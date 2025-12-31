@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Folder Logs</title>
+  <link rel="shortcut icon" type="image/x-icon" href="assets/favicon.png">
+  <script src="js/api.js"></script>
+  <script src="js/config.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <link href="https://fonts.googleapis.com/css?family=Roboto:400,500,700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+  <style>
+    html, body {
+      font-size: 16px;
+      max-width: 100vw;
+      overflow-x: hidden;
+      font-family: 'Roboto', Arial, sans-serif;
+    }
+    textarea, input[type="text"], input[type="date"] {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      min-height: 34px;
+      resize: none;
+      overflow: hidden;
+      line-height: 1.4;
+      font-size: 16px;
+      padding: 6px;
+      box-sizing: border-box;
+      font-family: inherit;
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: #fff;
+    }
+    td.text { max-width: 200px; }
+    .edit-btn, .save-btn {
+      margin: 20px;
+      padding: 10px 16px;
+      font-size: 16px;
+      cursor: pointer;
+      border: none;
+      border-radius: 6px;
+    }
+    .edit-btn { background-color: #CC0007; color: white; }
+    .save-btn { background-color: #a1a1a1; color: white; display: none; }
+    .back-btn {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 8px 16px;
+      background-color: #f0f0f0;
+      color: #333;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      z-index: 10;
+    }
+    .back-btn:hover {
+      background-color: #e0e0e0;
+    }
+    #eventTitle {
+      margin-top: 70px;
+      font-size: 1.05rem !important;
+      text-align: center;
+      font-weight: bold;
+    }
+    h2 {
+      font-size: 1.05rem !important;
+      margin-bottom: 0.5rem;
+      text-align: center;
+    }
+    .table-wrapper {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+      padding: 18px 12px 8px 12px;
+      margin: 24px 0 12px 0;
+      overflow-x: auto;
+      max-width: 100vw;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      background: transparent;
+      font-size: 16px;
+      max-width: 100vw;
+    }
+    th, td {
+      border: 1px solid #e0e0e0;
+      padding: 10px 12px;
+      text-align: left;
+      font-size: 16px;
+      background: #fff;
+      box-sizing: border-box;
+      max-width: 100vw;
+      overflow-x: hidden;
+    }
+    th {
+      background: #f7f7f7;
+      font-weight: 600;
+      color: #333;
+    }
+    tr:not(:last-child) {
+      border-bottom: 1px solid #ececec;
+    }
+    .add-btn {
+      margin: 18px 0 0 0;
+      padding: 9px 22px;
+      font-size: 16px;
+      background: #CC0007;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      box-shadow: 0 2px 8px rgba(204,0,7,0.08);
+      cursor: pointer;
+      transition: background 0.18s;
+      display: inline-block;
+      width: 100%;
+      max-width: 400px;
+    }
+    .add-btn:hover {
+      background: #a10006;
+    }
+    @media (max-width: 700px) {
+      .table-wrapper {
+        padding: 8px 0 0 0;
+        margin: 16px 0 8px 0;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+        max-width: 100vw;
+        overflow-x: hidden;
+      }
+      table, thead, tbody, th, td, tr {
+        display: block;
+        width: 100%;
+        font-size: 16px;
+        box-sizing: border-box;
+        max-width: 100vw;
+      }
+      thead {
+        display: none;
+      }
+      tr {
+        margin-bottom: 16px;
+        border-radius: 8px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.04);
+        background: #fff;
+        border: 1px solid #ececec;
+        padding: 8px 0;
+        width: 100%;
+        max-width: 100vw;
+        box-sizing: border-box;
+      }
+      td {
+        border: none;
+        border-bottom: 1px solid #ececec;
+        position: relative;
+        padding-left: 40%;
+        min-height: 44px;
+        font-size: 16px;
+        width: 100%;
+        max-width: 100vw;
+        box-sizing: border-box;
+        overflow-x: hidden;
+      }
+      td.text {
+        max-width: none;
+        width: 100%;
+        padding-left: 40%;
+      }
+      td:last-child {
+        border-bottom: none;
+      }
+      td:before {
+        position: absolute;
+        top: 10px;
+        left: 12px;
+        width: 38%;
+        white-space: nowrap;
+        font-weight: 600;
+        color: #888;
+        font-size: 16px;
+        content: attr(data-label);
+      }
+      #folderLogTable td:nth-child(1):before { content: 'Date'; }
+      #folderLogTable td:nth-child(2):before { content: 'Description'; }
+      #folderLogTable td:nth-child(3):before { content: 'Folder Name'; }
+      #folderLogTable td:nth-child(4):before { content: ''; }
+      td.text textarea, td.text input[type="text"], td.text input[type="date"] {
+        width: 100%;
+        min-width: 100%;
+        max-width: 100%;
+        display: block;
+        box-sizing: border-box;
+      }
+    }
+    #bottomNavPlaceholder, .bottom-nav {
+      display: none !important;
+    }
+    
+    /* Delete button styling */
+    .delete-btn {
+      background: transparent !important;
+      border: none !important;
+      outline: none !important;
+      box-shadow: none !important;
+      color: #888 !important;
+      padding: 4px !important;
+      cursor: pointer;
+      font-size: 16px !important;
+      line-height: 1;
+      height: 28px;
+      min-height: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .delete-btn .material-symbols-outlined {
+      color: #888;
+      font-size: 24px;
+      transition: color 0.2s ease;
+    }
+
+    .delete-btn:hover .material-symbols-outlined {
+      color: #d32f2f;
+    }
+
+    .delete-btn:active .material-symbols-outlined {
+      color: #b71c1c;
+    }
+  </style>
+</head>
+<body class="folder-logs-page">
+  <button class="back-btn" id="backToEventBtn">
+    <i data-lucide="arrow-left"></i> Back to Event
+  </button>
+  <h1 id="eventTitle" style="text-align: center;"></h1>
+  <div style="text-align:center">
+    <button class="edit-btn" id="editModeBtn" onclick="enterEditMode()">Edit</button>
+    <button class="save-btn" id="saveBtn" onclick="saveData()">Save</button>
+  </div>
+
+  <div class="section">
+    <h2>FTP Folder Names</h2>
+    <div class="table-wrapper">
+      <table id="folderLogTable">
+        <thead>
+          <tr>
+            <th class="date">Date</th>
+            <th class="text description-column">Description</th>
+            <th class="text folder-name-column">Folder Name</th>
+            <th class="action"></th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <button class="add-btn" onclick="addRow('folderLogTable')">+ Row</button>
+  </div>
+
+  <div id="bottomNavPlaceholder"></div>
+
+  <!-- Socket.IO for real-time updates -->
+  <script>
+    console.log('[FOLDER-LOGS] Starting script loading...');
+    console.log('[FOLDER-LOGS] API_BASE:', typeof API_BASE !== 'undefined' ? API_BASE : 'undefined');
+    
+    // Load Socket.IO and socket.js for real-time updates
+    if (typeof API_BASE !== 'undefined') {
+      // Load the Socket.IO libraries in order
+      const scripts = [
+        'https://cdn.socket.io/4.7.2/socket.io.min.js',
+        'js/socket.js',
+      ];
+      
+      function loadScript(index) {
+        if (index >= scripts.length) {
+          // All scripts loaded, now load the main folder-logs.js
+          console.log('[FOLDER-LOGS] Loading main folder-logs.js script...');
+          const mainScript = document.createElement('script');
+          mainScript.src = 'js/folder-logs.js';
+          mainScript.onload = () => {
+            console.log('[FOLDER-LOGS] folder-logs.js loaded successfully');
+            console.log('[FOLDER-LOGS] enterEditMode function available:', typeof window.enterEditMode);
+          };
+          mainScript.onerror = () => {
+            console.error('[FOLDER-LOGS] Failed to load folder-logs.js');
+          };
+          document.body.appendChild(mainScript);
+          return;
+        }
+        
+        console.log('[FOLDER-LOGS] Loading script:', scripts[index]);
+        const script = document.createElement('script');
+        script.src = scripts[index];
+        script.onload = () => {
+          console.log('[FOLDER-LOGS] Script loaded successfully:', scripts[index]);
+          loadScript(index + 1);
+        };
+        script.onerror = () => {
+          console.error('[FOLDER-LOGS] Failed to load script:', scripts[index]);
+          loadScript(index + 1); // Continue loading even if one fails
+        };
+        document.body.appendChild(script);
+      }
+      
+      loadScript(0);
+    } else {
+      console.error('[FOLDER-LOGS] API_BASE not defined, cannot load Socket.IO');
+      // Load folder-logs.js anyway
+      console.log('[FOLDER-LOGS] Loading folder-logs.js without Socket.IO...');
+      const script = document.createElement('script');
+      script.src = 'js/folder-logs.js';
+      script.onload = () => {
+        console.log('[FOLDER-LOGS] folder-logs.js loaded successfully (without Socket.IO)');
+        console.log('[FOLDER-LOGS] enterEditMode function available:', typeof window.enterEditMode);
+      };
+      script.onerror = () => {
+        console.error('[FOLDER-LOGS] Failed to load folder-logs.js');
+      };
+      document.body.appendChild(script);
+    }
+  </script>
+</body>
+</html> 

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Event Dashboard</title>
+  <link rel="shortcut icon" type="image/x-icon" href="assets/favicon.png">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/api.js"></script> 
+  <script src="js/config.js"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    body {
+      animation: fadeIn 0.3s ease-in forwards;
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      margin: 0;
+      display: flex;
+      align-items: center;
+    }
+
+
+    .logo-wrapper {
+      display: flex;
+      justify-content: center;
+      margin-top: 20px;
+      margin-bottom: 20px;
+    }
+
+    .auth-logo {
+      width: 300px;
+      height: auto;
+    }
+
+    .card-container {
+      background: white;
+      padding: 40px;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      width: 100%;
+      max-width: 600px;
+      text-align: center;
+      align-items: center;
+    }
+
+    .event-links {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 30px;
+      align-items: center;
+    }
+
+    .event-links a {
+      background-color: #CC0007;
+      color: white;
+      text-decoration: none;
+      padding: 12px;
+      border-radius: 6px;
+      font-weight: bold;
+      transition: background 0.2s ease;
+      width: 250px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+    }
+
+    .event-links a:hover {
+      background-color: rgb(170, 3, 8);
+    }
+
+    .event-links i {
+      stroke: white;
+      width: 20px;
+      height: 20px;
+    }
+
+    button.back-btn {
+      margin-bottom: 20px;
+      padding: 10px 16px;
+      background: #ccc;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    h1, h2 {
+      margin: 0 0 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="logo-wrapper">
+    <img src="assets/logo.png" alt="Logo" class="auth-logo">
+  </div>
+  <div class="card-container">
+    <button class="back-btn" onclick="window.location.href='events.html'">← Back to Events</button>
+
+    <h2 id="tableTitle">Loading...</h2>
+    <h1>Event Dashboard</h1>
+    <nav class="event-links">
+      <a id="generalLink"><i data-lucide="info"></i> General</a>
+      <a id="crewLink"><i data-lucide="users"></i> Crew Call</a>
+      <a id="travelLink"><i data-lucide="plane"></i> Travel & Stay</a>
+      <a id="gearLink"><i data-lucide="camera"></i> Gear List</a>
+      <a id="cardLogLink"><i data-lucide="memory-stick"></i> Card Log</a>
+      <a id="programScheduleLink"><i data-lucide="calendar"></i> Schedule</a>
+    </nav>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const tableId = params.get('id');
+
+    // Set hrefs for all links
+    document.getElementById('crewLink').href = `crew.html?id=${tableId}`;
+    document.getElementById('generalLink').href = `general.html?id=${tableId}`;
+    document.getElementById('gearLink').href = `gear.html?id=${tableId}`;
+    document.getElementById('travelLink').href = `travel-accommodation.html?id=${tableId}`;
+    document.getElementById('cardLogLink').href = `card-log.html?id=${tableId}`;
+    document.getElementById('programScheduleLink').href = `schedule.html?id=${tableId}`;
+
+    localStorage.setItem('eventId', tableId);
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const res = await fetch(`${API_BASE}/api/tables/${tableId}`, {
+        headers: { Authorization: localStorage.getItem('token') }
+      });
+
+      const title = res.ok ? (await res.json()).title : 'Event not found';
+      document.getElementById('tableTitle').textContent = title;
+
+      // Activate Lucide icons
+      lucide.createIcons();
+    });
+  </script>
+</body>
+</html>

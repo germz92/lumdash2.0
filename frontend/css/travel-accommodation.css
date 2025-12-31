@@ -1,0 +1,346 @@
+.travel-page { margin: 0; padding: 0; padding-bottom: 100px; font-family: 'Roboto', Arial, sans-serif; background: #f5f7fa; color: #333; min-height: 100%; overflow-x: hidden; }
+.travel-page .section { background: transparent; border-radius: 16px; padding: 24px; box-shadow: none; max-width: 100%; margin-bottom: 24px; }
+.travel-page h1 { font-size: 26px; margin-bottom: 18px; }
+.travel-page .section h2 { margin-top: 0; font-size: 18px; color: #222; margin-bottom: 12px; }
+.travel-page .table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  margin-bottom: 18px;
+}
+.travel-page table {
+  min-width: 600px;
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  background: #fff;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid #e0e0e0;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  table-layout: auto;
+}
+.travel-page th, .travel-page td {
+  padding: 14px 12px;
+  font-size: 15px;
+  text-align: left;
+  word-break: break-word;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  border-bottom: 1px solid #ececec;
+  border-left: 1px solid #f3f3f3;
+  border-right: 1px solid #f3f3f3;
+  background: none;
+  transition: background 0.2s;
+  min-width: 0;
+  max-width: none;
+}
+.travel-page th {
+  background: linear-gradient(90deg, #f5f5f5 0%, #e0e0e0 100%);
+  color: #222;
+  font-weight: 700;
+  font-size: 17px;
+  border-radius: 0;
+  border-bottom: 2px solid #b30006;
+  border-top: 1px solid #e0e0e0;
+  border-left: 1px solid #e0e0e0;
+  border-right: 1px solid #e0e0e0;
+  letter-spacing: 0.01em;
+}
+.travel-page tr:nth-child(even) td {
+  background: #fafbfc;
+}
+.travel-page tr:nth-child(odd) td {
+  background: #fff;
+}
+.travel-page td:last-child, .travel-page th:last-child {
+  text-align: center;
+}
+.travel-page td.date, .travel-page th.date, .travel-page td.time, .travel-page th.time {
+  width: 90px;
+}
+.travel-page td.text, .travel-page th.text {
+  width: 140px;
+}
+.travel-page td.hotel-column, .travel-page th.hotel-column {
+  width: 280px !important;
+  min-width: 280px !important;
+}
+.travel-page td.action, .travel-page th.action {
+  width: 90px;
+  text-align: center;
+}
+.travel-page tr:hover td {
+  background: #f0f4fa !important;
+}
+.travel-page input[type="text"], .travel-page input[type="date"], .travel-page input[type="time"], .travel-page select {
+  padding: 8px 10px;
+  font-size: 15px;
+  width: 100%;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+  background: #f9f9f9;
+}
+
+.travel-page select.name-select {
+  padding: 8px 10px;
+  font-size: 15px;
+  width: 100%;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  box-sizing: border-box;
+  background: #fff;
+  cursor: pointer;
+}
+.travel-page .add-btn {
+  background: #cc0007;
+  color: white;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 8px;
+  margin-top: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s;
+  box-shadow: 0 2px 8px rgba(204,0,7,0.08);
+  font-size: 1rem;
+}
+.travel-page .add-btn:hover {
+  background: #b30006;
+  box-shadow: 0 4px 16px rgba(204,0,7,0.12);
+}
+.travel-page .delete-btn {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  font-size: 1.2rem;
+  color: #888 !important;
+  cursor: pointer;
+  padding: 4px;
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative !important;
+  z-index: 1000 !important;
+  transition: color 0.2s;
+  min-width: 32px;
+  min-height: 32px;
+}
+.travel-page .delete-btn:hover {
+  color: #d32f2f !important;
+}
+.travel-page .delete-btn:focus, .travel-page .delete-btn:active, .travel-page .delete-btn:visited {
+  color: #888 !important;
+  outline: none !important;
+  background: transparent !important;
+}
+.travel-page td.action {
+  width: 90px;
+  text-align: center;
+  padding: 10px 8px !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative !important;
+  z-index: 1000 !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+}
+.travel-page td.action button.delete-btn {
+  display: inline-block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative !important;
+  z-index: 1000 !important;
+}
+
+@media (max-width: 900px) {
+  .travel-page table { min-width: 480px; }
+  .travel-page th, .travel-page td { font-size: 16px; padding: 8px 6px; }
+  .travel-page td.text, .travel-page th.text { width: 100px; }
+  .travel-page input,
+  .travel-page textarea,
+  .travel-page select,
+  .travel-page button {
+    font-size: 16px !important;
+  }
+}
+
+/* Desktop-specific styling for better appearance on larger screens */
+@media (min-width: 901px) {
+  .travel-page .open-airline-btn {
+    padding: 10px 20px !important;
+    font-size: 14px !important;
+    min-width: 75px !important;
+    font-weight: 500 !important;
+    border-radius: 8px !important;
+  }
+  
+  .travel-page td.action {
+    padding: 12px 10px !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .travel-page { padding: 5px 2px; }
+  .travel-page .section { padding: 10px 2px; background: transparent; box-shadow: none; }
+  .travel-page .table-wrapper { border-radius: 8px; }
+  .travel-page table { min-width: 550px; font-size: 16px; }
+  .travel-page th, .travel-page td { font-size: 16px; padding: 8px 6px; }
+  .travel-page th, .travel-page td { white-space: nowrap; }
+  .travel-page th, .travel-page td { min-width: 140px; max-width: 180px; }
+  .travel-page th.text, .travel-page td.text { min-width: 120px; max-width: 160px; }
+  .travel-page th.hotel-column, .travel-page td.hotel-column { min-width: 250px !important; max-width: none !important; width: 250px !important; }
+  .travel-page th.date, .travel-page td.date, .travel-page th.time, .travel-page td.time { min-width: 100px; max-width: 120px; }
+  .travel-page th.action { 
+    min-width: 80px; 
+    max-width: 90px;
+    width: 85px !important;
+    text-align: center;
+    display: table-cell !important;
+    vertical-align: middle !important;
+  }
+  .travel-page td.action { 
+    min-width: 80px; 
+    max-width: 90px;
+    width: 85px !important;
+    padding: 6px 4px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+  .travel-page .delete-btn {
+    min-width: 36px !important;
+    min-height: 36px !important;
+    padding: 6px !important;
+    font-size: 1.3rem !important;
+  }
+  
+  /* Mobile-specific styling for Open button */
+  .travel-page .open-airline-btn {
+    padding: 4px 8px !important;
+    font-size: 12px !important;
+    min-width: 50px !important;
+    max-width: 70px !important;
+    font-weight: 400 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1) !important;
+  }
+  
+  /* Mobile-specific styling for location links */
+  .travel-page .readonly-span a {
+    font-size: 14px !important;
+    gap: 1px !important;
+  }
+  
+  .travel-page .readonly-span a .material-symbols-outlined {
+    font-size: 12px !important;
+  }
+  
+  /* Ensure at least 3 columns fit before scrolling */
+  .travel-page table { min-width: 300px; }
+  .travel-page input,
+  .travel-page textarea,
+  .travel-page select,
+  .travel-page button {
+    font-size: 16px !important;
+  }
+}
+
+.name-column { width: 150px; /* Adjust the width as needed */ }
+
+.travel-page .readonly-span {
+  display: inline-block;
+  padding: 6px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  text-wrap: auto;
+  max-width: 100%;
+}
+
+.travel-page th.action {
+  width: 90px;
+  text-align: center;
+  display: table-cell;
+  vertical-align: middle;
+}
+
+/* Add styles for delete buttons in tables */
+.travel-page .table-wrapper table .delete-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  color: #888; /* Medium gray for the icon */
+}
+
+.travel-page .table-wrapper table .delete-btn .material-symbols-outlined {
+  font-size: 20px; /* Adjust size as needed */
+  vertical-align: middle;
+}
+
+.travel-page .table-wrapper table .delete-btn:hover .material-symbols-outlined {
+  color: #555; /* Darker gray on hover */
+}
+
+/* Styling for the Open Airline button */
+.travel-page .open-airline-btn {
+  background: #e0e0e0 !important;
+  color: #333 !important;
+  border: 1px solid #bbb !important;
+  border-radius: 6px !important;
+  padding: 8px 16px !important;
+  font-size: 14px !important;
+  cursor: pointer !important;
+  margin: 0 !important;
+  white-space: nowrap !important;
+  transition: background-color 0.2s ease !important;
+  min-width: 70px !important;
+  text-align: center !important;
+  display: inline-block !important;
+  font-weight: 500 !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1) !important;
+}
+
+.travel-page .open-airline-btn:hover {
+  background: #d0d0d0 !important;
+  border-color: #999 !important;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Styling for clickable location links in hotel column */
+.travel-page .readonly-span a {
+  color: #1976d2 !important;
+  text-decoration: underline !important;
+  transition: color 0.2s ease !important;
+  cursor: pointer !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 2px !important;
+}
+
+.travel-page .readonly-span a:hover {
+  color: #1565c0 !important;
+  text-decoration: none !important;
+}
+
+.travel-page .readonly-span a:visited {
+  color: #1976d2 !important;
+}
+
+.travel-page .readonly-span a .material-symbols-outlined {
+  font-size: 14px !important;
+  color: inherit !important;
+  vertical-align: text-bottom !important;
+}
+    

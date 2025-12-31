@@ -1,0 +1,1770 @@
+<!-- Google Fonts Roboto -->
+<link href="https://fonts.googleapis.com/css?family=Roboto:400,500,700&display=swap" rel="stylesheet">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<link rel="stylesheet" href="../css/gear.css">
+
+  <div class="container gear-page">
+    <button onclick="window.history.back()" class="back-button btn-text" style="margin-top: 20px; margin-bottom: 20px;">
+      <svg class="heroicon heroicon-outline icon-arrow-left" style="width: 20px; height: 20px; margin-right: 8px;" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+      </svg>
+      Back to Gear
+    </button>
+    <div class="card">
+      <h1>Gear Inventory Management</h1>
+      
+      <div id="messageArea"></div>
+      
+      <!-- Add/Edit Gear Form -->
+      <div id="gearForm" class="card">
+        <h2 id="formTitle">Add New Gear</h2>
+        <form id="addEditGearForm">
+          <input type="hidden" id="gearId" value="">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="label">Label*</label>
+              <input type="text" id="label" name="label" required>
+            </div>
+            <div class="form-group">
+              <label for="category">Category*</label>
+              <select id="category" name="category" required>
+                <option value="">Select Category</option>
+                <option value="Cameras">Cameras</option>
+                <option value="Lenses">Lenses</option>
+                <option value="Lighting">Lighting</option>
+                <option value="Support">Support</option>
+                <option value="Accessories">Accessories</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="serial">Serial Number*</label>
+              <input type="text" id="serial" name="serial" required>
+            </div>
+            <div class="form-group">
+              <label for="quantity">Quantity* 
+                <span class="quantity-examples">
+                  <small>(e.g., 1 for cameras, 10 for batteries)</small>
+                </span>
+              </label>
+              <input type="number" id="quantity" name="quantity" min="1" value="1" required>
+              <small class="help-text">
+                <strong>Single items:</strong> Use quantity 1 (cameras, lenses)<br>
+                <strong>Multiple units:</strong> Enter total available (batteries, memory cards, etc.)
+              </small>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <button type="submit" id="submitBtn" class="btn-primary">Add Gear</button>
+              <button type="button" id="cancelBtn" class="btn-secondary btn-outlined" style="display:none">Cancel</button>
+            </div>
+          </div>
+        </form>
+      </div>
+      
+      <!-- Gear Inventory List -->
+      <div class="card">
+        <h2>Current Inventory</h2>
+        
+        <!-- Date Selection Fields -->
+        <div class="date-filters">
+          <div class="date-filter">
+            <label for="checkFromDate">Check From Date</label>
+            <input type="date" id="checkFromDate" name="checkFromDate">
+          </div>
+          <div class="date-filter">
+            <label for="checkToDate">Check To Date</label>
+            <input type="date" id="checkToDate" name="checkToDate">
+          </div>
+          <div class="date-actions">
+            <button id="checkDatesBtn" class="btn-primary">Check Availability</button>
+            <button id="clearDatesBtn" class="btn-secondary btn-outlined">Clear Dates</button>
+          </div>
+        </div>
+        
+        <div class="filters">
+          <div class="form-group search-box">
+            <label for="searchInput">Search</label>
+            <input type="text" id="searchInput" placeholder="Search by label or serial...">
+          </div>
+          <div class="form-group category-filter">
+            <label for="filterCategory">Filter by Category</label>
+            <select id="filterCategory">
+              <option value="">All Categories</option>
+              <option value="Cameras">Cameras</option>
+              <option value="Lenses">Lenses</option>
+              <option value="Lighting">Lighting</option>
+              <option value="Support">Support</option>
+              <option value="Accessories">Accessories</option>
+            </select>
+          </div>
+          <div class="form-group status-filter">
+            <label for="statusFilter">Status</label>
+            <select id="statusFilter">
+              <option value="">All</option>
+              <option value="available">Available</option>
+              <option value="checked_out">Checked Out</option>
+              <option value="future_available">Future Available</option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Inventory Summary -->
+        <div id="inventorySummary" class="inventory-summary">
+          <!-- Summary will be populated by JavaScript -->
+        </div>
+        
+        <div class="table-responsive">
+          <table class="inventory-table">
+            <thead>
+              <tr>
+                <th>Label</th>
+                <th class="category-column">Category</th>
+                <th>Serial</th>
+                <th>Quantity</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="inventoryTableBody">
+              <!-- Inventory items will be loaded here -->
+              <tr>
+                <td colspan="5" id="loadingMessage">Loading inventory...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Confirmation Modal -->
+  <div id="confirmModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modalTitle">Confirm Action</h3>
+        <span class="close" id="closeModalBtn">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div id="modalMessage">Are you sure you want to proceed?</div>
+      </div>
+      <div class="modal-footer">
+        <button id="cancelModalBtn" class="btn-secondary btn-outlined">Cancel</button>
+        <button id="confirmModalBtn" class="btn-danger">Confirm</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Back to top button -->
+  <button id="backToTopBtn" class="btn-icon back-to-top-btn" title="Back to Top" style="display: none;">
+    <svg class="heroicon heroicon-outline icon-arrow-up" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M12 19.5v-15m0 0l-6.75 6.75M12 4.5l6.75 6.75" />
+    </svg>
+  </button>
+
+  <script src="../js/config.js"></script>
+  <script>
+    // DOM Elements
+    const messageArea = document.getElementById('messageArea');
+    const formTitle = document.getElementById('formTitle');
+    const gearForm = document.getElementById('addEditGearForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const cancelBtn = document.getElementById('cancelBtn');
+    const gearIdInput = document.getElementById('gearId');
+    const inventoryTableBody = document.getElementById('inventoryTableBody');
+    const confirmModal = document.getElementById('confirmModal');
+    const closeModalBtn = document.getElementById('closeModalBtn');
+    const cancelModalBtn = document.getElementById('cancelModalBtn');
+    const confirmModalBtn = document.getElementById('confirmModalBtn');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalMessage = document.getElementById('modalMessage');
+    const searchInput = document.getElementById('searchInput');
+    const filterCategory = document.getElementById('filterCategory');
+    const statusFilter = document.getElementById('statusFilter');
+    const checkFromDate = document.getElementById('checkFromDate');
+    const checkToDate = document.getElementById('checkToDate');
+    const checkDatesBtn = document.getElementById('checkDatesBtn');
+    const clearDatesBtn = document.getElementById('clearDatesBtn');
+    
+    // Get token from localStorage
+    const token = localStorage.getItem('token');
+    
+    // State
+    let inventory = [];
+    let currentAction = null;
+    let itemToDelete = null;
+    
+    // Set default dates
+    const today = new Date();
+    const nextWeek = new Date(today);
+    nextWeek.setDate(today.getDate() + 7);
+    
+    checkFromDate.valueAsDate = today;
+    checkToDate.valueAsDate = nextWeek;
+    
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('[add-gear.html] Config loaded, API_BASE:', window.API_BASE);
+      loadInventory();
+      setupEventListeners();
+    });
+    
+    // Event Listeners
+    function setupEventListeners() {
+      // Form submission
+      gearForm.addEventListener('submit', handleFormSubmit);
+      
+      // Cancel button
+      cancelBtn.addEventListener('click', resetForm);
+      
+      // Modal buttons
+      closeModalBtn.addEventListener('click', closeModal);
+      cancelModalBtn.addEventListener('click', closeModal);
+      confirmModalBtn.addEventListener('click', handleConfirmAction);
+      
+      // Search and filters
+      searchInput.addEventListener('input', filterInventory);
+      filterCategory.addEventListener('change', filterInventory);
+      statusFilter.addEventListener('change', filterInventory);
+      
+      // Date checking
+      checkDatesBtn.addEventListener('click', function() {
+        // Add debug info for date handling
+        console.log("Date Selection: ", {
+          fromRaw: checkFromDate.value,
+          toRaw: checkToDate.value,
+          fromNormalized: new Date(checkFromDate.value),
+          toNormalized: new Date(checkToDate.value),
+          fromFormatted: formatDate(checkFromDate.value),
+          toFormatted: formatDate(checkToDate.value)
+        });
+        renderInventory();
+      });
+      clearDatesBtn.addEventListener('click', function() {
+        checkFromDate.value = '';
+        checkToDate.value = '';
+        renderInventory();
+      });
+    }
+    
+    // Load Inventory Data
+    async function loadInventory() {
+      try {
+        const res = await fetch(`${window.API_BASE}/api/gear-inventory`, {
+          headers: { Authorization: token }
+        });
+        
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        
+        inventory = await res.json();
+        renderInventory();
+      } catch (err) {
+        showMessage(`Error loading inventory: ${err.message}`, 'error');
+      }
+    }
+    
+    // Calculate availability status based on dates
+    function getAvailabilityStatus(item) {
+      // If no dates are selected, just return current status
+      if (!checkFromDate.value || !checkToDate.value) {
+        return {
+          status: item.status,
+          availableDate: item.checkInDate ? new Date(item.checkInDate) : null,
+          conflictingReservations: []
+        };
+      }
+      
+      // For quantity items, use the new calculation
+      if (item.quantity > 1) {
+        const availableQty = calculateAvailableQuantity(item, checkFromDate.value, checkToDate.value);
+        if (availableQty > 0) {
+          return {
+            status: 'available',
+            availableDate: null,
+            conflictingReservations: [],
+            availableQuantity: availableQty
+          };
+        } else {
+          return {
+            status: 'conflict',
+            availableDate: null,
+            conflictingReservations: [],
+            availableQuantity: 0
+          };
+        }
+      }
+      
+      // Normalize dates to remove time component for accurate date comparison
+      // Start date at 00:00:00 of the selected day
+      const normalizeDate = (dateStr) => {
+        const date = new Date(dateStr);
+        date.setUTCHours(0, 0, 0, 0);
+        return date;
+      };
+      
+      const fromDate = normalizeDate(checkFromDate.value);
+      const toDate = normalizeDate(checkToDate.value);
+      const now = new Date();
+      now.setUTCHours(0, 0, 0, 0);  // Normalize current date as well
+      
+      // If item is currently available, check for any conflicts in future reservations
+      if (item.status === 'available') {
+        const conflictingReservations = [];
+        
+        if (item.history && item.history.length > 0) {
+          item.history.forEach(entry => {
+            if (!entry.checkOutDate || !entry.checkInDate) return;
+            
+            const entryStart = normalizeDate(entry.checkOutDate);
+            const entryEnd = normalizeDate(entry.checkInDate);
+            
+            // Skip if the reservation is in the past
+            if (entryEnd < now) return;
+            
+            // Check if our requested dates are completely before this reservation
+            if (toDate < entryStart) {
+              // No conflict - our dates end before this reservation starts
+              return;
+            }
+            
+            // Check if our requested dates are completely after this reservation
+            if (fromDate > entryEnd) {
+              // No conflict - our dates start after this reservation ends
+              return;
+            }
+            
+            // If we get here, there's an overlap
+            conflictingReservations.push({
+              from: entryStart,
+              to: entryEnd
+            });
+          });
+        }
+        
+        if (conflictingReservations.length > 0) {
+          // Sort conflicts by start date
+          conflictingReservations.sort((a, b) => a.from - b.from);
+          return {
+            status: 'conflict',
+            availableDate: null,
+            conflictingReservations
+          };
+        }
+        
+        return {
+          status: 'available',
+          availableDate: null,
+          conflictingReservations: []
+        };
+      } 
+      
+      // If item is checked out, check if it will be available for the requested dates
+      else if (item.status === 'checked_out') {
+        // Get current reservation dates
+        const existingCheckOut = normalizeDate(item.checkOutDate);
+        const existingCheckIn = normalizeDate(item.checkInDate);
+        
+        if (existingCheckOut && existingCheckIn) {
+          // Case 1: Our requested dates end BEFORE the existing checkout starts
+          if (toDate < existingCheckOut) {
+            return {
+              status: 'available',
+              availableDate: null,
+              conflictingReservations: []
+            };
+          }
+          
+          // Case 2: Our requested dates start AFTER the existing checkin ends
+          if (fromDate > existingCheckIn) {
+            return {
+              status: 'future_available',
+              availableDate: existingCheckIn,
+              conflictingReservations: []
+            };
+          }
+          
+          // Otherwise there's a conflict
+          return {
+            status: 'checked_out',
+            availableDate: existingCheckIn,
+            conflictingReservations: [{
+              from: existingCheckOut,
+              to: existingCheckIn
+            }]
+          };
+        }
+      }
+      
+      // Default: item is checked out with no valid dates
+      return {
+        status: 'checked_out',
+        availableDate: null,
+        conflictingReservations: []
+      };
+    }
+    
+    // Calculate available quantity for multi-unit items
+    function calculateAvailableQuantity(item, checkOutDate, checkInDate) {
+      if (item.quantity === 1) {
+        return item.status === 'available' ? 1 : 0;
+      }
+      
+      const normalizeDate = (dateStr) => {
+        const date = new Date(dateStr);
+        date.setUTCHours(0, 0, 0, 0);
+        return date;
+      };
+      
+      const reqStart = normalizeDate(checkOutDate);
+      const reqEnd = normalizeDate(checkInDate);
+      const now = new Date();
+      now.setUTCHours(0, 0, 0, 0);
+      
+      let reservedQuantity = 0;
+      
+      // Check reservations array if it exists (new quantity system)
+      if (item.reservations && item.reservations.length > 0) {
+        item.reservations.forEach(reservation => {
+          const resStart = normalizeDate(reservation.checkOutDate);
+          const resEnd = normalizeDate(reservation.checkInDate);
+          
+          // Check for overlap: (startA <= endB) && (endA >= startB)
+          if (reqStart <= resEnd && reqEnd >= resStart) {
+            reservedQuantity += reservation.quantity || 1;
+          }
+        });
+      }
+      
+      // Also check history for backward compatibility
+      if (item.history && item.history.length > 0) {
+        item.history.forEach(entry => {
+          if (!entry.checkOutDate || !entry.checkInDate) return;
+          
+          const entryStart = normalizeDate(entry.checkOutDate);
+          const entryEnd = normalizeDate(entry.checkInDate);
+          
+          // Skip if the reservation is in the past
+          if (entryEnd < now) return;
+          
+          // Check for overlap
+          if (reqStart <= entryEnd && reqEnd >= entryStart) {
+            reservedQuantity += entry.quantity || 1;
+          }
+        });
+      }
+      
+      return Math.max(0, item.quantity - reservedQuantity);
+    }
+    
+    // Update inventory summary with enhanced status reporting
+    function updateInventorySummary(items) {
+      const summaryElement = document.getElementById('inventorySummary');
+      
+      if (items.length === 0) {
+        summaryElement.innerHTML = '<div class="no-inventory-message">No inventory items found. Add some gear to get started!</div>';
+        return;
+      }
+      
+      const stats = {
+        totalItems: items.length,
+        singleItems: items.filter(item => item.quantity === 1).length,
+        multipleItems: items.filter(item => item.quantity > 1).length,
+        totalUnits: items.reduce((sum, item) => sum + (item.quantity || 1), 0),
+        availableItems: 0,
+        checkedOutItems: 0,
+        futureAvailableItems: 0,
+        conflictItems: 0,
+        availableUnits: 0,
+        checkedOutUnits: 0,
+        categoryBreakdown: {},
+        statusBreakdown: {
+          available: 0,
+          checked_out: 0,
+          future_available: 0,
+          conflict: 0
+        }
+      };
+      
+      // Calculate detailed availability stats
+      items.forEach(item => {
+        const availability = getAvailabilityStatus(item);
+        const category = item.category || 'Uncategorized';
+        
+        // Initialize category if not exists
+        if (!stats.categoryBreakdown[category]) {
+          stats.categoryBreakdown[category] = {
+            total: 0,
+            available: 0,
+            checkedOut: 0,
+            units: 0
+          };
+        }
+        
+        stats.categoryBreakdown[category].total++;
+        stats.categoryBreakdown[category].units += (item.quantity || 1);
+        
+        // Count by status
+        if (availability.status === 'available') {
+          stats.availableItems++;
+          stats.statusBreakdown.available++;
+          stats.categoryBreakdown[category].available++;
+          if (item.quantity > 1) {
+            const availableQty = calculateAvailableQuantity(item, checkFromDate.value, checkToDate.value);
+            stats.availableUnits += availableQty;
+          } else {
+            stats.availableUnits++;
+          }
+        } else if (availability.status === 'future_available') {
+          stats.futureAvailableItems++;
+          stats.statusBreakdown.future_available++;
+        } else if (availability.status === 'conflict') {
+          stats.conflictItems++;
+          stats.statusBreakdown.conflict++;
+          stats.categoryBreakdown[category].checkedOut++;
+        } else {
+          stats.checkedOutItems++;
+          stats.statusBreakdown.checked_out++;
+          stats.categoryBreakdown[category].checkedOut++;
+          if (item.quantity > 1) {
+            const availableQty = calculateAvailableQuantity(item, checkFromDate.value, checkToDate.value);
+            stats.checkedOutUnits += (item.quantity - availableQty);
+          } else {
+            stats.checkedOutUnits++;
+          }
+        }
+      });
+      
+      // Calculate utilization percentage
+      const utilizationRate = stats.totalUnits > 0 ? Math.round((stats.checkedOutUnits / stats.totalUnits) * 100) : 0;
+      const availabilityRate = stats.totalUnits > 0 ? Math.round((stats.availableUnits / stats.totalUnits) * 100) : 100;
+      
+      // Generate category breakdown HTML
+      const categoryHTML = Object.entries(stats.categoryBreakdown)
+        .sort(([,a], [,b]) => b.total - a.total)
+        .map(([category, data]) => {
+          const categoryRate = data.total > 0 ? Math.round((data.available / data.total) * 100) : 0;
+          return `
+            <div class="category-stat">
+              <div class="category-name">${category}</div>
+              <div class="category-details">
+                <span class="category-total">${data.total} items</span>
+                <span class="category-available ${categoryRate >= 70 ? 'good' : categoryRate >= 40 ? 'warning' : 'critical'}">${categoryRate}% available</span>
+              </div>
+            </div>
+          `;
+        }).join('');
+      
+      summaryElement.innerHTML = `
+        <div class="enhanced-summary">
+          <!-- Main Stats Row -->
+          <div class="summary-stats">
+            <div class="stat-item primary">
+              <div class="stat-icon">📦</div>
+              <span class="stat-number">${stats.totalItems}</span>
+              <span class="stat-label">Total Items</span>
+            </div>
+            <div class="stat-item primary">
+              <div class="stat-icon">🔢</div>
+              <span class="stat-number">${stats.totalUnits}</span>
+              <span class="stat-label">Total Units</span>
+            </div>
+            <div class="stat-item available">
+              <div class="stat-icon">✅</div>
+              <span class="stat-number">${stats.availableItems}</span>
+              <span class="stat-label">Available Items</span>
+              <div class="stat-subtitle">${stats.availableUnits} units</div>
+            </div>
+            <div class="stat-item checked-out">
+              <div class="stat-icon">📤</div>
+              <span class="stat-number">${stats.checkedOutItems}</span>
+              <span class="stat-label">Checked Out</span>
+              <div class="stat-subtitle">${stats.checkedOutUnits} units</div>
+            </div>
+            ${stats.futureAvailableItems > 0 ? `
+              <div class="stat-item future-available">
+                <div class="stat-icon">⏰</div>
+                <span class="stat-number">${stats.futureAvailableItems}</span>
+                <span class="stat-label">Future Available</span>
+              </div>
+            ` : ''}
+            ${stats.conflictItems > 0 ? `
+              <div class="stat-item conflict">
+                <div class="stat-icon">⚠️</div>
+                <span class="stat-number">${stats.conflictItems}</span>
+                <span class="stat-label">Conflicts</span>
+              </div>
+            ` : ''}
+          </div>
+          
+          <!-- Utilization Metrics -->
+          <div class="utilization-metrics">
+            <div class="metric-item">
+              <div class="metric-label">Availability Rate</div>
+              <div class="progress-bar">
+                <div class="progress-fill available" style="width: ${availabilityRate}%"></div>
+              </div>
+              <div class="metric-value">${availabilityRate}%</div>
+            </div>
+            <div class="metric-item">
+              <div class="metric-label">Utilization Rate</div>
+              <div class="progress-bar">
+                <div class="progress-fill utilization" style="width: ${utilizationRate}%"></div>
+              </div>
+              <div class="metric-value">${utilizationRate}%</div>
+            </div>
+          </div>
+          
+          <!-- Category Breakdown -->
+          ${Object.keys(stats.categoryBreakdown).length > 1 ? `
+            <div class="category-breakdown">
+              <h4>Category Breakdown</h4>
+              <div class="category-grid">
+                ${categoryHTML}
+              </div>
+            </div>
+          ` : ''}
+          
+          <!-- Quick Actions -->
+          <div class="quick-actions">
+            <button class="quick-action-btn" onclick="showAvailableOnly()">
+              <span class="action-icon">✅</span>
+              Show Available Only
+            </button>
+            <button class="quick-action-btn" onclick="showCheckedOutOnly()">
+              <span class="action-icon">📤</span>
+              Show Checked Out
+            </button>
+            <button class="quick-action-btn" onclick="exportInventoryReport()">
+              <span class="action-icon">📊</span>
+              Export Report
+            </button>
+          </div>
+        </div>
+      `;
+    }
+    
+    // Filter inventory based on search and filters
+    function filterInventory() {
+      const searchTerm = searchInput.value.toLowerCase();
+      const categoryFilter = filterCategory.value;
+      const statusValue = statusFilter.value;
+      
+      const filtered = inventory.filter(item => {
+        // Calculate availability for this item
+        const availability = getAvailabilityStatus(item);
+        
+        // Match search term
+        const matchesSearch = 
+          item.label.toLowerCase().includes(searchTerm) || 
+          (item.serial && item.serial.toLowerCase().includes(searchTerm));
+        
+        // Match category
+        const matchesCategory = !categoryFilter || item.category === categoryFilter;
+        
+        // Match status
+        let matchesStatus = true;
+        if (statusValue) {
+          if (statusValue === 'available') {
+            matchesStatus = availability.status === 'available';
+          } else if (statusValue === 'checked_out') {
+            matchesStatus = availability.status === 'checked_out';
+          } else if (statusValue === 'future_available') {
+            matchesStatus = availability.status === 'future_available';
+          }
+        }
+        
+        return matchesSearch && matchesCategory && matchesStatus;
+      });
+      
+      renderInventory(filtered);
+    }
+    
+    // Format date to readable string
+    function formatDate(date) {
+      if (!date) return 'Unknown';
+      
+      // Create a date that correctly handles timezone offset
+      const utcDate = new Date(date);
+      
+      // Format date in user's local timezone
+      return utcDate.toLocaleDateString('en-US', { 
+        year: 'numeric', 
+        month: 'short', 
+        day: 'numeric',
+        timeZone: 'UTC' // Use UTC to prevent timezone shifts
+      });
+    }
+    
+    // Render inventory table
+    function renderInventory(items) {
+      if (!items) {
+        items = inventory;
+      }
+      
+      // Update inventory summary
+      updateInventorySummary(items);
+      
+      // Check if we're on mobile
+      const isMobile = window.innerWidth <= 768;
+      
+      // Add mobile class to table if needed
+      const inventoryTable = document.querySelector('.inventory-table');
+      if (inventoryTable) {
+        if (isMobile) {
+          inventoryTable.classList.add('mobile-view');
+        } else {
+          inventoryTable.classList.remove('mobile-view');
+        }
+      }
+      
+      if (items.length === 0) {
+        // Adjust colspan based on viewport
+        const colspan = isMobile ? 4 : 5;
+        inventoryTableBody.innerHTML = `<tr><td colspan="${colspan}">No items found</td></tr>`;
+        return;
+      }
+      
+      inventoryTableBody.innerHTML = items.map(item => {
+        // Calculate availability status
+        const availability = getAvailabilityStatus(item);
+        
+        // Determine status display with enhanced information
+        let statusClass, statusText, statusIcon;
+        let availableInfo = '';
+        let reservationInfo = '';
+        let statusDetails = '';
+        
+        // For quantity items, calculate and show available quantity when dates are selected
+        let quantityInfo = '';
+        if (item.quantity > 1 && checkFromDate.value && checkToDate.value) {
+          const availableQty = calculateAvailableQuantity(item, checkFromDate.value, checkToDate.value);
+          quantityInfo = ` (${availableQty}/${item.quantity} available)`;
+        }
+        
+        if (availability.status === 'available') {
+          statusClass = 'status-available';
+          statusIcon = '✅';
+          statusText = 'Available' + quantityInfo;
+          statusDetails = 'Ready for checkout';
+        } else if (availability.status === 'future_available') {
+          statusClass = 'status-future-available';
+          statusIcon = '⏰';
+          statusText = isMobile ? 'Avail. After ' : 'Available After ';
+          statusText += formatDate(availability.availableDate) + quantityInfo;
+          statusDetails = 'Currently checked out, will be available soon';
+        } else if (availability.status === 'conflict') {
+          statusClass = 'status-conflict';
+          statusIcon = '⚠️';
+          statusText = isMobile ? 'Conflict' : 'Schedule Conflict';
+          statusDetails = 'Multiple overlapping reservations detected';
+          
+          if (availability.conflictingReservations.length > 0) {
+            const conflicts = availability.conflictingReservations.map(c => 
+              `${formatDate(c.from)} to ${formatDate(c.to)}`
+            ).join('<br>');
+            
+            reservationInfo = `
+              <div class="reservation-tooltip enhanced">
+                <span class="tooltip-icon">ℹ️</span>
+                <span class="tooltiptext">
+                  <strong>Scheduling Conflicts:</strong><br>
+                  ${conflicts}<br>
+                  <em>Contact admin to resolve</em>
+                </span>
+              </div>
+            `;
+          }
+        } else {
+          statusClass = 'status-checked-out';
+          statusIcon = '📤';
+          statusText = 'Checked Out';
+          statusDetails = 'Currently in use';
+          
+          if (availability.availableDate) {
+            availableInfo = isMobile ? '' : ' (Until ' + formatDate(availability.availableDate) + ')';
+            statusDetails = `In use until ${formatDate(availability.availableDate)}`;
+            
+            // Enhanced mobile tooltip with more information
+            if (isMobile && availability.availableDate) {
+              reservationInfo = `
+                <div class="reservation-tooltip enhanced">
+                  <span class="tooltip-icon">ℹ️</span>
+                  <span class="tooltiptext">
+                    <strong>Return Date:</strong><br>
+                    ${formatDate(availability.availableDate)}<br>
+                    <em>Tap to see details</em>
+                  </span>
+                </div>
+              `;
+            }
+          }
+        }
+        
+        // Enhanced quantity display
+        const quantityDisplay = item.quantity > 1 ? 
+          `<span class="quantity-badge multiple">${item.quantity} <small>units</small></span>` :
+          `<span class="quantity-badge single">1 <small>unit</small></span>`;
+        
+        // Enhanced serial display with copy functionality
+        const serialDisplay = item.serial ? 
+          `<span class="serial-number" onclick="copyToClipboard('${item.serial}')" title="Click to copy">${escapeHtml(item.serial)}</span>` :
+          `<span class="no-serial">No Serial</span>`;
+        
+        return `
+          <tr class="inventory-row ${statusClass}" onclick="showItemDetails('${item._id}')" style="cursor: pointer;" title="Click to view details">
+            <td class="item-label">
+              <div class="item-info">
+                <span class="item-name">${escapeHtml(item.label)}</span>
+                ${isMobile ? `<div class="mobile-category">${escapeHtml(item.category)}</div>` : ''}
+                ${isMobile ? `<div class="mobile-status-details">${statusDetails}</div>` : ''}
+              </div>
+            </td>
+            <td class="item-category">${escapeHtml(item.category)}</td>
+            <td class="item-serial">${serialDisplay}</td>
+            <td class="item-quantity">${quantityDisplay}</td>
+            <td class="item-status">
+              <div class="status-container">
+                <span class="status-badge ${statusClass}">
+                  <span class="status-icon">${statusIcon}</span>
+                  <span class="status-text">${statusText}${availableInfo}</span>
+                </span>
+                ${reservationInfo}
+                ${!isMobile ? `<div class="status-details">${statusDetails}</div>` : ''}
+              </div>
+            </td>
+            <td class="action-buttons" onclick="event.stopPropagation()">
+              <button class="action-btn btn-warning" onclick="editGear('${item._id}')" 
+                  ${item.status === 'checked_out' && item.quantity === 1 ? 'disabled title="Cannot edit checked out gear"' : ''}>
+                <span class="btn-icon">✏️</span>
+                <span class="btn-text">Edit</span>
+              </button>
+              <button class="action-btn btn-danger" onclick="showDeleteConfirmation('${item._id}')"
+                  ${item.status === 'checked_out' && item.quantity === 1 ? 'disabled title="Cannot delete checked out gear"' : ''}>
+                <span class="btn-icon">🗑️</span>
+                <span class="btn-text">Delete</span>
+              </button>
+              ${(item.reservations && item.reservations.length > 0) || (item.history && item.history.length > 0) || item.status === 'checked_out' ? 
+                `<button class="action-btn btn-secondary" onclick="showReleaseAllConfirmation('${item._id}')" title="Release all reservations for this item">
+                  <span class="btn-icon">🔓</span>
+                  <span class="btn-text">Release</span>
+                </button>` : ''}
+              <button class="action-btn btn-info" onclick="showItemDetails('${item._id}')" title="View detailed information">
+                <span class="btn-icon">📋</span>
+                <span class="btn-text">Details</span>
+              </button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+    
+    // Form submit handler
+    async function handleFormSubmit(e) {
+      e.preventDefault();
+      
+      // Get values and ensure proper trimming
+      const labelValue = document.getElementById('label').value.trim();
+      const categoryValue = document.getElementById('category').value;
+      const serialValue = document.getElementById('serial').value.trim();
+      const quantityValue = parseInt(document.getElementById('quantity').value) || 1;
+      
+      // Create form data ensuring empty serials are null
+      const formData = {
+        label: labelValue,
+        category: categoryValue,
+        serial: serialValue.length > 0 ? serialValue : null,
+        quantity: quantityValue
+      };
+      
+      if (!formData.label || !formData.category) {
+        showMessage('Label and category are required.', 'error');
+        return;
+      }
+      
+      if (quantityValue < 1) {
+        showMessage('Quantity must be at least 1.', 'error');
+        return;
+      }
+      
+      const isEditing = gearIdInput.value !== '';
+      let url = `${window.API_BASE}/api/gear-inventory`;
+      let method = 'POST';
+      
+      if (isEditing) {
+        url = `${url}/${gearIdInput.value}`;
+        method = 'PUT';
+      }
+      
+      try {
+        const res = await fetch(url, {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: token
+          },
+          body: JSON.stringify(formData)
+        });
+        
+        const data = await res.json();
+        
+        if (!res.ok) {
+          // Handle specific error cases
+          if (res.status === 409) {
+            if (data.error.includes('Duplicate label')) {
+              throw new Error('A gear item with this label already exists.');
+            } else if (data.error.includes('Duplicate serial')) {
+              // Only show this error if the serial was actually provided
+              if (serialValue.length > 0) {
+                throw new Error('This serial number is already assigned to another gear item.');
+              } else {
+                // This shouldn't happen, but if it does, show the more general error
+                throw new Error(data.error || `Error: ${res.status}`);
+              }
+            } else {
+              throw new Error(data.error || `Error: ${res.status}`);
+            }
+          }
+          throw new Error(data.error || `Error: ${res.status}`);
+        }
+        
+        showMessage(isEditing ? 'Gear updated successfully!' : 'Gear added successfully!', 'success');
+        resetForm();
+        await loadInventory();
+      } catch (err) {
+        showMessage(err.message, 'error');
+      }
+    }
+    
+    // Edit gear
+    function editGear(id) {
+      const item = inventory.find(g => g._id === id);
+      if (!item) return;
+      
+      // Fill the form
+      document.getElementById('gearId').value = item._id;
+      document.getElementById('label').value = item.label;
+      document.getElementById('category').value = item.category;
+      document.getElementById('serial').value = item.serial || '';
+      document.getElementById('quantity').value = item.quantity || 1;
+      
+      // Update UI
+      formTitle.textContent = 'Edit Gear';
+      submitBtn.textContent = 'Update Gear';
+      cancelBtn.style.display = 'inline-block';
+      
+      // Scroll to form
+      document.getElementById('gearForm').scrollIntoView({ behavior: 'smooth' });
+    }
+    
+    // Delete confirmation
+    function showDeleteConfirmation(id) {
+      const item = inventory.find(g => g._id === id);
+      if (!item) return;
+      
+      itemToDelete = id;
+      modalTitle.textContent = 'Confirm Deletion';
+      modalMessage.textContent = `Are you sure you want to delete "${item.label}"?`;
+      confirmModalBtn.textContent = 'Delete';
+      currentAction = 'delete';
+      
+      openModal();
+    }
+    
+    // Release all reservations confirmation
+    function showReleaseAllConfirmation(id) {
+      const item = inventory.find(g => g._id === id);
+      if (!item) return;
+      
+      itemToDelete = id; // Reuse the same variable for simplicity
+      modalTitle.textContent = 'Release All Reservations';
+      
+      // Count total reserved quantity across all reservations
+      let totalReservedQuantity = 0;
+      let reservationEntries = 0;
+      let historyEntries = 0;
+      
+      // For multi-quantity items, count from reservations array
+      if (item.reservations && item.reservations.length > 0) {
+        reservationEntries = item.reservations.length;
+        totalReservedQuantity = item.reservations.reduce((total, reservation) => {
+          return total + (reservation.quantity || 1);
+        }, 0);
+      }
+      
+      // For single-quantity items that are checked out, count from status
+      if (item.quantity === 1 && item.status === 'checked_out') {
+        totalReservedQuantity = 1;
+        reservationEntries = 1;
+      }
+      
+      // Count history entries for additional context
+      if (item.history && item.history.length > 0) {
+        historyEntries = item.history.length;
+        
+        // If we haven't found reservations yet, try to count from future history entries
+        if (totalReservedQuantity === 0) {
+          const now = new Date();
+          now.setUTCHours(0, 0, 0, 0);
+          
+          item.history.forEach(entry => {
+            if (entry.checkInDate) {
+              const entryEnd = new Date(entry.checkInDate);
+              entryEnd.setUTCHours(0, 0, 0, 0);
+              
+              // Only count future reservations
+              if (entryEnd >= now) {
+                totalReservedQuantity += (entry.quantity || 1);
+                reservationEntries++;
+              }
+            }
+          });
+        }
+      }
+      
+      modalMessage.innerHTML = `
+        Are you sure you want to release ALL reservations for "<strong>${item.label}</strong>"?<br><br>
+        This will:<br>
+        • Clear ${totalReservedQuantity} reserved units across ${reservationEntries} reservation(s)<br>
+        • Remove ${historyEntries} history entries<br>
+        • Make the item fully available<br>
+        • Remove this item from ALL gear lists where it appears<br><br>
+        <strong>This action cannot be undone.</strong>
+      `;
+      
+      confirmModalBtn.textContent = 'Release All';
+      confirmModalBtn.className = 'btn-warning'; // Change button color
+      currentAction = 'releaseAll';
+      
+      openModal();
+    }
+    
+    // Handle confirm action
+    async function handleConfirmAction() {
+      if (currentAction === 'delete' && itemToDelete) {
+        await deleteGear(itemToDelete);
+      } else if (currentAction === 'releaseAll' && itemToDelete) {
+        await releaseAllReservations(itemToDelete);
+      } else if (currentAction === 'removeReservation') {
+        await handleReservationRemoval();
+      }
+      
+      closeModal();
+    }
+    
+    // Delete gear
+    async function deleteGear(id) {
+      try {
+        const res = await fetch(`${window.API_BASE}/api/gear-inventory/${id}`, {
+          method: 'DELETE',
+          headers: { Authorization: token }
+        });
+        
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || `Error: ${res.status}`);
+        }
+        
+        showMessage('Gear deleted successfully!', 'success');
+        await loadInventory();
+      } catch (err) {
+        showMessage(err.message, 'error');
+      }
+    }
+    
+    // Release all reservations
+    async function releaseAllReservations(id) {
+      try {
+        const res = await fetch(`${window.API_BASE}/api/gear-inventory/${id}/release-all`, {
+          method: 'POST',
+          headers: { Authorization: token }
+        });
+        
+        if (!res.ok) {
+          const data = await res.json();
+          throw new Error(data.error || `Error: ${res.status}`);
+        }
+        
+        const result = await res.json();
+        
+        // Show detailed success message with information about what was released
+        let message = 'All reservations released successfully!';
+        
+        if (result.releasedReservations) {
+          message += `\n\nDetails:`;
+          message += `\n• Cleared ${result.reservationCount || 0} reservation entries from inventory`;
+          
+          if (result.removedFromLists > 0) {
+            message += `\n• Removed ${result.removedFromLists} items from ${result.affectedEvents} gear lists`;
+            
+            if (result.affectedEventTitles && result.affectedEventTitles.length > 0) {
+              message += `\n• Affected events: ${result.affectedEventTitles.join(', ')}`;
+            }
+          } else {
+            message += `\n• No items found in gear lists to remove`;
+          }
+        }
+        
+        showMessage(message, 'success');
+        await loadInventory();
+      } catch (err) {
+        showMessage(err.message, 'error');
+      }
+    }
+    
+    // Reset form
+    function resetForm() {
+      gearForm.reset();
+      gearIdInput.value = '';
+      formTitle.textContent = 'Add New Gear';
+      submitBtn.textContent = 'Add Gear';
+      cancelBtn.style.display = 'none';
+    }
+    
+    // Show message
+    function showMessage(text, type = 'error') {
+      messageArea.innerHTML = `<div class="msg msg-${type}">${text}</div>`;
+      
+      // Auto-hide after 5 seconds
+      setTimeout(() => {
+        messageArea.innerHTML = '';
+      }, 5000);
+    }
+    
+    // Modal functions
+    function openModal() {
+      confirmModal.style.display = 'block';
+    }
+    
+    function closeModal() {
+      confirmModal.style.display = 'none';
+      currentAction = null;
+      itemToDelete = null;
+      // Reset button styling
+      confirmModalBtn.className = 'btn-danger';
+    }
+    
+    // Enhanced escape HTML function
+    function escapeHtml(text) {
+      const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+      };
+      return text ? text.replace(/[&<>"']/g, m => map[m]) : '';
+    }
+    
+    // Get human-readable association type labels
+    function getAssociationTypeLabel(type) {
+      const labels = {
+        'gear_list': 'In gear list',
+        'reservation': 'Reserved',
+        'history': 'Past booking',
+        'checked_out': 'Currently checked out'
+      };
+      return labels[type] || type;
+    }
+    
+    // Expose functions to window
+    window.editGear = editGear;
+    window.showDeleteConfirmation = showDeleteConfirmation;
+    window.showReleaseAllConfirmation = showReleaseAllConfirmation;
+    window.removeReservation = removeReservation;
+    
+    // Debug function to test gear associations
+    window.debugGearAssociations = async function(gearId) {
+      try {
+        const response = await fetch(`${window.API_BASE}/api/debug/gear/${gearId}`, {
+          headers: { Authorization: token }
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('[DEBUG] Gear associations:', data);
+          alert(`Debug info logged to console for gear ID: ${gearId}`);
+        } else {
+          console.error('[DEBUG] Failed to fetch debug info:', response.status);
+        }
+      } catch (error) {
+        console.error('[DEBUG] Error:', error);
+      }
+    };
+    
+    // Add a resize listener to refresh display on window resize
+    window.addEventListener('resize', () => {
+      renderInventory();
+    });
+    
+    // Back to top button functionality
+    const backToTopBtn = document.getElementById('backToTopBtn');
+    
+    // Show/hide button based on scroll position
+    window.addEventListener('scroll', () => {
+      if (document.body.scrollTop > 300 || document.documentElement.scrollTop > 300) {
+        backToTopBtn.style.display = 'flex';
+      } else {
+        backToTopBtn.style.display = 'none';
+      }
+    });
+    
+    // Scroll to top when button is clicked
+    backToTopBtn.addEventListener('click', () => {
+      window.scrollTo({
+        top: 0,
+        behavior: 'smooth'
+      });
+    });
+    
+    // Enhanced utility functions for improved status reporting
+    
+    // Quick action functions
+    function showAvailableOnly() {
+      statusFilter.value = 'available';
+      filterInventory();
+    }
+    
+    function showCheckedOutOnly() {
+      statusFilter.value = 'checked_out';
+      filterInventory();
+    }
+    
+    // Copy to clipboard functionality
+    function copyToClipboard(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => {
+          showMessage(`Serial number "${text}" copied to clipboard!`, 'success');
+        }).catch(() => {
+          fallbackCopyToClipboard(text);
+        });
+      } else {
+        fallbackCopyToClipboard(text);
+      }
+    }
+    
+    function fallbackCopyToClipboard(text) {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      
+      try {
+        document.execCommand('copy');
+        showMessage(`Serial number "${text}" copied to clipboard!`, 'success');
+      } catch (err) {
+        showMessage('Failed to copy to clipboard', 'error');
+      }
+      
+      document.body.removeChild(textArea);
+    }
+    
+    // Export inventory report
+    function exportInventoryReport() {
+      const reportData = inventory.map(item => {
+        const availability = getAvailabilityStatus(item);
+        return {
+          Label: item.label,
+          Category: item.category,
+          Serial: item.serial || 'N/A',
+          Quantity: item.quantity || 1,
+          Status: availability.status,
+          'Available Date': availability.availableDate ? formatDate(availability.availableDate) : 'N/A',
+          'Last Updated': item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : 'N/A'
+        };
+      });
+      
+      // Convert to CSV
+      const headers = Object.keys(reportData[0] || {});
+      const csvContent = [
+        headers.join(','),
+        ...reportData.map(row => 
+          headers.map(header => 
+            `"${String(row[header]).replace(/"/g, '""')}"`
+          ).join(',')
+        )
+      ].join('\n');
+      
+      // Download CSV
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', `inventory-report-${new Date().toISOString().split('T')[0]}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      showMessage('Inventory report exported successfully!', 'success');
+    }
+    
+    // Show detailed item information with event details
+    async function showItemDetails(id) {
+      const item = inventory.find(g => g._id === id);
+      if (!item) return;
+      
+      const availability = getAvailabilityStatus(item);
+      const availableQty = item.quantity > 1 ? calculateAvailableQuantity(item, checkFromDate.value, checkToDate.value) : (availability.status === 'available' ? 1 : 0);
+      
+      // Show loading state first
+      modalTitle.textContent = `${item.label} - Details`;
+      modalMessage.innerHTML = `
+        <div class="item-details-modal">
+          <div class="loading-details">
+            <div class="loading-spinner"></div>
+            <p>Loading reservation details...</p>
+          </div>
+        </div>
+      `;
+      confirmModalBtn.textContent = 'Close';
+      currentAction = 'details';
+      openModal();
+      
+      try {
+        // Fetch event details for this item
+        const eventResponse = await fetch(`${window.API_BASE}/api/events/by-gear/${id}`, {
+          headers: { Authorization: token }
+        });
+        
+        let eventDetails = [];
+        if (eventResponse.ok) {
+          eventDetails = await eventResponse.json();
+          console.log(`[Item Details] Fetched ${eventDetails.length} events for gear ${item.label}:`, eventDetails);
+        } else {
+          console.error(`[Item Details] Failed to fetch events for gear ${item.label}:`, eventResponse.status, eventResponse.statusText);
+        }
+        
+        // Debug: Log the gear item's reservation and history data
+        console.log(`[Item Details] Gear item data for ${item.label}:`, {
+          reservations: item.reservations,
+          history: item.history,
+          status: item.status,
+          checkedOutEvent: item.checkedOutEvent,
+          checkOutDate: item.checkOutDate,
+          checkInDate: item.checkInDate
+        });
+        
+        // Build reservation details with event information
+        let reservationDetails = '';
+        let historyDetails = '';
+        
+        // Current reservations (from reservations array)
+        if (item.reservations && item.reservations.length > 0) {
+          const reservationPromises = item.reservations.map(async (res) => {
+            // Find matching event by reservation details
+            const matchingEvent = eventDetails.find(event => 
+              event.associationType === 'reservation' &&
+              event.reservationDetails &&
+              event.reservationDetails.checkOutDate === res.checkOutDate &&
+              event.reservationDetails.checkInDate === res.checkInDate
+            );
+            
+            const eventInfo = matchingEvent ? 
+              `<div class="event-info">
+                <span class="event-icon">🎬</span>
+                <strong>Event:</strong> ${escapeHtml(matchingEvent.title)}
+                ${matchingEvent.hasLimitedAccess ? `<br><span class="limited-access">🔒 Limited Access - You don't have permission to view this event</span>` : ''}
+                ${matchingEvent.location ? `<br><span class="event-location">📍 ${escapeHtml(matchingEvent.location)}</span>` : ''}
+                ${matchingEvent.client ? `<br><span class="event-client">👤 ${escapeHtml(matchingEvent.client)}</span>` : ''}
+                ${matchingEvent.associationType ? `<br><span class="association-type">🔗 ${getAssociationTypeLabel(matchingEvent.associationType)}</span>` : ''}
+                ${matchingEvent.reservationDetails?.reservedBy ? `<br><span class="reserved-by">👤 Reserved by: ${escapeHtml(matchingEvent.reservationDetails.reservedBy.name)}</span>` : ''}
+                ${matchingEvent.reservationDetails?.createdAt ? `<br><span class="reservation-date">📅 Reserved: ${formatDate(matchingEvent.reservationDetails.createdAt)}</span>` : ''}
+              </div>` : 
+              `<div class="event-info">
+                <span class="event-icon">❓</span>
+                <em>No associated event found</em>
+                <br><small>This item may be checked out manually or event was deleted</small>
+              </div>`;
+            
+            return `
+              <div class="reservation-detail current">
+                <div class="reservation-header">
+                  <span class="reservation-status current">🔴 Current Reservation</span>
+                  <span class="reservation-dates">
+                    ${formatDate(res.checkOutDate || res.from)} → ${formatDate(res.checkInDate || res.to)}
+                  </span>
+                  <button class="remove-reservation-btn" onclick="removeReservation('${item._id}', '${matchingEvent ? matchingEvent._id : ''}', '${res.checkOutDate || res.from}', '${res.checkInDate || res.to}', ${res.quantity || 1})" title="Remove this reservation">
+                    <span class="btn-icon">🗑️</span>
+                    Remove
+                  </button>
+                </div>
+                ${res.quantity ? `<div class="reservation-quantity"><strong>Quantity:</strong> ${res.quantity} units</div>` : ''}
+                ${eventInfo}
+              </div>
+            `;
+          });
+          
+          const resolvedReservations = await Promise.all(reservationPromises);
+          reservationDetails = resolvedReservations.join('');
+        }
+        
+        // Historical reservations (from history array)
+        if (item.history && item.history.length > 0) {
+          const now = new Date();
+          const futureHistory = item.history.filter(entry => {
+            if (!entry.checkInDate) return false;
+            return new Date(entry.checkInDate) >= now;
+          });
+          
+          if (futureHistory.length > 0) {
+            const historyPromises = futureHistory.map(async (entry) => {
+              // Find matching event by history details
+              const matchingEvent = eventDetails.find(event => 
+                event.associationType === 'history' &&
+                event.historyDetails &&
+                event.historyDetails.checkOutDate === entry.checkOutDate &&
+                event.historyDetails.checkInDate === entry.checkInDate
+              );
+              
+              const eventInfo = matchingEvent ? 
+                `<div class="event-info">
+                  <span class="event-icon">🎬</span>
+                  <strong>Event:</strong> ${escapeHtml(matchingEvent.title)}
+                  ${matchingEvent.hasLimitedAccess ? `<br><span class="limited-access">🔒 Limited Access - You don't have permission to view this event</span>` : ''}
+                  ${matchingEvent.location ? `<br><span class="event-location">📍 ${escapeHtml(matchingEvent.location)}</span>` : ''}
+                  ${matchingEvent.client ? `<br><span class="event-client">👤 ${escapeHtml(matchingEvent.client)}</span>` : ''}
+                  ${matchingEvent.associationType ? `<br><span class="association-type">🔗 ${getAssociationTypeLabel(matchingEvent.associationType)}</span>` : ''}
+                  ${matchingEvent.historyDetails?.reservedBy ? `<br><span class="reserved-by">👤 Reserved by: ${escapeHtml(matchingEvent.historyDetails.reservedBy.name)}</span>` : ''}
+                </div>` : 
+                `<div class="event-info">
+                  <span class="event-icon">❓</span>
+                  <em>No associated event found</em>
+                  <br><small>This item may be checked out manually or event was deleted</small>
+                </div>`;
+              
+              return `
+                <div class="reservation-detail future">
+                  <div class="reservation-header">
+                    <span class="reservation-status future">🟡 Future Reservation</span>
+                    <span class="reservation-dates">
+                      ${formatDate(entry.checkOutDate)} → ${formatDate(entry.checkInDate)}
+                    </span>
+                    <button class="remove-reservation-btn" onclick="removeReservation('${item._id}', '${matchingEvent ? matchingEvent._id : ''}', '${entry.checkOutDate}', '${entry.checkInDate}', ${entry.quantity || 1})" title="Remove this reservation">
+                      <span class="btn-icon">🗑️</span>
+                      Remove
+                    </button>
+                  </div>
+                  ${entry.quantity ? `<div class="reservation-quantity"><strong>Quantity:</strong> ${entry.quantity} units</div>` : ''}
+                  ${eventInfo}
+                </div>
+              `;
+            });
+            
+            const resolvedHistory = await Promise.all(historyPromises);
+            historyDetails = resolvedHistory.join('');
+          }
+        }
+        
+        // Check if item is currently checked out
+        let currentCheckoutDetails = '';
+        if (item.status === 'checked_out' && item.checkOutDate && item.checkInDate) {
+          // Find matching event by checkout details
+          const matchingEvent = eventDetails.find(event => 
+            event.associationType === 'checked_out' &&
+            event.checkoutDetails &&
+            event.checkoutDetails.checkOutDate === item.checkOutDate &&
+            event.checkoutDetails.checkInDate === item.checkInDate
+          );
+          
+          const eventInfo = matchingEvent ? 
+            `<div class="event-info">
+              <span class="event-icon">🎬</span>
+              <strong>Event:</strong> ${escapeHtml(matchingEvent.title)}
+              ${matchingEvent.hasLimitedAccess ? `<br><span class="limited-access">🔒 Limited Access - You don't have permission to view this event</span>` : ''}
+              ${matchingEvent.location ? `<br><span class="event-location">📍 ${escapeHtml(matchingEvent.location)}</span>` : ''}
+              ${matchingEvent.client ? `<br><span class="event-client">👤 ${escapeHtml(matchingEvent.client)}</span>` : ''}
+              ${matchingEvent.checkoutDetails?.checkedOutBy ? `<br><span class="checked-out-by">👤 Checked out by: ${escapeHtml(matchingEvent.checkoutDetails.checkedOutBy.name)}</span>` : ''}
+            </div>` : 
+            `<div class="event-info">
+              <span class="event-icon">❓</span>
+              <em>No associated event found</em>
+              <br><small>This item may be checked out manually or event was deleted</small>
+            </div>`;
+          
+          currentCheckoutDetails = `
+            <div class="reservation-detail checked-out">
+              <div class="reservation-header">
+                <span class="reservation-status checked-out">📤 Currently Checked Out</span>
+                <span class="reservation-dates">
+                  ${formatDate(item.checkOutDate)} → ${formatDate(item.checkInDate)}
+                </span>
+                <button class="remove-reservation-btn" onclick="removeReservation('${item._id}', '${matchingEvent ? matchingEvent._id : ''}', '${item.checkOutDate}', '${item.checkInDate}', 1)" title="Check in this item">
+                  <span class="btn-icon">📥</span>
+                  Check In
+                </button>
+              </div>
+              ${eventInfo}
+            </div>
+          `;
+        }
+        
+        // Update modal with complete information
+        modalMessage.innerHTML = `
+          <div class="item-details-modal">
+            <div class="detail-section">
+              <h4>Basic Information</h4>
+              <div class="detail-grid">
+                <div class="detail-item">
+                  <span class="detail-label">Category:</span>
+                  <span class="detail-value">${item.category}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Serial Number:</span>
+                  <span class="detail-value">${item.serial || 'Not specified'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Total Quantity:</span>
+                  <span class="detail-value">${item.quantity || 1} units</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Available Now:</span>
+                  <span class="detail-value availability-${availability.status}">${availableQty} units</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="detail-section">
+              <h4>Current Status</h4>
+              <div class="status-detail">
+                <span class="status-badge ${availability.status}">
+                  ${availability.status === 'available' ? '✅ Available' : 
+                    availability.status === 'checked_out' ? '📤 Checked Out' :
+                    availability.status === 'future_available' ? '⏰ Future Available' : '⚠️ Conflict'}
+                </span>
+                ${availability.availableDate ? `<div class="availability-date">Available: ${formatDate(availability.availableDate)}</div>` : ''}
+              </div>
+            </div>
+            
+            ${(currentCheckoutDetails || reservationDetails || historyDetails) ? `
+              <div class="detail-section">
+                <h4>Reservations & Events</h4>
+                <div class="reservations-list">
+                  ${currentCheckoutDetails}
+                  ${reservationDetails}
+                  ${historyDetails}
+                  ${(!currentCheckoutDetails && !reservationDetails && !historyDetails) ? 
+                    '<div class="no-reservations">No current or future reservations</div>' : ''}
+                </div>
+              </div>
+            ` : `
+              <div class="detail-section">
+                <h4>Reservations & Events</h4>
+                <div class="no-reservations">
+                  <span class="no-reservations-icon">📅</span>
+                  <p>No current or future reservations</p>
+                  <small>This item is available for checkout</small>
+                </div>
+              </div>
+            `}
+            
+            <div class="detail-section">
+              <h4>System Information</h4>
+              <div class="detail-grid">
+                <div class="detail-item">
+                  <span class="detail-label">Created:</span>
+                  <span class="detail-value">${item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'Unknown'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Last Updated:</span>
+                  <span class="detail-value">${item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : 'Unknown'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Item ID:</span>
+                  <span class="detail-value item-id" onclick="copyToClipboard('${item._id}')" title="Click to copy">${item._id}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+        
+      } catch (error) {
+        console.error('Error fetching event details:', error);
+        
+        // Fallback to basic details if event fetch fails
+        let basicReservationDetails = '';
+        if (item.reservations && item.reservations.length > 0) {
+          basicReservationDetails = item.reservations.map(res => 
+            `<div class="reservation-detail">
+              <div class="reservation-header">
+                <span class="reservation-status">🔴 Current Reservation</span>
+                <span class="reservation-dates">
+                  ${formatDate(res.checkOutDate || res.from)} → ${formatDate(res.checkInDate || res.to)}
+                </span>
+              </div>
+              ${res.quantity ? `<div class="reservation-quantity"><strong>Quantity:</strong> ${res.quantity} units</div>` : ''}
+              <div class="event-info">
+                <em>Event details unavailable</em>
+              </div>
+            </div>`
+          ).join('');
+        }
+        
+        modalMessage.innerHTML = `
+          <div class="item-details-modal">
+            <div class="detail-section">
+              <h4>Basic Information</h4>
+              <div class="detail-grid">
+                <div class="detail-item">
+                  <span class="detail-label">Category:</span>
+                  <span class="detail-value">${item.category}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Serial Number:</span>
+                  <span class="detail-value">${item.serial || 'Not specified'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Total Quantity:</span>
+                  <span class="detail-value">${item.quantity || 1} units</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Available Now:</span>
+                  <span class="detail-value availability-${availability.status}">${availableQty} units</span>
+                </div>
+              </div>
+            </div>
+            
+            <div class="detail-section">
+              <h4>Current Status</h4>
+              <div class="status-detail">
+                <span class="status-badge ${availability.status}">
+                  ${availability.status === 'available' ? '✅ Available' : 
+                    availability.status === 'checked_out' ? '📤 Checked Out' :
+                    availability.status === 'future_available' ? '⏰ Future Available' : '⚠️ Conflict'}
+                </span>
+                ${availability.availableDate ? `<div class="availability-date">Available: ${formatDate(availability.availableDate)}</div>` : ''}
+              </div>
+            </div>
+            
+            ${basicReservationDetails ? `
+              <div class="detail-section">
+                <h4>Reservations</h4>
+                <div class="reservations-list">
+                  ${basicReservationDetails}
+                </div>
+                <div class="error-notice">
+                  <small>⚠️ Unable to load event details</small>
+                </div>
+              </div>
+            ` : ''}
+            
+            <div class="detail-section">
+              <h4>System Information</h4>
+              <div class="detail-grid">
+                <div class="detail-item">
+                  <span class="detail-label">Created:</span>
+                  <span class="detail-value">${item.createdAt ? new Date(item.createdAt).toLocaleDateString() : 'Unknown'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Last Updated:</span>
+                  <span class="detail-value">${item.updatedAt ? new Date(item.updatedAt).toLocaleDateString() : 'Unknown'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Item ID:</span>
+                  <span class="detail-value item-id" onclick="copyToClipboard('${item._id}')" title="Click to copy">${item._id}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+    }
+    
+    // Remove specific reservation
+    async function removeReservation(gearId, eventId, checkOutDate, checkInDate, quantity) {
+      const item = inventory.find(g => g._id === gearId);
+      if (!item) {
+        showMessage('Gear item not found', 'error');
+        return;
+      }
+      
+      // Show confirmation modal
+      modalTitle.textContent = 'Remove Reservation';
+      modalMessage.innerHTML = `
+        <div class="remove-reservation-confirmation">
+          <p>Are you sure you want to remove this reservation?</p>
+          <div class="reservation-summary">
+            <strong>Item:</strong> ${escapeHtml(item.label)}<br>
+            <strong>Dates:</strong> ${formatDate(checkOutDate)} → ${formatDate(checkInDate)}<br>
+            <strong>Quantity:</strong> ${quantity} unit(s)<br>
+            ${eventId ? `<strong>Event:</strong> Will be removed from event gear lists and made available for other bookings` : '<strong>Note:</strong> Manual checkout - will be checked in and made available'}
+          </div>
+          <div class="warning-notice">
+            <strong>⚠️ Warning:</strong> This action cannot be undone. The item will be:
+            <ul style="margin: 8px 0; padding-left: 20px;">
+              <li>Released from this reservation</li>
+              ${eventId ? '<li>Removed from the event\'s gear lists</li>' : ''}
+              <li>Made available for other reservations</li>
+            </ul>
+          </div>
+        </div>
+      `;
+      confirmModalBtn.textContent = 'Remove Reservation';
+      confirmModalBtn.className = 'btn-danger';
+      currentAction = 'removeReservation';
+      
+      // Store the reservation details for the confirmation handler
+      window.pendingReservationRemoval = {
+        gearId,
+        eventId,
+        checkOutDate,
+        checkInDate,
+        quantity
+      };
+      
+      openModal();
+    }
+    
+    // Handle reservation removal
+    async function handleReservationRemoval() {
+      if (!window.pendingReservationRemoval) return;
+      
+      const { gearId, eventId, checkOutDate, checkInDate, quantity } = window.pendingReservationRemoval;
+      
+      try {
+        // Use the existing check-in API endpoint
+        const response = await fetch(`${window.API_BASE}/api/gear-inventory/checkin`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: token
+          },
+          body: JSON.stringify({
+            gearId,
+            eventId: eventId || null,
+            checkOutDate,
+            checkInDate,
+            quantity
+          })
+        });
+        
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || `Error: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        showMessage('Reservation removed successfully!', 'success');
+        
+        // Refresh the inventory and close the modal
+        await loadInventory();
+        closeModal();
+        
+        // If the details modal was open, refresh it
+        if (currentAction === 'details') {
+          setTimeout(() => showItemDetails(gearId), 500);
+        }
+        
+      } catch (error) {
+        console.error('Error removing reservation:', error);
+        showMessage(`Failed to remove reservation: ${error.message}`, 'error');
+      } finally {
+        window.pendingReservationRemoval = null;
+      }
+    }
+  </script>
+<script src="js/add-gear.js"></script>

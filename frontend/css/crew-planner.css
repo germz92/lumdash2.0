@@ -1,0 +1,633 @@
+/* Crew Planner Page Styles */
+.crew-planner-page {
+  font-family: 'Roboto', Arial, sans-serif;
+  background: #f5f7fa;
+  color: #333;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+.crew-planner-page .container {
+  max-width: 1800px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.crew-planner-page .back-btn {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  z-index: 1000;
+  background: #CC0007;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(204, 0, 7, 0.2);
+  transition: background 0.2s;
+}
+
+.crew-planner-page .back-btn:hover {
+  background: #a30006;
+}
+
+.crew-planner-page .header {
+  text-align: center;
+  margin-bottom: 30px;
+  padding-top: 60px;
+}
+
+.crew-planner-page .header h1 {
+  font-size: 2.5rem;
+  margin: 0 0 10px 0;
+  color: #CC0007;
+}
+
+.crew-planner-page .header p {
+  color: #666;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+/* Table Management Controls */
+.crew-planner-page .table-controls {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.crew-planner-page .table-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 300px;
+}
+
+.crew-planner-page .table-selector select {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  min-width: 200px;
+}
+
+.crew-planner-page .table-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* Current Table Info */
+.crew-planner-page .current-table-info {
+  background: #e8f4fd;
+  border: 1px solid #b3d9f2;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.crew-planner-page .current-table-info h3 {
+  margin: 0 0 5px 0;
+  color: #1976d2;
+}
+
+.crew-planner-page .current-table-info p {
+  margin: 0;
+  color: #555;
+}
+
+/* Planning Controls */
+.crew-planner-page .planning-controls {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.crew-planner-page .date-controls,
+.crew-planner-page .event-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.crew-planner-page .date-controls input {
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+/* Table Container */
+.crew-planner-page .table-container {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: visible;
+}
+
+.crew-planner-page .table-wrapper {
+  overflow-x: auto;
+  overflow-y: visible;
+  border-radius: 8px;
+}
+
+.crew-planner-page table {
+  width: 100%;
+  min-width: 1000px;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
+  overflow: hidden;
+  table-layout: fixed;
+}
+
+.crew-planner-page th {
+  background: linear-gradient(90deg, #f8f9fa 0%, #e9ecef 100%);
+  color: #495057;
+  padding: 15px 12px;
+  text-align: left;
+  font-weight: 600;
+  border-bottom: 3px solid #dee2e6;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.crew-planner-page .date-header {
+  width: 220px;
+  min-width: 220px;
+}
+
+
+.crew-planner-page .event-header {
+  min-width: 240px;
+  width: 240px;
+  text-align: center;
+  border-left: 3px solid #dee2e6;
+}
+
+.crew-planner-page .event-subheader {
+  background: #f1f3f4;
+  padding: 8px 12px;
+  font-weight: 500;
+  font-size: 13px;
+  border-bottom: 2px solid #dee2e6;
+  border-left: 2px solid #dee2e6;
+  width: 120px;
+  min-width: 120px;
+  max-width: 120px;
+}
+
+.crew-planner-page td {
+  padding: 12px;
+  border-bottom: 1px solid #f1f1f1;
+  vertical-align: top;
+  height: auto;
+  min-height: 50px;
+}
+
+.crew-planner-page .date-cell {
+  background: #f8f9fa;
+  font-weight: 500;
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  border-right: 3px solid #dee2e6;
+  height: auto;
+  min-height: 50px;
+  vertical-align: top;
+}
+
+
+.crew-planner-page .crew-cell {
+  border-left: 1px solid #f1f1f1;
+  padding: 8px 4px;
+  min-width: 120px;
+  max-width: 150px;
+  width: 120px;
+  height: auto;
+  min-height: 50px;
+  vertical-align: top;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  overflow: visible;
+  position: relative;
+}
+
+.crew-planner-page .crew-cell input,
+.crew-planner-page .crew-cell select {
+  width: 100%;
+  max-width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  background: white;
+  box-sizing: border-box;
+  height: auto;
+  min-height: 32px;
+  line-height: 1.3;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.crew-planner-page .crew-cell select {
+  cursor: pointer;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12"><path fill="%23666" d="M6 8L2 4h8z"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 12px;
+  padding-right: 28px;
+  appearance: none;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  position: relative;
+  z-index: 100;
+}
+
+.crew-planner-page .crew-cell.warning {
+  background: #fff3cd;
+  border-color: #ffeaa7;
+}
+
+.crew-planner-page .crew-cell.warning input {
+  background: #fff3cd;
+  border-color: #f39c12;
+}
+
+.crew-planner-page .crew-cell.empty-crew {
+  background: #ffebee;
+  border-color: #ffcdd2;
+}
+
+.crew-planner-page .crew-cell.empty-crew input,
+.crew-planner-page .crew-cell.empty-crew select {
+  background: #ffebee;
+  border-color: #ef9a9a;
+}
+
+/* Action Buttons */
+.crew-planner-page .action-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.crew-planner-page .action-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.crew-planner-page .delete-btn {
+  color: #dc3545;
+}
+
+.crew-planner-page .delete-btn:hover {
+  background: rgba(220, 53, 69, 0.1);
+}
+
+.crew-planner-page .edit-btn {
+  color: #6c757d;
+}
+
+.crew-planner-page .edit-btn:hover {
+  background: rgba(108, 117, 125, 0.1);
+  color: #495057;
+}
+
+.crew-planner-page .crew-delete-btn {
+  font-size: 16px;
+  padding: 2px;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.crew-planner-page .crew-delete-btn .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.crew-planner-page .add-crew-btn {
+  background: transparent;
+  color: #6c757d;
+  font-size: 14px;
+  padding: 4px;
+  min-width: 24px;
+  height: 24px;
+  border: 1px solid #dee2e6;
+  border-radius: 4px;
+  flex-shrink: 0;
+  opacity: 0.6;
+  transition: all 0.2s ease;
+}
+
+.crew-planner-page .add-crew-btn:hover {
+  background: #f8f9fa;
+  color: #495057;
+  opacity: 1;
+  border-color: #adb5bd;
+}
+
+.crew-planner-page .add-crew-btn .material-symbols-outlined {
+  font-size: 16px;
+  font-weight: 300;
+}
+
+/* Ensure consistent row heights */
+.crew-planner-page tr {
+  height: auto;
+  min-height: 50px;
+}
+
+.crew-planner-page .crew-cell > div {
+  height: 100%;
+  min-height: 32px;
+  align-items: center;
+}
+
+/* Empty State */
+.crew-planner-page .empty-state td {
+  text-align: center;
+  padding: 40px;
+  color: #666;
+  font-style: italic;
+}
+
+/* Buttons */
+.crew-planner-page .btn {
+  padding: 10px 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+  text-decoration: none;
+}
+
+.crew-planner-page .btn-primary {
+  background: #CC0007;
+  color: white;
+}
+
+.crew-planner-page .btn-primary:hover {
+  background: #a30006;
+}
+
+.crew-planner-page .btn-primary:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+.crew-planner-page .btn-secondary {
+  background: #6c757d;
+  color: white;
+}
+
+.crew-planner-page .btn-secondary:hover {
+  background: #5a6268;
+}
+
+.crew-planner-page .btn-danger {
+  background: #dc3545;
+  color: white;
+}
+
+.crew-planner-page .btn-danger:hover {
+  background: #c82333;
+}
+
+.crew-planner-page .btn-danger:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* Modal Styles */
+.crew-planner-page .modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+
+.crew-planner-page .modal.show {
+  display: flex;
+}
+
+.crew-planner-page .modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.crew-planner-page .modal-header {
+  padding: 20px 20px 0 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.crew-planner-page .modal-header h3 {
+  margin: 0;
+  color: #333;
+}
+
+.crew-planner-page .close-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  color: #666;
+}
+
+.crew-planner-page .close-btn:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.crew-planner-page .modal-body {
+  padding: 20px;
+}
+
+.crew-planner-page .modal-footer {
+  padding: 0 20px 20px 20px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.crew-planner-page .form-group {
+  margin-bottom: 20px;
+}
+
+.crew-planner-page .form-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+  color: #333;
+}
+
+.crew-planner-page .form-group input,
+.crew-planner-page .form-group textarea {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.crew-planner-page .form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Toast Notifications */
+.crew-planner-page .toast {
+  position: fixed;
+  top: 100px;
+  right: 20px;
+  background: white;
+  border-radius: 8px;
+  padding: 15px 20px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  z-index: 1001;
+  max-width: 400px;
+  border-left: 4px solid #f39c12;
+}
+
+.crew-planner-page .toast.warning {
+  border-left-color: #f39c12;
+  background: #fff3cd;
+}
+
+.crew-planner-page .toast button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  color: #666;
+  margin-left: auto;
+}
+
+.crew-planner-page .toast button:hover {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .crew-planner-page .container {
+    padding: 10px;
+  }
+  
+  .crew-planner-page .table-controls,
+  .crew-planner-page .planning-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .crew-planner-page .table-selector {
+    min-width: auto;
+  }
+  
+  .crew-planner-page .header h1 {
+    font-size: 2rem;
+  }
+  
+  .crew-planner-page .back-btn {
+    position: relative;
+    top: auto;
+    left: auto;
+    margin-bottom: 20px;
+  }
+  
+  .crew-planner-page .header {
+    padding-top: 20px;
+  }
+  
+  .crew-planner-page table {
+    min-width: 600px;
+    font-size: 13px;
+  }
+  
+  .crew-planner-page th,
+  .crew-planner-page td {
+    padding: 8px 6px;
+  }
+}
+
+/* Date and Event Separation Lines */
+.crew-planner-page .date-separator td {
+  border-top: 4px solid #adb5bd !important;
+}
+
+.crew-planner-page .event-separator {
+  border-left: 4px solid #adb5bd !important;
+}
+
+.crew-planner-page .event-header.event-separator {
+  border-left: 4px solid #adb5bd !important;
+}
+
+.crew-planner-page .event-subheader.event-separator {
+  border-left: 4px solid #adb5bd !important;
+}
+
+/* Ensure buttons in crew planner follow app styling */
+.crew-planner-page .btn-crew-planner.btn-outlined {
+  color: var(--md-sys-color-on-surface-variant);
+  border-color: var(--md-sys-color-outline);
+  background: transparent;
+}
+
+.crew-planner-page .btn-crew-planner.btn-outlined:hover {
+  background-color: rgba(0,0,0, 0.08);
+  color: var(--md-sys-color-on-surface);
+}

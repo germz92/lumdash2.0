@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Notes</title>
+  <link href="https://fonts.googleapis.com/css?family=Roboto:400,500,700&display=swap" rel="stylesheet">
+  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+  <link rel="stylesheet" href="../css/notes.css">
+  
+  <!-- Load Quill and config.js first -->
+  <script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
+  <script src="../js/config.js"></script>
+</head>
+<body class="notes-page">
+  <button id="backBtn" class="back-btn" type="button" aria-label="Back"><span class="back-arrow">←</span> Back</button>
+  <div class="notes-header">
+    <h2>Admin Notes</h2>
+    <span id="notesEventTitle"></span>
+    <button id="addNoteBtn" class="add-note-btn">+ Add Note</button>
+  </div>
+  <div id="notesContainer">
+    <div id="notesList"></div>
+  </div>
+  
+  <!-- Modal for add/edit note -->
+  <div id="noteModal" class="note-modal" style="display:none;">
+    <div class="note-modal-content">
+      <h3 id="modalTitle">Add Note</h3>
+      <div class="modal-scroll">
+        <div class="modal-sticky-header">
+          <label for="noteTitleInput">Title</label>
+          <input id="noteTitleInput" type="text" maxlength="100" placeholder="Note title">
+        </div>
+        <div id="modalEditor"></div>
+        <div id="modalError" class="modal-error" style="display:none;"></div>
+      </div>
+      <div class="modal-actions">
+        <button id="saveNoteBtn">Save</button>
+        <button id="cancelNoteBtn" class="cancel-btn">Cancel</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Handle sequential script loading to ensure proper order -->
+  <script>
+    // This function will load scripts in sequence
+    function loadScriptsSequentially(scripts, index = 0) {
+      if (index >= scripts.length) return;
+      
+      const script = document.createElement('script');
+      script.src = scripts[index];
+      
+      script.onload = function() {
+        loadScriptsSequentially(scripts, index + 1);
+      };
+      
+      script.onerror = function() {
+        console.error('Failed to load script:', scripts[index]);
+        // Try to continue loading the next script
+        loadScriptsSequentially(scripts, index + 1);
+      };
+      
+      document.head.appendChild(script);
+    }
+    
+    // Load in this specific order
+    loadScriptsSequentially([
+      'https://cdn.socket.io/4.7.2/socket.io.min.js',
+      '../js/socket.js',
+      '../js/notes.js'
+    ]);
+    
+    // Set up back button
+    document.getElementById('backBtn').onclick = () => window.history.back();
+  </script>
+</body>
+</html> 

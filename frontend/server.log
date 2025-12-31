@@ -1,0 +1,22 @@
+SENDGRID_API_KEY loaded: true
+SENDGRID_FROM_EMAIL: info@lumetrymedia.com
+APP_URL: https://lumdash.app
+Cloudinary Environment Variables:
+CLOUDINARY_CLOUD_NAME: SET
+CLOUDINARY_API_KEY: SET
+CLOUDINARY_API_SECRET: SET
+Cloudinary config: { cloud_name: 'dnp0pvego', api_key: '***7966', api_secret: '***02O4' }
+Server started on port 3000
+MongoDB connected
+Socket.IO: Client connected
+Socket.IO: Client connected
+Socket.IO: Client connected
+Socket.IO: Client connected
+Socket.IO: Client connected
+Socket.IO: Client connected
+📢 Emitting documentsChanged event for tableId: 6811a0d0eee337cc72d1e139
+Socket.IO: Client connected
+Socket.IO: Client connected
+Socket.IO: Client connected
+Socket.IO: Client connected
+Socket.IO: Client connected

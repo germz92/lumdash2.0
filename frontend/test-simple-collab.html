@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Collaboration Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .test-section {
+            margin-bottom: 30px;
+        }
+        
+        .test-section h2 {
+            color: #555;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        
+        .program-entry {
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 10px 0;
+            background: #f9f9f9;
+        }
+        
+        .program-entry input, .program-entry textarea {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin: 5px 0;
+            font-size: 14px;
+        }
+        
+        .program-entry textarea {
+            min-height: 60px;
+            resize: vertical;
+        }
+        
+        .test-controls {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        
+        .test-controls button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        
+        .test-controls button:hover {
+            background: #0056b3;
+        }
+        
+        .status {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        
+        .log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            height: 200px;
+            overflow-y: auto;
+        }
+        
+        .connected {
+            color: #28a745;
+            font-weight: bold;
+        }
+        
+        .disconnected {
+            color: #dc3545;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🧹 Simple Collaboration Test</h1>
+        
+        <div class="test-controls">
+            <button onclick="initializeCollab()">Initialize Collaboration</button>
+            <button onclick="testRemoteUpdate()">Test Remote Update</button>
+            <button onclick="testEditingIndicator()">Test Editing Indicator</button>
+            <button onclick="clearLog()">Clear Log</button>
+        </div>
+        
+        <div class="status" id="status">
+            Status: <span id="statusText">Not initialized</span>
+        </div>
+        
+        <div class="test-section">
+            <h2>Test Program Entry</h2>
+            <div class="program-entry" data-program-id="test-program-1">
+                <input type="text" data-field="name" placeholder="Program Name" value="Test Program">
+                <input type="time" data-field="startTime" value="14:00">
+                <input type="time" data-field="endTime" value="15:00">
+                <textarea data-field="location" placeholder="Location">Test Location</textarea>
+                <textarea data-field="notes" placeholder="Notes">Test notes here</textarea>
+                <label>
+                    <input type="checkbox" data-field="done" data-original-value="false"> Done
+                </label>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Another Test Entry</h2>
+            <div class="program-entry" data-program-id="test-program-2">
+                <input type="text" data-field="name" placeholder="Program Name" value="Another Program">
+                <input type="time" data-field="startTime" value="16:00">
+                <input type="time" data-field="endTime" value="17:00">
+                <textarea data-field="location" placeholder="Location">Another Location</textarea>
+                <textarea data-field="notes" placeholder="Notes">More notes</textarea>
+                <label>
+                    <input type="checkbox" data-field="done" data-original-value="true" checked> Done
+                </label>
+            </div>
+        </div>
+        
+        <div class="test-section">
+            <h2>Event Log</h2>
+            <div class="log" id="eventLog"></div>
+        </div>
+    </div>
+
+    <!-- Socket.IO - Use CDN for real testing -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    
+    <!-- Simple Collaboration System -->
+    <script src="js/schedule-simple-collab.js"></script>
+    
+    <script>
+        // Test setup
+        let testSocket = null;
+        let eventLog = [];
+        
+        // Initialize fake socket for testing
+        function initializeCollab() {
+            // Use a FIXED event ID so all browsers join the same room
+            const eventId = 'test-event-collaboration-room';
+            const userId = 'test-user-' + Math.random().toString(36).substr(2, 9);
+            const userName = 'Test User ' + Math.floor(Math.random() * 100);
+            
+            // Initialize simple collaboration
+            if (window.SimpleCollab) {
+                window.SimpleCollab.init(eventId, userId, userName);
+                updateStatus('connected', `Collaboration initialized for ${userName}`);
+                logEvent(`✅ Initialized collaboration for ${userName} (ID: ${userId})`);
+            } else {
+                updateStatus('disconnected', 'SimpleCollab not loaded');
+                logEvent('❌ SimpleCollab not available');
+            }
+        }
+        
+        function testRemoteUpdate() {
+            if (!window.SimpleCollab || !window.SimpleCollab.isEnabled()) {
+                logEvent('❌ Collaboration not initialized');
+                return;
+            }
+            
+            // Simulate a remote update
+            const updates = [
+                { programId: 'test-program-1', field: 'name', value: 'Updated Program Name' },
+                { programId: 'test-program-2', field: 'location', value: 'Updated Location' },
+                { programId: 'test-program-1', field: 'done', value: true }
+            ];
+            
+            const randomUpdate = updates[Math.floor(Math.random() * updates.length)];
+            
+            window.SimpleCollab.test.simulateRemoteUpdate(
+                randomUpdate.programId, 
+                randomUpdate.field, 
+                randomUpdate.value
+            );
+            
+            logEvent(`📥 Simulated remote update: ${randomUpdate.field} = ${randomUpdate.value}`);
+        }
+        
+        function testEditingIndicator() {
+            if (!window.SimpleCollab || !window.SimpleCollab.isEnabled()) {
+                logEvent('❌ Collaboration not initialized');
+                return;
+            }
+            
+            const testCases = [
+                { programId: 'test-program-1', field: 'name' },
+                { programId: 'test-program-2', field: 'location' },
+                { programId: 'test-program-1', field: 'notes' }
+            ];
+            
+            const randomTest = testCases[Math.floor(Math.random() * testCases.length)];
+            
+            window.SimpleCollab.test.showTestIndicator(
+                randomTest.programId, 
+                randomTest.field
+            );
+            
+            logEvent(`👤 Simulated editing indicator: ${randomTest.field}`);
+            
+            // Hide after 3 seconds
+            setTimeout(() => {
+                const fieldElement = document.querySelector(
+                    `[data-program-id="${randomTest.programId}"] [data-field="${randomTest.field}"]`
+                );
+                if (fieldElement) {
+                    fieldElement.style.borderLeft = '';
+                    fieldElement.style.boxShadow = '';
+                    const badge = fieldElement.parentNode.querySelector('.editing-badge');
+                    if (badge) badge.remove();
+                }
+                logEvent(`✅ Cleared editing indicator`);
+            }, 3000);
+        }
+        
+        function updateStatus(type, message) {
+            const statusText = document.getElementById('statusText');
+            statusText.textContent = message;
+            statusText.className = type;
+        }
+        
+        function logEvent(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            eventLog.push(`[${timestamp}] ${message}`);
+            
+            // Keep only last 50 events
+            if (eventLog.length > 50) {
+                eventLog = eventLog.slice(-50);
+            }
+            
+            const logDiv = document.getElementById('eventLog');
+            logDiv.innerHTML = eventLog.join('\n');
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+        
+        function clearLog() {
+            eventLog = [];
+            document.getElementById('eventLog').innerHTML = '';
+            logEvent('🧹 Log cleared');
+        }
+        
+        // Mock Socket.IO for frontend testing
+        function createMockSocket() {
+            const mockSocket = {
+                connected: true,
+                emit: function(event, data) {
+                    logEvent(`📤 Mock emit: ${event} with data:`, data);
+                },
+                on: function(event, callback) {
+                    logEvent(`👂 Mock listener added for: ${event}`);
+                }
+            };
+            return mockSocket;
+        }
+        
+        // Socket.IO connection monitoring
+        if (typeof io !== 'undefined') {
+            try {
+                // Connect to the backend server
+                const socket = io('http://localhost:3000');
+                
+                socket.on('connect', () => {
+                    logEvent('🔌 Socket.IO connected to backend');
+                    updateStatus('connected', 'Socket.IO connected to backend');
+                    window.socket = socket; // Make available to SimpleCollab
+                });
+                
+                socket.on('disconnect', () => {
+                    logEvent('❌ Socket.IO disconnected');
+                    updateStatus('disconnected', 'Socket.IO disconnected');
+                });
+                
+                socket.on('error', (error) => {
+                    logEvent(`❌ Socket.IO error: ${error}`);
+                });
+                
+                // Listen for collaboration events
+                socket.on('userStartedEditing', (data) => {
+                    logEvent(`👤 ${data.userName} started editing ${data.field}`);
+                });
+                
+                socket.on('userStoppedEditing', (data) => {
+                    logEvent(`✅ User stopped editing ${data.field}`);
+                });
+                
+                socket.on('fieldUpdated', (data) => {
+                    logEvent(`📥 Field ${data.field} updated to: ${data.value} by ${data.userName}`);
+                });
+                
+            } catch (error) {
+                logEvent('⚠️ Socket.IO connection failed, using mock');
+                window.socket = createMockSocket();
+                updateStatus('disconnected', 'Using mock socket for testing');
+            }
+        } else {
+            logEvent('⚠️ Socket.IO not available, using mock');
+            window.socket = createMockSocket();
+            updateStatus('disconnected', 'Using mock socket for testing');
+        }
+        
+        // Initialize on page load
+        window.addEventListener('load', () => {
+            logEvent('🚀 Test page loaded');
+            
+            // Check if SimpleCollab is available
+            if (window.SimpleCollab) {
+                logEvent('✅ SimpleCollab loaded successfully');
+            } else {
+                logEvent('❌ SimpleCollab not loaded');
+            }
+        });
+    </script>
+</body>
+</html> 

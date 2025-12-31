@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Simple Collaboration</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .debug-section { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .status { padding: 10px; border-radius: 5px; margin: 10px 0; font-weight: bold; }
+        .connected { background: #d4edda; color: #155724; }
+        .disconnected { background: #f8d7da; color: #721c24; }
+        .program-entry { border: 1px solid #ddd; padding: 15px; margin: 10px 0; background: white; }
+        .program-entry input { width: 100%; padding: 5px; margin: 5px 0; }
+        button { padding: 10px 15px; margin: 5px; cursor: pointer; }
+        .log { background: #333; color: #fff; padding: 10px; height: 300px; overflow-y: auto; font-family: monospace; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Debug Simple Collaboration</h1>
+    
+    <div class="debug-section">
+        <h3>Connection Status</h3>
+        <div id="status" class="status disconnected">Not connected</div>
+        <button onclick="connectToBackend()">Connect to Backend</button>
+        <button onclick="initializeCollab()">Initialize Collaboration</button>
+    </div>
+    
+    <div class="debug-section">
+        <h3>Test Program Entry</h3>
+        <div class="program-entry" data-program-id="debug-program-1">
+            <input type="text" data-field="name" placeholder="Program Name" value="Debug Program">
+            <input type="text" data-field="location" placeholder="Location" value="Debug Location">
+        </div>
+    </div>
+    
+    <div class="debug-section">
+        <h3>Manual Tests</h3>
+        <button onclick="testSendEvent()">Test Send Event</button>
+        <button onclick="testEditingIndicator()">Test Editing Indicator</button>
+        <button onclick="clearLogs()">Clear Logs</button>
+    </div>
+    
+    <div class="debug-section">
+        <h3>Event Logs</h3>
+        <div id="log" class="log"></div>
+    </div>
+
+    <!-- Socket.IO -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <!-- Simple Collaboration System -->
+    <script src="js/schedule-simple-collab.js"></script>
+    
+    <script>
+        let logs = [];
+        
+        function log(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            logs.push(`[${timestamp}] ${message}`);
+            document.getElementById('log').innerHTML = logs.join('\n');
+            document.getElementById('log').scrollTop = document.getElementById('log').scrollHeight;
+            console.log(message);
+        }
+        
+        function updateStatus(connected, message) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = message;
+            statusEl.className = `status ${connected ? 'connected' : 'disconnected'}`;
+        }
+        
+        function connectToBackend() {
+            log('🔌 Attempting to connect to backend...');
+            
+            if (window.socket) {
+                window.socket.disconnect();
+            }
+            
+            window.socket = io('http://localhost:3000');
+            
+            window.socket.on('connect', () => {
+                log('✅ Connected to backend Socket.IO');
+                updateStatus(true, 'Connected to backend');
+            });
+            
+            window.socket.on('disconnect', () => {
+                log('❌ Disconnected from backend');
+                updateStatus(false, 'Disconnected');
+            });
+            
+            window.socket.on('connect_error', (error) => {
+                log(`❌ Connection error: ${error.message}`);
+                updateStatus(false, `Error: ${error.message}`);
+            });
+            
+            // Listen for collaboration events
+            window.socket.on('userStartedEditing', (data) => {
+                log(`👤 Received: ${data.userName} started editing ${data.field}`);
+            });
+            
+            window.socket.on('userStoppedEditing', (data) => {
+                log(`✅ Received: User stopped editing ${data.field}`);
+            });
+            
+            window.socket.on('fieldUpdated', (data) => {
+                log(`📥 Received: Field ${data.field} updated to "${data.value}" by ${data.userName}`);
+                
+                // Apply the update to our test field
+                const fieldElement = document.querySelector(`[data-program-id="${data.programId}"] [data-field="${data.field}"]`);
+                if (fieldElement && fieldElement !== document.activeElement) {
+                    fieldElement.value = data.value;
+                    fieldElement.style.background = '#fff3cd';
+                    setTimeout(() => fieldElement.style.background = '', 1000);
+                }
+            });
+        }
+        
+        function initializeCollab() {
+            if (!window.socket || !window.socket.connected) {
+                log('❌ Not connected to backend - connect first');
+                return;
+            }
+            
+            if (!window.SimpleCollab) {
+                log('❌ SimpleCollab not loaded');
+                return;
+            }
+            
+            const eventId = 'debug-event-collaboration-room';
+            const userId = 'debug-user-' + Math.random().toString(36).substr(2, 9);
+            const userName = 'Debug User ' + Math.floor(Math.random() * 100);
+            
+            log(`🚀 Initializing collaboration: ${userName}`);
+            
+            window.SimpleCollab.init(eventId, userId, userName);
+            
+            log(`✅ Collaboration initialized for ${userName}`);
+        }
+        
+        function testSendEvent() {
+            if (!window.socket || !window.socket.connected) {
+                log('❌ Not connected - cannot send event');
+                return;
+            }
+            
+            const testData = {
+                eventId: 'debug-event-test',
+                programId: 'debug-program-1',
+                field: 'name',
+                value: 'Test Update ' + Date.now(),
+                userId: 'debug-user-test',
+                userName: 'Debug Test User'
+            };
+            
+            log(`📤 Sending test updateField event: ${JSON.stringify(testData)}`);
+            window.socket.emit('updateField', testData);
+        }
+        
+        function testEditingIndicator() {
+            const input = document.querySelector('[data-field="name"]');
+            if (input) {
+                input.focus();
+                input.style.borderLeft = '3px solid #FF6B6B';
+                log('👁️ Applied editing indicator to name field');
+                
+                setTimeout(() => {
+                    input.blur();
+                    input.style.borderLeft = '';
+                    log('✅ Removed editing indicator');
+                }, 3000);
+            }
+        }
+        
+        function clearLogs() {
+            logs = [];
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        // Auto-connect on page load
+        window.addEventListener('load', () => {
+            log('🚀 Debug page loaded');
+            connectToBackend();
+        });
+    </script>
+</body>
+</html> 

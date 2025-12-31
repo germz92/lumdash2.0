@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline - Events Dashboard</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#cc0007">
+  <link rel="shortcut icon" type="image/x-icon" href="assets/favicon.png">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: linear-gradient(135deg, #f5f7fa 0%, #e9ecf3 100%);
+      color: #333;
+      text-align: center;
+    }
+    
+    .container {
+      max-width: 450px;
+      padding: 30px;
+      background-color: white;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+    }
+    
+    img {
+      width: 120px;
+      margin-bottom: 20px;
+    }
+    
+    h1 {
+      font-size: 28px;
+      margin-bottom: 15px;
+      color: #cc0007;
+    }
+    
+    p {
+      font-size: 16px;
+      line-height: 1.5;
+      margin-bottom: 25px;
+    }
+    
+    button {
+      background-color: #cc0007;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    
+    button:hover {
+      background-color: #a30006;
+    }
+    
+    .status {
+      margin-top: 20px;
+      font-size: 14px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <img src="assets/logo.png" alt="Events Dashboard Logo">
+    <h1>You're Offline</h1>
+    <p>It looks like you don't have an internet connection right now. Some features of the Events Dashboard may not work properly until you're back online.</p>
+    <button id="reloadBtn">Try Again</button>
+    <div class="status" id="status">Checking connection...</div>
+  </div>
+
+  <script>
+    // Check network status
+    function updateStatus() {
+      const statusEl = document.getElementById('status');
+      if (navigator.onLine) {
+        statusEl.textContent = 'Internet connection detected! Redirecting...';
+        statusEl.style.color = '#4CAF50';
+        setTimeout(() => {
+          window.location.href = './index.html';
+        }, 1500);
+      } else {
+        statusEl.textContent = 'Still offline. Please check your connection.';
+        statusEl.style.color = '#F44336';
+      }
+    }
+    
+    // Add event listeners
+    window.addEventListener('online', updateStatus);
+    window.addEventListener('offline', updateStatus);
+    
+    // Set up reload button
+    document.getElementById('reloadBtn').addEventListener('click', () => {
+      updateStatus();
+    });
+    
+    // Initial check
+    setTimeout(updateStatus, 500);
+  </script>
+</body>
+</html> 

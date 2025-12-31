@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Lumetry Dashboard</title>
+  
+  <!-- PWA Meta Tags -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#cc0007">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="LumDash">
+  <link rel="apple-touch-icon" href="assets/logo.png">
+  <link rel="shortcut icon" type="image/x-icon" href="assets/favicon.png">
+  
+  <link href="https://fonts.googleapis.com/css?family=Roboto:400,500,700&display=swap" rel="stylesheet">
+  <!-- Plus Jakarta Sans for dark theme -->
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <!-- Add Material Symbols -->
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css">
+  <!-- Dark Theme CSS -->
+  <link rel="stylesheet" href="css/theme-dark.css">
+  
+  <!-- Page-specific CSS -->
+  <link rel="stylesheet" href="css/crew.css">
+  <link rel="stylesheet" href="css/events.css">
+  <link rel="stylesheet" href="css/general.css">
+  <link rel="stylesheet" href="css/schedule.css">
+  <link rel="stylesheet" href="css/travel-accommodation.css">
+  <link rel="stylesheet" href="css/gear.css">
+  <link rel="stylesheet" href="css/card-log.css">
+  <link rel="stylesheet" href="css/shotlist.css">
+  <link rel="stylesheet" href="css/users.css">
+  <link rel="stylesheet" href="css/crew-planner.css">
+  <link rel="stylesheet" href="css/chat.css">
+  
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+      font-family: 'Roboto', Arial, sans-serif;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    #page-container {
+      flex: 1;
+      padding: 20px 20px 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      position: relative;
+    }
+
+    /* Add offline indicator styles */
+    .offline-indicator {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background-color: #f44336;
+      color: white;
+      text-align: center;
+      padding: 8px;
+      font-weight: bold;
+      z-index: 9999;
+    }
+    
+    body.offline .offline-indicator {
+      display: block;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Offline indicator -->
+  <div class="offline-indicator">You are currently offline. Some features may be limited.</div>
+
+  <!-- Page content gets injected here -->
+  <div id="page-container">
+    <!-- Individual page content will be injected here -->
+  </div>
+
+  <!-- Bottom nav -->
+  <nav class="bottom-nav-material" id="bottomNav">
+    <a href="#" id="navHome" data-page="general"><span class="material-symbols-outlined">home</span><span>Home</span></a>
+    <a href="#" id="navCrew" data-page="crew"><span class="material-symbols-outlined">group</span><span>Crew</span></a>
+    <a href="#" id="navLuma" class="chat-button-nav"><span class="material-symbols-outlined">lightbulb_2</span><span>Luma</span></a>
+    <a href="#" id="navSchedule" data-page="schedule"><span class="material-symbols-outlined">calendar_today</span><span>Schedule</span></a>
+    <a href="#" id="navShotlist" data-page="shotlist"><span class="material-symbols-outlined">checklist</span><span>Shotlist</span></a>
+    
+    <!-- Dropdown menu for Travel, Gear, Cards, Map, Exit -->
+    <div class="nav-dropdown" id="navMore">
+      <a href="#" class="dropdown-toggle">
+        <span class="material-symbols-outlined">more_horiz</span>
+        <span>More</span>
+      </a>
+      <div class="dropdown-menu" id="dropdownMenu">
+        <a href="#" data-page="travel-accommodation">
+          <span class="material-symbols-outlined">flight_takeoff</span>
+          <span>Travel</span>
+        </a>
+        <a href="#" data-page="gear">
+          <span class="material-symbols-outlined">photo_camera</span>
+          <span>Gear</span>
+        </a>
+        <a href="#" data-page="card-log">
+          <span class="material-symbols-outlined">sd_card</span>
+          <span>Cards</span>
+        </a>
+                <a href="#" data-page="documents">
+          <span class="material-symbols-outlined">map</span>
+          <span>Map</span>
+        </a>
+        <a href="#" data-page="shotlist" class="mobile-shotlist-dropdown">
+          <span class="material-symbols-outlined">checklist</span>
+          <span>Shotlist</span>
+        </a>
+        <a href="#" id="navExit" data-page="events">
+          <span class="material-symbols-outlined">exit_to_app</span>
+          <span>Exit</span>
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Load icons and app logic -->
+  <!-- Remove Lucide script -->
+  <!-- <script src="https://unpkg.com/lucide@latest"></script> -->
+  
+  <!-- Load config.js first to define API_BASE -->
+  <script src="js/config.js"></script>
+  
+  <script>
+    // Dynamically load Socket.IO only for pages that need real-time updates
+    // Pages that need Socket.IO: events, general, crew, schedule, travel-accommodation, gear, card-log
+    // Pages that DON'T need Socket.IO: documents (maps)
+    
+    function loadSocketIO() {
+      const currentPage = location.hash.replace('#', '') || 'events';
+      const pagesNeedingSocketIO = ['events', 'general', 'crew', 'schedule', 'travel-accommodation', 'gear', 'card-log', 'shotlist'];
+      
+      if (pagesNeedingSocketIO.includes(currentPage)) {
+        // Only load Socket.IO if not already loaded
+        if (!window.io) {
+          const socketIoSrc = 'https://cdn.socket.io/4.7.2/socket.io.min.js';
+          
+          const socketScript = document.createElement('script');
+          socketScript.src = socketIoSrc;
+          
+          socketScript.onload = function() {
+            console.log('Socket.IO client loaded from:', socketIoSrc);
+            
+            // Now load socket.js after Socket.IO is ready
+            const socketJsScript = document.createElement('script');
+            socketJsScript.src = 'js/socket.js';
+            document.head.appendChild(socketJsScript);
+          };
+          
+          socketScript.onerror = function() {
+            console.error('Failed to load Socket.IO client from:', socketIoSrc);
+          };
+          
+          document.head.appendChild(socketScript);
+        }
+      } else {
+        console.log(`Page ${currentPage} doesn't need Socket.IO, skipping load`);
+      }
+    }
+    
+    // Load Socket.IO on initial page load
+    loadSocketIO();
+    
+    // Also check when hash changes (page navigation)
+    window.addEventListener('hashchange', loadSocketIO);
+  </script>
+  
+  <!-- Load other scripts after config.js -->
+  <script src="js/api.js"></script>
+  <script src="js/app.js"></script>
+  
+  <!-- Shared dashboard sidebar component (for users page, etc.) -->
+  <script src="js/sidebar-dashboard.js"></script>
+  
+  <!-- AI Chat Widget -->
+  <script src="js/chat.js"></script>
+  
+  <!-- PWA Page Restoration Script -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Check if we should restore the last page state
+      const urlHash = window.location.hash.replace('#', '');
+      const urlParams = new URLSearchParams(window.location.search);
+      const hasEventParam = urlParams.get('id') || urlParams.get('eventId');
+      const pageParam = urlParams.get('page');
+      
+      // If there's a page parameter (coming from gear page), navigate to that page
+      if (pageParam && hasEventParam) {
+        console.log(`[PWA] Navigating to page from URL parameter: ${pageParam} with eventId: ${hasEventParam}`);
+        navigate(pageParam, hasEventParam);
+        return;
+      }
+      
+      // Only attempt restoration if no specific page is requested in the URL
+      if (!urlHash && !hasEventParam && typeof restoreLastPageState === 'function') {
+        const restored = restoreLastPageState();
+        
+        // If no page was restored, navigate to default events page
+        if (!restored) {
+          console.log('[PWA] No page restored, navigating to default events page');
+          navigate('events');
+        }
+      } else if (urlHash) {
+        // If there's a hash in the URL, navigate to that page
+        const eventId = hasEventParam || localStorage.getItem('eventId');
+        navigate(urlHash, eventId);
+      } else {
+        // Default fallback
+        navigate('events');
+      }
+    });
+    
+    // Handle browser back/forward navigation to also save page state
+    window.addEventListener('hashchange', function(e) {
+      const newHash = window.location.hash.replace('#', '');
+      if (newHash && typeof saveCurrentPageState === 'function') {
+        const eventId = localStorage.getItem('eventId');
+        console.log('[PWA] Hash changed to:', newHash, 'saving page state');
+        saveCurrentPageState(newHash, eventId);
+      }
+    });
+    
+    // Handle PWA lifecycle events to save page state
+    document.addEventListener('visibilitychange', function() {
+      if (document.hidden && typeof saveCurrentPageState === 'function' && window.currentPage) {
+        const eventId = localStorage.getItem('eventId');
+        console.log('[PWA] App going to background, saving current page state:', window.currentPage);
+        saveCurrentPageState(window.currentPage, eventId);
+        
+        // Send message to service worker
+        if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
+          navigator.serviceWorker.controller.postMessage({
+            type: 'PAGE_VISIBILITY_CHANGE',
+            hidden: true,
+            page: window.currentPage
+          });
+        }
+      }
+    });
+    
+    // Handle beforeunload to save state when app is closed
+    window.addEventListener('beforeunload', function() {
+      if (typeof saveCurrentPageState === 'function' && window.currentPage) {
+        const eventId = localStorage.getItem('eventId');
+        console.log('[PWA] App closing, saving current page state:', window.currentPage);
+        saveCurrentPageState(window.currentPage, eventId);
+      }
+    });
+  </script>
+
+  <!-- Service Worker Registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      // First unregister any existing service workers to clear caches
+      navigator.serviceWorker.getRegistrations().then(registrations => {
+        for (let registration of registrations) {
+          registration.unregister();
+          console.log('Unregistered existing service worker');
+        }
+        
+        // Then register our no-cache service worker
+        navigator.serviceWorker.register('./service-worker.js?v=' + new Date().getTime())
+          .then(reg => console.log('✅ No-cache ServiceWorker registered:', reg.scope))
+          .catch(err => console.warn('❌ ServiceWorker registration failed:', err));
+      });
+        
+      // Check for online/offline status
+      function updateOnlineStatus() {
+        if (navigator.onLine) {
+          document.body.classList.remove('offline');
+      } else {
+          document.body.classList.add('offline');
+      }
+      }
+      
+      window.addEventListener('online', updateOnlineStatus);
+      window.addEventListener('offline', updateOnlineStatus);
+      updateOnlineStatus(); // Initial check
+    }
+  </script>
+</body>
+</html>

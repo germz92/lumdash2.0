@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Collaborative Features Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .program-entry {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 3px;
+        }
+        .field-being-edited {
+            border: 2px solid #007bff !important;
+            box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+        }
+        input, textarea {
+            width: 100%;
+            padding: 5px;
+            margin: 5px 0;
+        }
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 3px;
+        }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.info { background: #d1ecf1; color: #0c5460; }
+    </style>
+</head>
+<body>
+    <h1>🤝 Collaborative Features Test</h1>
+    
+    <div class="test-section">
+        <h2>Connection Status</h2>
+        <div id="connectionStatus" class="status info">Checking connection...</div>
+        <button onclick="checkConnection()">Check Connection</button>
+        <button onclick="testCollaborative()">Test Collaborative Features</button>
+    </div>
+
+    <div class="test-section">
+        <h2>Test Program Entry</h2>
+        <div class="program-entry" data-program-id="test-program-123">
+            <input type="text" data-field="name" placeholder="Program Name" value="Test Program">
+            <input type="time" data-field="startTime" value="14:00">
+            <input type="time" data-field="endTime" value="16:00">
+            <textarea data-field="location" placeholder="Location">Test Location</textarea>
+            <textarea data-field="photographer" placeholder="Photographer">Test Photographer</textarea>
+            <textarea data-field="notes" placeholder="Notes">Test notes content</textarea>
+            <label><input type="checkbox" data-field="done"> Done</label>
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>Active Users</h2>
+        <div id="activeUsers">No users detected</div>
+    </div>
+
+    <div class="test-section">
+        <h2>Debug Log</h2>
+        <div id="debugLog" style="background: #f8f9fa; padding: 10px; height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px;"></div>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+
+    <!-- Load required scripts -->
+    <script src="js/config.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="js/socket.js"></script>
+    <script src="js/schedule-collaborative.js"></script>
+
+    <script>
+        // Override console.log to also display in our debug log
+        const originalLog = console.log;
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            const logDiv = document.getElementById('debugLog');
+            if (logDiv) {
+                const timestamp = new Date().toLocaleTimeString();
+                logDiv.innerHTML += `[${timestamp}] ${args.join(' ')}\n`;
+                logDiv.scrollTop = logDiv.scrollHeight;
+            }
+        };
+
+        // Test event ID (you can change this to match your actual event)
+        const TEST_EVENT_ID = localStorage.getItem('eventId') || 'test-event-123';
+        
+        function checkConnection() {
+            const status = document.getElementById('connectionStatus');
+            
+            if (typeof io === 'undefined') {
+                status.className = 'status error';
+                status.textContent = '❌ Socket.IO library not loaded';
+                return;
+            }
+            
+            if (!window.socket) {
+                status.className = 'status error';
+                status.textContent = '❌ Socket not initialized';
+                return;
+            }
+            
+            if (window.socket.connected) {
+                status.className = 'status success';
+                status.textContent = '✅ Socket.IO connected successfully';
+            } else {
+                status.className = 'status error';
+                status.textContent = '❌ Socket.IO not connected';
+            }
+        }
+
+        function testCollaborative() {
+            console.log('🧪 Starting collaborative test...');
+            
+            if (window.CollaborativeSchedule) {
+                // Initialize collaborative features
+                window.CollaborativeSchedule.init(TEST_EVENT_ID, [], true);
+                
+                // Run test
+                const result = window.CollaborativeSchedule.test();
+                console.log('Test result:', result);
+                
+                // Test field detection
+                const testField = document.querySelector('[data-field="name"]');
+                if (testField) {
+                    console.log('🎯 Testing field focus on name field...');
+                    testField.focus();
+                    setTimeout(() => {
+                        testField.blur();
+                        console.log('🎯 Field blur test completed');
+                    }, 2000);
+                }
+                
+                updateActiveUsers();
+            } else {
+                console.log('❌ CollaborativeSchedule not available');
+            }
+        }
+
+        function updateActiveUsers() {
+            const usersDiv = document.getElementById('activeUsers');
+            // This would be updated by the collaborative system
+            usersDiv.innerHTML = 'Check console for user presence information';
+        }
+
+        function clearLog() {
+            document.getElementById('debugLog').innerHTML = '';
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', function() {
+            console.log('🚀 Test page loaded');
+            
+            // Set up a test token if none exists
+            if (!localStorage.getItem('token')) {
+                // Create a dummy JWT token for testing
+                const testPayload = {
+                    id: 'test-user-123',
+                    userId: 'test-user-123',
+                    fullName: 'Test User',
+                    name: 'Test User'
+                };
+                const testToken = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.' + btoa(JSON.stringify(testPayload)) + '.test-signature';
+                localStorage.setItem('token', testToken);
+                console.log('🔑 Set test token for user:', testPayload.fullName);
+            }
+            
+            // Check connection status
+            setTimeout(checkConnection, 1000);
+            
+            // Auto-test collaborative features
+            setTimeout(testCollaborative, 2000);
+        });
+
+        // Listen for Socket.IO events
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                if (window.socket) {
+                    window.socket.on('userJoined', function(data) {
+                        console.log('👋 User joined event:', data);
+                        updateActiveUsers();
+                    });
+                    
+                    window.socket.on('userLeft', function(data) {
+                        console.log('👋 User left event:', data);
+                        updateActiveUsers();
+                    });
+                    
+                    window.socket.on('fieldEditStarted', function(data) {
+                        console.log('✏️ Field edit started:', data);
+                    });
+                    
+                    window.socket.on('fieldEditStopped', function(data) {
+                        console.log('🛑 Field edit stopped:', data);
+                    });
+                    
+                    window.socket.on('programOperationReceived', function(data) {
+                        console.log('📨 Program operation received:', data);
+                    });
+                }
+            }, 3000);
+        });
+    </script>
+</body>
+</html> 

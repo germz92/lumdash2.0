@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+  <title>SD Card Calculator</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+      margin: 0;
+      background: #f5f5f5;
+      min-height: 100vh;
+    }
+    h2 {
+      text-align: center;
+      color: #cc0007;
+      margin-top: 20px;
+      letter-spacing: 0.5px;
+      font-size: 1.5em;
+    }
+    .center {
+      text-align: center;
+      margin-top: 16px;
+    }
+    label {
+      font-size: 1em;
+      color: #222;
+      margin-right: 6px;
+    }
+    input[type="number"] {
+      width: 56px;
+      padding: 6px 8px;
+      border: 1px solid #d3d3d3;
+      border-radius: 6px;
+      font-size: 1em;
+      background: #fff;
+      transition: border 0.2s;
+      margin: 0 6px 8px 0;
+    }
+    input[type="number"]:focus {
+      border: 1.5px solid #cc0007;
+      outline: none;
+    }
+    button {
+      background: #cc0007;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 18px;
+      font-size: 1em;
+      font-weight: 500;
+      cursor: pointer;
+      box-shadow: 0 1px 4px rgba(204,0,7,0.08);
+      margin-top: 8px;
+      margin-bottom: 8px;
+      transition: background 0.2s, transform 0.1s;
+    }
+    button:hover {
+      background: #a80005;
+      transform: translateY(-1px) scale(1.02);
+    }
+    form#cameraForm {
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(44, 62, 80, 0.05);
+      max-width: 340px;
+      margin: 16px auto 0 auto;
+      padding: 14px 10px 6px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      overflow-x: auto;
+    }
+    #cameraForm > div {
+      width: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px 12px;
+      margin-bottom: 10px;
+    }
+    #cameraForm label {
+      margin-bottom: 2px;
+      font-size: 0.97em;
+    }
+    #cameraForm input[type="number"] {
+      margin-bottom: 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      margin-top: 16px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(44, 62, 80, 0.05);
+      overflow: hidden;
+      font-size: 0.98em;
+    }
+    th, td {
+      border: none;
+      padding: 8px 4px;
+      text-align: center;
+      font-size: 0.98em;
+    }
+    th {
+      background: #cc0007;
+      color: #fff;
+      font-weight: 600;
+      letter-spacing: 0.2px;
+    }
+    tr:nth-child(even) td {
+      background: #f5f5f5;
+    }
+    tr:hover td {
+      background: #ededed;
+      transition: background 0.2s;
+    }
+    .summary {
+      margin-top: 16px;
+      font-weight: 500;
+      background: #f5f5f5;
+      padding: 12px 10px;
+      border-radius: 8px;
+      border: 1px solid #ededed;
+      box-shadow: 0 1px 4px rgba(204,0,7,0.04);
+      color: #222;
+      max-width: 340px;
+      margin-left: auto;
+      margin-right: auto;
+      font-size: 1em;
+    }
+    @media (max-width: 600px) {
+      body {
+        background: #fff;
+      }
+      form#cameraForm, .summary {
+        max-width: 98vw;
+        padding: 8px 2vw 4px 2vw;
+      }
+      table {
+        font-size: 0.95em;
+      }
+      th, td {
+        padding: 6px 1px;
+      }
+      h2 {
+        font-size: 1.1em;
+        margin-top: 10px;
+      }
+      .center {
+        margin-top: 8px;
+      }
+      #cameraForm > div {
+        flex-direction: row;
+        gap: 6px 4px;
+      }
+      #cameraForm label {
+        font-size: 0.93em;
+      }
+      #cameraForm input[type="number"] {
+        width: 44px;
+        font-size: 0.97em;
+      }
+    }
+    .input-arrows-group {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      margin-top: 2px;
+    }
+    .arrow-btn {
+      background: #ededed;
+      color: #cc0007;
+      border: none;
+      border-radius: 4px;
+      width: 24px;
+      height: 28px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+      touch-action: manipulation;
+    }
+    .arrow-btn:hover {
+      background: #cc0007;
+      color: #fff;
+    }
+    #cameraForm input[type="number"] {
+      margin-bottom: 0;
+      width: 44px;
+      text-align: center;
+    }
+    #clearBtn {
+      background: #ededed;
+      color: #cc0007;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 18px;
+      font-size: 1em;
+      font-weight: 500;
+      cursor: pointer;
+      box-shadow: 0 1px 4px rgba(204,0,7,0.08);
+      margin-top: 8px;
+      margin-bottom: 8px;
+      transition: background 0.2s, color 0.2s;
+    }
+    #clearBtn:hover {
+      background: #cc0007;
+      color: #fff;
+    }
+    html, body {
+      height: 100%;
+    }
+    body {
+      min-height: 100vh;
+      display: block;
+      width: 100vw;
+      overflow-x: hidden;
+    }
+    .main-center {
+      width: 100%;
+      max-width: 520px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-left: 8px;
+      padding-right: 8px;
+    }
+    @media (max-width: 600px) {
+      .main-center {
+        max-width: 100vw;
+        padding: 0 2vw;
+      }
+      body, html {
+        width: 100vw;
+        overflow-x: hidden;
+      }
+    }
+    .cards-total {
+      color: #cc0007;
+      font-size: 1.7em;
+      font-weight: bold;
+      margin-top: 10px;
+      margin-bottom: 2px;
+      letter-spacing: 1px;
+      display: block;
+    }
+    html {
+      box-sizing: border-box;
+      width: 100vw;
+      overflow-x: hidden;
+    }
+    *, *:before, *:after {
+      box-sizing: inherit;
+    }
+    .table-responsive {
+      width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      margin-top: 16px;
+    }
+    table {
+      min-width: 520px;
+      max-width: 100%;
+    }
+    @media (max-width: 600px) {
+      table {
+        min-width: 420px;
+        font-size: 0.93em;
+      }
+    }
+    .clear-btn-container {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      margin-top: 24px;
+      margin-bottom: 8px;
+    }
+    #clearBtn {
+      background: #ededed;
+      color: #cc0007;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 18px;
+      font-size: 1em;
+      font-weight: 500;
+      cursor: pointer;
+      box-shadow: 0 1px 4px rgba(204,0,7,0.08);
+      transition: background 0.2s, color 0.2s;
+    }
+    #clearBtn:hover {
+      background: #cc0007;
+      color: #fff;
+    }
+    .cameras-label {
+      font-size: 1.08em;
+      font-weight: 500;
+      color: #222;
+      margin-top: 18px;
+      margin-bottom: 2px;
+      text-align: center;
+    }
+    .back-btn {
+      display: inline-flex;
+      align-items: center;
+      background: #ededed;
+      color: #333;
+      border: none;
+      border-radius: 6px;
+      padding: 8px 16px;
+      margin: 16px 0 0 16px;
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 14px;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .back-btn:hover {
+      background: #ddd;
+      transform: translateY(-1px);
+    }
+    .back-arrow {
+      margin-right: 6px;
+    }
+  </style>
+</head>
+<body>
+  <button onclick="goBackToCardLog()" class="back-btn">
+    <span class="back-arrow">&#8592;</span>
+    Back to Card Log
+  </button>
+  <h2>SD Card Calculator</h2>
+  <div class="main-center">
+    <div class="center">
+      <label>Number of Days:
+        <span class="input-arrows-group" style="margin-left:6px;">
+          <button type="button" class="arrow-btn" onclick="decrementDays()">&#8722;</button>
+          <input type="number" id="numDays" value="1" min="1" style="width:44px; text-align:center;">
+          <button type="button" class="arrow-btn" onclick="incrementDays()">&#43;</button>
+        </span>
+      </label>
+    </div>
+    <div class="cameras-label">Cameras Per Day:</div>
+    <form id="cameraForm" class="center"></form>
+    <div id="results"></div>
+    <div class="clear-btn-container">
+      <button id="clearBtn" onclick="clearTable()" type="button">Clear Table</button>
+    </div>
+  </div>
+
+  <script>
+    function generateTable() {
+      const numDays = parseInt(document.getElementById('numDays').value);
+      const form = document.getElementById('cameraForm');
+      form.innerHTML = '';
+
+      // Create a flex container for horizontal stacking
+      const daysContainer = document.createElement('div');
+      daysContainer.style.display = 'flex';
+      daysContainer.style.flexWrap = 'wrap';
+      daysContainer.style.justifyContent = 'center';
+      daysContainer.style.gap = '10px 12px';
+      daysContainer.style.marginBottom = '10px';
+
+      for (let i = 1; i <= numDays; i++) {
+        const dayGroup = document.createElement('div');
+        dayGroup.style.display = 'flex';
+        dayGroup.style.flexDirection = 'column';
+        dayGroup.style.alignItems = 'center';
+        dayGroup.style.minWidth = '90px';
+        dayGroup.innerHTML = `
+          <label for="day${i}">Day ${i}</label>
+          <div class="input-arrows-group">
+            <button type="button" class="arrow-btn" onclick="decrement('day${i}')">&#8722;</button>
+            <input type="number" id="day${i}" name="day${i}" min="0" value="2">
+            <button type="button" class="arrow-btn" onclick="increment('day${i}')">&#43;</button>
+          </div>
+        `;
+        daysContainer.appendChild(dayGroup);
+      }
+      form.appendChild(daysContainer);
+      form.innerHTML += '<button type="button" onclick="calculateSDCards()">Calculate</button>';
+    }
+
+    function calculateSDCards() {
+      const formData = new FormData(document.getElementById('cameraForm'));
+      let results = '<div class="table-responsive"><table><tr><th>Day</th><th>Cameras</th><th>SD Cards Needed</th><th>Available for Reuse</th><th>New Cards</th><th>Extra Cards EOD</th></tr>';
+
+      let prevCameras = 0;
+      let prevExtraCards = 0;
+      let totalCardsNeeded = 0;
+      let numDays = 0;
+      let reuseAvailable = 0;
+      for (let [key, value] of formData.entries()) {
+        numDays++;
+        const day = key.replace('day', '');
+        const cameras = parseInt(value);
+        const cardsNeeded = cameras * 2;
+        totalCardsNeeded += cardsNeeded;
+        // For the first day, reuseAvailable is 0. For subsequent days, it's prevCameras + prevExtraCards
+        if (numDays === 1) {
+          reuseAvailable = 0;
+        } else {
+          reuseAvailable = prevCameras + prevExtraCards;
+        }
+        const newCards = Math.max(0, cardsNeeded - reuseAvailable);
+        const extraCards = reuseAvailable + newCards - cardsNeeded;
+
+        results += `<tr><td>${day}</td><td>${cameras}</td><td>${cardsNeeded}</td><td>${reuseAvailable}</td><td>${newCards}</td><td>${extraCards}</td></tr>`;
+
+        prevCameras = cameras;
+        prevExtraCards = extraCards;
+      }
+
+      const backupsNeeded = numDays * 2; // two backup cards per day
+      const totalWithBackups = totalCardsNeeded + backupsNeeded;
+
+      results += '</table></div>';
+      results += `<div class="summary">
+        📦 Total Cards Needed: ${totalCardsNeeded} <br>
+        🔄 Backups Needed (2/day): ${backupsNeeded} <br>
+        <span class="cards-total">🎯 Cards Total: ${totalWithBackups}</span>
+      </div>`;
+
+      document.getElementById('results').innerHTML = results;
+    }
+
+    function increment(id) {
+      const input = document.getElementById(id);
+      if (input) input.value = parseInt(input.value || 0) + 1;
+    }
+    function decrement(id) {
+      const input = document.getElementById(id);
+      if (input) input.value = Math.max(0, parseInt(input.value || 0) - 1);
+    }
+
+    function incrementDays() {
+      const input = document.getElementById('numDays');
+      input.value = parseInt(input.value || 1) + 1;
+      generateTable();
+    }
+    function decrementDays() {
+      const input = document.getElementById('numDays');
+      input.value = Math.max(1, parseInt(input.value || 1) - 1);
+      generateTable();
+    }
+
+    function clearTable() {
+      if (window.confirm('Are you sure you want to clear the table and start over?')) {
+        document.getElementById('cameraForm').innerHTML = '';
+        document.getElementById('results').innerHTML = '';
+        document.getElementById('numDays').value = 1;
+      }
+    }
+
+    function goBackToCardLog() {
+      // Use the SPA's navigation system to go back to card-log
+      if (window.navigate) {
+        window.navigate('card-log', localStorage.getItem('currentTableId'));
+      } else if (window.history && window.history.back) {
+        // Fallback to browser history if available
+        window.history.back();
+      } else {
+        // Last resort: direct page navigation
+        window.location.href = 'dashboard.html#card-log';
+      }
+    }
+  </script>
+</body>
+</html>

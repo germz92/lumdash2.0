@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Collaborative Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .user-panel {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .user-panel h2 {
+            margin-top: 0;
+            padding: 10px;
+            border-radius: 5px;
+            color: white;
+            text-align: center;
+        }
+        .program-entry {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background: #fafafa;
+            position: relative;
+        }
+        .field-being-edited {
+            border: 2px solid !important;
+            transition: all 0.2s ease;
+        }
+        .editing-indicator {
+            position: absolute;
+            top: -35px;
+            right: 0px;
+            background: white;
+            border: 1px solid;
+            border-radius: 16px;
+            padding: 4px 8px;
+            font-size: 12px;
+            font-weight: 500;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            white-space: nowrap;
+        }
+        .editor-avatar {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 10px;
+            flex-shrink: 0;
+        }
+        .editor-name {
+            color: #333;
+            font-size: 11px;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+        .status.info { background: #d1ecf1; color: #0c5460; }
+        .log {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .presence-users {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .user-avatar {
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🤝 Real-Time Collaborative Editing Test</h1>
+    <p>Open this page in multiple browser tabs or windows to test real-time collaboration!</p>
+    
+    <div class="container">
+        <!-- User 1 Panel -->
+        <div class="user-panel">
+            <h2 id="user1-header" style="background: #ff6b6b;">User 1: Alice</h2>
+            
+            <div class="status" id="user1-status">Initializing...</div>
+            
+            <button onclick="simulateUser1()">Simulate User 1 Actions</button>
+            <button onclick="user1FocusField('name')">Edit Program Name</button>
+            <button onclick="user1FocusField('location')">Edit Location</button>
+            
+            <div class="program-entry" data-program-id="test-program-123">
+                <label>Program Name:</label>
+                <input type="text" data-field="name" value="Morning Session" onchange="handleFieldChange(this, 'User 1')">
+                
+                <label>Start Time:</label>
+                <input type="time" data-field="startTime" value="09:00" onchange="handleFieldChange(this, 'User 1')">
+                
+                <label>End Time:</label>
+                <input type="time" data-field="endTime" value="12:00" onchange="handleFieldChange(this, 'User 1')">
+                
+                <label>Location:</label>
+                <textarea data-field="location" onchange="handleFieldChange(this, 'User 1')">Main Conference Room</textarea>
+                
+                <label>Photographer:</label>
+                <textarea data-field="photographer" onchange="handleFieldChange(this, 'User 1')">John Doe</textarea>
+                
+                <label>Notes:</label>
+                <textarea data-field="notes" onchange="handleFieldChange(this, 'User 1')">Opening keynote presentation</textarea>
+            </div>
+            
+            <div class="presence-users" id="user1-presence">
+                <strong>Active Users:</strong>
+                <div id="user1-presence-list">No other users</div>
+            </div>
+        </div>
+        
+        <!-- User 2 Panel -->
+        <div class="user-panel">
+            <h2 id="user2-header" style="background: #4ecdc4;">User 2: Bob</h2>
+            
+            <div class="status" id="user2-status">Initializing...</div>
+            
+            <button onclick="simulateUser2()">Simulate User 2 Actions</button>
+            <button onclick="user2FocusField('photographer')">Edit Photographer</button>
+            <button onclick="user2FocusField('notes')">Edit Notes</button>
+            
+            <div class="program-entry" data-program-id="test-program-123">
+                <label>Program Name:</label>
+                <input type="text" data-field="name" value="Morning Session" onchange="handleFieldChange(this, 'User 2')">
+                
+                <label>Start Time:</label>
+                <input type="time" data-field="startTime" value="09:00" onchange="handleFieldChange(this, 'User 2')">
+                
+                <label>End Time:</label>
+                <input type="time" data-field="endTime" value="12:00" onchange="handleFieldChange(this, 'User 2')">
+                
+                <label>Location:</label>
+                <textarea data-field="location" onchange="handleFieldChange(this, 'User 2')">Main Conference Room</textarea>
+                
+                <label>Photographer:</label>
+                <textarea data-field="photographer" onchange="handleFieldChange(this, 'User 2')">John Doe</textarea>
+                
+                <label>Notes:</label>
+                <textarea data-field="notes" onchange="handleFieldChange(this, 'User 2')">Opening keynote presentation</textarea>
+            </div>
+            
+            <div class="presence-users" id="user2-presence">
+                <strong>Active Users:</strong>
+                <div id="user2-presence-list">No other users</div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Shared Event Log -->
+    <div style="margin-top: 20px;">
+        <h3>📋 Real-Time Event Log</h3>
+        <div class="log" id="eventLog"></div>
+        <button onclick="clearLog()">Clear Log</button>
+                 <button onclick="testConnection()">Test Connection</button>
+         <button onclick="manualInitCollaborative()">Manual Init</button>
+         <button onclick="testDataSync()">Test Data Sync</button>
+         <button onclick="showDebugInfo()">Show Debug Info</button>
+         <button onclick="forceOperation()">Force Operation Test</button>
+    </div>
+
+    <!-- Load required scripts -->
+    <script src="js/config.js"></script>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="js/socket.js"></script>
+    <script src="js/schedule-collaborative.js"></script>
+
+    <script>
+        const TEST_EVENT_ID = 'test-realtime-event-' + Date.now();
+        let currentUser = 'Alice';
+        
+        // Enhanced logging
+        const originalLog = console.log;
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            logToEventLog(args.join(' '));
+        };
+        
+        function logToEventLog(message) {
+            const logDiv = document.getElementById('eventLog');
+            if (logDiv) {
+                const timestamp = new Date().toLocaleTimeString();
+                logDiv.innerHTML += `[${timestamp}] ${message}\n`;
+                logDiv.scrollTop = logDiv.scrollHeight;
+            }
+        }
+        
+        function clearLog() {
+            document.getElementById('eventLog').innerHTML = '';
+        }
+        
+        function testConnection() {
+            logToEventLog('🔍 Testing connection...');
+            logToEventLog(`Socket.IO available: ${typeof io !== 'undefined'}`);
+            logToEventLog(`Socket connected: ${window.socket && window.socket.connected}`);
+            logToEventLog(`Collaborative system: ${!!window.CollaborativeSchedule}`);
+        }
+        
+                 function manualInitCollaborative() {
+             logToEventLog('🚀 Manually initializing collaborative features...');
+             if (window.CollaborativeSchedule) {
+                 // Create test program data that matches the HTML
+                 const testPrograms = [{
+                     _id: 'test-program-123',
+                     name: 'Morning Session',
+                     startTime: '09:00',
+                     endTime: '12:00',
+                     location: 'Main Conference Room',
+                     photographer: 'John Doe',
+                     notes: 'Opening keynote presentation',
+                     done: false
+                 }];
+                 
+                 logToEventLog(`📊 Initializing with test programs: ${JSON.stringify(testPrograms)}`);
+                 window.CollaborativeSchedule.init(TEST_EVENT_ID, testPrograms, true);
+                 updateAllStatus();
+             }
+         }
+         
+         function testDataSync() {
+             logToEventLog('🧪 Testing data synchronization...');
+             const testField = document.querySelector('[data-field="name"]');
+             if (testField) {
+                 const programEntry = testField.closest('.program-entry');
+                 const programId = programEntry ? programEntry.getAttribute('data-program-id') : 'NOT_FOUND';
+                 
+                 logToEventLog(`🔍 Field found: ${testField.tagName}, Program ID: ${programId}`);
+                 
+                 const testValue = 'Test Sync ' + Date.now();
+                 logToEventLog(`📝 Setting test value: ${testValue}`);
+                 testField.value = testValue;
+                 testField.focus();
+                 testField.dispatchEvent(new Event('input', { bubbles: true }));
+                 setTimeout(() => testField.blur(), 1000);
+             } else {
+                 logToEventLog('❌ Test field not found');
+             }
+         }
+         
+         function showDebugInfo() {
+             logToEventLog('🔍 Debug Information:');
+             logToEventLog(`Socket connected: ${window.socket && window.socket.connected}`);
+             logToEventLog(`Collaborative manager exists: ${!!window.collaborationManager}`);
+             
+             if (window.CollaborativeSchedule) {
+                 const testResult = window.CollaborativeSchedule.test();
+                 logToEventLog(`Test result: ${JSON.stringify(testResult)}`);
+             }
+             
+             // List all program entries
+             const programEntries = document.querySelectorAll('.program-entry');
+             logToEventLog(`Found ${programEntries.length} program entries`);
+             
+             programEntries.forEach((entry, index) => {
+                 const programId = entry.getAttribute('data-program-id');
+                 const fields = entry.querySelectorAll('[data-field]');
+                 logToEventLog(`Program ${index}: ID=${programId}, Fields=${fields.length}`);
+                 
+                 fields.forEach(field => {
+                     logToEventLog(`  - ${field.getAttribute('data-field')}: "${field.value}"`);
+                 });
+             });
+         }
+         
+         function forceOperation() {
+             logToEventLog('🔧 Force testing operation creation and broadcast...');
+             
+             if (window.socket && window.socket.connected) {
+                 const testOperation = {
+                     id: 'test-op-' + Date.now(),
+                     type: 'UPDATE_FIELD',
+                     data: {
+                         programId: 'test-program-123',
+                         field: 'name',
+                         value: 'Force Test ' + Date.now(),
+                         oldValue: 'Morning Session'
+                     },
+                     userId: 'user-alice-123',
+                     timestamp: Date.now(),
+                     version: 1
+                 };
+                 
+                 const payload = {
+                     eventId: TEST_EVENT_ID,
+                     operation: testOperation,
+                     userId: 'user-alice-123',
+                     userName: 'Alice Cooper'
+                 };
+                 
+                 logToEventLog(`📤 Sending test operation: ${JSON.stringify(payload)}`);
+                 window.socket.emit('programOperation', payload);
+             } else {
+                 logToEventLog('❌ Socket not connected for force test');
+             }
+         }
+        
+        function updateAllStatus() {
+            const connected = window.socket && window.socket.connected;
+            const status1 = document.getElementById('user1-status');
+            const status2 = document.getElementById('user2-status');
+            
+            if (connected) {
+                status1.className = 'status success';
+                status1.textContent = '✅ Connected and ready';
+                status2.className = 'status success';
+                status2.textContent = '✅ Connected and ready';
+            } else {
+                status1.className = 'status error';
+                status1.textContent = '❌ Not connected';
+                status2.className = 'status error';
+                status2.textContent = '❌ Not connected';
+            }
+        }
+        
+        function handleFieldChange(field, userName) {
+            logToEventLog(`📝 ${userName} changed ${field.getAttribute('data-field')} to: ${field.value}`);
+        }
+        
+        function user1FocusField(fieldName) {
+            const field = document.querySelector(`[data-field="${fieldName}"]`);
+            if (field) {
+                logToEventLog(`🎯 User 1 (Alice) focusing on ${fieldName}`);
+                field.focus();
+                setTimeout(() => field.blur(), 3000);
+            }
+        }
+        
+        function user2FocusField(fieldName) {
+            const fields = document.querySelectorAll(`[data-field="${fieldName}"]`);
+            const field = fields[1]; // Second instance for User 2
+            if (field) {
+                logToEventLog(`🎯 User 2 (Bob) focusing on ${fieldName}`);
+                field.focus();
+                setTimeout(() => field.blur(), 3000);
+            }
+        }
+        
+                 function simulateUser1() {
+             logToEventLog('🤖 Simulating User 1 actions...');
+             setTimeout(() => user1FocusField('name'), 500);
+             setTimeout(() => {
+                 const nameField = document.querySelector('[data-field="name"]');
+                 if (nameField) {
+                     nameField.value = 'Updated by Alice ' + Date.now();
+                     nameField.dispatchEvent(new Event('input', { bubbles: true }));
+                     logToEventLog('📝 Alice updated program name');
+                 }
+             }, 1000);
+             setTimeout(() => user1FocusField('location'), 2000);
+             setTimeout(() => {
+                 const locationField = document.querySelector('[data-field="location"]');
+                 if (locationField) {
+                     locationField.value = 'Location updated by Alice';
+                     locationField.dispatchEvent(new Event('input', { bubbles: true }));
+                     logToEventLog('📝 Alice updated location');
+                 }
+             }, 2500);
+         }
+        
+                 function simulateUser2() {
+             logToEventLog('🤖 Simulating User 2 actions...');
+             setTimeout(() => user2FocusField('photographer'), 500);
+             setTimeout(() => {
+                 const fields = document.querySelectorAll('[data-field="photographer"]');
+                 const photographerField = fields[1];
+                 if (photographerField) {
+                     photographerField.value = 'Updated by Bob ' + Date.now();
+                     photographerField.dispatchEvent(new Event('input', { bubbles: true }));
+                     logToEventLog('📝 Bob updated photographer');
+                 }
+             }, 1000);
+             setTimeout(() => user2FocusField('notes'), 2000);
+             setTimeout(() => {
+                 const fields = document.querySelectorAll('[data-field="notes"]');
+                 const notesField = fields[1];
+                 if (notesField) {
+                     notesField.value = 'Notes updated by Bob';
+                     notesField.dispatchEvent(new Event('input', { bubbles: true }));
+                     logToEventLog('📝 Bob updated notes');
+                 }
+             }, 2500);
+         }
+        
+        // Initialize when page loads
+        window.addEventListener('load', function() {
+            logToEventLog('🚀 Real-time test page loaded');
+            
+            // Create test tokens for different users
+            const user1Token = createTestToken('user-alice-123', 'Alice Cooper');
+            const user2Token = createTestToken('user-bob-456', 'Bob Wilson');
+            
+            // Store one for this session (will simulate one user)
+            localStorage.setItem('token', user1Token);
+            
+            // Set up socket event listeners
+            setTimeout(() => {
+                if (window.socket) {
+                    setupSocketListeners();
+                    updateAllStatus();
+                    
+                    // Auto-initialize collaborative features
+                    setTimeout(manualInitCollaborative, 1000);
+                } else {
+                    logToEventLog('❌ Socket not available');
+                }
+            }, 2000);
+        });
+        
+        function createTestToken(userId, userName) {
+            const payload = {
+                id: userId,
+                userId: userId,
+                fullName: userName,
+                name: userName
+            };
+            return 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.' + btoa(JSON.stringify(payload)) + '.test-signature';
+        }
+        
+        function setupSocketListeners() {
+            logToEventLog('🎧 Setting up socket listeners...');
+            
+            window.socket.on('connect', () => {
+                logToEventLog('✅ Socket connected!');
+                updateAllStatus();
+            });
+            
+            window.socket.on('disconnect', () => {
+                logToEventLog('❌ Socket disconnected!');
+                updateAllStatus();
+            });
+            
+            window.socket.on('userJoined', (data) => {
+                logToEventLog(`👋 User joined: ${data.userName}`);
+            });
+            
+            window.socket.on('userLeft', (data) => {
+                logToEventLog(`👋 User left: ${data.userId}`);
+            });
+            
+            window.socket.on('fieldEditStarted', (data) => {
+                logToEventLog(`✏️ ${data.userName} started editing ${data.fieldId}`);
+            });
+            
+            window.socket.on('fieldEditStopped', (data) => {
+                logToEventLog(`🛑 User stopped editing ${data.fieldId}`);
+            });
+            
+            window.socket.on('programOperationReceived', (data) => {
+                logToEventLog(`📨 Program operation: ${data.operation.type} by ${data.userName}`);
+            });
+        }
+    </script>
+</body>
+</html> 

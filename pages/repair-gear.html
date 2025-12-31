@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Repair Gear Inventory</title>
+  <link href="https://fonts.googleapis.com/css?family=Roboto:400,500,700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="../css/styles.css">
+  <script src="../js/config.js"></script>
+  <style>
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    
+    .card {
+      background: white;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    
+    h1 {
+      color: #333;
+      margin-bottom: 20px;
+    }
+    
+    button {
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      text-align: center;
+      text-decoration: none;
+      display: inline-block;
+      font-size: 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-bottom: 20px;
+    }
+    
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    
+    #results {
+      background-color: #f9f9f9;
+      border: 1px solid #ddd;
+      padding: 15px;
+      border-radius: 4px;
+      white-space: pre-wrap;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    
+    .result-item {
+      margin-bottom: 10px;
+      padding: 10px;
+      background-color: #f0f8ff;
+      border-radius: 4px;
+    }
+    
+    .success {
+      color: green;
+      font-weight: bold;
+    }
+    
+    .error {
+      color: red;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body class="gear-page">
+  <div class="container">
+    <div class="card">
+      <h1>Gear Inventory Data Repair Tool</h1>
+      
+      <p>This tool will scan your gear inventory database and fix common issues:</p>
+      <ul>
+        <li>Remove incomplete history entries</li>
+        <li>Remove duplicate event reservations</li>
+        <li>Auto check-in gear with past check-in dates</li>
+        <li>Fix inconsistent status fields</li>
+      </ul>
+      
+      <button id="repairBtn">Run Repair Process</button>
+      
+      <div id="status"></div>
+      
+      <h2>Results:</h2>
+      <div id="results">No repair has been run yet.</div>
+    </div>
+    
+    <div class="card">
+      <h2>Repair Instructions</h2>
+      <p>If you're experiencing issues with gear reservations, such as:</p>
+      <ul>
+        <li>Gear showing as "already reserved" when it shouldn't be</li>
+        <li>Gear not showing as available after being checked in</li>
+        <li>Duplicate reservations appearing in history</li>
+      </ul>
+      <p>Running this repair tool may fix the issues by cleaning up the database.</p>
+      <p><a href="javascript:history.back()">← Return to previous page</a></p>
+    </div>
+  </div>
+  
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const repairBtn = document.getElementById('repairBtn');
+      const statusElement = document.getElementById('status');
+      const resultsElement = document.getElementById('results');
+      
+      // Get auth token from localStorage
+      const token = localStorage.getItem('token');
+      if (!token) {
+        statusElement.innerHTML = '<p class="error">You must be logged in to use this tool.</p>';
+        repairBtn.disabled = true;
+        return;
+      }
+      
+      // Log API base URL for debugging
+      console.log('[repair-gear.html] API_BASE:', window.API_BASE);
+      
+      repairBtn.addEventListener('click', async function() {
+        try {
+          repairBtn.disabled = true;
+          statusElement.innerHTML = '<p>Repairing gear inventory data... Please wait.</p>';
+          resultsElement.textContent = 'Processing...';
+          
+          const response = await fetch(`${window.API_BASE}/api/gear-inventory/repair`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': token
+            }
+          });
+          
+          const data = await response.json();
+          
+          if (!response.ok) {
+            throw new Error(data.error || 'An unknown error occurred');
+          }
+          
+          statusElement.innerHTML = `<p class="success">Repair completed successfully. ${data.itemsRepaired} items were repaired.</p>`;
+          
+          if (data.details && data.details.length > 0) {
+            let resultsHTML = '<h3>Repaired Items:</h3>';
+            
+            data.details.forEach(item => {
+              resultsHTML += `
+                <div class="result-item">
+                  <strong>${item.label}</strong>
+                  <ul>
+                    <li>History entries: ${item.historyBefore} → ${item.historyAfter}</li>
+                    ${item.statusChanged ? `<li>Status changed to: ${item.newStatus}</li>` : ''}
+                  </ul>
+                </div>
+              `;
+            });
+            
+            resultsElement.innerHTML = resultsHTML;
+          } else {
+            resultsElement.textContent = 'No issues were found that needed repair.';
+          }
+        } catch (error) {
+          console.error('Repair failed:', error);
+          statusElement.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+          resultsElement.textContent = 'Repair failed. See console for details.';
+        } finally {
+          repairBtn.disabled = false;
+        }
+      });
+    });
+  </script>
+</body>
+</html> 

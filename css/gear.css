@@ -1,0 +1,2250 @@
+.gear-page { font-family: 'Roboto', Arial, sans-serif; background: linear-gradient(135deg, #f5f7fa 0%, #e9ecf3 100%); color: #333; min-height: 100%; padding-bottom: 100px; }
+.gear-page h1, .gear-page h2 { text-align: center; font-weight: bold; margin-bottom: 10px; font-size: 22px; letter-spacing: 0.01em; }
+.gear-page .gear-controls { display: flex; justify-content: center; align-items: flex-end; gap: 24px; margin-bottom: 20px; flex-wrap: wrap; }
+.gear-page .top-controls { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.gear-page .top-controls label { font-weight: 500; margin-right: 4px; font-size: 16px; }
+.gear-page .top-controls button { min-width: 90px; font-size: 16px; border-radius: 8px; box-shadow: 0 2px 8px rgba(204,0,7,0.08); }
+.gear-page .back-button { background-color: #cccccc; color: #333; font-size: 16px; padding: 8px 14px; border: none; border-radius: 8px; cursor: pointer; font-weight: 500; margin-bottom: 20px; margin-left: 10px; transition: background 0.2s, box-shadow 0.2s; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.gear-page .back-button:hover { background-color: #b3b3b3; box-shadow: 0 4px 16px rgba(204,0,7,0.10); }
+.gear-page select, .gear-page button { font-size: 16px; padding: 8px 12px; border-radius: 8px; border: 1.5px solid #ccc; outline: none; transition: all 0.2s; }
+.gear-page button { background-color: #cc0007; color: white; font-weight: 600; border: none; cursor: pointer; transition: background 0.2s, box-shadow 0.2s; }
+.gear-page button:hover { background-color: rgb(170, 3, 8); box-shadow: 0 4px 16px rgba(204,0,7,0.10); transform: translateY(-2px) scale(1.03); }
+.gear-page #gearContainer.gear-container { 
+  display: flex; 
+  flex-wrap: wrap; 
+  justify-content: center; 
+  gap: 32px; 
+  padding: 18px 0; 
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+@media (max-width: 900px) { 
+  .gear-page .list-group { 
+    flex: 1 1 100%; 
+    min-width: 0; 
+    gap: 6px; 
+    justify-content: center; 
+  } 
+  .gear-page .list-group label, 
+  .gear-page .list-group select, 
+  .gear-page .list-group button { 
+    flex: unset; 
+    min-width: 0; 
+    width: auto; 
+  } 
+}
+
+/* Gear list card styling */
+.category {
+  background: linear-gradient(135deg, #fff 60%, #f5f7fa 100%);
+  border-radius: 18px;
+  padding: 24px 18px;
+  width: 280px;
+  max-width: 100%;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.09);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s, box-shadow 0.2s;
+  border: 1.5px solid #e0e0e0;
+}
+
+.category:hover {
+  transform: translateY(-6px) scale(1.01);
+  box-shadow: 0 12px 32px rgba(204,0,7,0.10);
+}
+
+.category h3 {
+  margin: 0 0 18px 0;
+  font-size: 1.12rem;
+  color: #222;
+  border-bottom: 1.5px solid #eee;
+  padding-bottom: 6px;
+  letter-spacing: 0.01em;
+  text-align: center;
+}
+
+/* Item row styling */
+.item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 10px;
+  border-radius: 6px;
+  border: 1px solid #f0f0f0;
+  background: #fafbfc;
+  padding: 6px 4px;
+  transition: box-shadow 0.2s, border 0.2s;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.item input[type="text"] {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1.5px solid #ccc;
+  border-radius: 6px;
+  font-size: 16px;
+  transition: border-color 0.2s;
+  background: #fff;
+  width: 100%;
+  min-width: 0;
+}
+
+.item input[type="text"]:focus {
+  border-color: #cc0007;
+  box-shadow: 0 2px 8px rgba(204,0,7,0.08);
+}
+
+.item input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  accent-color: #cc0007;
+  transition: box-shadow 0.2s;
+  flex-shrink: 0;
+}
+
+.item input[type="checkbox"]:hover {
+  box-shadow: 0 0 0 2px #cc0007;
+}
+
+/* "+ Add Item" button (uses same base button style) */
+.add-btn {
+  font-size: 16px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(204,0,7,0.08);
+  padding: 0 16px;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 900px) {
+  .category {
+    width: 96vw;
+    min-width: 0;
+    padding: 12px 4px;
+  }
+  #gearContainer.gear-container {
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+  }
+}
+
+@media (max-width: 600px) {
+  .gear-page h1, .gear-page h2 { font-size: 18px; }
+  .category {
+    width: 96vw;
+    max-width: 360px;
+    padding: 8px 0;
+    box-sizing: border-box;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .item input[type="text"] { font-size: 16px; }
+}
+
+.list-group {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+@media (max-width: 768px) {
+  .list-group {
+    flex: 1 1 100%;
+    min-width: 0;
+    gap: 6px;
+    justify-content: center;
+  }
+  .list-group label,
+  .list-group select,
+  .list-group button {
+    flex: unset;
+    min-width: 0;
+    width: auto;
+  }
+}
+
+.item-list {
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+.delete-btn {
+  flex-shrink: 0 !important;
+  display: inline-block !important;
+  min-width: 30px;
+}
+
+/* Admin Gear Link */
+.admin-gear-link {
+  display: block;
+  background-color: #444 !important;
+  color: white !important;
+  padding: 10px 16px !important;
+  border-radius: 8px !important;
+  text-decoration: none !important;
+  font-weight: bold !important;
+  margin: 10px auto !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+  text-align: center !important;
+  transition: background-color 0.3s, transform 0.2s !important;
+  max-width: 250px !important;
+}
+
+.admin-gear-link:hover {
+  background-color: #333 !important;
+  transform: translateY(-2px) !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+}
+
+@media (max-width: 768px) {
+  .admin-gear-link {
+    width: 90% !important;
+    margin: 15px auto !important;
+  }
+}
+
+/* Add Gear Page Styling */
+.gear-page .container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: 'Segoe UI', 'Roboto', sans-serif;
+}
+
+.gear-page .card {
+  background: linear-gradient(135deg, #fff 60%, #f5f7fa 100%);
+  border-radius: 18px;
+  padding: 24px;
+  margin-bottom: 30px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.09);
+  border: 1.5px solid #e0e0e0;
+}
+
+.gear-page .container h1 {
+  text-align: center;
+  color: #333;
+  margin-bottom: 24px;
+  font-size: 28px;
+  font-weight: bold;
+}
+
+.gear-page .container h2 {
+  color: #333;
+  margin-bottom: 20px;
+  font-size: 22px;
+  font-weight: 600;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+.gear-page .form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.gear-page .form-group {
+  flex: 1;
+  min-width: 200px;
+}
+
+.gear-page .form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #444;
+}
+
+.gear-page .form-group input,
+.gear-page .form-group select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1.5px solid #ccc;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: border-color 0.2s;
+}
+
+.gear-page .form-group input:focus,
+.gear-page .form-group select:focus {
+  border-color: #cc0007;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(204, 0, 7, 0.1);
+}
+
+.gear-page .btn-primary {
+  background-color: #cc0007;
+  color: white;
+  font-weight: 600;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.2s;
+}
+
+.gear-page .btn-primary:hover {
+  background-color: #a30006;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(204, 0, 7, 0.2);
+}
+
+.gear-page .btn-secondary {
+  background-color: #6c757d;
+  color: white;
+  font-weight: 600;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.gear-page .btn-secondary:hover {
+  background-color: #5a6268;
+}
+
+.gear-page .btn-warning {
+  background-color: #ffc107;
+  color: #212529;
+}
+
+.gear-page .btn-warning:hover {
+  background-color: #e0a800;
+}
+
+.gear-page .btn-danger {
+  background-color: #dc3545;
+  color: white;
+}
+
+.gear-page .btn-danger:hover {
+  background-color: #bd2130;
+}
+
+.gear-page .action-btn {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.15s, transform 0.15s;
+  margin-right: 5px;
+}
+
+.gear-page .action-btn:hover {
+  transform: translateY(-2px);
+}
+
+.gear-page .action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.gear-page .msg {
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  border-radius: 8px;
+  font-weight: 500;
+}
+
+.gear-page .msg-error {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.gear-page .msg-success {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+/* Also update media queries for .container, .card, etc. */
+@media (max-width: 768px) {
+  .gear-page .container {
+    padding: 10px;
+  }
+  .gear-page .card {
+    padding: 16px 12px;
+    margin-bottom: 20px;
+    border-radius: 12px;
+  }
+  .gear-page .container h1 {
+    font-size: 22px;
+    margin-bottom: 16px;
+  }
+  .gear-page .container h2 {
+    font-size: 18px;
+    margin-bottom: 14px;
+  }
+  .gear-page .form-row {
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  .gear-page .form-group {
+    width: 100%;
+  }
+  .gear-page .form-group input,
+  .gear-page .form-group select {
+    padding: 12px;
+    font-size: 16px;
+    height: 48px;
+  }
+  .gear-page .btn-primary,
+  .gear-page .btn-secondary {
+    width: 100%;
+    padding: 14px;
+    margin-bottom: 8px;
+    font-size: 16px;
+    height: auto;
+    min-height: 48px;
+  }
+}
+
+/* Mobile table view styles */
+.mobile-view th.category-column,
+.mobile-view td.item-category {
+  display: none;
+}
+
+.mobile-category {
+  font-size: 13px;
+  color: #666;
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.mobile-view td.item-label {
+  padding-bottom: 6px;
+  font-weight: 500;
+}
+
+.mobile-view .action-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.mobile-view .action-btn {
+  width: 100%;
+  margin: 2px 0;
+  text-align: center;
+}
+
+/* Fix long labels overflow */
+.item-label {
+  max-width: 250px;
+  white-space: normal;
+  word-break: break-word;
+}
+
+@media (max-width: 768px) {
+  .item-label {
+    max-width: 150px;
+  }
+  
+  .item-status {
+    font-size: 13px;
+  }
+  
+  /* Stack form buttons on mobile */
+  #addEditGearForm .form-group:last-child {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  /* Make sure date inputs are large enough on mobile */
+  input[type="date"] {
+    min-height: 44px;
+    font-size: 16px !important;
+  }
+}
+
+/* Back to top button */
+.back-to-top-btn {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  width: 45px;
+  height: 45px;
+  background-color: #cc0007;
+  color: white;
+  border: none;
+  border-radius: 50%;
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  opacity: 0.8;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.back-to-top-btn:hover {
+  opacity: 1;
+  transform: translateY(-3px);
+}
+
+@media (max-width: 768px) {
+  .back-to-top-btn {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+    bottom: 15px;
+    right: 15px;
+  }
+}
+
+body:not(.owner) .delete-btn {
+  display: none !important;
+}
+
+/* Quantity Display Styles */
+.quantity-display {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.quantity-single {
+  background-color: #f8f9fa;
+  color: #6c757d;
+  border: 1px solid #e9ecef;
+}
+
+.quantity-multiple {
+  background-color: #e3f2fd;
+  color: #1976d2;
+  border: 1px solid #bbdefb;
+  font-weight: 600;
+}
+
+.quantity-multiple small {
+  font-size: 0.75em;
+  opacity: 0.8;
+  font-weight: 400;
+}
+
+/* Enhanced help text styling */
+.help-text {
+  font-size: 0.85em;
+  color: #6c757d;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.help-text strong {
+  color: #495057;
+  font-weight: 600;
+}
+
+/* Quantity input field enhancement */
+#quantity {
+  background: linear-gradient(135deg, #fff 0%, #f8f9fa 100%);
+  border: 2px solid #dee2e6;
+  transition: all 0.3s ease;
+}
+
+#quantity:focus {
+  border-color: #cc0007;
+  box-shadow: 0 0 0 3px rgba(204, 0, 7, 0.1);
+  background: #fff;
+}
+
+/* Quantity examples styling */
+.quantity-examples {
+  font-weight: 400;
+  color: #6c757d;
+  margin-left: 8px;
+}
+
+.quantity-examples small {
+  font-size: 0.8em;
+  font-style: italic;
+}
+
+/* Mobile responsiveness for quantity display */
+@media (max-width: 768px) {
+  .quantity-display {
+    padding: 2px 6px;
+    font-size: 0.9em;
+  }
+  
+  .quantity-multiple small {
+    font-size: 0.7em;
+  }
+}
+
+/* Inventory Summary Styles */
+.inventory-summary {
+  margin: 20px 0;
+  padding: 16px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  border: 1px solid #dee2e6;
+}
+
+.summary-stats {
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  min-width: 80px;
+  transition: all 0.2s;
+}
+
+.stat-item:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.stat-number {
+  font-size: 1.5em;
+  font-weight: 700;
+  color: #495057;
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 0.85em;
+  color: #6c757d;
+  font-weight: 500;
+  text-align: center;
+  margin-top: 4px;
+}
+
+.stat-item.available .stat-number {
+  color: #28a745;
+}
+
+.stat-item.checked-out .stat-number {
+  color: #dc3545;
+}
+
+/* Mobile responsiveness for summary */
+@media (max-width: 768px) {
+  .summary-stats {
+    gap: 8px;
+  }
+  
+  .stat-item {
+    min-width: 60px;
+    padding: 6px 8px;
+  }
+  
+  .stat-number {
+    font-size: 1.2em;
+  }
+  
+  .stat-label {
+    font-size: 0.75em;
+  }
+}
+
+/* Modal Styles */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+}
+
+.modal-content {
+  background-color: #fff;
+  margin: 2% auto;
+  padding: 0;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  width: 90%;
+  max-width: 800px;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #e0e0e0;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px 12px 0 0;
+  flex-shrink: 0;
+}
+
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #e0e0e0;
+  background-color: #f8f9fa;
+  border-radius: 0 0 12px 12px;
+  flex-shrink: 0;
+}
+
+.close {
+  color: #666;
+  float: right;
+  font-size: 28px;
+  font-weight: bold;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  background: none;
+  border: none;
+  position: absolute;
+  right: 20px;
+  top: 20px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+
+.close:hover,
+.close:focus {
+  color: #000;
+  background-color: #f0f0f0;
+  text-decoration: none;
+}
+
+/* Responsive modal */
+@media (max-width: 768px) {
+  .modal-content {
+    width: 95%;
+    margin: 1% auto;
+    max-height: 95vh;
+  }
+  
+  .modal-header {
+    padding: 16px 20px;
+  }
+  
+  .modal-body {
+    padding: 20px;
+  }
+  
+  .modal-footer {
+    padding: 12px 20px;
+  }
+  
+  .close {
+    right: 16px;
+    top: 16px;
+  }
+}
+
+/* Custom scrollbar for modal body */
+.modal-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 4px;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Modal footer button styles */
+.modal-footer {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.modal-footer button {
+  min-width: 80px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.modal-footer .btn-secondary {
+  background-color: #6c757d;
+  color: white;
+  border: 1px solid #6c757d;
+}
+
+.modal-footer .btn-secondary:hover {
+  background-color: #5a6268;
+  border-color: #545b62;
+}
+
+.modal-footer .btn-outlined {
+  background-color: transparent;
+  color: #6c757d;
+  border: 1px solid #6c757d;
+}
+
+.modal-footer .btn-outlined:hover {
+  background-color: #6c757d;
+  color: white;
+}
+
+.modal-footer .btn-danger {
+  background-color: #dc3545;
+  color: white;
+  border: 1px solid #dc3545;
+}
+
+.modal-footer .btn-danger:hover {
+  background-color: #c82333;
+  border-color: #bd2130;
+}
+
+/* Tooltip Styles */
+.reservation-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  cursor: help;
+  font-size: 14px;
+  color: #007bff;
+  transition: color 0.2s;
+}
+
+.reservation-tooltip:hover {
+  color: #0056b3;
+}
+
+.reservation-tooltip .tooltiptext {
+  visibility: hidden;
+  width: 250px;
+  background-color: #333;
+  color: #fff;
+  text-align: left;
+  border-radius: 8px;
+  padding: 12px;
+  position: absolute;
+  z-index: 1001;
+  bottom: 125%;
+  left: 50%;
+  margin-left: -125px;
+  opacity: 0;
+  transition: opacity 0.3s, visibility 0.3s;
+  font-size: 13px;
+  line-height: 1.4;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.reservation-tooltip .tooltiptext::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -5px;
+  border-width: 5px;
+  border-style: solid;
+  border-color: #333 transparent transparent transparent;
+}
+
+.reservation-tooltip:hover .tooltiptext {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* Mobile tooltip adjustments */
+@media (max-width: 768px) {
+  .reservation-tooltip .tooltiptext {
+    width: 200px;
+    margin-left: -100px;
+    font-size: 12px;
+    padding: 10px;
+  }
+  
+  /* On mobile, show tooltip on tap */
+  .reservation-tooltip:active .tooltiptext {
+    visibility: visible;
+    opacity: 1;
+  }
+}
+
+/* Table Styles */
+.table-responsive {
+  overflow-x: auto;
+  margin-top: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.inventory-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  font-size: 14px;
+}
+
+.inventory-table th {
+  background: linear-gradient(135deg, #cc0007 0%, #a30006 100%);
+  color: white;
+  padding: 16px 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.5px;
+  border: none;
+}
+
+.inventory-table td {
+  padding: 14px 12px;
+  border-bottom: 1px solid #f0f0f0;
+  vertical-align: middle;
+  transition: background-color 0.2s;
+}
+
+.inventory-table tr:hover td {
+  background-color: #f8f9fa;
+}
+
+.inventory-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* Status styling */
+.status-available {
+  color: #28a745;
+  font-weight: 600;
+  padding: 4px 8px;
+  background-color: #d4edda;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.status-checked-out {
+  color: #dc3545;
+  font-weight: 600;
+  padding: 4px 8px;
+  background-color: #f8d7da;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.status-future-available {
+  color: #fd7e14;
+  font-weight: 600;
+  padding: 4px 8px;
+  background-color: #fff3cd;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+/* Date filter styles */
+.date-filters {
+  display: flex;
+  align-items: end;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  border: 1px solid #dee2e6;
+  flex-wrap: wrap;
+}
+
+.date-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.date-filter label {
+  font-weight: 500;
+  color: #495057;
+  font-size: 14px;
+}
+
+.date-filter input[type="date"] {
+  padding: 8px 12px;
+  border: 1.5px solid #ced4da;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #fff;
+  transition: border-color 0.2s;
+}
+
+.date-filter input[type="date"]:focus {
+  border-color: #cc0007;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(204, 0, 7, 0.1);
+}
+
+.date-actions {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+}
+
+.date-actions button {
+  padding: 8px 16px;
+  font-size: 14px;
+  border-radius: 6px;
+  font-weight: 500;
+  min-width: auto;
+}
+
+/* Filters section */
+.filters {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+.search-box,
+.category-filter,
+.status-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 150px;
+}
+
+.search-box input,
+.category-filter select,
+.status-filter select {
+  padding: 8px 12px;
+  border: 1.5px solid #ced4da;
+  border-radius: 6px;
+  font-size: 14px;
+  background: #fff;
+  transition: border-color 0.2s;
+}
+
+.search-box input:focus,
+.category-filter select:focus,
+.status-filter select:focus {
+  border-color: #cc0007;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(204, 0, 7, 0.1);
+}
+
+/* Mobile table responsiveness */
+@media (max-width: 768px) {
+  .date-filters {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  
+  .date-actions {
+    justify-content: stretch;
+  }
+  
+  .date-actions button {
+    flex: 1;
+  }
+  
+  .filters {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .search-box,
+  .category-filter,
+  .status-filter {
+    min-width: auto;
+  }
+  
+  .inventory-table {
+    font-size: 13px;
+  }
+  
+  .inventory-table th,
+  .inventory-table td {
+    padding: 10px 8px;
+  }
+  
+  .action-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  
+  .action-btn {
+    font-size: 12px;
+    padding: 6px 10px;
+    margin: 0;
+  }
+}
+
+/* Enhanced Checkout Modal Styles */
+.modal-item-container {
+  transition: all 0.2s ease;
+}
+
+.modal-item-container:hover {
+  background-color: #f0f0f0 !important;
+  border-color: #cc0007 !important;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(204, 0, 7, 0.1);
+}
+
+.modal-item-btn {
+  transition: all 0.2s ease;
+}
+
+.modal-item-btn:hover {
+  background-color: rgba(204, 0, 7, 0.05) !important;
+}
+
+.modal-item-container input[type="number"] {
+  transition: all 0.2s ease;
+}
+
+.modal-item-container input[type="number"]:focus {
+  border-color: #cc0007;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(204, 0, 7, 0.1);
+}
+
+/* Quantity input styling */
+.quantity-input-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px;
+  background-color: rgba(204, 0, 7, 0.02);
+  border-radius: 6px;
+  border: 1px solid rgba(204, 0, 7, 0.1);
+}
+
+.quantity-input-container label {
+  font-weight: 500;
+  color: #495057;
+  margin: 0;
+}
+
+.quantity-input-container input {
+  border: 1.5px solid #ced4da;
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 14px;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.quantity-input-container input:focus {
+  border-color: #cc0007;
+  box-shadow: 0 0 0 2px rgba(204, 0, 7, 0.1);
+}
+
+.quantity-input-container small {
+  color: #6c757d;
+  font-style: italic;
+}
+
+/* Modal content improvements */
+#checkoutModal .modal-content {
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+#modalItemList {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+/* Custom scrollbar for modal */
+#modalItemList::-webkit-scrollbar {
+  width: 6px;
+}
+
+#modalItemList::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+#modalItemList::-webkit-scrollbar-thumb {
+  background: #cc0007;
+  border-radius: 3px;
+}
+
+#modalItemList::-webkit-scrollbar-thumb:hover {
+  background: #a30006;
+}
+
+/* Mobile modal adjustments */
+@media (max-width: 768px) {
+  .modal-item-container {
+    padding: 10px;
+    margin-bottom: 6px;
+  }
+  
+  .quantity-input-container {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  
+  .quantity-input-container > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  
+  .quantity-input-container input {
+    width: 80px;
+  }
+  
+  #modalItemList {
+    max-height: 50vh;
+  }
+}
+
+/* Gear Page Material Symbol Styles */
+.gear-page button .material-symbols-outlined {
+  vertical-align: middle;
+  margin-right: 4px; /* Add a little space between icon and text */
+  font-size: 1.1em; /* Slightly larger icons */
+}
+
+/* Delete Icon Styling (already has .delete-btn class) */
+.gear-page .delete-btn .material-symbols-outlined {
+  color: #fff; /* White */
+}
+.gear-page .delete-btn:hover .material-symbols-outlined {
+  color: #555; /* Darker gray on hover for feedback */
+}
+
+/* Save Icon Styling */
+.gear-page .save-btn .material-symbols-outlined,
+.gear-page .package-btn .material-symbols-outlined[innerHTML='save'] /* Specific for save package */
+{
+  color: #fff; /* White */
+}
+.gear-page .save-btn:hover .material-symbols-outlined,
+.gear-page .package-btn:hover .material-symbols-outlined[innerHTML='save']
+{
+  /* color: #1976D2; */ /* Darker blue on hover - Removed for white icon */
+}
+
+/* Package Load Icon Styling */
+.gear-page .package-btn .material-symbols-outlined[innerHTML='inventory_2'] {
+  color: #009688; /* Teal */
+}
+.gear-page .package-btn:hover .material-symbols-outlined[innerHTML='inventory_2'] {
+  color: #00796B; /* Darker teal on hover */
+}
+
+/* Style for delete icons specifically within item rows */
+.gear-page .item .delete-btn .material-symbols-outlined {
+  color: #888; /* A medium gray color */
+}
+
+.gear-page .item .delete-btn:hover .material-symbols-outlined {
+  color: #555; /* Darker gray on hover for feedback */
+}
+
+/* Style for Use Inventory button icon */
+.gear-page .checkout-btn .material-symbols-outlined {
+  color: #fff; /* White to match button text */
+  /* vertical-align: middle; */ /* Already handled by .gear-page button .material-symbols-outlined */
+  /* margin-right: 4px; */ /* Already handled by .gear-page button .material-symbols-outlined */
+  /* font-size: 1.1em; */ /* Already handled by .gear-page button .material-symbols-outlined */
+}
+
+/* Style for Manage Inventory link icon */
+.gear-page .admin-gear-link .material-symbols-outlined {
+  color: #fff; /* White to match link background */
+  vertical-align: middle;
+  margin-right: 4px;
+  font-size: 1.1em; /* Consistent with other button icons */
+}
+
+/* Ensure item row delete BUTTON has no background/border/padding */
+.gear-page .item .delete-btn {
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0; /* Reset margin on the button, apply only to icon if needed */
+  line-height: 1; /* Match JS style */
+  outline: none !important; /* Remove focus outline */
+  box-shadow: none !important; /* Remove default shadow */
+}
+
+/* Enhanced Inventory Summary Styles */
+.enhanced-summary {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 16px;
+  padding: 24px;
+  margin: 24px 0;
+  border: 1px solid #dee2e6;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.summary-stats {
+  display: flex;
+  justify-content: space-around;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 16px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  min-width: 100px;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-item::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #6c757d, #495057);
+  transition: all 0.3s ease;
+}
+
+.stat-item.primary::before {
+  background: linear-gradient(90deg, #007bff, #0056b3);
+}
+
+.stat-item.available::before {
+  background: linear-gradient(90deg, #28a745, #1e7e34);
+}
+
+.stat-item.checked-out::before {
+  background: linear-gradient(90deg, #dc3545, #c82333);
+}
+
+.stat-item.future-available::before {
+  background: linear-gradient(90deg, #fd7e14, #e55a00);
+}
+
+.stat-item.conflict::before {
+  background: linear-gradient(90deg, #ffc107, #e0a800);
+}
+
+.stat-item:hover {
+  transform: translateY(-4px) scale(1.02);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+.stat-icon {
+  font-size: 1.5em;
+  margin-bottom: 8px;
+  opacity: 0.8;
+}
+
+.stat-number {
+  font-size: 1.8em;
+  font-weight: 700;
+  color: #495057;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.stat-label {
+  font-size: 0.85em;
+  color: #6c757d;
+  font-weight: 500;
+  text-align: center;
+  margin-bottom: 4px;
+}
+
+.stat-subtitle {
+  font-size: 0.75em;
+  color: #868e96;
+  font-style: italic;
+}
+
+/* Utilization Metrics */
+.utilization-metrics {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.metric-item {
+  flex: 1;
+  min-width: 200px;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.metric-label {
+  font-size: 0.9em;
+  font-weight: 600;
+  color: #495057;
+  margin-bottom: 8px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 12px;
+  background: #e9ecef;
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 8px;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 6px;
+  transition: width 0.6s ease;
+  position: relative;
+}
+
+.progress-fill.available {
+  background: linear-gradient(90deg, #28a745, #20c997);
+}
+
+.progress-fill.utilization {
+  background: linear-gradient(90deg, #007bff, #6610f2);
+}
+
+.metric-value {
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #495057;
+  text-align: right;
+}
+
+/* Category Breakdown */
+.category-breakdown {
+  margin-bottom: 24px;
+}
+
+.category-breakdown h4 {
+  margin: 0 0 16px 0;
+  color: #495057;
+  font-size: 1.1em;
+  font-weight: 600;
+}
+
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.category-stat {
+  background: rgba(255, 255, 255, 0.8);
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  transition: all 0.2s ease;
+}
+
+.category-stat:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.category-name {
+  font-weight: 600;
+  color: #495057;
+  margin-bottom: 4px;
+}
+
+.category-details {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85em;
+}
+
+.category-total {
+  color: #6c757d;
+}
+
+.category-available {
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.8em;
+}
+
+.category-available.good {
+  background: #d4edda;
+  color: #155724;
+}
+
+.category-available.warning {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.category-available.critical {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+/* Quick Actions */
+.quick-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.quick-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #fff;
+  border: 2px solid #dee2e6;
+  border-radius: 8px;
+  color: #495057;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-decoration: none;
+}
+
+.quick-action-btn:hover {
+  background: #f8f9fa;
+  border-color: #cc0007;
+  color: #cc0007;
+  transform: translateY(-2px);
+}
+
+.action-icon {
+  font-size: 1.1em;
+}
+
+/* Enhanced Status Badges */
+.status-container {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.85em;
+  line-height: 1.2;
+  transition: all 0.2s ease;
+}
+
+.status-badge.status-available {
+  background: linear-gradient(135deg, #d4edda, #c3e6cb);
+  color: #155724;
+  border: 1px solid #b8dacc;
+}
+
+.status-badge.status-checked-out {
+  background: linear-gradient(135deg, #f8d7da, #f1b0b7);
+  color: #721c24;
+  border: 1px solid #f1b0b7;
+}
+
+.status-badge.status-future-available {
+  background: linear-gradient(135deg, #fff3cd, #ffeaa7);
+  color: #856404;
+  border: 1px solid #ffeaa7;
+}
+
+.status-badge.status-conflict {
+  background: linear-gradient(135deg, #fff3cd, #ffd93d);
+  color: #856404;
+  border: 1px solid #ffd93d;
+}
+
+.status-icon {
+  font-size: 1em;
+}
+
+.status-details {
+  font-size: 0.75em;
+  color: #6c757d;
+  font-style: italic;
+}
+
+/* Enhanced Item Display */
+.inventory-row {
+  transition: all 0.2s ease;
+}
+
+.inventory-row:hover {
+  background: rgba(204, 0, 7, 0.02);
+  transform: scale(1.005);
+}
+
+.inventory-row[onclick] {
+  cursor: pointer;
+}
+
+.inventory-row[onclick]:hover {
+  background: rgba(204, 0, 7, 0.05);
+  transform: scale(1.008);
+  box-shadow: 0 2px 8px rgba(204, 0, 7, 0.1);
+}
+
+.inventory-row[onclick]:active {
+  transform: scale(1.002);
+  background: rgba(204, 0, 7, 0.08);
+}
+
+.item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.item-name {
+  font-weight: 600;
+  color: #495057;
+}
+
+.mobile-status-details {
+  font-size: 0.8em;
+  color: #6c757d;
+  font-style: italic;
+}
+
+/* Enhanced Quantity Badges */
+.quantity-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 0.85em;
+}
+
+.quantity-badge.single {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.quantity-badge.multiple {
+  background: linear-gradient(135deg, #cce5ff, #b3d9ff);
+  color: #0056b3;
+  border: 1px solid #b3d9ff;
+}
+
+/* Enhanced Serial Number Display */
+.serial-number {
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  transition: all 0.2s ease;
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+}
+
+.serial-number:hover {
+  background: #e9ecef;
+  border-color: #cc0007;
+  color: #cc0007;
+}
+
+.no-serial {
+  color: #6c757d;
+  font-style: italic;
+  font-size: 0.85em;
+}
+
+/* Enhanced Action Buttons */
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  font-size: 0.8em;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.btn-icon {
+  font-size: 1em;
+}
+
+.btn-text {
+  font-size: 0.9em;
+}
+
+.btn-info {
+  background: #17a2b8;
+  color: white;
+  border: none;
+}
+
+.btn-info:hover {
+  background: #138496;
+  transform: translateY(-1px);
+}
+
+/* Enhanced Tooltips */
+.reservation-tooltip.enhanced {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+}
+
+.tooltip-icon {
+  cursor: help;
+  font-size: 1.1em;
+  color: #007bff;
+  transition: color 0.2s;
+}
+
+.tooltip-icon:hover {
+  color: #0056b3;
+}
+
+/* Item Details Modal */
+.item-details-modal {
+  text-align: left;
+}
+
+.detail-section {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+.detail-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.detail-section h4 {
+  margin: 0 0 12px 0;
+  color: #495057;
+  font-size: 1.1em;
+  font-weight: 600;
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #dee2e6;
+}
+
+.detail-label {
+  font-weight: 500;
+  color: #6c757d;
+  font-size: 0.9em;
+}
+
+.detail-value {
+  font-weight: 600;
+  color: #495057;
+}
+
+.detail-value.item-id {
+  font-family: 'Courier New', monospace;
+  font-size: 0.8em;
+  cursor: pointer;
+  padding: 2px 4px;
+  background: #e9ecef;
+  border-radius: 3px;
+}
+
+.detail-value.item-id:hover {
+  background: #dee2e6;
+  color: #cc0007;
+}
+
+.status-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.availability-date {
+  font-size: 0.85em;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.reservations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reservation-detail {
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border-left: 4px solid #007bff;
+  font-size: 0.9em;
+}
+
+/* No Inventory Message */
+.no-inventory-message {
+  text-align: center;
+  padding: 40px 20px;
+  color: #6c757d;
+  font-style: italic;
+  font-size: 1.1em;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 12px;
+  border: 2px dashed #dee2e6;
+}
+
+/* Mobile Responsiveness for Enhanced Features */
+@media (max-width: 768px) {
+  .enhanced-summary {
+    padding: 16px;
+    margin: 16px 0;
+  }
+  
+  .summary-stats {
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  
+  .stat-item {
+    min-width: 80px;
+    padding: 12px 8px;
+  }
+  
+  .stat-number {
+    font-size: 1.4em;
+  }
+  
+  .stat-label {
+    font-size: 0.75em;
+  }
+  
+  .utilization-metrics {
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+  
+  .metric-item {
+    min-width: auto;
+  }
+  
+  .category-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .quick-actions {
+    flex-direction: column;
+  }
+  
+  .quick-action-btn {
+    justify-content: center;
+  }
+  
+  .detail-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .detail-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .action-btn .btn-text {
+    display: none;
+  }
+  
+  .action-btn {
+    padding: 8px;
+    min-width: 36px;
+    justify-content: center;
+  }
+}
+
+/* Enhanced Reservation Details Styles */
+.loading-details {
+  text-align: center;
+  padding: 40px 20px;
+  color: #6c757d;
+}
+
+.loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #cc0007;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 16px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.reservation-detail {
+  background: #f8f9fa;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 12px;
+  border-left: 4px solid #6c757d;
+  transition: all 0.2s ease;
+}
+
+.reservation-detail:hover {
+  background: #e9ecef;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.reservation-detail.current {
+  border-left-color: #dc3545;
+  background: linear-gradient(135deg, #fff5f5, #f8f9fa);
+}
+
+.reservation-detail.future {
+  border-left-color: #ffc107;
+  background: linear-gradient(135deg, #fffbf0, #f8f9fa);
+}
+
+.reservation-detail.checked-out {
+  border-left-color: #cc0007;
+  background: linear-gradient(135deg, #fff0f0, #f8f9fa);
+}
+
+.reservation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.reservation-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 0.85em;
+}
+
+.reservation-status.current {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.reservation-status.future {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.reservation-status.checked-out {
+  background: #f5c6cb;
+  color: #721c24;
+}
+
+.reservation-dates {
+  font-family: 'Courier New', monospace;
+  font-size: 0.9em;
+  color: #495057;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+}
+
+.reservation-quantity {
+  margin-bottom: 8px;
+  font-size: 0.9em;
+  color: #495057;
+}
+
+.event-info {
+  background: rgba(255, 255, 255, 0.9);
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #dee2e6;
+  margin-top: 8px;
+}
+
+.event-icon {
+  font-size: 1.1em;
+  margin-right: 6px;
+}
+
+.event-location {
+  color: #6c757d;
+  font-size: 0.9em;
+  margin-top: 4px;
+  display: block;
+}
+
+.event-client {
+  color: #666;
+  font-size: 0.9em;
+}
+
+.association-type {
+  color: #888;
+  font-size: 0.85em;
+  font-style: italic;
+}
+
+.reserved-by,
+.checked-out-by {
+  color: #007bff;
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+.reservation-date {
+  color: #666;
+  font-size: 0.85em;
+}
+
+.no-reservations {
+  text-align: center;
+  padding: 32px 20px;
+  color: #6c757d;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 12px;
+  border: 2px dashed #dee2e6;
+}
+
+.no-reservations-icon {
+  font-size: 2em;
+  display: block;
+  margin-bottom: 12px;
+  opacity: 0.6;
+}
+
+.no-reservations p {
+  margin: 8px 0 4px 0;
+  font-weight: 500;
+}
+
+.no-reservations small {
+  color: #868e96;
+  font-style: italic;
+}
+
+.error-notice {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.error-notice small {
+  color: #856404;
+  font-weight: 500;
+}
+
+/* Limited access styling */
+.limited-access {
+  color: #856404;
+  font-style: italic;
+  font-size: 0.9em;
+  background: rgba(255, 193, 7, 0.1);
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  display: inline-block;
+  margin-top: 4px;
+}
+
+/* Mobile responsiveness for reservation details */
+@media (max-width: 768px) {
+  .reservation-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  
+  .reservation-status {
+    font-size: 0.9em;
+  }
+  
+  .reservation-dates {
+    font-size: 0.85em;
+  }
+  
+  .event-info {
+    font-size: 0.9em;
+  }
+  
+  .loading-details {
+    padding: 15px;
+  }
+  
+  .loading-spinner {
+    width: 20px;
+    height: 20px;
+  }
+  
+  .no-reservations {
+    padding: 15px;
+  }
+  
+  .no-reservations-icon {
+    font-size: 2em;
+  }
+}
+
+/* Remove reservation button styling */
+.remove-reservation-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.85em;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.2s ease;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.remove-reservation-btn:hover {
+  background: #c82333;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(220, 53, 69, 0.3);
+}
+
+.remove-reservation-btn .btn-icon {
+  font-size: 1em;
+}
+
+/* Reservation confirmation modal styling */
+.remove-reservation-confirmation {
+  text-align: left;
+}
+
+.reservation-summary {
+  background: #f8f9fa;
+  padding: 12px;
+  border-radius: 6px;
+  margin: 12px 0;
+  border-left: 4px solid #007bff;
+}
+
+.warning-notice {
+  background: #fff3cd;
+  color: #856404;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #ffeaa7;
+  margin-top: 12px;
+}
+
+.warning-notice strong {
+  color: #856404;
+}
+
+/* Responsive adjustments for remove buttons */
+@media (max-width: 768px) {
+  .remove-reservation-btn {
+    padding: 4px 8px;
+    font-size: 0.8em;
+    margin-top: 8px;
+    margin-left: 0;
+    align-self: flex-start;
+  }
+  
+  .reservation-header {
+    position: relative;
+  }
+  
+  .remove-reservation-btn {
+    position: absolute;
+    top: 0;
+    right: 0;
+  }
+}
+  

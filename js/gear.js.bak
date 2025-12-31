@@ -1,0 +1,51 @@
+(function() {
+const categories = ["Cameras", "Lenses", "Lighting", "Support", "Accessories"];
+
+const token = window.token || (window.token = localStorage.getItem('token'));
+const params = new URLSearchParams(window.location.search);
+let tableId = params.get('id');
+
+let savedGearLists = {};
+let activeList = '';
+let saveTimeout;
+let filterSetting = 'all';
+let gearInventory = [];
+let pendingProceed = false;
+
+console.log("Gear page loaded");
+
+function showNotification(title, message, type = 'info') {
+  console.log(`[NOTIFICATION] ${type}: ${title} - ${message}`);
+  alert(`${title}: ${message}`);
+}
+
+// Placeholder for core functions - testing page load
+function loadGear() {
+  console.log("Loading gear...");
+  document.getElementById('gearContainer').innerHTML = '<p>Gear loading placeholder</p>';
+}
+
+function loadEventTitle() {
+  console.log("Loading event title...");
+  document.getElementById('eventTitle').textContent = "Test Event";
+}
+
+function loadGearInventory() {
+  console.log("Loading gear inventory...");
+}
+
+// Simple implementation of critical functions
+function initPage(id) {
+  console.log("initPage called with ID:", id);
+  tableId = id || tableId;
+  loadGear();
+  loadEventTitle();
+  loadGearInventory();
+}
+
+// Export functions to window
+window.initPage = initPage;
+window.createNewGearList = function() { alert("New list"); };
+window.deleteGearList = function() { alert("Delete list"); };
+window.saveGear = function() { alert("Save gear"); };
+})();

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Event Tasks / To-Do List</title>
+  <link rel="stylesheet" href="/css/main.css">
+  <style>
+    body { font-family: 'Roboto', Arial, sans-serif; background: #f7f7f7; }
+    .tasks-container { max-width: 540px; margin: 40px auto; background: #fff; border-radius: 16px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); padding: 32px 28px; }
+    .tasks-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 10px; }
+    .tasks-header h2 { margin: 0; color: #CC0007; font-size: 2rem; flex: 1 1 100%; text-align: left; }
+    .tasks-header a { flex: 0 0 auto; }
+    .add-task-form { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+    .add-task-form input[type="text"], .add-task-form input[type="date"] { flex: 1 1 100%; min-width: 0; padding: 12px 14px; border: 1px solid #bbb; border-radius: 6px; font-size: 1rem; margin-bottom: 8px; }
+    .add-task-form button { background: #CC0007; color: #fff; border: none; border-radius: 6px; padding: 12px 18px; font-size: 1rem; cursor: pointer; font-weight: 500; width: 100%; margin-top: 4px; }
+    .tasks-list { list-style: none; padding: 0; margin: 0; }
+    .task-item { display: flex; align-items: center; gap: 12px; background: #fafafa; border-radius: 8px; padding: 12px 10px; margin-bottom: 10px; box-shadow: 0 1px 4px rgba(204,0,7,0.04); flex-wrap: wrap; }
+    .task-item.completed .task-title { text-decoration: line-through; color: #888; }
+    .task-title { flex: 2 1 100%; font-size: 1.08rem; word-break: break-word; }
+    .task-deadline { flex: 1 1 100%; color: #666; font-size: 0.98rem; margin-top: 2px; }
+    .task-actions { flex: 0 0 auto; display: flex; gap: 6px; }
+    .task-actions button { background: none; border: none; color: #CC0007; font-size: 1.2rem; cursor: pointer; margin-left: 6px; padding: 8px; border-radius: 6px; }
+    .task-actions button.edit { color: #1976d2; }
+    .tasks-list input[type="checkbox"] {
+      width: 1.4em;
+      height: 1.4em;
+      accent-color: #CC0007;
+      margin-right: 10px;
+      vertical-align: middle;
+    }
+    @media (max-width: 700px) {
+      .tasks-container { padding: 12px 2vw; border-radius: 0; margin: 0; min-height: 100vh; box-shadow: none; }
+      .tasks-header { flex-direction: column; align-items: flex-start; gap: 6px; }
+      .tasks-header h2 { font-size: 1.4rem; }
+      .add-task-form { flex-direction: column; gap: 8px; }
+      .add-task-form input, .add-task-form button { font-size: 1rem; padding: 12px 10px; }
+      .task-item { flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 6px; }
+      .task-title, .task-deadline { font-size: 1rem; }
+      .task-actions { gap: 2px; }
+    }
+  </style>
+  
+  <!-- Load config.js first -->
+  <script src="/js/config.js"></script>
+</head>
+<body>
+  <div class="tasks-container">
+    <div class="tasks-header">
+      <h2>To-Do List</h2>
+      <a id="backToGeneral" href="#" style="color:#CC0007;text-decoration:none;font-size:1.2rem;">← Back</a>
+    </div>
+    <form class="add-task-form" id="addTaskForm">
+      <input type="text" id="taskTitle" placeholder="Task description..." required maxlength="120">
+      <input type="date" id="taskDeadline" required>
+      <button type="submit">Add</button>
+    </form>
+    <ul class="tasks-list" id="tasksList"></ul>
+  </div>
+  
+  <!-- Handle sequential script loading to ensure proper order -->
+  <script>
+    // This function will load scripts in sequence
+    function loadScriptsSequentially(scripts, index = 0) {
+      if (index >= scripts.length) return;
+      
+      const script = document.createElement('script');
+      script.src = scripts[index];
+      
+      script.onload = function() {
+        loadScriptsSequentially(scripts, index + 1);
+      };
+      
+      script.onerror = function() {
+        console.error('Failed to load script:', scripts[index]);
+        // Try to continue loading the next script
+        loadScriptsSequentially(scripts, index + 1);
+      };
+      
+      document.head.appendChild(script);
+    }
+    
+    // Load in this specific order
+    loadScriptsSequentially([
+      'https://cdn.socket.io/4.7.2/socket.io.min.js',
+      '../js/socket.js',
+      '../js/tasks.js'
+    ]);
+    
+    // Set up back button
+    const params = new URLSearchParams(window.location.search);
+    const tableId = params.get('id') || localStorage.getItem('eventId');
+    document.getElementById('backToGeneral').onclick = function(e) {
+      e.preventDefault();
+      if (tableId) {
+        localStorage.setItem('eventId', tableId);
+      }
+      window.location.href = '/dashboard.html#general';
+    };
+  </script>
+</body>
+</html> 

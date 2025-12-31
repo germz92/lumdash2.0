@@ -1,0 +1,1169 @@
+.events-page {
+    font-family: 'Roboto', Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e9ecf3 100%);
+    min-height: 100%;
+    box-sizing: border-box;
+}
+
+.logout-btn {
+    background: gray;
+    opacity: 0.5;
+}
+
+.events-page html, .events-page body {
+    max-width: 100%;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.logo-wrapper {
+    display: flex;
+    justify-content: center;
+    margin-top: 16px;
+    margin-bottom: 12px;
+}
+
+.auth-logo {
+    width: 220px;
+    height: auto;
+    filter: drop-shadow(0 2px 8px rgba(204,0,7,0.08));
+}
+
+.card-container {
+    background: #fff;
+    padding: 36px 24px 32px 24px;
+    border-radius: 22px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.10);
+    max-width: 700px;
+    margin: 0 auto 32px auto;
+    align-items: center;
+    overflow: visible;
+}
+
+.top-bar {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 20px;
+    background: #f8fafd;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(204,0,7,0.06);
+    padding: 12px 18px;
+    border: 1.5px solid #e0e0e0;
+    gap: 12px;
+}
+
+.top-bar-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+}
+
+.top-bar button.logout-btn {
+    background: #fff0f0;
+    color: #d11a2a;
+    border: 1.5px solid #d11a2a;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 16px;
+    padding: 8px 18px;
+    opacity: 1;
+    box-shadow: 0 2px 8px rgba(209,26,42,0.06);
+    transition: background 0.15s, color 0.15s, border 0.15s;
+    cursor: pointer;
+}
+.top-bar button.logout-btn:hover {
+    background: #d11a2a;
+    color: #fff;
+    border-color: #b0101e;
+}
+
+/* Top bar rows */
+.top-bar .welcome-row {
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.top-bar .admin-row {
+    padding-top: 8px;
+}
+
+.top-bar .welcome-row h2 {
+    margin: 0;
+    flex: 1;
+}
+
+/* Admin buttons container in top bar */
+.top-bar #adminButtonsContainer {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+/* Admin buttons in top bar */
+.top-bar .btn-admin.btn-outlined,
+.top-bar .btn-inventory.btn-outlined,
+.top-bar .btn-crew-planner.btn-outlined,
+.top-bar .btn-crew-calendar.btn-outlined {
+    font-size: 14px;
+    padding: 8px 16px;
+    white-space: nowrap;
+}
+
+.events-header {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 18px 16px;
+    align-items: center;
+}
+
+.events-header-row1 {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    gap: 16px;
+}
+
+.events-header-row2 {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+}
+
+.events-header-row2 .sort-search-group {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    align-items: center;
+    justify-content: center;
+}
+
+.events-header h2 {
+    margin: 0;
+    flex: 1 1 auto;
+    text-align: center;
+}
+
+#calendarViewBtn {
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+.btn-create {
+    background: #CC0007;
+    color: white;
+    padding: 10px 22px;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 17px;
+    box-shadow: 0 2px 8px rgba(204,0,7,0.08);
+    transition: background 0.2s, box-shadow 0.2s;
+}
+.btn-create:hover {
+    background: #a30006;
+    box-shadow: 0 4px 16px rgba(204,0,7,0.10);
+}
+
+.events-header select {
+    padding: 10px 14px;
+    font-size: 16px;
+    border-radius: 8px;
+    border: 1.5px solid #ccc;
+    background: #fff;
+    transition: border 0.2s;
+    box-shadow: 0 1px 4px rgba(204,0,7,0.04);
+}
+
+.table-cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+    justify-content: center;
+    align-items: flex-start;
+    overflow: visible;
+}
+
+.table-card {
+    background: linear-gradient(135deg, #fff 60%, #f8fafd 100%);
+    padding: 24px 18px 18px 18px;
+    border-radius: 18px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.09);
+    display: flex;
+    flex-direction: column;
+    width: 320px;
+    min-height: 120px;
+    flex: 0 1 320px;
+    justify-content: center;
+    transition: box-shadow 0.2s, transform 0.2s;
+    border: 1.5px solid #e0e0e0;
+    margin-bottom: 8px;
+    overflow: visible;
+    position: relative;
+}
+.table-card:hover {
+    box-shadow: 0 12px 32px rgba(204,0,7,0.10);
+    transform: translateY(-2px) scale(1.02);
+}
+
+.event-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 12px;
+    width: 100%;
+    gap: 12px;
+}
+
+.event-title-container {
+    flex: 1;
+    min-width: 0;
+}
+
+.event-header h3 {
+    font-size: 1.18em;
+    font-weight: 700;
+    color: #222;
+    margin: 0 0 6px 0;
+    text-align: left;
+}
+
+.event-details {
+    font-size: 0.95em;
+    color: #666;
+    text-align: left;
+    margin: 0;
+    font-weight: 400;
+    line-height: 1.4;
+}
+
+/* 3-dot menu */
+.event-menu-container {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.event-menu-btn {
+    background: transparent !important;
+    border: none;
+    cursor: pointer;
+    padding: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    text-transform: none !important;
+    transition: color 0.2s;
+}
+
+.event-menu-btn:hover {
+    background: transparent !important;
+    color: #333 !important;
+    box-shadow: none !important;
+    transform: none !important;
+}
+
+.event-menu-btn:active {
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.event-menu-btn .material-symbols-outlined {
+    font-size: 24px;
+}
+
+.event-menu-dropdown {
+    position: absolute;
+    top: calc(100% + 8px);
+    right: 0;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(0, 0, 0, 0.05);
+    min-width: 200px;
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: opacity 0.2s, transform 0.2s, visibility 0.2s;
+    overflow: hidden;
+    padding: 4px 0;
+}
+
+.event-menu-dropdown.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.menu-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    margin: 0;
+    border: none !important;
+    outline: none !important;
+    background: transparent;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 400;
+    color: #030303;
+    transition: background 0.15s ease;
+    box-sizing: border-box;
+    box-shadow: none !important;
+}
+
+.menu-item:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.menu-item:focus {
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.menu-item:active {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.menu-item .material-symbols-outlined {
+    font-size: 20px;
+    color: #606060;
+    flex-shrink: 0;
+}
+
+.menu-item-danger {
+    color: #cc0000;
+}
+
+.menu-item-danger .material-symbols-outlined {
+    color: #cc0000;
+}
+
+.menu-item-danger:hover {
+    background: rgba(204, 0, 0, 0.08);
+}
+
+.action-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.action-buttons button {
+    padding: 12px 16px;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    font-weight: 700;
+    color: white;
+    font-size: 15px;
+    box-shadow: 0 2px 8px rgba(204,0,7,0.08);
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.action-buttons button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.btn-open { 
+    background-color: #CC0007;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.btn-add-calendar {
+    background: linear-gradient(135deg, #2196F3, #1976D2);
+    font-size: 13px;
+    font-weight: 600;
+}
+.btn-share { background-color: #a1a1a1; }
+.btn-delete { background-color: #858585; }
+.btn-archive {
+    background-color: #ff9800;
+    color: white;
+}
+.btn-archive:hover {
+    background-color: #e68900;
+}
+
+/* User-specific archive button */
+.btn-archive-user {
+    background-color: #2196F3;
+    color: white;
+}
+.btn-archive-user:hover {
+    background-color: #1976D2;
+}
+
+/* User unarchive button */
+.btn-unarchive {
+    background-color: #4CAF50;
+    color: white;
+}
+.btn-unarchive:hover {
+    background-color: #45a049;
+}
+
+
+.btn-open:hover { 
+    background-color: #a30006; 
+}
+
+.btn-add-calendar:hover {
+    background: linear-gradient(135deg, #1976D2, #1565C0);
+}
+
+.btn-add-calendar .material-symbols-outlined {
+    font-size: 18px;
+}
+
+#newTitle,
+#newClient {
+    height: 48px;
+    font-size: 17px;
+    padding: 14px 12px;
+    border: 1.5px solid #ccc;
+    border-radius: 8px;
+    width: 100%;
+    box-sizing: border-box;
+    background: #f8fafd;
+    margin-bottom: 8px;
+}
+
+.modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0, 0, 0, 0.4);
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    width: 100vw;
+    height: 100vh;
+}
+
+#shareEmail {
+    height: 48px;
+    font-size: 16px;
+    border-radius: 8px;
+    border: 1.5px solid #ccc;
+    background: #f8fafd;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+}
+
+.modal-content {
+    background: linear-gradient(135deg, #fff 70%, #f8fafd 100%);
+    border-radius: 22px;
+    padding: 40px 28px;
+    max-width: 420px;
+    width: 92vw;
+    box-shadow: 0 12px 40px rgba(204,0,7,0.13), 0 2px 8px rgba(0,0,0,0.08);
+    border: 1.5px solid #e0e0e0;
+    animation: modalPopIn 0.28s cubic-bezier(.4,1.4,.6,1) both;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    align-items: center;
+    justify-content: center;
+}
+
+@keyframes modalPopIn {
+    0% {
+        opacity: 0;
+        transform: scale(0.96) translateY(30px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.modal-content h3 {
+    margin-top: 0;
+    margin-bottom: 8px;
+    font-size: 24px;
+    text-align: center;
+    font-weight: 700;
+    color: #CC0007;
+    letter-spacing: 0.01em;
+}
+
+.modal-content input[type="text"],
+.modal-content input[type="email"],
+.modal-content input[type="date"] {
+    padding: 16px 14px;
+    height: 48px;
+    border: 1.5px solid #ccc;
+    border-radius: 10px;
+    font-size: 17px;
+    width: 100%;
+    box-sizing: border-box;
+    background: #f8fafd;
+    margin-bottom: 8px;
+    transition: border 0.2s;
+}
+
+.modal-content input[type="text"]:focus,
+.modal-content input[type="email"]:focus,
+.modal-content input[type="date"]:focus {
+    border-color: #CC0007;
+    outline: none;
+}
+
+.modal-content button {
+    padding: 12px 0;
+    font-size: 17px;
+    border: none;
+    border-radius: 10px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background-color 0.2s, box-shadow 0.2s;
+    box-shadow: 0 2px 8px rgba(204,0,7,0.08);
+    width: 100%;
+    margin-bottom: 6px;
+}
+
+.modal-content button:first-of-type {
+    background-color: #CC0007;
+    color: white;
+}
+.modal-content button:first-of-type:hover {
+    background-color: #a30006;
+}
+
+.modal-content button:last-of-type {
+    background-color: #6c757d;
+    color: white;
+}
+.modal-content button:last-of-type:hover {
+    background-color: #5a6268;
+}
+
+@media (max-width: 768px) {
+    .events-page html {
+        width: 100%;
+        overflow-x: hidden;
+    }
+    .events-page body {
+        padding: 5px 8px;
+    }
+    .card-container {
+        padding: 12px 8px 16px 8px !important;
+        border-radius: 10px !important;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+        margin: 0 auto 12px auto !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        overflow: visible !important;
+    }
+    .table-cards {
+        gap: 10px !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box !important;
+        overflow-x: hidden !important;
+        overflow-y: visible !important;
+    }
+    .table-card {
+        padding: 12px 10px 10px 10px !important;
+        border-radius: 8px !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        flex: 1 1 100% !important;
+        margin-bottom: 40px !important;
+        box-sizing: border-box !important;
+        overflow: visible !important;
+    }
+    
+    .event-menu-dropdown {
+        min-width: 180px;
+        max-height: 200px;
+    }
+    .event-header h3 {
+        font-size: 1em !important;
+    }
+    .event-details {
+        font-size: 0.95em !important;
+        margin-left: 6px !important;
+    }
+    .action-buttons button {
+        font-size: 15px !important;
+        padding: 6px 10px !important;
+        border-radius: 6px !important;
+    }
+    .btn-create {
+        font-size: 15px !important;
+        padding: 8px 12px !important;
+        border-radius: 7px !important;
+    }
+    .events-header select {
+        font-size: 15px !important;
+        padding: 8px 10px !important;
+        border-radius: 7px !important;
+    }
+    #newTitle,
+    #newClient {
+        font-size: 15px !important;
+        padding: 10px 8px !important;
+        border-radius: 7px !important;
+        height: 40px !important;
+    }
+    .modal-content {
+        width: 98vw !important;
+        padding: 18px 4px !important;
+        border-radius: 14px !important;
+        max-width: 99vw !important;
+    }
+    .modal-content h3 {
+        font-size: 18px !important;
+    }
+    .modal-content input[type="text"],
+    .modal-content input[type="email"],
+    .modal-content input[type="date"] {
+        height: 40px !important;
+        font-size: 15px !important;
+        border-radius: 8px !important;
+        padding: 10px 8px !important;
+    }
+    .modal-content button {
+        font-size: 15px !important;
+        border-radius: 8px !important;
+        padding: 10px 0 !important;
+    }
+    .events-header h2 {
+        font-size: 1.1em !important;
+        margin-bottom: 4px !important;
+        margin-top: 0 !important;
+        font-weight: 800 !important;
+        line-height: 1.1 !important;
+        text-align: center !important;
+    }
+    #calendarViewBtn {
+        margin-left: 0;
+        margin-right: 0;
+        align-self: flex-start;
+        width: auto !important;
+        justify-self: flex-end;
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+}
+
+@media (min-width: 900px) {
+    .card-container {
+        max-width: 100%;
+        width: 100%;
+        margin: 0 auto;
+        border-radius: 0;
+        padding-left: 0;
+        padding-right: 0;
+        overflow-x: hidden;
+        overflow-y: visible;
+    }
+    .table-cards {
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: flex-start;
+        gap: 16px;
+        width: 100%;
+        max-width: 100%;
+        overflow-x: hidden;
+        overflow-y: visible;
+        box-sizing: border-box;
+    }
+    .table-card {
+        width: 400px;
+        min-width: 320px;
+        max-width: 400px;
+        flex: 0 1 400px;
+        margin-bottom: 16px;
+        box-sizing: border-box;
+    }
+    .action-buttons {
+        flex-wrap: nowrap;
+        gap: 14px;
+    }
+}
+
+.events-page table {
+  /* Add any table styles here that were previously global */
+}
+
+.events-page th, .events-page td {
+  /* Add any th/td styles here that were previously global */
+}
+
+.events-page button {
+  /* Add any button styles here that were previously global */
+}
+
+/* Calendar View Styles */
+#calendarViewContainer {
+  background: #fff;
+  border-radius: 22px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.10);
+  padding: 32px 18px 32px 18px;
+  max-width: 900px;
+  margin: 0 auto 32px auto;
+  min-height: 320px;
+  animation: modalPopIn 0.28s cubic-bezier(.4,1.4,.6,1) both;
+}
+
+.btn-calendar-toggle {
+  background: transparent !important;
+  border: none !important;
+  color: #CC0007 !important;
+  border-radius: 10px;
+  padding: 10px !important;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  font-weight: 600;
+  font-size: 22px !important;
+  box-shadow: none !important;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.btn-calendar-toggle i[data-lucide] {
+  font-size: 1.5em;
+  color: inherit;
+}
+.btn-calendar-toggle:hover,
+.btn-calendar-toggle:focus {
+  background: transparent !important;
+  color: #a30006 !important;
+  box-shadow: none !important;
+}
+
+#calendarViewContainer .calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+#calendarViewContainer .calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 8px;
+  background: linear-gradient(135deg, #fff 60%, #f8fafd 100%);
+  border-radius: 18px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.09);
+  padding: 18px;
+  margin-bottom: 18px;
+}
+
+#calendarViewContainer .calendar-day {
+  position: relative;
+  min-height: 60px;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(204,0,7,0.04);
+  padding: 4px 4px 2px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+#calendarViewContainer .calendar-day:hover {
+  background: #f8fafd;
+}
+#calendarViewContainer .calendar-day-num {
+  position: relative;
+  z-index: 3;
+  font-weight: bold;
+  color: #CC0007;
+  margin-bottom: 2px;
+}
+#calendarViewContainer .calendar-event-pill {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  min-width: 0;
+  z-index: 2;
+  background: #CC0007;
+  color: #fff;
+  border-radius: 6px;
+  padding: 2px 6px;
+  margin: 2px 0;
+  font-size: 0.95em;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(204,0,7,0.08);
+  transition: background 0.15s;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  position: relative;
+  border: 2px solid #fff;
+  opacity: 0.96;
+  pointer-events: auto;
+  grid-row: auto;
+}
+#calendarViewContainer .calendar-event-pill:hover {
+  background: #a30006;
+  opacity: 1;
+}
+#calendarViewContainer .calendar-event-pill[title] {
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  .top-bar {
+    padding: 8px 10px !important;
+    margin-bottom: 10px !important;
+    border-radius: 8px !important;
+    min-height: 0 !important;
+    gap: 8px !important;
+  }
+  
+  .top-bar .welcome-row {
+    padding-bottom: 6px !important;
+  }
+  
+  .top-bar .admin-row {
+    padding-top: 6px !important;
+  }
+  
+  .top-bar h2,
+  #usernameDisplay {
+    font-size: 1em !important;
+    font-weight: 500 !important;
+    margin: 0 !important;
+    flex: 1;
+    min-width: 0;
+  }
+  .top-bar button.logout-btn {
+    font-size: 11px !important;
+    padding: 6px 10px !important;
+    border-radius: 6px !important;
+    flex-shrink: 0;
+  }
+  
+  /* Admin buttons container on mobile */
+  .top-bar #adminButtonsContainer {
+    gap: 4px !important;
+    flex-shrink: 0;
+  }
+  
+  /* Admin buttons on mobile - make them more compact */
+  .top-bar .btn-admin.btn-outlined,
+  .top-bar .btn-inventory.btn-outlined,
+  .top-bar .btn-crew-planner.btn-outlined,
+  .top-bar .btn-crew-calendar.btn-outlined {
+    font-size: 10px !important;
+    padding: 6px 8px !important;
+    border-radius: 6px !important;
+    white-space: nowrap;
+  }
+  
+  /* Events header mobile layout */
+  .events-header-row2 {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .events-header-row2 .sort-search-group {
+    flex-direction: row;
+    gap: 8px;
+    width: 100%;
+  }
+  #sortDropdown, #searchEventsInput {
+    flex: 1 1 0;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .events-header-row1 h2 {
+    font-size: 1.1em !important;
+    font-weight: 800 !important;
+    margin-bottom: 0 !important;
+  }
+  .events-header {
+    padding: 10px 4px;
+  }
+  #calendarViewBtn {
+    margin-left: 0;
+    margin-right: 0;
+    align-self: flex-start;
+    width: auto !important;
+    justify-self: flex-end;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+}
+
+/* Hide text and show only icons on very small screens */
+@media (max-width: 480px) {
+  .top-bar .btn-admin.btn-outlined,
+  .top-bar .btn-inventory.btn-outlined,
+  .top-bar .btn-crew-planner.btn-outlined,
+  .top-bar .btn-crew-calendar.btn-outlined {
+    padding: 6px !important;
+    font-size: 0 !important;
+  }
+  
+  .top-bar .btn-admin.btn-outlined::before {
+    content: "👤";
+    font-size: 14px !important;
+  }
+  
+  .top-bar .btn-inventory.btn-outlined .material-symbols-outlined,
+  .top-bar .btn-crew-planner.btn-outlined .material-symbols-outlined,
+  .top-bar .btn-crew-calendar.btn-outlined .material-symbols-outlined {
+    font-size: 16px !important;
+    margin: 0 !important;
+  }
+  
+  .top-bar .btn-inventory.btn-outlined span:not(.material-symbols-outlined),
+  .top-bar .btn-crew-planner.btn-outlined span:not(.material-symbols-outlined),
+  .top-bar .btn-crew-calendar.btn-outlined span:not(.material-symbols-outlined) {
+    display: none;
+  }
+}
+
+/* Fix: Make the last button (archive) span both columns if it's the last item */
+#toggleArchivedBtn {
+  grid-column: 1 / -1;
+}
+
+/* ========= ADD TO CALENDAR MODAL ========= */
+.calendar-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  padding: 20px;
+}
+
+.calendar-modal-content {
+  background: white;
+  border-radius: 16px;
+  max-width: 500px;
+  width: 100%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    transform: translateY(-20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.calendar-modal-header {
+  padding: 24px;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.calendar-modal-header h3 {
+  margin: 0;
+  font-size: 1.5em;
+  font-weight: 600;
+  color: #222;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.calendar-modal-header .material-symbols-outlined {
+  color: #CC0007;
+  font-size: 28px;
+}
+
+.calendar-modal-header .close-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  transition: color 0.2s, background 0.2s;
+  border-radius: 50%;
+}
+
+.calendar-modal-header .close-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #333;
+}
+
+.calendar-modal-header .close-btn .material-symbols-outlined {
+  color: inherit;
+  font-size: 24px;
+}
+
+.calendar-modal-body {
+  padding: 24px;
+}
+
+.calendar-modal-body > p {
+  margin: 0 0 16px 0;
+  color: #666;
+  font-size: 1em;
+}
+
+.calendar-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.calendar-option-btn {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.calendar-option-btn:hover {
+  border-color: #CC0007;
+  background: #fff5f5;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(204, 0, 7, 0.1);
+}
+
+.calendar-option-btn .material-symbols-outlined {
+  font-size: 32px;
+  color: #CC0007;
+  flex-shrink: 0;
+}
+
+
+.calendar-option-btn strong {
+  display: block;
+  font-size: 1.1em;
+  color: #222;
+  margin-bottom: 4px;
+}
+
+.calendar-option-btn small {
+  display: block;
+  font-size: 0.9em;
+  color: #666;
+}
+
+.calendar-option-disabled {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+  border: 2px dashed #d0d0d0;
+  border-radius: 12px;
+  background: #f8f8f8;
+  text-align: left;
+  opacity: 0.6;
+}
+
+.calendar-option-disabled .material-symbols-outlined {
+  font-size: 32px;
+  color: #999;
+  flex-shrink: 0;
+}
+
+.calendar-option-disabled strong {
+  display: block;
+  font-size: 1.1em;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.calendar-option-disabled small {
+  display: block;
+  font-size: 0.9em;
+  color: #999;
+}
+
+@media (max-width: 768px) {
+  .calendar-modal {
+    padding: 10px;
+  }
+  
+  .calendar-modal-content {
+    max-width: 100%;
+  }
+  
+  .calendar-modal-header {
+    padding: 16px;
+  }
+  
+  .calendar-modal-header h3 {
+    font-size: 1.2em;
+  }
+  
+  .calendar-modal-body {
+    padding: 16px;
+  }
+  
+  .calendar-option-btn {
+    padding: 12px;
+    gap: 12px;
+  }
+  
+  .calendar-option-btn .material-symbols-outlined {
+    font-size: 28px;
+  }
+  
+  .calendar-option-btn strong {
+    font-size: 1em;
+  }
+  
+  .calendar-option-btn small {
+    font-size: 0.85em;
+  }
+}
+
+/* Toast message */
+.toast-message {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+/* ========= END ADD TO CALENDAR MODAL ========= */
+  

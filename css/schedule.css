@@ -1,0 +1,1668 @@
+/* Schedule page specific styles - CONTENT COMPRESSED ONLY */
+.schedule-page {
+    --header-height: 180px;
+    font-family: 'Roboto', Arial, sans-serif;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e9ecf3 100%);
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+}
+
+/* Remove padding from page container on schedule page */
+.schedule-page #page-container,
+body:has(.schedule-page) #page-container {
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+/* Hide export and import buttons for non-owners/non-leads */
+body.no-owner-controls .schedule-page #importBtn,
+body.no-owner-controls .schedule-page #exportBtn,
+body.no-owner-controls .schedule-page #downloadTemplateBtn {
+    display: none !important;
+}
+
+/* Export button styling */
+.schedule-page .export-btn {
+    padding: 8px 16px;
+    font-size: 16px;
+    border: none;
+    color: white;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    box-shadow: 0 2px 8px rgba(40, 167, 69, 0.15);
+    transition: background 0.2s, box-shadow 0.2s;
+}
+
+.schedule-page .export-btn:hover {
+    background-color: #218838 !important;
+    box-shadow: 0 4px 16px rgba(40, 167, 69, 0.25);
+}
+
+/* Fixed Top Header Wrapper - RESTORED */
+.schedule-page .top-controls-fixed {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: white;
+    z-index: 1001;
+    padding: 16px 8px 12px 8px; /* Increased bottom padding from 10px to 12px */
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
+    border-bottom: 1.5px solid #e0e0e0;
+    box-sizing: border-box;
+}
+
+/* Add spacing to scrollable content - RESTORED */
+.schedule-page .program-container {
+    padding-top: calc(var(--header-height) + 60px);
+    padding-bottom: 100px; /* Space for bottom navigation */
+    padding-left: 14px; /* Increased from 8px to 14px (added 6px) */
+    padding-right: 14px; /* Increased from 8px to 14px (added 6px) */
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px; /* Keep content compression */
+    max-width: 1800px; /* Increased for 3 columns on large screens */
+    margin: 0 auto; /* Center the container */
+}
+
+.schedule-page .done-entry input.program-name {
+    text-decoration: line-through;
+    color: #888;
+}
+
+.schedule-page h1, 
+.schedule-page h2 {
+    text-align: center;
+    font-size: 20px; /* Restored to original */
+    margin: 8px 0; /* Restored to original */
+}
+
+.schedule-page .top-controls {
+    width: 95%;
+    max-width: 900px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px; /* Restored to original */
+    margin: 8px auto; /* Restored to original */
+    flex-wrap: wrap;
+    background: #f8fafd;
+    border-radius: 10px; /* Restored to original */
+    box-shadow: 0 2px 8px rgba(204,0,7,0.06);
+    padding: 10px 8px; /* Restored to original */
+    border: 1.5px solid #e0e0e0;
+}
+
+.schedule-page .top-controls input,
+.schedule-page .top-controls select {
+    padding: 8px; /* Restored to original */
+    font-size: 16px; /* Restored to original */
+    max-width: 200px; /* Restored to original */
+    flex: 1;
+    border-radius: 6px; /* Restored to original */
+    border: 1.5px solid #ccc;
+    background: #fff;
+    transition: border 0.2s;
+}
+
+.schedule-page .top-controls button {
+    padding: 8px 16px; /* Restored to original */
+    font-size: 16px; /* Restored to original */
+    border: none;
+    background-color: #CC0007;
+    color: white;
+    border-radius: 8px; /* Restored to original */
+    cursor: pointer;
+    font-weight: bold;
+    box-shadow: 0 2px 8px rgba(204,0,7,0.08);
+    transition: background 0.2s, box-shadow 0.2s;
+}
+
+.schedule-page .top-controls button:hover {
+    background-color: #a30006;
+    box-shadow: 0 4px 16px rgba(204,0,7,0.10);
+}
+
+.schedule-page .date-section {
+    padding: 12px 8px 8px 8px; /* Further reduced horizontal padding */
+    max-width: 100%; /* Allow cards to be flexible width */
+    width: 100%;
+    flex: 1 1 calc(33.33% - 12px); /* Allow 3 cards side by side on desktop */
+    min-width: 280px; /* Reduced minimum width for more columns */
+    display: flex;
+    flex-direction: column;
+    gap: 8px; /* Reduced from 10px */
+    position: relative;
+    background: transparent;
+    border-radius: 12px; /* Reduced from 18px */
+    box-shadow: none;
+    border: none;
+    margin-bottom: 16px; /* Reduced from 24px */
+    transition: box-shadow 0.2s;
+}
+
+/* Desktop large: allow up to 3 cards side by side */
+@media (min-width: 1400px) {
+    .schedule-page .date-section {
+        flex: 1 1 calc(33.33% - 12px);
+        max-width: calc(33.33% - 12px);
+    }
+}
+
+/* Desktop medium: allow up to 2 cards side by side */
+@media (min-width: 1000px) and (max-width: 1399px) {
+    .schedule-page .date-section {
+        flex: 1 1 calc(50% - 12px);
+        max-width: calc(50% - 12px);
+    }
+}
+
+/* Tablet: one card per row */
+@media (min-width: 768px) and (max-width: 999px) {
+    .schedule-page .date-section {
+        flex: 1 1 100%;
+        max-width: 700px;
+    }
+}
+
+.schedule-page .date-section:hover {
+    box-shadow: none;
+}
+
+.schedule-page .date-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    width: 100%;
+    font-weight: bold;
+    font-size: 14px !important; /* Added !important to override mobile styles */
+    margin-bottom: 6px;
+    gap: 0;
+    flex-wrap: nowrap;
+    flex-direction: row;
+    color: #222;
+    letter-spacing: 0.01em;
+}
+
+.schedule-page .date-header .date-title {
+    flex: 1 1 200px;
+    text-align: center;
+    margin: 0 4px;
+    white-space: nowrap;
+    font-weight: 600;
+    font-size: 1.08em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 0;
+    line-height: 1.2;
+    min-width: 150px;
+}
+
+.schedule-page .date-header .delete-btn {
+    flex: 0 0 32px;
+    margin-left: 4px;
+    position: static;
+    right: auto;
+    top: auto;
+    transform: none;
+}
+
+.schedule-page .date-header button {
+    background: none !important;
+    border: none !important;
+    outline: none !important;
+    box-shadow: none !important;
+    color: #d11a2a;
+    font-size: 20px;
+    cursor: pointer;
+    flex-shrink: 0;
+    margin-left: 4px;
+    white-space: nowrap;
+    border-radius: 0 !important;
+    transition: background 0.2s, color 0.2s;
+    padding: 0 !important;
+}
+
+.schedule-page .date-header button:hover {
+    background: #fbeaec;
+    color: #a30006;
+}
+
+.schedule-page .program-entry {
+    background: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    padding: 14px;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 12px !important; /* Added !important to override mobile styles */
+    position: relative;
+    border: 1.5px solid #e0e0e0;
+    margin-bottom: 8px;
+    transition: background 0.2s, box-shadow 0.2s;
+}
+
+.schedule-page .program-entry:hover {
+    background: #f7fafd !important;
+    box-shadow: 0 4px 16px rgba(204,0,7,0.08);
+}
+
+.schedule-page .program-entry input,
+.schedule-page .program-entry textarea {
+    width: 100%;
+    font-size: 12px !important; /* Added !important to override mobile styles */
+    border: none;
+    background: transparent;
+    font-size: 16px;
+    font-family: inherit;
+    color: black;
+    outline: none;
+    padding: 6px 8px;
+    box-sizing: border-box;
+    border-radius: 6px;
+    transition: border 0.2s, background 0.2s;
+}
+
+.schedule-page .program-entry input.editing,
+.schedule-page .program-entry textarea.editing {
+    border: 1.5px solid #CC0007;
+    background: #fff;
+}
+
+.schedule-page .program-name {
+    font-weight: 600;
+    font-size: 12px !important; /* Reduced from 13px for even more compact layout */
+}
+
+.schedule-page .add-btn {
+    margin-top: 8px;
+    padding: 6px 0;
+    background: #6c757d;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    width: 100%;
+    max-width: 120px;
+    font-size: 12px !important; /* Added !important to override mobile styles */
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    transition: background 0.2s, box-shadow 0.2s;
+}
+
+.schedule-page .add-btn:hover {
+    background: #5a6268;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.schedule-page .delete-btn {
+    position: relative;
+    background: transparent;
+    border: none;
+    outline: none !important;
+    box-shadow: none !important;
+    font-size: 20px;
+    color: #6c757d; /* Subtle gray - matches crew page */
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+.schedule-page .delete-btn:hover {
+    background: rgba(220, 53, 69, 0.1); /* Light red background on hover */
+    color: #dc3545; /* Red on hover */
+    transform: scale(1.1);
+}
+
+.schedule-page .program-entry .right-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-left: auto;
+}
+
+.schedule-page .program-entry .delete-btn {
+    margin-left: 8px;
+}
+
+.schedule-page .program-entry .entry-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 6px; /* Reduced from 12px for more compact layout */
+    margin-top: 4px; /* Reduced from 8px for more compact layout */
+    padding: 2px 0; /* Added minimal padding for touch targets */
+}
+
+.schedule-page .program-entry .show-notes-btn {
+    color: #a1a1a1;
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    cursor: pointer;
+    font-size: 10px !important; /* Reduced from 12px for more compact layout */
+    text-decoration: underline;
+    padding: 0 !important;
+    width: fit-content;
+    border-radius: 0 !important;
+    transition: color 0.2s, background 0.2s;
+}
+
+.schedule-page .program-entry .show-notes-btn:hover {
+    color: #CC0007;
+    background: none !important;
+}
+
+.schedule-page .notes-field textarea {
+    display: block;
+    width: 100% !important;
+    min-height: 80px !important;
+    max-height: 300px !important;
+    overflow-y: auto !important;
+    resize: vertical !important;
+    white-space: pre-wrap !important;
+    word-break: break-word !important;
+    box-sizing: border-box !important;
+    line-height: 1.4 !important;
+    padding: 8px 10px !important;
+    font-family: inherit !important;
+    font-size: 12px !important; /* Reduced from 16px for smaller fonts */
+    border: 1.5px solid #eee !important;
+    border-radius: 6px !important;
+    background: #f9f9f9 !important;
+    transition: border 0.2s, background 0.2s;
+}
+
+.schedule-page .notes-field {
+    display: none;
+    margin-top: 8px;
+}
+
+/* Mobile styles */
+@media (max-width: 768px) {
+    .schedule-page {
+        --header-height: 120px; /* Restored mobile header */
+        padding: 0;
+    }
+
+    /* Hide import/export buttons and template download link on mobile */
+    .schedule-page #importBtn,
+    .schedule-page #exportBtn,
+    .schedule-page #downloadTemplateBtn {
+        display: none !important;
+    }
+
+    .schedule-page .program-container {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .schedule-page .date-section {
+        padding: 2px !important;
+        max-width: 100% !important;
+        flex: 1 1 100% !important;
+        min-width: 0 !important;
+        gap: 2px !important;
+        margin-bottom: 6px !important;
+    }
+
+    .schedule-page .top-controls {
+        flex-wrap: nowrap;
+        overflow-x: hidden;
+        justify-content: center;
+        width: 100%;
+        gap: 2px;
+        padding: 4px 0;
+    }
+
+    .schedule-page .top-controls input,
+    .schedule-page .top-controls select {
+        font-size: 16px;
+        min-width: 150px;
+        max-width: none;
+    }
+
+    .schedule-page .top-controls button,
+    .schedule-page .add-btn {
+        font-size: 16px;
+        padding: 6px 10px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .schedule-page .show-notes-btn {
+        font-size: 16px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .schedule-page .program-entry {
+        padding: 12px !important;
+        gap: 2px !important;
+        font-size: 14px !important;
+        border-radius: 20px !important;
+        margin-bottom: 4px !important;
+    }
+
+    .schedule-page .program-entry input,
+    .schedule-page .program-entry textarea {
+        font-size: 14px !important;
+        padding: 2px 4px !important;
+        min-height: 28px !important;
+    }
+
+    .schedule-page .delete-btn {
+        font-size: 17px;
+    }
+
+    .schedule-page #newDate {
+        min-width: 120px;
+        max-width: 140px;
+        font-size: 15px;
+        padding: 4px 6px;
+    }
+
+    .schedule-page h1 {
+        font-size: 20px;
+    }
+
+    .schedule-page #programSections,
+    .schedule-page .date-section,
+    .schedule-page .program-entry,
+    .schedule-page .date-header {
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box;
+    }
+
+    .schedule-page .date-section {
+        padding-left: 0 !important;
+        padding-right: 0 !important;
+    }
+
+    .schedule-page .program-entry > div,
+    .schedule-page .program-entry > button,
+    .schedule-page .program-entry textarea,
+    .schedule-page .program-entry input,
+    .schedule-page .program-entry label {
+        width: 100% !important;
+        box-sizing: border-box;
+    }
+
+    .schedule-page .program-entry {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 2px !important;
+    }
+
+    /* Ensure the first row with times + checkbox stays horizontal even on mobile */
+    .schedule-page .program-entry > div:first-child {
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: space-between !important;
+        gap: 8px !important;
+        flex-wrap: nowrap !important;
+    }
+
+    /* Time fields container should stay horizontal */
+    .schedule-page .program-entry > div:first-child > div:first-child {
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+        min-width: 0 !important;
+        flex: 1 !important;
+        max-width: calc(100% - 25px) !important; /* Reserve space for checkbox */
+    }
+
+    /* Second row with program name should span full width */
+    .schedule-page .program-entry > div:nth-child(2) {
+        flex-direction: row !important;
+        align-items: center !important;
+        width: 100% !important;
+    }
+
+    /* Time inputs on mobile - give them more space to prevent cutoff */
+    .schedule-page .program-entry input[type="time"] {
+        width: 120px !important;
+        min-width: 120px !important;
+        max-width: 120px !important;
+        font-size: 12px !important;
+        padding: 6px 4px !important;
+        border: 1px solid transparent !important;
+        border-radius: 4px !important;
+        background: transparent !important;
+        text-align: left !important;
+        transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s !important;
+    }
+
+    /* Mobile focus and hover states */
+    .schedule-page .program-entry input[type="time"]:focus {
+        border-color: #CC0007 !important;
+        background-color: #fff !important;
+        box-shadow: 0 0 0 2px rgba(204, 0, 7, 0.1) !important;
+    }
+
+    .schedule-page .program-entry input[type="time"]:hover {
+        background-color: rgba(204, 0, 7, 0.02) !important;
+        border-color: rgba(204, 0, 7, 0.2) !important;
+    }
+
+    /* Make checkboxes smaller on mobile since they don't need much room */
+    .schedule-page .done-checkbox {
+        width: 18px !important;
+        height: 18px !important;
+        min-width: 18px !important;
+        min-height: 18px !important;
+        accent-color: #CC0007;
+        margin: 0 !important;
+        flex-shrink: 0 !important;
+    }
+
+    .schedule-page .date-header {
+        font-size: 14px !important;
+        min-height: 36px;
+        flex-wrap: nowrap !important;
+        gap: 0 !important;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between !important;
+    }
+
+    .schedule-page .date-header .date-title {
+        font-size: 14px !important;
+        flex: 1 1 150px;
+        text-align: center !important;
+        margin: 0 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin-bottom: 0;
+        line-height: 1.2;
+        min-width: 120px;
+    }
+
+    .schedule-page .delete-date-btn {
+        margin-left: 4px;
+        align-self: center;
+    }
+
+    .schedule-page input,
+    .schedule-page textarea,
+    .schedule-page select,
+    .schedule-page button {
+        font-size: 16px !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        box-sizing: border-box;
+    }
+
+    .schedule-page .show-notes-btn,
+    .schedule-page .delete-btn,
+    .schedule-page .delete-date-btn {
+        width: auto !important;
+        min-width: 0 !important;
+    }
+
+    .schedule-page .program-entry input.program-name {
+        min-width: 200px !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        box-sizing: border-box;
+        white-space: normal !important;
+        overflow-wrap: break-word !important;
+        word-break: break-word !important;
+        height: auto !important;
+        line-height: 1.3 !important;
+        padding: 6px 8px !important;
+        font-size: 16px !important;
+    }
+
+    .schedule-page .program-entry textarea {
+        min-height: 80px !important;
+        max-height: 300px !important;
+        overflow-y: auto !important;
+        resize: vertical !important;
+        white-space: pre-wrap !important;
+        word-break: break-word !important;
+        box-sizing: border-box !important;
+        line-height: 1.3 !important;
+        padding: 6px 8px !important;
+        font-family: inherit !important;
+        font-size: 16px !important;
+        border: 1px solid #eee !important;
+        border-radius: 4px !important;
+        background: #f9f9f9 !important;
+    }
+
+    .schedule-page .program-entry .right-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        margin-left: auto;
+        width: auto !important;
+    }
+
+    .schedule-page .program-entry .delete-btn {
+        margin-left: 8px;
+    }
+
+    .schedule-page .program-entry .entry-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-top: -14px; /* Negative margin to pull up closer */
+        width: 30%; /* Reduced width for more compact layout */
+    }
+
+    .schedule-page .program-entry .show-notes-btn {
+        margin-left: 0;
+        color: #a1a1a1;
+        background: none;
+        border: none;
+        cursor: pointer;
+        font-size: 12px !important; /* Changed from 14px to 12px for mobile */
+        text-decoration: underline;
+        padding: 3px 6px !important;
+        width: fit-content;
+        transition: none;
+    }
+
+    .schedule-page .program-entry .show-notes-btn:hover {
+        color: #a1a1a1;
+        background: none;
+    }
+
+    .schedule-page .add-btn,
+    .schedule-page .show-notes-btn,
+    .schedule-page .delete-btn {
+        font-size: 14px !important;
+        padding: 3px 6px !important;
+        min-width: 0 !important;
+        margin: 0 !important;
+    }
+
+    .schedule-page .date-header {
+        font-size: 14px !important;
+        margin-bottom: 2px !important;
+        gap: 2px !important;
+    }
+
+    .schedule-page .notes-field textarea {
+        min-height: 80px !important;
+        max-height: 300px !important;
+        overflow-y: auto !important;
+        resize: vertical !important;
+        white-space: pre-wrap !important;
+        word-break: break-word !important;
+        box-sizing: border-box !important;
+        line-height: 1.3 !important;
+        padding: 6px 8px !important;
+        font-family: inherit !important;
+        font-size: inherit !important;
+        border: 1px solid #eee !important;
+        border-radius: 4px !important;
+        background: #f9f9f9 !important;
+    }
+
+    .schedule-page .delete-date-btn {
+        margin-left: 4px !important;
+    }
+
+    /* Ensure search input is 16px */
+    .schedule-page #searchInput {
+        font-size: 16px !important;
+    }
+
+    /* Make checkboxes bigger on mobile */
+    .schedule-page .done-checkbox {
+        width: 28px !important;
+        height: 28px !important;
+        min-width: 28px !important;
+        min-height: 28px !important;
+        accent-color: #CC0007;
+        margin: 0 8px 0 0;
+    }
+}
+
+.schedule-page input[type="time"] {
+    text-align: left !important;
+    font-size: 12px !important; /* Added !important to override mobile styles */
+}
+
+/* Ensure time fields are consistently left-aligned */
+.schedule-page .program-entry input[type="time"] {
+    text-align: left !important;
+}
+
+/* Desktop styling for time fields in the new layout */
+.schedule-page .program-entry input[type="time"] {
+    border: 1px solid transparent;
+    border-radius: 4px;
+    padding: 6px 8px;
+    background: transparent;
+    transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+    font-size: 12px;
+}
+
+.schedule-page .program-entry input[type="time"]:focus {
+    border-color: #CC0007;
+    background-color: #fff;
+    box-shadow: 0 0 0 2px rgba(204, 0, 7, 0.1);
+}
+
+.schedule-page .program-entry input[type="time"]:hover {
+    background-color: rgba(204, 0, 7, 0.02);
+    border-color: rgba(204, 0, 7, 0.2);
+}
+
+.schedule-page .program-entry textarea[placeholder="Location"],
+.schedule-page .program-entry textarea[placeholder="Photographer"] {
+    min-height: 32px !important;
+    max-height: 60px !important;
+    resize: vertical !important;
+    font-size: 12px !important; /* Added !important to override mobile styles */
+}
+
+.schedule-page .delete-date-btn {
+    background: #fff0f0;
+    color: #d11a2a;
+    border: 1.5px solid #d11a2a;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border 0.15s;
+    box-shadow: 0 2px 8px rgba(209,26,42,0.06);
+    margin-left: 4px;
+    outline: none;
+    padding: 0;
+    flex-shrink: 0;
+}
+.schedule-page .delete-date-btn:hover, .schedule-page .delete-date-btn:focus {
+    background: #d11a2a;
+    color: #fff;
+    border-color: #b0101e;
+}
+
+.schedule-page, html, body {
+    overflow-x: hidden !important;
+    max-width: 100vw;
+    box-sizing: border-box;
+}
+
+#page-container {
+  overflow-x: hidden !important;
+}
+
+.import-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 14px;
+  background-color: #4a5568;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.import-btn:hover {
+  background-color: #2d3748;
+}
+
+/* Visual feedback when file is being processed */
+.import-btn.importing {
+  background-color: #4299e1;
+  cursor: wait;
+}
+
+/* Style for delete icons - subtle like crew page */
+.delete-date-btn .material-symbols-outlined {
+  color: #6c757d;
+  font-size: 24px;
+}
+
+.delete-btn .material-symbols-outlined {
+  color: inherit; /* Inherit from parent for smooth transition */
+  font-size: 20px;
+}
+  
+/* Atomic Save Visual Feedback */
+.schedule-page .saving {
+  border-left: 3px solid #ffc107 !important;
+  background: #fff8e1 !important;
+}
+
+.schedule-page .saved {
+  border-left: 3px solid #28a745 !important;
+  background: #e8f5e8 !important;
+}
+
+.schedule-page .save-error {
+  border-left: 3px solid #dc3545 !important;
+  background: #ffeaea !important;
+}
+
+/* Animation for save state transitions */
+.schedule-page input, 
+.schedule-page textarea {
+  transition: border-left 0.3s ease, background 0.3s ease;
+}
+
+/* Real-time collaboration indicators */
+.schedule-page .field-updated-indicator {
+  position: absolute;
+  top: -25px;
+  right: 0;
+  background: #2196f3;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  z-index: 1000;
+  pointer-events: none;
+  animation: slideInFromRight 0.3s ease-out;
+}
+
+@keyframes slideInFromRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Mobile fixes for Phase 2 collaboration features */
+@media (max-width: 768px) {
+  /* User presence indicators - larger and better positioned for mobile */
+  .user-presence-indicator {
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px !important;
+    min-height: 20px !important;
+    max-width: 20px !important;
+    max-height: 20px !important;
+    top: -10px !important;
+    right: -10px !important;
+    border: 3px solid white !important;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3) !important;
+    border-radius: 50% !important;
+    flex-shrink: 0 !important;
+    box-sizing: border-box !important;
+    display: block !important;
+  }
+  
+  /* Merge notifications - responsive sizing */
+  .merge-notification {
+    max-width: calc(100vw - 40px) !important;
+    padding: 10px 12px !important;
+    font-size: 12px !important;
+    position: fixed !important;
+    top: 10px !important;
+    left: 20px !important;
+    right: 20px !important;
+    width: auto !important;
+  }
+  
+  .merge-text {
+    font-size: 12px !important;
+    line-height: 1.3 !important;
+  }
+  
+  .merge-icon {
+    font-size: 14px !important;
+  }
+  
+  /* Optimistic update states - more visible on mobile */
+  .schedule-page .optimistic-update {
+    border-left: 4px solid #2196f3 !important;
+    border-radius: 4px !important;
+  }
+  
+  .schedule-page .confirmed-update {
+    border-left: 4px solid #4caf50 !important;
+    border-radius: 4px !important;
+  }
+  
+  .schedule-page .failed-update {
+    border-left: 4px solid #f44336 !important;
+    border-radius: 4px !important;
+  }
+  
+  /* Enhanced field focus states for mobile */
+  .schedule-page input:focus,
+  .schedule-page textarea:focus {
+    transform: scale(1.02) !important;
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.3) !important;
+  }
+  
+  /* Conflict resolution modal - mobile optimized */
+  .conflict-resolution-modal {
+    padding: 10px !important;
+  }
+  
+  .conflict-resolution-content {
+    width: 95% !important;
+    max-width: none !important;
+    padding: 16px !important;
+    max-height: 90vh !important;
+  }
+  
+  .conflict-field-comparison {
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+  }
+  
+  .conflict-option {
+    padding: 10px !important;
+    font-size: 14px !important;
+  }
+  
+  .conflict-custom-input {
+    min-height: 60px !important;
+    font-size: 16px !important;
+  }
+  
+  .conflict-actions {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  
+  .conflict-actions button {
+    width: 100% !important;
+    padding: 12px !important;
+    font-size: 16px !important;
+  }
+  
+  /* Collaborative user list - mobile positioning */
+  .collaborative-users {
+    top: 60px !important;
+    right: 10px !important;
+    left: 10px !important;
+    max-width: none !important;
+    font-size: 11px !important;
+  }
+  
+  .collaborative-user {
+    padding: 6px 0 !important;
+  }
+  
+  .user-color-dot {
+    width: 14px !important;
+    height: 14px !important;
+  }
+}
+
+/* Touch-friendly enhancements */
+@media (max-width: 768px) and (pointer: coarse) {
+  /* Larger touch targets for mobile */
+  .user-presence-indicator {
+    width: 24px !important;
+    height: 24px !important;
+    min-width: 24px !important;
+    min-height: 24px !important;
+    max-width: 24px !important;
+    max-height: 24px !important;
+    top: -12px !important;
+    right: -12px !important;
+    border-radius: 50% !important;
+    flex-shrink: 0 !important;
+    box-sizing: border-box !important;
+    display: block !important;
+  }
+  
+  /* Better tap targets for conflict resolution */
+  .conflict-option {
+    min-height: 60px !important;
+    padding: 12px !important;
+  }
+  
+  .merge-close {
+    padding: 8px !important;
+    font-size: 20px !important;
+    min-width: 32px !important;
+    min-height: 32px !important;
+  }
+  
+  /* Enhanced typing indicators on mobile */
+  .typing-indicator.enhanced-typing-indicator {
+    top: -40px !important;
+    max-width: 200px !important;
+    padding: 6px 10px !important;
+    font-size: 12px !important;
+  }
+  
+  .typing-indicator.mobile-typing-indicator .editor-avatar {
+    width: 24px !important;
+    height: 24px !important;
+    font-size: 12px !important;
+  }
+  
+  .typing-indicator.mobile-typing-indicator .editor-name {
+    font-size: 12px !important;
+    max-width: 120px !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+  }
+  
+  /* Mobile-specific indicator adjustments (legacy fallback) */
+  .user-presence-indicator.mobile-indicator {
+    width: 20px !important;
+    height: 20px !important;
+    min-width: 20px !important;
+    min-height: 20px !important;
+    max-width: 20px !important;
+    max-height: 20px !important;
+    top: -10px !important;
+    right: -10px !important;
+    border: 3px solid white !important;
+    border-radius: 50% !important;
+    flex-shrink: 0 !important;
+    box-sizing: border-box !important;
+    display: block !important;
+  }
+}
+
+/* Phase 2: Advanced Collaboration Styles */
+
+/* Merge notifications */
+.merge-notification {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 12px 16px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  max-width: 300px;
+  opacity: 0;
+  transform: translateY(-10px);
+  transition: all 0.3s ease;
+  z-index: 10000;
+}
+
+.merge-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.merge-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.merge-text {
+  flex-grow: 1;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.merge-close {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+.merge-close:hover {
+  opacity: 1;
+}
+
+/* Optimistic update states */
+.schedule-page .optimistic-update {
+  background: #e3f2fd !important;
+  border-left: 3px solid #2196f3 !important;
+  transition: all 0.2s ease;
+}
+
+.schedule-page .confirmed-update {
+  background: #e8f5e9 !important;
+  border-left: 3px solid #4caf50 !important;
+  transition: all 0.2s ease;
+}
+
+.schedule-page .failed-update {
+  background: #ffebee !important;
+  border-left: 3px solid #f44336 !important;
+  transition: all 0.2s ease;
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-2px); }
+  75% { transform: translateX(2px); }
+}
+
+/* Enhanced Typing Indicators (Google Sheets Style) */
+.typing-indicator.enhanced-typing-indicator {
+  position: absolute;
+  background: white;
+  border-radius: 16px;
+  font-weight: 500;
+  z-index: 1000;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  animation: typingIndicatorFadeIn 0.3s ease-out;
+}
+
+.typing-indicator .editor-avatar {
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.typing-indicator .editor-name {
+  font-weight: 500;
+  color: #333;
+  white-space: nowrap;
+}
+
+/* Field being edited styling */
+.field-being-edited {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Legacy user presence indicators (fallback) */
+.user-presence-indicator {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  min-height: 16px;
+  max-width: 16px;
+  max-height: 16px;
+  border-radius: 50%;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  z-index: 1000;
+  animation: presencePulse 2s infinite;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  display: block;
+}
+
+@keyframes presencePulse {
+  0%, 100% { 
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% { 
+    transform: scale(1.1);
+    opacity: 0.8;
+  }
+}
+
+@keyframes typingIndicatorFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Enhanced field states for better collaboration feedback */
+.schedule-page input:focus,
+.schedule-page textarea:focus {
+  outline: none;
+  border-color: #2196f3;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+  transform: scale(1.01);
+}
+
+/* Collaborative user list (future enhancement) */
+.collaborative-users {
+  position: fixed;
+  top: 80px;
+  right: 20px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  padding: 12px;
+  max-width: 200px;
+  z-index: 1000;
+}
+
+.collaborative-user {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.user-color-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Conflict resolution UI styles */
+.conflict-resolution-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10001;
+}
+
+.conflict-resolution-content {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.conflict-field-comparison {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin: 16px 0;
+}
+
+.conflict-option {
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  padding: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.conflict-option:hover {
+  border-color: #2196f3;
+  background: #f8f9ff;
+}
+
+.conflict-option.selected {
+  border-color: #2196f3;
+  background: #e3f2fd;
+}
+
+.conflict-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 20px;
+}
+
+/* Field protection styling */
+.schedule-page .recently-edited {
+  box-shadow: 0 0 0 2px rgba(40, 167, 69, 0.3) !important;
+}
+
+/* Better error styling */
+.schedule-page .save-error[title]:hover::after {
+  content: attr(title);
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  background: #dc3545;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 1001;
+}
+
+/* ============================================
+   TABLE VIEW STYLES (Desktop Only)
+   ============================================ */
+
+/* View Toggle Button - Desktop Only */
+.view-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 14px;
+  border: 2px solid #4a5568;
+  background: white;
+  color: #4a5568;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.view-toggle-btn:hover {
+  background: #4a5568;
+  color: white;
+}
+
+.view-toggle-btn .material-symbols-outlined {
+  font-size: 20px;
+}
+
+/* Hide toggle button on mobile */
+@media (max-width: 768px) {
+  .desktop-only {
+    display: none !important;
+  }
+}
+
+/* Table View Container */
+.schedule-table-view {
+  display: none; /* Hidden by default, shown when table view active */
+  padding-top: calc(var(--header-height) + 80px); /* Increased from 60px to 80px for more breathing room */
+  padding-bottom: 100px; /* Space for bottom navigation */
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+.schedule-table-view.active {
+  display: block;
+}
+
+/* Card container should maintain flex display for proper layout */
+.schedule-page .program-container {
+  /* Already has display: flex from main styles - don't override */
+}
+
+.schedule-page .program-container.hidden {
+  display: none !important;
+}
+
+/* Schedule Table Styling - Matching Crew Page */
+.schedule-table-section {
+  margin-bottom: 30px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.schedule-table-section .date-header {
+  background: transparent; /* No solid background - matching crew page */
+  color: #2c3e50; /* Dark text color to match crew page */
+  padding: 0 20px 16px 20px; /* Padding only at bottom, sides for alignment */
+  padding-top: 24px; /* Add top padding to match crew page section padding */
+  margin-bottom: 20px; /* Space below the date header */
+  font-size: 1.4rem; /* Match crew page h2 size */
+  font-weight: 700; /* Match crew page h2 weight */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 3px solid #f8f9fa; /* Border bottom like crew page */
+}
+
+.schedule-table-section .date-header .delete-date-btn {
+  background: transparent !important;
+  border: none !important;
+  color: #6c757d !important; /* Gray color matching crew page */
+  padding: 4px !important;
+  border-radius: 4px !important;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.schedule-table-section .date-header .delete-date-btn:hover {
+  background: rgba(220, 53, 69, 0.1) !important;
+  color: #dc3545 !important;
+  transform: scale(1.1);
+}
+
+.schedule-table-section .date-header .delete-date-btn .material-symbols-outlined {
+  font-size: 24px;
+}
+
+.schedule-table-section table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+  background: white;
+  table-layout: fixed;
+}
+
+.schedule-table-section thead {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+}
+
+.schedule-table-section th {
+  color: #495057;
+  text-align: left;
+  padding: 16px 14px; /* Increased from 14px 12px to match crew page exactly */
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 12px; /* Increased from 11px to match crew page */
+  letter-spacing: 1px; /* Increased from 0.5px to match crew page */
+  border-bottom: 2px solid #dee2e6;
+}
+
+.schedule-table-section th:first-child {
+  border-top-left-radius: 8px;
+  padding-left: 20px;
+}
+
+.schedule-table-section th:last-child {
+  border-top-right-radius: 8px;
+  padding-right: 20px;
+}
+
+.schedule-table-section tbody tr {
+  border-bottom: 1px solid #f1f3f5;
+  transition: all 0.2s ease;
+}
+
+.schedule-table-section tbody tr:hover {
+  background: linear-gradient(90deg, #f8f9fa 0%, #ffffff 100%);
+}
+
+.schedule-table-section tbody tr.done-row {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.schedule-table-section td {
+  padding: 12px;
+  color: #495057;
+  vertical-align: middle;
+  word-wrap: break-word;
+}
+
+.schedule-table-section td:first-child {
+  padding-left: 20px;
+  font-weight: 500;
+}
+
+.schedule-table-section td:last-child {
+  padding-right: 20px;
+}
+
+/* Column widths - Desktop only */
+@media (min-width: 769px) {
+  .schedule-table-section th:nth-child(1),
+  .schedule-table-section td:nth-child(1) { width: 10%; } /* Start Time */
+  .schedule-table-section th:nth-child(2),
+  .schedule-table-section td:nth-child(2) { width: 10%; } /* End Time */
+  .schedule-table-section th:nth-child(3),
+  .schedule-table-section td:nth-child(3) { width: 20%; } /* Name */
+  .schedule-table-section th:nth-child(4),
+  .schedule-table-section td:nth-child(4) { width: 18%; } /* Location */
+  .schedule-table-section th:nth-child(5),
+  .schedule-table-section td:nth-child(5) { width: 15%; } /* Photographer */
+  .schedule-table-section th:nth-child(6),
+  .schedule-table-section td:nth-child(6) { width: 22%; } /* Notes */
+  .schedule-table-section th:nth-child(7),
+  .schedule-table-section td:nth-child(7) { width: 5%; } /* Done */
+}
+
+/* Inline editing styles for schedule table */
+.schedule-table-section .editable-cell {
+  position: relative;
+  cursor: default;
+}
+
+.schedule-table-section .owner-editable {
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.schedule-table-section .owner-editable:hover {
+  background: #f8f9fa;
+}
+
+.schedule-table-section .owner-editable .cell-display {
+  display: block;
+  min-height: 20px;
+  padding: 2px 4px;
+}
+
+.schedule-table-section .owner-editable .cell-display:empty::before {
+  content: 'Click to add';
+  color: #adb5bd;
+  font-style: italic;
+  font-size: 12px;
+}
+
+.schedule-table-section .editable-cell.editing {
+  background: #fff;
+  padding: 0 !important;
+}
+
+.schedule-table-section .inline-edit-input {
+  width: 100% !important;
+  padding: 8px 12px !important;
+  font-size: 14px !important;
+  border: 2px solid #4dabf7 !important;
+  border-radius: 4px;
+  background: #ffffff;
+  box-sizing: border-box;
+  font-family: 'Roboto', Arial, sans-serif;
+}
+
+.schedule-table-section .inline-edit-input:focus {
+  outline: none !important;
+  border-color: #339af0 !important;
+  box-shadow: 0 0 0 3px rgba(51, 154, 240, 0.1);
+}
+
+.schedule-table-section .inline-edit-input[type="time"] {
+  padding: 6px 8px !important;
+}
+
+/* Done checkbox in table */
+.schedule-table-section .done-checkbox-cell {
+  text-align: center;
+  padding: 8px !important;
+}
+
+.schedule-table-section .done-checkbox {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+/* Action buttons in table */
+.schedule-table-section .table-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.schedule-table-section .add-row-btn {
+  margin: 16px 20px;
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%); /* Changed from purple to gray to match header */
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.schedule-table-section .add-row-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3); /* Updated shadow color to match gray */
+}
+
+.schedule-table-section .delete-row-btn {
+  background: none;
+  border: none;
+  color: #dc3545;
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.schedule-table-section .delete-row-btn:hover {
+  background: #ffe0e0;
+}
+
+.schedule-table-section .delete-row-btn .material-symbols-outlined {
+  font-size: 20px;
+}
+
+/* Ensure table view doesn't show on mobile */
+@media (max-width: 768px) {
+  .schedule-table-view {
+    display: none !important;
+  }
+  
+  .schedule-page .program-container {
+    display: block !important;
+  }
+}
+
+/* Proper fix: Ensure delete buttons show for owners */
+.schedule-page .program-entry .entry-actions .delete-btn {
+  display: inline-flex !important;
+}
+  

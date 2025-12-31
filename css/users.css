@@ -1,0 +1,470 @@
+/* ===== USERS PAGE - BUILT FROM SCRATCH ===== */
+
+/* Reset and base styles */
+.users-page {
+  font-family: 'Roboto', Arial, sans-serif;
+  background: #f8f9fa;
+  min-height: 100vh;
+  padding: 20px;
+  box-sizing: border-box;
+  /* Prevent horizontal overflow */
+  overflow-x: hidden;
+  width: 100%;
+}
+
+.users-page * {
+  box-sizing: border-box;
+}
+
+/* Back button */
+.users-page .back-button {
+  margin: 20px 0;
+  /* Inherits global Material Design styles */
+}
+
+/* Main card container */
+.users-page .card {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 24px;
+  max-width: 1200px;
+  margin: 0 auto;
+  /* Prevent overflow */
+  width: 100%;
+  overflow-x: hidden;
+}
+
+/* Page title */
+.users-page h1 {
+  text-align: center;
+  font-size: 28px;
+  font-weight: 600;
+  margin: 0 0 24px 0;
+  color: #1f2937;
+  /* Prevent text overflow */
+  word-wrap: break-word;
+}
+
+/* Message area */
+.users-page #messageArea {
+  margin-bottom: 20px;
+}
+
+.users-page .msg {
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-weight: 500;
+  margin: 10px 0;
+  /* Allow text wrapping */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.users-page .msg-error {
+  background-color: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.users-page .msg-success {
+  background-color: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+
+/* Table styles */
+.users-page .table-responsive {
+  overflow-x: auto;
+  margin-top: 20px;
+  /* Better mobile scrolling */
+  -webkit-overflow-scrolling: touch;
+}
+
+.users-page .user-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  /* Minimum width for mobile */
+  min-width: 600px;
+}
+
+.users-page .user-table th {
+  background-color: #f9fafb;
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 2px solid #e5e7eb;
+  /* Prevent text wrapping in headers */
+  white-space: nowrap;
+}
+
+.users-page .user-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+  color: #1f2937;
+  /* Allow text wrapping in cells */
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+}
+
+.users-page .user-table tr:hover {
+  background-color: #f9fafb;
+}
+
+/* Action buttons in table */
+.users-page .action-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  /* Minimum width for action column */
+  min-width: 180px;
+}
+
+.users-page .action-btn {
+  /* Inherits global button styles but with overrides for table context */
+  font-size: 12px;
+  padding: 4px 12px;
+  height: 28px;
+  min-width: auto;
+  text-transform: none;
+  /* Prevent button shrinking */
+  flex-shrink: 0;
+}
+
+/* ===== MODAL SYSTEM - BUILT FROM SCRATCH ===== */
+
+/* Modal backdrop */
+.modal {
+  /* Reset any previous styles */
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 9999;
+  
+  /* Flexbox centering */
+  align-items: center;
+  justify-content: center;
+  
+  /* Smooth transitions */
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+}
+
+/* Show modal */
+.modal.show {
+  display: flex;
+  opacity: 1;
+}
+
+/* Modal content container */
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  
+  /* Shadow for depth */
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  
+  /* Animation */
+  transform: scale(0.95);
+  transition: transform 0.2s ease-in-out;
+}
+
+.modal.show .modal-content {
+  transform: scale(1);
+}
+
+/* Modal header */
+.modal-content h3 {
+  margin: 0 0 20px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+/* Close button */
+.close-btn {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 4px;
+  line-height: 1;
+  transition: color 0.2s ease;
+}
+
+.close-btn:hover {
+  color: #374151;
+}
+
+/* Form styles */
+.form-group {
+  margin-bottom: 20px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: #374151;
+  font-size: 14px;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 16px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: var(--brand-primary, #cc0007);
+  box-shadow: 0 0 0 3px rgba(204, 0, 7, 0.1);
+}
+
+/* Modal buttons */
+.modal-content .btn-outlined,
+.modal-content .btn-edit,
+.modal-content .btn-reset {
+  /* Inherits global button styles */
+}
+
+/* Form button container */
+.modal-content .form-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .users-page {
+    padding: 8px;
+    margin: 0;
+  }
+  
+  .users-page .card {
+    padding: 12px;
+    margin: 0;
+    border-radius: 8px;
+  }
+  
+  .users-page h1 {
+    font-size: 20px;
+    margin-bottom: 16px;
+  }
+  
+  .users-page .back-button {
+    margin-bottom: 16px;
+    width: 100%;
+    text-align: center;
+  }
+  
+  /* Better table handling on mobile */
+  .users-page .table-responsive {
+    margin-top: 16px;
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  
+  .users-page .user-table {
+    min-width: 500px;
+    font-size: 14px;
+  }
+  
+  .users-page .user-table th,
+  .users-page .user-table td {
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+  
+  /* Adjust table columns for mobile */
+  .users-page .user-table th:nth-child(1),
+  .users-page .user-table td:nth-child(1) {
+    min-width: 100px;
+  }
+  
+  .users-page .user-table th:nth-child(2),
+  .users-page .user-table td:nth-child(2) {
+    min-width: 120px;
+  }
+  
+  /* Hide role column on mobile */
+  .users-page .user-table th:nth-child(3),
+  .users-page .user-table td:nth-child(3) {
+    display: none;
+  }
+  
+  .users-page .user-table th:nth-child(4),
+  .users-page .user-table td:nth-child(4) {
+    min-width: 120px;
+  }
+  
+  .users-page .action-buttons {
+    flex-direction: column;
+    gap: 2px;
+    min-width: 110px;
+  }
+  
+  .users-page .action-btn {
+    width: 100%;
+    text-align: center;
+    font-size: 10px;
+    padding: 2px 6px;
+    height: 22px;
+    border-radius: 4px;
+  }
+  
+  .modal-content {
+    width: calc(100% - 16px);
+    max-width: none;
+    padding: 16px;
+    margin: 8px;
+    border-radius: 8px;
+  }
+  
+  .modal-content h3 {
+    font-size: 18px;
+    margin-bottom: 16px;
+  }
+  
+  .form-group {
+    margin-bottom: 16px;
+  }
+  
+  .form-group input,
+  .form-group select {
+    padding: 10px;
+    font-size: 16px; /* Prevent zoom on iOS */
+  }
+  
+  .close-btn {
+    top: 12px;
+    right: 16px;
+    font-size: 20px;
+  }
+  
+  /* Mobile form button adjustments */
+  .modal-content .form-buttons {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .modal-content .form-buttons button {
+    width: 100%;
+  }
+}
+
+/* Extra small mobile devices */
+@media (max-width: 480px) {
+  .users-page {
+    padding: 4px;
+  }
+  
+  .users-page .card {
+    padding: 8px;
+  }
+  
+  .users-page h1 {
+    font-size: 18px;
+  }
+  
+  .users-page .user-table {
+    min-width: 350px;
+    font-size: 11px;
+  }
+  
+  .users-page .user-table th,
+  .users-page .user-table td {
+    padding: 3px 4px;
+    font-size: 11px;
+  }
+  
+  .users-page .user-table th:nth-child(4),
+  .users-page .user-table td:nth-child(4) {
+    min-width: 90px;
+  }
+  
+  .users-page .action-buttons {
+    min-width: 80px;
+    gap: 1px;
+  }
+  
+  .users-page .action-btn {
+    font-size: 9px;
+    padding: 1px 4px;
+    height: 18px;
+    border-radius: 3px;
+  }
+  
+  .modal-content {
+    width: calc(100% - 8px);
+    padding: 12px;
+    margin: 4px;
+  }
+}
+
+/* Extra extra small devices - use abbreviated button text */
+@media (max-width: 360px) {
+  .users-page .user-table {
+    min-width: 320px;
+    font-size: 10px;
+  }
+  
+  .users-page .user-table th,
+  .users-page .user-table td {
+    padding: 2px 3px;
+    font-size: 10px;
+  }
+  
+  .users-page .user-table th:nth-child(4),
+  .users-page .user-table td:nth-child(4) {
+    min-width: 70px;
+  }
+  
+  .users-page .action-buttons {
+    min-width: 60px;
+    gap: 1px;
+  }
+  
+  .users-page .action-btn {
+    font-size: 8px;
+    padding: 1px 2px;
+    height: 16px;
+    border-radius: 2px;
+  }
+  
+  /* Use abbreviated text for buttons on very small screens */
+  .users-page .action-btn.btn-edit::before { content: "Edit"; }
+  .users-page .action-btn.btn-delete::before { content: "Del"; }
+  .users-page .action-btn.btn-reset::before { content: "Reset"; }
+  
+  .users-page .action-btn {
+    font-size: 0; /* Hide original text */
+  }
+  
+  .users-page .action-btn::before {
+    font-size: 8px;
+  }
+}

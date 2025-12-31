@@ -1,0 +1,419 @@
+.notes-page {
+  font-family: 'Inter', Arial, sans-serif;
+  background: #f8f9fb;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  color: #222;
+}
+.notes-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.5rem 1rem 0.5rem 1rem;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+}
+.notes-header h2 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #222;
+}
+#notesEventTitle {
+  font-size: 1rem;
+  color: #888;
+  margin-bottom: 0.5rem;
+}
+#notesContainer {
+  max-width: 650px;
+  margin: 2rem auto;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+#editor {
+  min-height: 220px;
+  background: #f4f6fa;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+  padding: 0.5rem;
+}
+#saveNotesBtn {
+  align-self: flex-end;
+  background: #CC0007;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.5rem 1.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, box-shadow 0.2s;
+  box-shadow: 0 2px 8px rgba(204,0,7,0.08);
+}
+#saveNotesBtn:hover:not(:disabled), #saveNotesBtn:focus:not(:disabled) {
+  background: #a80006;
+  box-shadow: 0 4px 12px rgba(204,0,7,0.13);
+}
+#saveNotesBtn:disabled {
+  background: #b6c3d1;
+  cursor: not-allowed;
+  color: #fff;
+}
+#notesLoading {
+  color: #3b82f6;
+  font-size: 1rem;
+  text-align: center;
+}
+#notesError {
+  color: #e11d48;
+  font-size: 1rem;
+  text-align: center;
+  margin-top: 0.5rem;
+}
+.back-btn {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  background: none;
+  border: none;
+  color: #6b7280;
+  font-size: 1.05rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 4px 10px 4px 4px;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+  z-index: 10;
+}
+.back-btn .back-arrow {
+  font-size: 1.2em;
+  margin-right: 2px;
+}
+.back-btn:hover, .back-btn:focus {
+  background: #f3f4f6;
+  color: #222;
+  outline: none;
+}
+@media (max-width: 600px) {
+  #notesContainer {
+    margin: 1rem;
+    padding: 1rem;
+  }
+  .notes-header {
+    padding: 1rem 0.5rem 0.5rem 0.5rem;
+  }
+  #editor {
+    min-height: 140px;
+  }
+  .back-btn {
+    top: 8px;
+    left: 8px;
+    font-size: 0.98rem;
+    padding: 3px 8px 3px 3px;
+  }
+}
+.add-note-btn {
+  margin-top: 0.5rem;
+  background: #CC0007;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.4rem 1.1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(204,0,7,0.08);
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.add-note-btn:hover, .add-note-btn:focus {
+  background: #a80006;
+  box-shadow: 0 4px 12px rgba(204,0,7,0.13);
+}
+#notesList {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-top: 1.5rem;
+}
+.note-card {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  padding: 1.1rem 1.2rem 1.1rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  position: relative;
+  max-width: 650px;
+}
+.note-card-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #222;
+  margin-bottom: 0.1rem;
+}
+.note-card-date {
+  font-size: 0.98rem;
+  color: #888;
+  margin-bottom: 0.2rem;
+}
+.note-card-content {
+  font-size: 1rem;
+  color: #333;
+  margin-bottom: 0.2rem;
+}
+.note-card-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.2rem;
+}
+.edit-note-btn, .delete-note-btn {
+  background: #f3f4f6;
+  color: #6b7280;
+  border: none;
+  border-radius: 6px;
+  padding: 0.25rem 0.9rem;
+  font-size: 0.98rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.edit-note-btn:hover, .edit-note-btn:focus {
+  background: #e5e7eb;
+  color: #222;
+}
+.delete-note-btn {
+  color: #CC0007;
+}
+.delete-note-btn:hover, .delete-note-btn:focus {
+  background: #ffe4e6;
+  color: #a80006;
+}
+/* Modal styles */
+.note-modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(34, 41, 47, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.note-modal-content {
+  display: flex;
+  flex-direction: column;
+  max-height: 80vh;
+  width: 650px;
+  max-width: 98vw;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 6px 32px rgba(0,0,0,0.13);
+  position: relative;
+  padding: 2rem 1.5rem 1.5rem 1.5rem;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.modal-scroll {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0;
+  margin-bottom: 1rem;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+}
+#modalEditor,
+#modalEditor .ql-container,
+#modalEditor .ql-editor {
+  box-sizing: border-box;
+  max-width: 100%;
+  width: 100%;
+  overflow-x: auto;
+  word-break: break-word;
+}
+#modalEditor .ql-editor {
+  padding-right: 0 !important;
+  white-space: pre-wrap;
+}
+#noteTitleInput {
+  width: 100%;
+  padding: 0.5rem;
+  font-size: 1.05rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  margin-bottom: 0.7rem;
+}
+.modal-actions {
+  flex-shrink: 0;
+  display: flex;
+  gap: 0.7rem;
+  justify-content: flex-end;
+  background: #fff;
+  padding-top: 0.5rem;
+  box-shadow: 0 -2px 8px rgba(0,0,0,0.03);
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+}
+#saveNoteBtn {
+  background: #CC0007;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 0.4rem 1.1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(204,0,7,0.08);
+  transition: background 0.2s, box-shadow 0.2s;
+}
+#saveNoteBtn:hover, #saveNoteBtn:focus {
+  background: #a80006;
+  box-shadow: 0 4px 12px rgba(204,0,7,0.13);
+}
+.cancel-btn {
+  background: #f3f4f6;
+  color: #6b7280;
+  border: none;
+  border-radius: 6px;
+  padding: 0.25rem 0.9rem;
+  font-size: 0.98rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.cancel-btn:hover, .cancel-btn:focus {
+  background: #e5e7eb;
+  color: #222;
+}
+.modal-error {
+  color: #e11d48;
+  font-size: 1rem;
+  text-align: center;
+  margin-top: 0.5rem;
+}
+@media (max-width: 600px) {
+  .note-modal-content {
+    min-width: 0;
+    width: 98vw;
+    padding: 1.2rem 0.5rem 1rem 0.5rem;
+  }
+  .add-note-btn {
+    font-size: 0.98rem;
+    padding: 0.3rem 0.8rem;
+  }
+  .note-card {
+    padding: 0.7rem 0.7rem 0.7rem 0.7rem;
+  }
+}
+.modal-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #fff;
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+}
+
+/* Make the Quill toolbar sticky below the title */
+#modalEditor .ql-toolbar,
+.modal-sticky-header + .ql-toolbar {
+  position: sticky;
+  top: 3.7rem; /* Adjust if needed to be just below the title input */
+  z-index: 2;
+  background: #fff;
+}
+@media (max-width: 700px) {
+  html, body,
+  .notes-header h2,
+  #notesEventTitle,
+  #notesContainer,
+  .note-card,
+  .note-card-title,
+  .note-card-date,
+  .note-card-content,
+  .add-note-btn,
+  .edit-note-btn,
+  .delete-note-btn,
+  .modal-sticky-header label,
+  #noteTitleInput,
+  #modalEditor,
+  #modalEditor .ql-container,
+  #modalEditor .ql-editor,
+  .modal-actions,
+  .cancel-btn,
+  #saveNoteBtn,
+  .modal-error {
+    font-size: 16px !important;
+  }
+  html, body {
+    width: 100vw;
+    overflow-x: hidden;
+    box-sizing: border-box;
+  }
+  .note-modal-content,
+  #notesContainer,
+  .note-card {
+    width: 100%;
+    max-width: 100vw;
+    min-width: 0;
+    margin: 0;
+    padding-left: 12px;
+    padding-right: 12px;
+    box-sizing: border-box;
+  }
+  .note-modal-content {
+    padding-left: 12px;
+    padding-right: 12px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  #notesContainer {
+    margin: 0;
+    padding: 0.5rem 0 0.5rem 0;
+  }
+  .note-card {
+    padding: 0.7rem 0.7rem 0.7rem 0.7rem;
+  }
+  .modal-scroll {
+    width: 100%;
+    max-width: 100vw;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+  #modalEditor,
+  #modalEditor .ql-container,
+  #modalEditor .ql-editor {
+    width: 100%;
+    max-width: 100vw;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+}
+.admin-notes-btn {
+  background: #f3f4f6;
+  color: #6b7280;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 22px;
+  font-weight: 600;
+  font-size: 17px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.admin-notes-btn:hover, .admin-notes-btn:focus {
+  background: #e5e7eb;
+  color: #222;
+}
+.notes-page { font-family: 'Roboto', Arial, sans-serif; } 

@@ -745,8 +745,69 @@
     </style>
 </head>
 <body class="inventory-dark">
-    <!-- Sidebar Container - will be populated by sidebar-dashboard.js -->
-    <div id="sidebarContainer"></div>
+    <!-- Sidebar -->
+    <aside class="dashboard-sidebar" id="dashboardSidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">
+          <img src="assets/Logo - Dark BG.png" alt="Lumetry Media" class="sidebar-logo-img">
+        </div>
+      </div>
+      
+      <nav class="sidebar-nav">
+        <a href="/dashboard.html#events" class="nav-item nav-external">
+          <span class="material-symbols-outlined">dashboard</span>
+          <span>Dashboard</span>
+        </a>
+        <a href="/pages/event-calendar.html" class="nav-item nav-external">
+          <span class="material-symbols-outlined">calendar_month</span>
+          <span>Event Calendar</span>
+        </a>
+        <a href="/pages/users.html" class="nav-item nav-external admin-only-nav" id="adminNavItem" style="display: none;">
+          <span class="material-symbols-outlined">admin_panel_settings</span>
+          <span>Admin Console</span>
+        </a>
+        <a href="#" class="nav-item active" onclick="event.preventDefault();">
+          <span class="material-symbols-outlined">inventory_2</span>
+          <span>Inventory</span>
+        </a>
+        <a href="/pages/crew-planner.html" class="nav-item nav-external">
+          <span class="material-symbols-outlined">groups</span>
+          <span>Crew Planner</span>
+        </a>
+        <a href="/pages/crew-calendar.html" class="nav-item nav-external">
+          <span class="material-symbols-outlined">calendar_month</span>
+          <span>Crew Calendar</span>
+        </a>
+      </nav>
+      
+      <div class="sidebar-user" id="sidebarUserContainer">
+        <div class="sidebar-user-avatar" id="sidebarUserAvatar">
+          <img src="" alt="User" id="sidebarAvatarImg" style="display: none;">
+          <span class="material-symbols-outlined" id="sidebarAvatarIcon">person</span>
+        </div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name" id="sidebarUserName">Loading...</div>
+          <div class="sidebar-user-role" id="sidebarUserRole">User</div>
+        </div>
+        <span class="material-symbols-outlined" style="color: var(--text-tertiary); font-size: 18px;">expand_more</span>
+      </div>
+    </aside>
+
+    <!-- User Dropdown Menu -->
+    <div class="user-menu-dropdown" id="userMenuDropdown">
+      <button class="user-menu-item" id="profileMenuItem">
+        <span class="material-symbols-outlined">person</span>
+        <span>Profile</span>
+        </button>
+      <button class="user-menu-item" id="settingsMenuItem">
+        <span class="material-symbols-outlined">settings</span>
+        <span>Settings</span>
+      </button>
+      <button class="user-menu-item danger" id="logoutMenuItem">
+        <span class="material-symbols-outlined">logout</span>
+        <span>Logout</span>
+      </button>
+    </div>
 
     <!-- Main Content -->
     <main class="main-content">
@@ -908,16 +969,19 @@
         let currentInventory = [];
 
         // Initialize page
-        document.addEventListener('DOMContentLoaded', async function() {
-            // Inject the shared sidebar
-            const sidebarContainer = document.getElementById('sidebarContainer');
-            if (sidebarContainer && window.injectDashboardSidebar) {
-              await window.injectDashboardSidebar(sidebarContainer, { 
-                position: 'replace',
-                activePage: 'inventory-management'
-              });
-            } else if (window.initDashboardSidebar) {
+        document.addEventListener('DOMContentLoaded', function() {
+            // Initialize sidebar
+            if (window.initDashboardSidebar) {
               window.initDashboardSidebar();
+            }
+
+            // Setup logout handler
+            const logoutBtn = document.getElementById('logoutMenuItem');
+            if (logoutBtn) {
+              logoutBtn.onclick = function() {
+                localStorage.clear();
+                window.location.href = '/index.html';
+              };
             }
 
             // Check admin access for nav item

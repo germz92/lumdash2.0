@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Lumetry Dashboard</title>
   
+  <!-- Preconnect to Google Fonts for faster font loading -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  
   <!-- PWA Meta Tags -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#cc0007">
@@ -18,8 +22,8 @@
   <link href="https://fonts.googleapis.com/css?family=Roboto:400,500,700&display=swap" rel="stylesheet">
   <!-- Plus Jakarta Sans for dark theme -->
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <!-- Add Material Symbols -->
-  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+  <!-- Add Material Symbols with display=block to prevent FOUT -->
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet" />
   <link rel="stylesheet" href="css/styles.css">
   <!-- Dark Theme CSS -->
   <link rel="stylesheet" href="css/theme-dark.css">
@@ -54,6 +58,9 @@
     #page-container {
       flex: 1;
       padding: 20px 20px 0;
+      /* Fade transition for page changes */
+      opacity: 1;
+      transition: opacity 0.15s ease-out;
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
       position: relative;
@@ -145,7 +152,9 @@
     // Pages that DON'T need Socket.IO: documents (maps)
     
     function loadSocketIO() {
-      const currentPage = location.hash.replace('#', '') || 'events';
+      // Parse page name from hash (handles #page?id=xxx format)
+      const fullHash = location.hash.replace('#', '') || 'events';
+      const currentPage = fullHash.split('?')[0] || 'events';
       const pagesNeedingSocketIO = ['events', 'general', 'crew', 'schedule', 'travel-accommodation', 'gear', 'card-log', 'shotlist'];
       
       if (pagesNeedingSocketIO.includes(currentPage)) {
@@ -197,9 +206,15 @@
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       // Check if we should restore the last page state
-      const urlHash = window.location.hash.replace('#', '');
+      // Parse hash to extract page name and ID separately (handles #page?id=xxx format)
+      const fullHash = window.location.hash.replace('#', '');
+      const hashParts = fullHash.split('?');
+      const urlHash = hashParts[0]; // Just the page name
+      const hashParams = hashParts[1] ? new URLSearchParams(hashParts[1]) : null;
+      const hashEventId = hashParams ? hashParams.get('id') : null;
+      
       const urlParams = new URLSearchParams(window.location.search);
-      const hasEventParam = urlParams.get('id') || urlParams.get('eventId');
+      const hasEventParam = hashEventId || urlParams.get('id') || urlParams.get('eventId');
       const pageParam = urlParams.get('page');
       
       // If there's a page parameter (coming from gear page), navigate to that page
@@ -230,11 +245,17 @@
     
     // Handle browser back/forward navigation to also save page state
     window.addEventListener('hashchange', function(e) {
-      const newHash = window.location.hash.replace('#', '');
-      if (newHash && typeof saveCurrentPageState === 'function') {
-        const eventId = localStorage.getItem('eventId');
-        console.log('[PWA] Hash changed to:', newHash, 'saving page state');
-        saveCurrentPageState(newHash, eventId);
+      // Parse page name from hash (handles #page?id=xxx format)
+      const fullHash = window.location.hash.replace('#', '');
+      const hashParts = fullHash.split('?');
+      const newPage = hashParts[0];
+      const hashParams = hashParts[1] ? new URLSearchParams(hashParts[1]) : null;
+      const hashEventId = hashParams ? hashParams.get('id') : null;
+      
+      if (newPage && typeof saveCurrentPageState === 'function') {
+        const eventId = hashEventId || localStorage.getItem('eventId');
+        console.log('[PWA] Hash changed to page:', newPage, 'with eventId:', eventId);
+        saveCurrentPageState(newPage, eventId);
       }
     });
     

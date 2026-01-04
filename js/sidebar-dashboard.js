@@ -1,16 +1,175 @@
 /**
  * Dashboard Sidebar - Shared component for home dashboard pages
- * Used by: events.html, users.html, and other dashboard-level pages
+ * Used by: events.html, users.html, inventory-management.html, crew-planner.html, crew-calendar.html, event-calendar.html
  * 
- * This sidebar includes: Dashboard, Admin Console, Inventory, Crew Planner, Crew Calendar
+ * This sidebar includes: Dashboard, Event Calendar, Admin Console, Inventory, Crew Planner, Crew Calendar
  */
 
 (function() {
   'use strict';
   
+  // Cache for the sidebar HTML to avoid refetching
+  let sidebarHTMLCache = null;
+  
+  /**
+   * Get the current page name for determining active state
+   */
+  function getCurrentPage() {
+    const path = window.location.pathname;
+    const hash = window.location.hash;
+    
+    // Check for SPA pages via hash
+    if (path.includes('dashboard.html')) {
+      const hashPage = hash.replace('#', '').split('?')[0];
+      return hashPage || 'events';
+    }
+    
+    // Check for standalone pages
+    if (path.includes('event-calendar')) return 'event-calendar';
+    if (path.includes('users')) return 'users';
+    if (path.includes('inventory-management')) return 'inventory-management';
+    if (path.includes('crew-planner')) return 'crew-planner';
+    if (path.includes('crew-calendar')) return 'crew-calendar';
+    
+    return 'events';
+  }
+  
+  /**
+   * Get the correct path prefix based on current page location
+   */
+  function getPathPrefix() {
+    const path = window.location.pathname;
+    // If we're in /pages/ directory, assets need to go up one level
+    if (path.includes('/pages/')) {
+      return '../';
+    }
+    return '';
+  }
+  
+  /**
+   * Wait for Material Symbols font to be loaded
+   */
+  async function waitForFonts() {
+    // Quick check if fonts are already loaded
+    if (document.fonts && document.fonts.check('24px "Material Symbols Outlined"')) {
+      return;
+    }
+    
+    // Wait for fonts to load (max 500ms)
+    return new Promise(resolve => {
+      if (document.fonts && document.fonts.ready) {
+        const timeout = setTimeout(resolve, 500); // Fallback timeout
+        document.fonts.ready.then(() => {
+          clearTimeout(timeout);
+          resolve();
+        });
+      } else {
+        // Fallback for older browsers
+        setTimeout(resolve, 100);
+      }
+    });
+  }
+  
+  /**
+   * Inject the dashboard sidebar into the page
+   * @param {HTMLElement} container - The element to inject the sidebar into (or before)
+   * @param {Object} options - Configuration options
+   * @param {string} options.position - 'prepend' | 'before' | 'replace' - where to inject
+   * @param {string} options.activePage - Override the active page detection
+   */
+  async function injectDashboardSidebar(container, options = {}) {
+    if (!container) {
+      console.error('[Dashboard Sidebar] No container provided for injection');
+      return false;
+    }
+    
+    const position = options.position || 'prepend';
+    const activePage = options.activePage || getCurrentPage();
+    const pathPrefix = getPathPrefix();
+    
+    console.log('[Dashboard Sidebar] Injecting sidebar, active page:', activePage);
+    
+    // Wait for fonts before injecting sidebar (prevents FOUT)
+    await waitForFonts();
+    
+    try {
+      // Fetch the sidebar HTML (use cache if available)
+      if (!sidebarHTMLCache) {
+        const response = await fetch(`${pathPrefix}partials/dashboard-sidebar.html`);
+        if (!response.ok) {
+          throw new Error(`Failed to fetch sidebar: ${response.status}`);
+        }
+        sidebarHTMLCache = await response.text();
+      }
+      
+      // Create a temporary container to parse the HTML
+      const temp = document.createElement('div');
+      temp.innerHTML = sidebarHTMLCache;
+      
+      // Fix asset paths for pages in subdirectories
+      if (pathPrefix) {
+        const logoImg = temp.querySelector('.sidebar-logo-img');
+        if (logoImg) {
+          const currentSrc = logoImg.getAttribute('src');
+          if (currentSrc && !currentSrc.startsWith('../') && !currentSrc.startsWith('/')) {
+            logoImg.setAttribute('src', `${pathPrefix}${currentSrc}`);
+          }
+        }
+      }
+      
+      // Set the active nav item
+      const navItems = temp.querySelectorAll('.nav-item[data-sidebar-page]');
+      navItems.forEach(item => {
+        const itemPage = item.getAttribute('data-sidebar-page');
+        if (itemPage === activePage) {
+          item.classList.add('active');
+        } else {
+          item.classList.remove('active');
+        }
+      });
+      
+      // Get sidebar elements
+      const sidebar = temp.querySelector('.dashboard-sidebar');
+      const dropdown = temp.querySelector('.user-menu-dropdown');
+      const overlay = temp.querySelector('.sidebar-overlay');
+      
+      if (!sidebar) {
+        console.error('[Dashboard Sidebar] Sidebar element not found in partial');
+        return false;
+      }
+      
+      // Inject based on position option
+      if (position === 'prepend') {
+        // Insert sidebar, dropdown, and overlay at the start of container
+        if (overlay) container.prepend(overlay);
+        if (dropdown) container.prepend(dropdown);
+        container.prepend(sidebar);
+      } else if (position === 'before') {
+        // Insert before the container
+        if (sidebar) container.parentNode.insertBefore(sidebar, container);
+        if (dropdown) container.parentNode.insertBefore(dropdown, container);
+        if (overlay) document.body.appendChild(overlay);
+      } else if (position === 'replace') {
+        // Replace container's content
+        container.innerHTML = '';
+        container.appendChild(sidebar);
+        if (dropdown) container.appendChild(dropdown);
+        if (overlay) container.appendChild(overlay);
+      }
+      
+      // Initialize the sidebar functionality
+      initDashboardSidebar();
+      
+      return true;
+    } catch (error) {
+      console.error('[Dashboard Sidebar] Error injecting sidebar:', error);
+      return false;
+    }
+  }
+  
   /**
    * Initialize the dashboard sidebar
-   * Call this from your page's init function
+   * Call this from your page's init function after sidebar HTML is present
    */
   function initDashboardSidebar() {
     console.log('🎨 Initializing dashboard sidebar...');
@@ -19,7 +178,6 @@
     setupMobileMenu();
     setupUserDropdown();
     setupSidebarNavigation();
-    setupExternalNavigation();
     updateUserInfo();
     checkAdminAccess();
     setupDropdownClickOutside();
@@ -27,23 +185,48 @@
   }
   
   /**
-   * Setup external navigation links
-   * Inline onclick handlers don't work reliably in SPA, so we attach listeners programmatically
+   * Setup sidebar navigation click handlers
    */
-  function setupExternalNavigation() {
-    const externalLinks = document.querySelectorAll('.nav-external');
-    console.log('Setting up external navigation for', externalLinks.length, 'links');
+  function setupSidebarNavigation() {
+    const navItems = document.querySelectorAll('#dashboardSidebar .nav-item[data-sidebar-page]');
     
-    externalLinks.forEach(link => {
-      // Use onclick property (simple, no accumulation)
-      link.onclick = function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        const href = link.getAttribute('href');
-        console.log('External nav clicked:', href);
-        window.location.href = href;
+    navItems.forEach(item => {
+      item.onclick = function(e) {
+        const page = item.getAttribute('data-sidebar-page');
+        const href = item.getAttribute('href');
+        const isSpa = item.getAttribute('data-spa') === 'true';
+        
+        // If already on this page, do nothing
+        if (item.classList.contains('active')) {
+          e.preventDefault();
+          return;
+        }
+        
+        // For SPA pages (marked with data-spa="true"), use window.navigate
+        if (isSpa && window.navigate) {
+          e.preventDefault();
+          window.navigate(page);
+          return;
+        }
+        
+        // For SPA navigation within dashboard.html (legacy check)
+        if (href && href.startsWith('/dashboard.html#')) {
+          e.preventDefault();
+          const hashPage = href.replace('/dashboard.html#', '').split('?')[0];
+          if (window.navigate) {
+            window.navigate(hashPage);
+          } else {
+            window.location.href = href;
+          }
+          return;
+        }
+        
+        // For external/standalone pages, let the browser handle the navigation
+        // (href will work normally)
       };
     });
+    
+    console.log('Sidebar navigation ready');
   }
   
   /**
@@ -52,14 +235,15 @@
   function setupMobileMenu() {
     const mobileMenuBtn = document.getElementById('mobileMenuBtn');
     const sidebar = document.getElementById('dashboardSidebar');
+    let overlay = document.getElementById('dashboardSidebarOverlay') || document.querySelector('.sidebar-overlay');
     
     if (!mobileMenuBtn || !sidebar) return;
     
-    // Create overlay element
-    let overlay = document.querySelector('.sidebar-overlay');
+    // Create overlay if it doesn't exist
     if (!overlay) {
       overlay = document.createElement('div');
       overlay.className = 'sidebar-overlay';
+      overlay.id = 'dashboardSidebarOverlay';
       document.body.appendChild(overlay);
     }
     
@@ -148,23 +332,31 @@
         localStorage.removeItem('user');
         localStorage.removeItem('fullName');
         localStorage.removeItem('userId');
-        // Navigate to login page (handle both root and pages/ paths)
-        const isInPagesDir = window.location.pathname.includes('/pages/');
-        window.location.href = isInPagesDir ? '../index.html' : 'index.html';
+        // Navigate to login page
+        window.location.href = '/index.html';
       };
     }
-  }
-  
-  /**
-   * Setup sidebar navigation
-   * Note: Nav items use inline onclick handlers in the HTML, 
-   * so we don't need to attach listeners here for basic navigation.
-   * This function just handles the active state updates.
-   */
-  function setupSidebarNavigation() {
-    // Navigation is handled by inline onclick handlers in the HTML
-    // This keeps behavior consistent and avoids listener duplication issues
-    console.log('Sidebar navigation ready');
+    
+    // Setup profile and settings handlers
+    const profileMenuItem = document.getElementById('profileMenuItem');
+    if (profileMenuItem) {
+      profileMenuItem.onclick = function(e) {
+        e.stopPropagation();
+        console.log('Profile clicked');
+        // TODO: Navigate to profile page when implemented
+        document.getElementById('userMenuDropdown')?.classList.remove('show');
+      };
+    }
+    
+    const settingsMenuItem = document.getElementById('settingsMenuItem');
+    if (settingsMenuItem) {
+      settingsMenuItem.onclick = function(e) {
+        e.stopPropagation();
+        console.log('Settings clicked');
+        // TODO: Navigate to settings page when implemented
+        document.getElementById('userMenuDropdown')?.classList.remove('show');
+      };
+    }
   }
   
   /**
@@ -263,15 +455,6 @@
     adminOnlyNavItems.forEach(item => {
       item.style.display = isAdmin ? 'flex' : 'none';
     });
-    
-    // Also check by specific IDs for backward compatibility
-    const adminNavIds = ['adminNavItem', 'inventoryNavItem', 'crewPlannerNavItem', 'crewCalendarNavItem'];
-    adminNavIds.forEach(id => {
-      const navItem = document.getElementById(id);
-      if (navItem) {
-        navItem.style.display = isAdmin ? 'flex' : 'none';
-      }
-    });
   }
   
   /**
@@ -326,9 +509,25 @@
     }
   }
   
+  /**
+   * Set active page in sidebar (for use after navigation)
+   */
+  function setActivePage(pageName) {
+    const navItems = document.querySelectorAll('#dashboardSidebar .nav-item[data-sidebar-page]');
+    navItems.forEach(item => {
+      const itemPage = item.getAttribute('data-sidebar-page');
+      if (itemPage === pageName) {
+        item.classList.add('active');
+      } else {
+        item.classList.remove('active');
+      }
+    });
+  }
+  
   // Expose functions globally
+  window.injectDashboardSidebar = injectDashboardSidebar;
   window.initDashboardSidebar = initDashboardSidebar;
   window.updateDashboardUserInfo = updateUserInfo;
+  window.setDashboardActivePage = setActivePage;
   
 })();
-

@@ -733,142 +733,203 @@
     </style>
 </head>
 <body class="crew-planner-page crew-planner-dark">
-    <!-- Sidebar Container - will be populated by sidebar-dashboard.js -->
-    <div id="sidebarContainer"></div>
+    <!-- Sidebar -->
+    <aside class="dashboard-sidebar" id="dashboardSidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">
+          <img src="../assets/Logo - Dark BG.png" alt="Lumetry Media" class="sidebar-logo-img">
+        </div>
+      </div>
+      
+      <nav class="sidebar-nav">
+        <a href="/dashboard.html#events" class="nav-item nav-external">
+          <span class="material-symbols-outlined">dashboard</span>
+          <span>Dashboard</span>
+        </a>
+        <a href="/pages/event-calendar.html" class="nav-item nav-external">
+          <span class="material-symbols-outlined">calendar_month</span>
+          <span>Event Calendar</span>
+        </a>
+        <a href="/pages/users.html" class="nav-item nav-external admin-only-nav" id="adminNavItem" style="display: none;">
+          <span class="material-symbols-outlined">admin_panel_settings</span>
+          <span>Admin Console</span>
+        </a>
+        <a href="/inventory-management.html" class="nav-item nav-external">
+          <span class="material-symbols-outlined">inventory_2</span>
+          <span>Inventory</span>
+        </a>
+        <a href="#" class="nav-item active" onclick="event.preventDefault();">
+          <span class="material-symbols-outlined">groups</span>
+          <span>Crew Planner</span>
+        </a>
+        <a href="/pages/crew-calendar.html" class="nav-item nav-external">
+          <span class="material-symbols-outlined">calendar_month</span>
+          <span>Crew Calendar</span>
+        </a>
+      </nav>
+      
+      <div class="sidebar-user" id="sidebarUserContainer">
+        <div class="sidebar-user-avatar" id="sidebarUserAvatar">
+          <img src="" alt="User" id="sidebarAvatarImg" style="display: none;">
+          <span class="material-symbols-outlined" id="sidebarAvatarIcon">person</span>
+        </div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name" id="sidebarUserName">Loading...</div>
+          <div class="sidebar-user-role" id="sidebarUserRole">User</div>
+        </div>
+        <span class="material-symbols-outlined" style="color: var(--text-tertiary); font-size: 18px;">expand_more</span>
+      </div>
+    </aside>
+
+    <!-- User Dropdown Menu -->
+    <div class="user-menu-dropdown" id="userMenuDropdown">
+      <button class="user-menu-item" id="profileMenuItem">
+        <span class="material-symbols-outlined">person</span>
+        <span>Profile</span>
+      </button>
+      <button class="user-menu-item" id="settingsMenuItem">
+        <span class="material-symbols-outlined">settings</span>
+        <span>Settings</span>
+      </button>
+      <button class="user-menu-item danger" id="logoutMenuItem">
+        <span class="material-symbols-outlined">logout</span>
+        <span>Logout</span>
+      </button>
+    </div>
 
     <!-- Main Content -->
     <main class="main-content">
       <div class="page-header">
-            <h1>Crew Planner</h1>
-            <p>Plan crew assignments across multiple events and conflicting dates</p>
-        </div>
+        <h1>Crew Planner</h1>
+        <p>Plan crew assignments across multiple events and conflicting dates</p>
+      </div>
 
-        <!-- Table Management Controls -->
-        <div class="table-controls">
-            <div class="table-selector">
-                <select id="tableSelect">
-                    <option value="">Select a table...</option>
-                </select>
-                <button id="loadTableBtn" class="btn btn-secondary">Load</button>
-                <button id="newTableBtn" class="btn btn-primary">New Table</button>
-            </div>
-            
-            <div class="table-actions">
-                <button id="saveTableBtn" class="btn btn-primary" disabled>Save</button>
-                <button id="deleteTableBtn" class="btn btn-danger" disabled>Delete</button>
-            </div>
+      <!-- Table Management Controls -->
+      <div class="table-controls">
+        <div class="table-selector">
+          <select id="tableSelect">
+            <option value="">Select a table...</option>
+          </select>
+          <button id="loadTableBtn" class="btn btn-secondary">Load</button>
+          <button id="newTableBtn" class="btn btn-primary">New Table</button>
         </div>
+        
+        <div class="table-actions">
+          <button id="saveTableBtn" class="btn btn-primary" disabled>Save</button>
+          <button id="deleteTableBtn" class="btn btn-danger" disabled>Delete</button>
+        </div>
+      </div>
 
-        <!-- Current Table Info -->
-        <div id="currentTableInfo" class="current-table-info" style="display: none;">
-            <h3 id="currentTableName">Table Name</h3>
-            <p id="currentTableDescription">Table Description</p>
-        </div>
+      <!-- Current Table Info -->
+      <div id="currentTableInfo" class="current-table-info" style="display: none;">
+        <h3 id="currentTableName">Table Name</h3>
+        <p id="currentTableDescription">Table Description</p>
+      </div>
 
-        <!-- Planning Controls -->
-        <div class="planning-controls">
-            <div class="date-controls">
-                <input type="date" id="newDate" placeholder="Select date">
-                <button id="addDateBtn" class="btn btn-secondary">
-                    <span class="material-symbols-outlined">add</span>
-                    Add Date
-                </button>
-            </div>
-            
-            <div class="event-controls">
-                <button id="addEventBtn" class="btn btn-secondary">
-                    <span class="material-symbols-outlined">event</span>
-                    Add Event
-                </button>
-            </div>
+      <!-- Planning Controls -->
+      <div class="planning-controls">
+        <div class="date-controls">
+          <input type="date" id="newDate" placeholder="Select date">
+          <button id="addDateBtn" class="btn btn-secondary">
+            <span class="material-symbols-outlined">add</span>
+            Add Date
+          </button>
         </div>
+        
+        <div class="event-controls">
+          <button id="addEventBtn" class="btn btn-secondary">
+            <span class="material-symbols-outlined">event</span>
+            Add Event
+          </button>
+        </div>
+      </div>
 
-        <!-- Planning Table -->
-        <div class="table-container">
-            <div class="table-wrapper">
-                <table id="planningTable">
-                    <thead>
-                        <tr id="headerRow">
-                            <th class="date-header">Date</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tableBody">
-                        <tr class="empty-state">
-                            <td colspan="100%" class="empty-message">
-                                Add dates and events to start planning crew assignments
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+      <!-- Planning Table -->
+      <div class="table-container">
+        <div class="table-wrapper">
+          <table id="planningTable">
+            <thead>
+              <tr id="headerRow">
+                <th class="date-header">Date</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody">
+              <tr class="empty-state">
+                <td colspan="100%" class="empty-message">
+                  Add dates and events to start planning crew assignments
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
+      </div>
     </main>
 
     <!-- New Table Modal -->
     <div id="newTableModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Create New Crew Planning Table</h3>
-                <button class="close-btn" onclick="closeModal('newTableModal')">
-                    <span class="material-symbols-outlined">close</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label for="tableName">Table Name *</label>
-                    <input type="text" id="tableName" placeholder="Enter table name..." required>
-                </div>
-                <div class="form-group">
-                    <label for="tableDescription">Description</label>
-                    <textarea id="tableDescription" placeholder="Optional description..."></textarea>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('newTableModal')">Cancel</button>
-                <button class="btn btn-primary" onclick="createNewTable()">Create</button>
-            </div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Create New Crew Planning Table</h3>
+          <button class="close-btn" onclick="closeModal('newTableModal')">
+            <span class="material-symbols-outlined">close</span>
+          </button>
         </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="tableName">Table Name *</label>
+            <input type="text" id="tableName" placeholder="Enter table name..." required>
+          </div>
+          <div class="form-group">
+            <label for="tableDescription">Description</label>
+            <textarea id="tableDescription" placeholder="Optional description..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('newTableModal')">Cancel</button>
+          <button class="btn btn-primary" onclick="createNewTable()">Create</button>
+        </div>
+      </div>
     </div>
 
     <!-- Add Event Modal -->
     <div id="addEventModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3>Add New Event</h3>
-                <button class="close-btn" onclick="closeModal('addEventModal')">
-                    <span class="material-symbols-outlined">close</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div class="form-group">
-                    <label for="eventName">Event Name *</label>
-                    <input type="text" id="eventName" placeholder="Enter event name..." required>
-                </div>
-                <div class="form-group">
-                    <label for="eventLocation">Location</label>
-                    <input type="text" id="eventLocation" placeholder="Enter location...">
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('addEventModal')">Cancel</button>
-                <button class="btn btn-primary" onclick="addNewEvent()">Add Event</button>
-            </div>
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>Add New Event</h3>
+          <button class="close-btn" onclick="closeModal('addEventModal')">
+            <span class="material-symbols-outlined">close</span>
+          </button>
         </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label for="eventName">Event Name *</label>
+            <input type="text" id="eventName" placeholder="Enter event name..." required>
+          </div>
+          <div class="form-group">
+            <label for="eventLocation">Location</label>
+            <input type="text" id="eventLocation" placeholder="Enter location...">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-secondary" onclick="closeModal('addEventModal')">Cancel</button>
+          <button class="btn btn-primary" onclick="addNewEvent()">Add Event</button>
+        </div>
+      </div>
     </div>
 
     <!-- Collision Warning Toast -->
     <div id="collisionWarning" class="toast warning" style="display: none;">
-        <span class="material-symbols-outlined">warning</span>
-        <span id="collisionMessage">Warning: Crew member already assigned on this date</span>
-        <button onclick="hideCollisionWarning()">
-            <span class="material-symbols-outlined">close</span>
-        </button>
+      <span class="material-symbols-outlined">warning</span>
+      <span id="collisionMessage">Warning: Crew member already assigned on this date</span>
+      <button onclick="hideCollisionWarning()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
     </div>
 
     <script src="../js/crew-planner.js"></script>
     <script>
       // Initialize sidebar functionality
-      document.addEventListener('DOMContentLoaded', async function() {
+      document.addEventListener('DOMContentLoaded', function() {
         // Check admin access first - redirect non-admins
         const token = localStorage.getItem('token');
         if (!token) {
@@ -889,15 +950,17 @@
           return;
         }
         
-        // Inject the shared sidebar
-        const sidebarContainer = document.getElementById('sidebarContainer');
-        if (sidebarContainer && window.injectDashboardSidebar) {
-          await window.injectDashboardSidebar(sidebarContainer, { 
-            position: 'replace',
-            activePage: 'crew-planner'
-          });
-        } else if (window.initDashboardSidebar) {
+        if (window.initDashboardSidebar) {
           window.initDashboardSidebar();
+        }
+        
+        // Setup logout handler
+        const logoutBtn = document.getElementById('logoutMenuItem');
+        if (logoutBtn) {
+          logoutBtn.onclick = function() {
+            localStorage.clear();
+            window.location.href = '/index.html';
+          };
         }
       });
     </script>

@@ -7,12 +7,22 @@ if (!token && !window.location.pathname.endsWith('index.html')) {
 
 let currentTableId = null;
 let showArchived = false;
-let statusFilter = 'active'; // 'active', 'archived', or 'all'
+let statusFilter = localStorage.getItem('eventsStatusFilter') || 'active'; // 'active', 'archived', or 'all'
+let ownerFilter = localStorage.getItem('eventsOwnerFilter') || 'all'; // 'all', 'mine', or a specific owner ID
 let searchEventsValue = '';
 let dateFilterStart = null;
 let dateFilterEnd = null;
+let sortField = localStorage.getItem('eventsSortField') || 'date'; // 'name' or 'date'
+let sortOrder = localStorage.getItem('eventsSortOrder') || 'asc'; // 'asc' or 'desc'
+let allOwners = []; // Store unique owners for the dropdown
 let allUsers = [];
 let selectedUsers = [];
+let isInitialLoad = true; // Track if this is the first load to auto-switch to Live tab
+
+// Pagination state
+let currentPage = 1;
+const EVENTS_PER_PAGE = 50;
+let totalFilteredEvents = 0;
 
 function getUserIdFromToken() {
   const token = localStorage.getItem('token');
@@ -63,9 +73,9 @@ function showToast(message, type = 'info', duration = 4000) {
   `;
   
   container.appendChild(toast);
-  
+    
   // Auto remove after duration
-  setTimeout(() => {
+    setTimeout(() => {
     if (toast.parentElement) {
       toast.classList.add('toast-exit');
       setTimeout(() => toast.remove(), 300);
@@ -395,7 +405,7 @@ function getInitials(name) {
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 }
 
-function renderCrewAvatarsDark(crewMembers, totalCount) {
+function renderCrewAvatarsDark(crewMembers, totalCount, eventId = null) {
   const maxVisible = 4;
   const crewArray = Array.isArray(crewMembers) ? crewMembers : [];
   const hasOverflow = totalCount > maxVisible;
@@ -460,7 +470,7 @@ function renderCrewAvatarsDark(crewMembers, totalCount) {
           <div class="crew-expanded-list-wrapper ${totalCount > 5 ? 'has-scroll' : ''}">
             <div class="crew-expanded-list">${crewListItems}</div>
           </div>
-          <button class="crew-view-all-btn" onclick="event.stopPropagation(); window.navigate && window.navigate('crew-planner');">
+          <button class="crew-view-all-btn" onclick="event.stopPropagation(); ${eventId ? `window.navigate && window.navigate('crew', '${eventId}');` : `window.location.href = '/pages/crew-planner.html';`}">
             <span class="material-symbols-outlined">group</span>
             View Crew Page
           </button>
@@ -485,7 +495,6 @@ function renderCrewAvatarsDark(crewMembers, totalCount) {
 function renderEventRowDark(table, index, userId) {
   const general = table.general || {};
   const accentColor = rowAccentColors[index % rowAccentColors.length];
-  const status = getEventStatus(table);
   
   // Get unique crew member names from rows
   const rows = table.rows || [];
@@ -494,7 +503,18 @@ function renderEventRowDark(table, index, userId) {
   const crewCount = crewMembers.length;
   
   const dateStr = formatDateRangeDark(general.start, general.end);
-  const isOwner = Array.isArray(table.owners) && table.owners.includes(userId);
+  
+  // Check if current user is owner (handle both populated and unpopulated owners)
+  const isOwner = Array.isArray(table.owners) && table.owners.some(owner => 
+    (typeof owner === 'string' && owner === userId) || 
+    (owner && owner._id && owner._id.toString() === userId)
+  );
+  
+  // Get owner names for display
+  const ownerNames = table.ownerNames || [];
+  const ownerDisplay = ownerNames.length > 0 ? ownerNames[0] : '—';
+  const hasMultipleOwners = ownerNames.length > 1;
+  const ownerListHtml = ownerNames.map(name => `<div class="owner-dropdown-item">${name}</div>`).join('');
   
   const row = document.createElement('tr');
   row.className = 'event-row';
@@ -526,12 +546,14 @@ function renderEventRowDark(table, index, userId) {
     </td>
     <td>
       <div class="crew-avatars">
-        ${renderCrewAvatarsDark(crewMembers, crewCount)}
+        ${renderCrewAvatarsDark(crewMembers, crewCount, table._id)}
       </div>
     </td>
     <td>
-      <div class="event-status">
-        <span class="status-badge ${status.class}">${status.label}</span>
+      <div class="event-owner ${hasMultipleOwners ? 'has-dropdown' : ''}" onclick="${hasMultipleOwners ? 'event.stopPropagation(); toggleOwnerDropdown(this)' : ''}">
+        <span class="owner-name">${ownerDisplay}</span>
+        ${hasMultipleOwners ? `<span class="owner-more">+${ownerNames.length - 1}</span>` : ''}
+        ${hasMultipleOwners ? `<div class="owner-dropdown">${ownerListHtml}</div>` : ''}
       </div>
     </td>
     <td>
@@ -833,6 +855,26 @@ async function loadTables(forceRefresh = false) {
   }
   // 'all' shows everything
 
+  // Filter by owner selection
+  if (ownerFilter === 'mine') {
+    const userId = getUserIdFromToken();
+    filteredTables = filteredTables.filter(table => {
+      // Check if user is in owners array (handle both populated and unpopulated)
+      return Array.isArray(table.owners) && table.owners.some(owner => 
+        (typeof owner === 'string' && owner === userId) || 
+        (owner && owner._id && owner._id.toString() === userId)
+      );
+    });
+  } else if (ownerFilter !== 'all') {
+    // Filter by specific owner ID
+    filteredTables = filteredTables.filter(table => {
+      return Array.isArray(table.owners) && table.owners.some(owner => 
+        (typeof owner === 'string' && owner === ownerFilter) || 
+        (owner && owner._id && owner._id.toString() === ownerFilter)
+      );
+    });
+  }
+
   // Filter by search box
   if (searchEventsValue) {
     const q = searchEventsValue.toLowerCase();
@@ -875,23 +917,24 @@ async function loadTables(forceRefresh = false) {
     });
   }
 
-  const sortValue = document.getElementById('sortDropdown')?.value || 'newest';
+  // Sort based on column header clicks
   filteredTables.sort((a, b) => {
-    // Create UTC dates for consistent sorting regardless of timezone
-    const parseDateUTC = (dateStr) => {
-      if (!dateStr) return new Date(0);
-      const date = new Date(dateStr);
-      // Create a UTC date to prevent timezone issues
-      return date;
-    };
+    let comparison = 0;
     
-    const dateA = parseDateUTC(a.general?.start || a.createdAt || 0);
-    const dateB = parseDateUTC(b.general?.start || b.createdAt || 0);
+    if (sortField === 'name') {
+      comparison = (a.title || '').localeCompare(b.title || '');
+    } else if (sortField === 'date') {
+      const parseDateUTC = (dateStr) => {
+        if (!dateStr) return new Date(0);
+        return new Date(dateStr);
+      };
+      const dateA = parseDateUTC(a.general?.start || a.createdAt || 0);
+      const dateB = parseDateUTC(b.general?.start || b.createdAt || 0);
+      comparison = dateA - dateB;
+    }
     
-    if (sortValue === 'newest') return dateB - dateA;
-    if (sortValue === 'oldest') return dateA - dateB;
-    if (sortValue === 'title') return (a.title || '').localeCompare(b.title || '');
-    return 0;
+    // Apply sort order
+    return sortOrder === 'desc' ? -comparison : comparison;
   });
 
   // Check if using dark theme table layout
@@ -915,13 +958,73 @@ async function loadTables(forceRefresh = false) {
         });
       }
       
-      tabFilteredTables.forEach((table, index) => {
-        const row = renderEventRowDark(table, index, userId);
+      // Store total for pagination
+      totalFilteredEvents = tabFilteredTables.length;
+      const totalPages = Math.ceil(totalFilteredEvents / EVENTS_PER_PAGE);
+      
+      // Ensure current page is valid
+      if (currentPage > totalPages) currentPage = Math.max(1, totalPages);
+      
+      // Paginate the results
+      const startIndex = (currentPage - 1) * EVENTS_PER_PAGE;
+      const endIndex = startIndex + EVENTS_PER_PAGE;
+      const paginatedTables = tabFilteredTables.slice(startIndex, endIndex);
+      
+      // Populate owner dropdown with owners from currently visible events only
+      populateOwnerDropdown(paginatedTables);
+      
+      paginatedTables.forEach((table, index) => {
+        const row = renderEventRowDark(table, startIndex + index, userId);
         tableBody.appendChild(row);
       });
       
       if (eventsCount) {
-        eventsCount.textContent = `Showing ${tabFilteredTables.length} of ${filteredTables.length} events`;
+        const showingStart = totalFilteredEvents > 0 ? startIndex + 1 : 0;
+        const showingEnd = Math.min(endIndex, totalFilteredEvents);
+        eventsCount.textContent = `Showing ${showingStart}-${showingEnd} of ${totalFilteredEvents} events`;
+      }
+      
+      // Render pagination controls
+      renderPagination(totalPages);
+      
+      // On initial load, check if there are live events and switch to Live tab
+      if (isInitialLoad) {
+        isInitialLoad = false;
+        
+        // Count live events from the full filtered list (not tab-filtered)
+        const liveEvents = filteredTables.filter(table => {
+          const status = getEventStatus(table);
+          return status.class === 'live';
+        });
+        
+        console.log(`[Events] Initial load - Found ${liveEvents.length} live events`);
+        
+        // If there are live events, switch to the Live tab
+        if (liveEvents.length > 0) {
+          const liveTab = document.querySelector('.events-tab[data-filter="live"]');
+          if (liveTab && !liveTab.classList.contains('active')) {
+            console.log('[Events] Switching to Live tab (has live events)');
+            // Remove active from all tabs
+            document.querySelectorAll('.events-tab').forEach(t => t.classList.remove('active'));
+            // Activate live tab
+            liveTab.classList.add('active');
+            // Re-render with live filter (paginated)
+            currentPage = 1;
+            totalFilteredEvents = liveEvents.length;
+            const liveTotalPages = Math.ceil(totalFilteredEvents / EVENTS_PER_PAGE);
+            const livePaginated = liveEvents.slice(0, EVENTS_PER_PAGE);
+            tableBody.innerHTML = '';
+            livePaginated.forEach((table, index) => {
+              const row = renderEventRowDark(table, index, userId);
+              tableBody.appendChild(row);
+            });
+            if (eventsCount) {
+              const showingEnd = Math.min(EVENTS_PER_PAGE, liveEvents.length);
+              eventsCount.textContent = `Showing 1-${showingEnd} of ${liveEvents.length} events`;
+            }
+            renderPagination(liveTotalPages);
+          }
+        }
       }
     }
     
@@ -1048,20 +1151,6 @@ async function loadTables(forceRefresh = false) {
       });
       
       list.appendChild(allEventsSection);
-    }
-  }
-
-  renderCalendar(filteredTables);
-
-  // Ensure only the correct view is visible
-  const cal = document.getElementById('calendarViewContainer');
-  if (list && cal) {
-    if (cal.style.display === 'block') {
-      list.style.display = 'none';
-      cal.style.display = 'block';
-    } else {
-      list.style.display = 'flex';
-      cal.style.display = 'none';
     }
   }
 }
@@ -1252,219 +1341,7 @@ function renderEventCard(table, container, userId) {
   if (container) container.appendChild(card);
 }
 
-function renderCalendar(events) {
-  const container = document.getElementById('calendarViewContainer');
-  if (!container) return;
-  container.innerHTML = '';
-
-  // Get all event date ranges - fix timezone issues by parsing dates as UTC
-  const eventObjs = events.map(table => {
-    const general = table.general || {};
-    
-    // Parse dates as UTC to prevent timezone shifts
-    const parseUTCDate = (dateStr) => {
-      if (!dateStr) return null;
-      const date = new Date(dateStr);
-      // Create a new date using UTC components to prevent timezone shifts
-      return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
-    };
-    
-    return {
-      id: table._id,
-      title: table.title,
-      start: parseUTCDate(general.start),
-      end: parseUTCDate(general.end),
-      color: '#CC0007', // main accent
-    };
-  }).filter(e => e.start && e.end);
-
-  // Find min and max dates
-  let minDate = null, maxDate = null;
-  eventObjs.forEach(e => {
-    if (!minDate || e.start < minDate) minDate = e.start;
-    if (!maxDate || e.end > maxDate) maxDate = e.end;
-  });
-  if (!minDate || !maxDate) {
-    container.innerHTML = '<div style="text-align:center; color:#888;">No events to display in calendar.</div>';
-    return;
-  }
-
-  // Show current month by default
-  let currentMonth = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
-
-  function renderMonth(monthDate) {
-    container.innerHTML = '';
-    const year = monthDate.getFullYear();
-    const month = monthDate.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startWeekDay = firstDay.getDay();
-    const gap = 8; // matches grid gap in CSS
-
-    // Header
-    const header = document.createElement('div');
-    header.style.display = 'flex';
-    header.style.justifyContent = 'space-between';
-    header.style.alignItems = 'center';
-    header.style.marginBottom = '18px';
-    header.innerHTML = `
-      <button id="prevMonthBtn" style="background:none;border:none;color:#CC0007;font-size:22px;cursor:pointer;">&#8592;</button>
-      <span style="font-size:1.3em;font-weight:600;color:#CC0007;">${firstDay.toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
-      <button id="nextMonthBtn" style="background:none;border:none;color:#CC0007;font-size:22px;cursor:pointer;">&#8594;</button>
-    `;
-    container.appendChild(header);
-
-    // Days of week
-    const daysRow = document.createElement('div');
-    daysRow.style.display = 'grid';
-    daysRow.style.gridTemplateColumns = 'repeat(7, 1fr)';
-    daysRow.style.gap = '4px';
-    daysRow.style.marginBottom = '6px';
-    ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d => {
-      const el = document.createElement('div');
-      el.textContent = d;
-      el.style.textAlign = 'center';
-      el.style.fontWeight = 'bold';
-      el.style.color = '#a1a1a1';
-      daysRow.appendChild(el);
-    });
-    container.appendChild(daysRow);
-
-    // Calendar grid
-    const grid = document.createElement('div');
-    grid.style.display = 'grid';
-    grid.style.gridTemplateColumns = 'repeat(7, 1fr)';
-    grid.style.gap = '8px';
-    grid.style.background = 'linear-gradient(135deg, #fff 60%, #f8fafd 100%)';
-    grid.style.borderRadius = '18px';
-    grid.style.boxShadow = '0 8px 24px rgba(0,0,0,0.09)';
-    grid.style.padding = '18px';
-    grid.style.marginBottom = '18px';
-
-    // Fill blanks for first week
-    for (let i = 0; i < startWeekDay; i++) {
-      const blank = document.createElement('div');
-      grid.appendChild(blank);
-    }
-    // Fill days
-    const dayCells = [];
-    // For stacking: track max stack per week
-    const weekStacks = [];
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(year, month, day);
-      const cell = document.createElement('div');
-      cell.style.minHeight = '60px';
-      cell.style.borderRadius = '10px';
-      cell.style.background = '#fff';
-      cell.style.boxShadow = '0 2px 8px rgba(204,0,7,0.04)';
-      cell.style.padding = '4px 4px 2px 4px';
-      cell.style.position = 'relative';
-      cell.style.display = 'flex';
-      cell.style.flexDirection = 'column';
-      cell.style.alignItems = 'flex-start';
-      cell.style.justifyContent = 'flex-start';
-      cell.style.cursor = 'pointer';
-      cell.style.transition = 'background 0.15s, box-shadow 0.15s';
-      cell.classList.add('calendar-day');
-      // Day number
-      const dayNum = document.createElement('div');
-      dayNum.textContent = day;
-      dayNum.className = 'calendar-day-num';
-      cell.appendChild(dayNum);
-      grid.appendChild(cell);
-      dayCells.push(cell);
-      // For stacking: initialize weekStacks
-      const weekIdx = Math.floor((day + startWeekDay - 1) / 7);
-      if (!weekStacks[weekIdx]) weekStacks[weekIdx] = [];
-      weekStacks[weekIdx][(day + startWeekDay - 1) % 7] = [];
-    }
-    // Multi-day event rendering (after grid is built)
-    eventObjs.forEach(ev => {
-      // Find the first and last day in this month for the event
-      const eventStart = new Date(Math.max(ev.start, firstDay));
-      const eventEnd = new Date(Math.min(ev.end, lastDay));
-      if (eventStart > lastDay || eventEnd < firstDay) return;
-      // Calculate the start and end day index (0-based)
-      let startIdx = eventStart.getDate() - 1;
-      let endIdx = eventEnd.getDate() - 1;
-      // For each week the event spans, render a pill in the first day of that week
-      let idx = startIdx;
-      while (idx <= endIdx) {
-        // Find the week boundary
-        const weekDay = (idx + startWeekDay) % 7;
-        const weekIdx = Math.floor((idx + startWeekDay) / 7);
-        const daysLeftInWeek = 7 - weekDay;
-        const span = Math.min(endIdx - idx + 1, daysLeftInWeek);
-        // Find the max stack index for this week segment
-        let maxStack = 0;
-        for (let d = 0; d < span; d++) {
-          const cellStack = weekStacks[weekIdx][weekDay + d] || [];
-          if (cellStack.length > maxStack) maxStack = cellStack.length;
-        }
-        // Assign this event to the next available stack index for all spanned days
-        for (let d = 0; d < span; d++) {
-          if (!weekStacks[weekIdx][weekDay + d]) weekStacks[weekIdx][weekDay + d] = [];
-          weekStacks[weekIdx][weekDay + d][maxStack] = true;
-        }
-        // Render the pill at the correct stack index
-        const pill = document.createElement('div');
-        pill.textContent = ev.title;
-        pill.className = 'calendar-event-pill';
-        pill.title = ev.title;
-        pill.style.background = ev.color;
-        pill.style.color = '#fff';
-        pill.style.position = 'absolute';
-        pill.style.left = '0';
-        pill.style.top = `${28 + maxStack * 28}px`;
-        pill.style.height = '24px';
-        pill.style.display = 'flex';
-        pill.style.alignItems = 'center';
-        pill.style.fontSize = '0.95em';
-        pill.style.fontWeight = '600';
-        pill.style.cursor = 'pointer';
-        pill.style.boxShadow = '0 2px 8px rgba(204,0,7,0.08)';
-        pill.style.zIndex = '2';
-        pill.style.border = '2px solid #fff';
-        pill.style.opacity = '0.96';
-        pill.style.pointerEvents = 'auto';
-        pill.onclick = (e) => {
-          e.stopPropagation();
-          window.navigate('general', ev.id);
-        };
-        // Calculate width: span * 100% + (span-1)*gap, but subtract 8px for the last pill in a week or for the event
-        let pillWidth = `calc(${span * 100}% + ${(span - 1) * gap}px)`;
-        if (idx + span - 1 === endIdx || ((idx + span + startWeekDay - 1) % 7 === 6)) {
-          pillWidth = `calc(${span * 100}% + ${(span - 1) * gap}px - 8px)`;
-        }
-        pill.style.width = pillWidth;
-        pill.style.maxWidth = pillWidth;
-        pill.style.minWidth = pillWidth;
-        // Append pill to the first cell of the span
-        dayCells[idx].appendChild(pill);
-        // Adjust minHeight of all spanned cells to fit stacked pills
-        for (let d = 0; d < span; d++) {
-          const cell = dayCells[idx + d];
-          const minHeight = 60 + (maxStack * 28);
-          if (cell) cell.style.minHeight = `${minHeight}px`;
-        }
-        idx += span;
-      }
-    });
-    container.appendChild(grid);
-
-    // Navigation
-    document.getElementById('prevMonthBtn').onclick = () => {
-      currentMonth = new Date(year, month - 1, 1);
-      renderMonth(currentMonth);
-    };
-    document.getElementById('nextMonthBtn').onclick = () => {
-      currentMonth = new Date(year, month + 1, 1);
-      renderMonth(currentMonth);
-    };
-  }
-  renderMonth(currentMonth);
-}
+// Calendar view removed - using dedicated calendar page (/pages/event-calendar.html) instead
 
 async function openShareModal(tableId) {
   try {
@@ -2038,6 +1915,9 @@ function logout() {
 window.initPage = function(id) {
   console.log('initPage called for events');
   
+  // Reset initial load flag so we check for live events each time page loads
+  isInitialLoad = true;
+  
   // Check if dark theme is active and initialize accordingly
   if (isDarkThemeActive()) {
     initDarkTheme();
@@ -2228,31 +2108,6 @@ window.initPage = function(id) {
     toggleBtn.textContent = showArchived ? 'Show Active Events' : 'Archived Events';
   }
 
-  // Set up Calendar View button
-  const calendarBtn = document.getElementById('calendarViewBtn');
-  if (calendarBtn) {
-    calendarBtn.onclick = () => {
-      const list = document.getElementById('tableList');
-      const cal = document.getElementById('calendarViewContainer');
-      if (!list || !cal) return;
-      if (cal.style.display === 'none' || cal.style.display === '') {
-        list.style.display = 'none';
-        cal.style.display = 'block';
-        // Use the same filtered tables as in loadTables
-        fetch(`${API_BASE}/api/tables`, { headers: { Authorization: token } })
-          .then(r => r.json())
-          .then(tables => {
-            const showArchived = !!document.getElementById('toggleArchivedBtn')?.classList.contains('active');
-            const filteredTables = tables.filter(table => !!table.userArchived === showArchived);
-            renderCalendar(filteredTables);
-          });
-      } else {
-        cal.style.display = 'none';
-        list.style.display = 'flex';
-      }
-    };
-  }
-
   // Attach search box event listener (SPA-safe)
   const searchInput = document.getElementById('searchEventsInput');
   if (searchInput && !searchInput._listenerAttached) {
@@ -2267,9 +2122,23 @@ window.initPage = function(id) {
   loadTables();
 };
 
+// Calendar modal removed - using dedicated calendar page instead
+
 // Initialize dark theme specific features
-function initDarkTheme() {
+async function initDarkTheme() {
   console.log('Initializing dark theme for events page');
+  
+  // Inject the shared dashboard sidebar
+  const layoutContainer = document.getElementById('eventsPageLayout');
+  if (layoutContainer && typeof window.injectDashboardSidebar === 'function') {
+    await window.injectDashboardSidebar(layoutContainer, { 
+      position: 'prepend',
+      activePage: 'events'
+    });
+  } else if (typeof window.initDashboardSidebar === 'function') {
+    // Fallback: sidebar HTML already exists, just initialize
+    window.initDashboardSidebar();
+  }
   
   // Setup tab filtering
   const tabs = document.querySelectorAll('.events-tab');
@@ -2277,6 +2146,7 @@ function initDarkTheme() {
     tab.onclick = function() {
       tabs.forEach(t => t.classList.remove('active'));
       this.classList.add('active');
+      resetPagination(); // Reset to page 1 when switching tabs
       loadTables(); // Reload with new filter
     };
   });
@@ -2285,11 +2155,6 @@ function initDarkTheme() {
   const createBtn = document.getElementById('createEventBtn');
   if (createBtn) {
     createBtn.onclick = showCreateModal;
-  }
-  
-  // Use shared dashboard sidebar component for user dropdown
-  if (typeof window.initDashboardSidebar === 'function') {
-    window.initDashboardSidebar();
   }
   
   // Logout and dropdown close handlers are managed by sidebar-dashboard.js
@@ -2324,6 +2189,12 @@ function initDarkTheme() {
   
   // Setup status filter
   setupStatusFilter();
+  
+  // Setup owner filter dropdown
+  setupOwnerFilter();
+  
+  // Setup column header sorting
+  setupSorting();
 }
 
 // Date filter dropdown functionality
@@ -2553,6 +2424,28 @@ function setupStatusFilter() {
   const statusFilterDropdown = document.getElementById('statusFilterDropdown');
   const statusOptions = document.querySelectorAll('.status-option');
   
+  // Restore saved status filter state
+  const savedStatus = localStorage.getItem('eventsStatusFilter') || 'active';
+  statusFilter = savedStatus;
+  
+  // Update UI to match saved state
+  const label = document.getElementById('statusFilterLabel');
+  if (label) {
+    if (savedStatus === 'active') label.textContent = 'Active';
+    else if (savedStatus === 'archived') label.textContent = 'Archived';
+    else label.textContent = 'All';
+  }
+  
+  // Update active option
+  statusOptions.forEach(o => {
+    o.classList.toggle('active', o.dataset.status === savedStatus);
+  });
+  
+  // Highlight button if not default
+  if (statusFilterBtn) {
+    statusFilterBtn.classList.toggle('active', savedStatus !== 'active');
+  }
+  
   if (statusFilterBtn && statusFilterDropdown && !statusFilterBtn._listenerAttached) {
     statusFilterBtn.addEventListener('click', function(e) {
       e.stopPropagation();
@@ -2582,6 +2475,9 @@ function setupStatusFilter() {
         const newStatus = this.dataset.status;
         statusFilter = newStatus;
         
+        // Save to localStorage
+        localStorage.setItem('eventsStatusFilter', newStatus);
+        
         // Update active state
         statusOptions.forEach(o => o.classList.remove('active'));
         this.classList.add('active');
@@ -2603,13 +2499,254 @@ function setupStatusFilter() {
         // Close dropdown
         statusFilterDropdown.classList.remove('show');
         
-        // Reload tables
+        // Reset pagination and reload tables
+        resetPagination();
         loadTables(true);
       });
       option._listenerAttached = true;
     }
   });
 }
+
+// Owner filter functionality
+function setupOwnerFilter() {
+  const ownerFilterBtn = document.getElementById('ownerFilterBtn');
+  const ownerFilterDropdown = document.getElementById('ownerFilterDropdown');
+  const ownerFilterLabel = document.getElementById('ownerFilterLabel');
+  
+  if (!ownerFilterBtn || !ownerFilterDropdown) return;
+  
+  // Only show for admins
+  try {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.role === 'admin') {
+        ownerFilterBtn.style.display = '';
+      } else {
+        ownerFilterBtn.style.display = 'none';
+        ownerFilter = 'all'; // Reset to all for non-admins
+        return;
+      }
+    }
+  } catch (e) {
+    console.error('Error checking admin role for owner filter:', e);
+    return;
+  }
+  
+  // Restore saved state
+  ownerFilter = localStorage.getItem('eventsOwnerFilter') || 'all';
+  updateOwnerFilterLabel();
+  updateActiveOwnerOption();
+  
+  // Toggle dropdown on button click
+  if (!ownerFilterBtn._listenerAttached) {
+    ownerFilterBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const isVisible = ownerFilterDropdown.classList.contains('show');
+      
+      // Hide all other dropdowns
+      document.querySelectorAll('.action-dropdown').forEach(d => d.classList.remove('show'));
+      
+      if (!isVisible) {
+        ownerFilterDropdown.classList.add('show');
+        // Position dropdown below button
+        const rect = ownerFilterBtn.getBoundingClientRect();
+        ownerFilterDropdown.style.position = 'fixed';
+        ownerFilterDropdown.style.top = (rect.bottom + 8) + 'px';
+        ownerFilterDropdown.style.left = rect.left + 'px';
+      }
+    });
+    ownerFilterBtn._listenerAttached = true;
+  }
+  
+  // Handle static option clicks (All Owners, My Events)
+  const staticOptions = ownerFilterDropdown.querySelectorAll('.owner-option');
+  staticOptions.forEach(option => {
+    if (option._listenerAttached) return;
+    
+    option.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const value = this.dataset.owner;
+      
+      ownerFilter = value;
+      localStorage.setItem('eventsOwnerFilter', ownerFilter);
+      
+      updateOwnerFilterLabel();
+      updateActiveOwnerOption();
+      ownerFilterDropdown.classList.remove('show');
+      
+      resetPagination();
+      loadTables(true);
+    });
+    option._listenerAttached = true;
+  });
+  
+  // Close on outside click
+  document.addEventListener('click', function(e) {
+    if (!ownerFilterBtn.contains(e.target) && !ownerFilterDropdown.contains(e.target)) {
+      ownerFilterDropdown.classList.remove('show');
+    }
+  });
+  
+  function updateOwnerFilterLabel() {
+    if (!ownerFilterLabel) return;
+    if (ownerFilter === 'all') {
+      ownerFilterLabel.textContent = 'All Owners';
+    } else if (ownerFilter === 'mine') {
+      ownerFilterLabel.textContent = 'My Events';
+    } else {
+      // Find owner name from allOwners
+      const owner = allOwners.find(o => o.id === ownerFilter);
+      ownerFilterLabel.textContent = owner ? owner.name : 'Owner';
+    }
+  }
+  
+  function updateActiveOwnerOption() {
+    // Update active state on all options
+    ownerFilterDropdown.querySelectorAll('.owner-option, .dynamic-owner-option').forEach(opt => {
+      opt.classList.toggle('active', opt.dataset.owner === ownerFilter);
+    });
+  }
+}
+
+// Populate owner dropdown with unique owners from loaded events
+function populateOwnerDropdown(tables) {
+  const ownerOptionsList = document.getElementById('ownerOptionsList');
+  if (!ownerOptionsList) return;
+  
+  // Extract unique owners from all tables
+  const ownersMap = new Map();
+  
+  tables.forEach(table => {
+    if (Array.isArray(table.owners)) {
+      table.owners.forEach(owner => {
+        const id = typeof owner === 'string' ? owner : (owner._id || owner.id);
+        const name = owner.fullName || owner.name || owner.email || 'Unknown';
+        if (id && !ownersMap.has(id)) {
+          ownersMap.set(id, { id, name });
+        }
+      });
+    }
+    // Also check ownerNames if populated
+    if (Array.isArray(table.ownerNames) && Array.isArray(table.owners)) {
+      table.owners.forEach((ownerId, index) => {
+        const id = typeof ownerId === 'string' ? ownerId : (ownerId._id || ownerId.id);
+        const name = table.ownerNames[index] || 'Unknown';
+        if (id && !ownersMap.has(id)) {
+          ownersMap.set(id, { id, name });
+        }
+      });
+    }
+  });
+  
+  // Convert to array and sort by name
+  allOwners = Array.from(ownersMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  
+  // Clear existing dynamic options
+  ownerOptionsList.innerHTML = '';
+  
+  // Add owner options
+  allOwners.forEach(owner => {
+    const option = document.createElement('button');
+    option.className = 'action-item dynamic-owner-option';
+    option.dataset.owner = owner.id;
+    if (owner.id === ownerFilter) {
+      option.classList.add('active');
+    }
+    option.innerHTML = `
+      <span class="material-symbols-outlined">account_circle</span>
+      ${owner.name}
+    `;
+    
+    option.addEventListener('click', function(e) {
+      e.stopPropagation();
+      ownerFilter = owner.id;
+      localStorage.setItem('eventsOwnerFilter', ownerFilter);
+      
+      const ownerFilterLabel = document.getElementById('ownerFilterLabel');
+      if (ownerFilterLabel) ownerFilterLabel.textContent = owner.name;
+      
+      // Update active states
+      const ownerFilterDropdown = document.getElementById('ownerFilterDropdown');
+      if (ownerFilterDropdown) {
+        ownerFilterDropdown.querySelectorAll('.owner-option, .dynamic-owner-option').forEach(opt => {
+          opt.classList.toggle('active', opt.dataset.owner === ownerFilter);
+        });
+        ownerFilterDropdown.classList.remove('show');
+      }
+      
+      resetPagination();
+      loadTables(true);
+    });
+    
+    ownerOptionsList.appendChild(option);
+  });
+}
+
+window.setupOwnerFilter = setupOwnerFilter;
+window.populateOwnerDropdown = populateOwnerDropdown;
+
+// Column header sorting functionality
+function setupSorting() {
+  const sortableHeaders = document.querySelectorAll('.events-table th.sortable');
+  
+  sortableHeaders.forEach(header => {
+    if (header._sortListenerAttached) return;
+    
+    header.addEventListener('click', function() {
+      const field = this.dataset.sort;
+      
+      // Toggle order if same field, otherwise default to ascending
+      if (sortField === field) {
+        sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortField = field;
+        sortOrder = 'asc';
+      }
+      
+      // Save to localStorage
+      localStorage.setItem('eventsSortField', sortField);
+      localStorage.setItem('eventsSortOrder', sortOrder);
+      
+      // Update sort icons
+      updateSortIcons();
+      
+      // Reload tables with new sort
+      loadTables(true);
+    });
+    
+    header._sortListenerAttached = true;
+  });
+  
+  // Initialize sort icons on page load
+  updateSortIcons();
+}
+
+function updateSortIcons() {
+  const sortableHeaders = document.querySelectorAll('.events-table th.sortable');
+  
+  sortableHeaders.forEach(header => {
+    const field = header.dataset.sort;
+    const icon = header.querySelector('.sort-icon');
+    
+    if (!icon) return;
+    
+    // Reset all headers
+    header.classList.remove('sorted-asc', 'sorted-desc');
+    
+    if (field === sortField) {
+      // Active sort column
+      header.classList.add(sortOrder === 'asc' ? 'sorted-asc' : 'sorted-desc');
+      icon.textContent = sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward';
+    } else {
+      // Inactive - show default expand_more
+      icon.textContent = 'expand_more';
+    }
+  });
+}
+
+window.setupSorting = setupSorting;
 
 window.setupStatusFilter = setupStatusFilter;
 window.setupDateFilters = setupDateFilters;
@@ -2621,13 +2758,144 @@ window.closeModal = closeModal;
 window.submitCreate = submitCreate;
 window.hideCreateModal = hideCreateModal;
 
+// Toggle owner dropdown
+function toggleOwnerDropdown(element) {
+  // Close any other open dropdowns
+  document.querySelectorAll('.event-owner.show-dropdown').forEach(el => {
+    if (el !== element) el.classList.remove('show-dropdown');
+  });
+  
+  // Toggle this dropdown
+  element.classList.toggle('show-dropdown');
+}
+
+// Close owner dropdowns when clicking outside
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.event-owner')) {
+    document.querySelectorAll('.event-owner.show-dropdown').forEach(el => {
+      el.classList.remove('show-dropdown');
+    });
+  }
+});
+
+window.toggleOwnerDropdown = toggleOwnerDropdown;
+
+// Pagination functions
+function renderPagination(totalPages) {
+  // Find or create pagination container
+  let paginationContainer = document.getElementById('eventsPagination');
+  
+  if (!paginationContainer) {
+    // Create pagination container if it doesn't exist
+    const eventsFooter = document.querySelector('.events-footer');
+    if (eventsFooter) {
+      paginationContainer = document.createElement('div');
+      paginationContainer.id = 'eventsPagination';
+      paginationContainer.className = 'events-pagination';
+      eventsFooter.appendChild(paginationContainer);
+    } else {
+      return; // No footer to attach to
+    }
+  }
+  
+  // Don't show pagination if only 1 page
+  if (totalPages <= 1) {
+    paginationContainer.innerHTML = '';
+    paginationContainer.style.display = 'none';
+    return;
+  }
+  
+  paginationContainer.style.display = 'flex';
+  
+  // Build pagination HTML
+  let html = '';
+  
+  // Previous button
+  html += `<button class="pagination-btn pagination-prev ${currentPage === 1 ? 'disabled' : ''}" ${currentPage === 1 ? 'disabled' : ''} onclick="goToPage(${currentPage - 1})">
+    <span class="material-symbols-outlined">chevron_left</span>
+  </button>`;
+  
+  // Page numbers
+  html += '<div class="pagination-pages">';
+  
+  // Determine which pages to show
+  const maxVisiblePages = 5;
+  let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+  let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+  
+  // Adjust start if we're near the end
+  if (endPage - startPage < maxVisiblePages - 1) {
+    startPage = Math.max(1, endPage - maxVisiblePages + 1);
+  }
+  
+  // First page + ellipsis
+  if (startPage > 1) {
+    html += `<button class="pagination-btn pagination-page" onclick="goToPage(1)">1</button>`;
+    if (startPage > 2) {
+      html += `<span class="pagination-ellipsis">...</span>`;
+    }
+  }
+  
+  // Page numbers
+  for (let i = startPage; i <= endPage; i++) {
+    html += `<button class="pagination-btn pagination-page ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+  }
+  
+  // Last page + ellipsis
+  if (endPage < totalPages) {
+    if (endPage < totalPages - 1) {
+      html += `<span class="pagination-ellipsis">...</span>`;
+    }
+    html += `<button class="pagination-btn pagination-page" onclick="goToPage(${totalPages})">${totalPages}</button>`;
+  }
+  
+  html += '</div>';
+  
+  // Next button
+  html += `<button class="pagination-btn pagination-next ${currentPage === totalPages ? 'disabled' : ''}" ${currentPage === totalPages ? 'disabled' : ''} onclick="goToPage(${currentPage + 1})">
+    <span class="material-symbols-outlined">chevron_right</span>
+  </button>`;
+  
+  paginationContainer.innerHTML = html;
+}
+
+function goToPage(page) {
+  const totalPages = Math.ceil(totalFilteredEvents / EVENTS_PER_PAGE);
+  if (page < 1 || page > totalPages) return;
+  
+  currentPage = page;
+  loadTables(true);
+  
+  // Scroll to top of table
+  const tableWrapper = document.querySelector('.events-table-wrapper');
+  if (tableWrapper) {
+    tableWrapper.scrollTop = 0;
+  }
+}
+
+// Reset page when filters change
+function resetPagination() {
+  currentPage = 1;
+}
+
+window.goToPage = goToPage;
+window.renderPagination = renderPagination;
+window.resetPagination = resetPagination;
+
 // Exposing the loadTables function to the global scope for Socket.IO updates
 window.loadTables = loadTables;
 
 // Setup Socket.IO event listeners for real-time updates
-function setupSocketListeners() {
+function setupSocketListeners(retryCount = 0) {
+  const maxRetries = 10;
+  
   if (!window.socket) {
-    console.warn('Socket.IO not available, real-time updates disabled');
+    if (retryCount < maxRetries) {
+      // Retry after a short delay - Socket.IO may still be loading
+      setTimeout(() => setupSocketListeners(retryCount + 1), 200);
+      return;
+    }
+    console.warn('Socket.IO not available after retries, real-time updates disabled');
     return;
   }
   

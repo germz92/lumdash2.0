@@ -5,6 +5,8 @@ html {
   box-sizing: inherit;
 }
 
+/* Material Symbols visibility is now handled in theme-dark.css */
+
 :root {
   /* Material Design Text Colors (on light surfaces) */
   --md-sys-color-on-surface: rgba(0, 0, 0, 0.87); /* High emphasis */

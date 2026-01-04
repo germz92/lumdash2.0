@@ -1448,7 +1448,11 @@ async function loadShotlistSidebarUser() {
     const userId = localStorage.getItem('userId');
     if (userId && avatarImg && avatarIcon) {
       try {
-        const res = await fetch(`${API_BASE}/api/users/${userId}`);
+        const res = await fetch(`${API_BASE}/api/users/${userId}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
         if (res.ok) {
           const userData = await res.json();
           if (userData.profilePicture) {

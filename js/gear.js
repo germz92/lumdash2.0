@@ -497,8 +497,9 @@ async function loadGear() {
     console.log("Check out date from API:", dates.checkOutDate);
     console.log("Check in date from API:", dates.checkInDate);
 
-    const checkoutDateEl = document.getElementById('checkoutDate');
-    const checkinDateEl = document.getElementById('checkinDate');
+    // Support both naming conventions (gear.js vs gear.html)
+    const checkoutDateEl = document.getElementById('checkoutDate') || document.getElementById('checkOutDate');
+    const checkinDateEl = document.getElementById('checkinDate') || document.getElementById('checkInDate');
     
     if (checkoutDateEl && dates.checkOutDate) {
       checkoutDateEl.value = dates.checkOutDate;
@@ -582,7 +583,12 @@ function getUserIdFromToken() {
 }
 
 function populateGearListDropdown() {
-  const select = document.getElementById("gearListSelect");
+  // Try both possible element IDs (gear.js vs gear.html inline)
+  const select = document.getElementById("gearListSelect") || document.getElementById("listSelect");
+  if (!select) {
+    console.warn('[gear.js] Gear list dropdown element not found');
+    return;
+  }
   select.innerHTML = '';
 
   // Add list options
@@ -2862,13 +2868,20 @@ window.addEventListener("DOMContentLoaded", async () => {
 
       loadGearInventory();
 
-      // Set up event listeners
-      document.getElementById('gearContainer').addEventListener('input', triggerAutosave);
-      document.getElementById('gearContainer').addEventListener('change', triggerAutosave);
-      document.getElementById("filterCheckbox").addEventListener("change", e => {
-        filterSetting = e.target.value;
-        renderGear();
-      });
+      // Set up event listeners (with null checks for SPA compatibility)
+      const gearContainer = document.getElementById('gearContainer');
+      if (gearContainer) {
+        gearContainer.addEventListener('input', triggerAutosave);
+        gearContainer.addEventListener('change', triggerAutosave);
+      }
+      
+      const filterCheckbox = document.getElementById("filterCheckbox");
+      if (filterCheckbox) {
+        filterCheckbox.addEventListener("change", e => {
+          filterSetting = e.target.value;
+          renderGear();
+        });
+      }
       // document.getElementById('checkoutDate').addEventListener('change', triggerAutosave);
       // document.getElementById('checkinDate').addEventListener('change', triggerAutosave);
     } catch (err) {

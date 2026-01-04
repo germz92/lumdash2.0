@@ -1,0 +1,71 @@
+<!-- Dashboard Sidebar Partial - Shared across dashboard pages -->
+<!-- Used by: events, users, inventory-management, crew-planner, crew-calendar, event-calendar -->
+
+<aside class="dashboard-sidebar" id="dashboardSidebar">
+  <div class="sidebar-header">
+    <div class="sidebar-logo">
+      <img src="assets/Logo - Dark BG.png" alt="Lumetry Media" class="sidebar-logo-img">
+    </div>
+  </div>
+  
+  <nav class="sidebar-nav">
+    <!-- SPA Pages (use hash navigation) -->
+    <a href="/dashboard.html#events" class="nav-item" data-sidebar-page="events" data-spa="true">
+      <span class="material-symbols-outlined">dashboard</span>
+      <span>Dashboard</span>
+    </a>
+    <a href="/dashboard.html#users" class="nav-item admin-only-nav" data-sidebar-page="users" data-spa="true" style="display: none;">
+      <span class="material-symbols-outlined">admin_panel_settings</span>
+      <span>Admin Console</span>
+    </a>
+    
+    <!-- Standalone Pages (use external navigation) -->
+    <a href="/pages/event-calendar.html" class="nav-item" data-sidebar-page="event-calendar">
+      <span class="material-symbols-outlined">calendar_month</span>
+      <span>Event Calendar</span>
+    </a>
+    <a href="/inventory-management.html" class="nav-item admin-only-nav" data-sidebar-page="inventory-management" style="display: none;">
+      <span class="material-symbols-outlined">inventory_2</span>
+      <span>Inventory</span>
+    </a>
+    <a href="/pages/crew-planner.html" class="nav-item admin-only-nav" data-sidebar-page="crew-planner" style="display: none;">
+      <span class="material-symbols-outlined">groups</span>
+      <span>Crew Planner</span>
+    </a>
+    <a href="/pages/crew-calendar.html" class="nav-item admin-only-nav" data-sidebar-page="crew-calendar" style="display: none;">
+      <span class="material-symbols-outlined">event_note</span>
+      <span>Crew Calendar</span>
+    </a>
+  </nav>
+  
+  <div class="sidebar-user" id="sidebarUserContainer">
+    <div class="sidebar-user-avatar" id="sidebarUserAvatar">
+      <img src="" alt="User" id="sidebarAvatarImg" style="display: none;">
+      <span class="material-symbols-outlined" id="sidebarAvatarIcon">person</span>
+    </div>
+    <div class="sidebar-user-info">
+      <div class="sidebar-user-name" id="sidebarUserName">Loading...</div>
+      <div class="sidebar-user-role" id="sidebarUserRole">User</div>
+    </div>
+    <span class="material-symbols-outlined" style="color: var(--text-tertiary); font-size: 18px;">expand_more</span>
+  </div>
+</aside>
+
+<!-- User Dropdown Menu -->
+<div class="user-menu-dropdown action-dropdown" id="userMenuDropdown">
+  <button class="user-menu-item" id="profileMenuItem">
+    <span class="material-symbols-outlined">person</span>
+    <span>Profile</span>
+  </button>
+  <button class="user-menu-item" id="settingsMenuItem">
+    <span class="material-symbols-outlined">settings</span>
+    <span>Settings</span>
+  </button>
+  <button class="user-menu-item danger" id="logoutMenuItem">
+    <span class="material-symbols-outlined">logout</span>
+    <span>Logout</span>
+  </button>
+</div>
+
+<!-- Mobile Overlay -->
+<div class="sidebar-overlay" id="dashboardSidebarOverlay"></div>

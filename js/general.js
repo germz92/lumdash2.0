@@ -2510,7 +2510,9 @@ function closeQRCodeModal() {
 
 function initPage(id) {
   // Safeguard: Only run on the general page
-  const currentPage = location.hash.replace('#', '') || 'events';
+  // Parse the page name from hash, handling #page?id=xxx format
+  const hash = location.hash.replace('#', '') || 'events';
+  const currentPage = hash.split('?')[0];
   if (currentPage !== 'general') {
     console.log(`general.js initPage called on wrong page: ${currentPage}, skipping execution`);
     return;

@@ -36,87 +36,21 @@
         min-height: 100vh;
       }
 
-      /* Page Header - Dashboard Style */
       .crew-calendar-dark .page-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 20px 24px;
-        background: #111111;
-        border-bottom: 1px solid var(--border-subtle);
-        margin: -32px -32px 24px -32px;
-        flex-wrap: wrap;
-        gap: 16px;
-      }
-
-      .crew-calendar-dark .page-header-left {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
+        margin-bottom: 32px;
       }
 
       .crew-calendar-dark .page-header h1 {
-        font-size: var(--font-size-lg);
-        font-weight: var(--font-weight-semibold);
+        font-size: var(--font-size-2xl);
+        font-weight: var(--font-weight-bold);
         color: var(--text-primary);
-        margin: 0;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-
-      .crew-calendar-dark .page-header h1 .material-symbols-outlined {
-        font-size: 22px;
-        color: var(--brand-red);
+        margin: 0 0 8px 0;
       }
 
       .crew-calendar-dark .page-header p {
-        color: var(--text-tertiary);
-        font-size: var(--font-size-sm);
+        color: var(--text-secondary);
+        font-size: var(--font-size-base);
         margin: 0;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-      }
-
-      .crew-calendar-dark .page-header-right {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-
-      .crew-calendar-dark .header-search {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        background: var(--bg-tertiary);
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-md);
-        padding: 8px 12px;
-        min-width: 200px;
-        transition: var(--transition-base);
-      }
-
-      .crew-calendar-dark .header-search:focus-within {
-        border-color: var(--brand-red);
-        box-shadow: 0 0 0 3px var(--brand-red-muted);
-      }
-
-      .crew-calendar-dark .header-search .material-symbols-outlined {
-        color: var(--text-tertiary);
-        font-size: 20px;
-      }
-
-      .crew-calendar-dark .header-search input {
-        background: transparent;
-        border: none;
-        color: var(--text-primary);
-        font-size: var(--font-size-sm);
-        width: 100%;
-        outline: none;
-      }
-
-      .crew-calendar-dark .header-search input::placeholder {
-        color: var(--text-tertiary);
       }
 
       /* Calendar Controls */
@@ -141,9 +75,9 @@
       }
 
       .crew-calendar-dark .btn-nav {
-        background: var(--bg-tertiary);
-        color: var(--text-primary);
-        border: 1px solid var(--border-default);
+        background: var(--brand-red);
+        color: white;
+        border: none;
         border-radius: var(--radius-md);
         padding: 10px 20px;
         font-size: var(--font-size-base);
@@ -156,8 +90,8 @@
       }
 
       .crew-calendar-dark .btn-nav:hover {
-        background: var(--bg-elevated);
-        border-color: var(--border-strong);
+        background: var(--brand-red-hover);
+        box-shadow: var(--shadow-glow-red);
         transform: translateY(-1px);
       }
 
@@ -180,9 +114,9 @@
       }
 
       .crew-calendar-dark .btn-today {
-        background: var(--bg-tertiary);
-        color: var(--text-primary);
-        border: 1px solid var(--border-default);
+        background: transparent;
+        color: var(--brand-red);
+        border: 2px solid var(--brand-red);
         border-radius: var(--radius-md);
         padding: 10px 18px;
         font-size: var(--font-size-base);
@@ -195,8 +129,8 @@
       }
 
       .crew-calendar-dark .btn-today:hover {
-        background: var(--bg-elevated);
-        border-color: var(--border-strong);
+        background: var(--brand-red);
+        color: white;
       }
 
       .crew-calendar-dark .week-picker {
@@ -506,47 +440,82 @@
           grid-template-columns: 1fr;
         }
 
-        .crew-calendar-dark .page-header {
-          padding: 16px 20px;
-          margin: -20px -20px 20px -20px;
-          flex-direction: column;
-          align-items: stretch;
-        }
-
         .crew-calendar-dark .page-header h1 {
-          font-size: var(--font-size-base);
-        }
-
-        .crew-calendar-dark .page-header h1 .material-symbols-outlined {
-          font-size: 20px;
-        }
-
-        .crew-calendar-dark .header-search {
-          min-width: 100%;
+          font-size: var(--font-size-xl);
         }
       }
     </style>
 </head>
 <body class="crew-calendar-dark">
-    <!-- Sidebar Container - will be populated by sidebar-dashboard.js -->
-    <div id="sidebarContainer"></div>
+    <!-- Sidebar -->
+    <aside class="dashboard-sidebar" id="dashboardSidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">
+          <img src="../assets/Logo - Dark BG.png" alt="Lumetry Media" class="sidebar-logo-img">
+        </div>
+      </div>
+      
+      <nav class="sidebar-nav">
+        <a href="/dashboard.html#events" class="nav-item nav-external">
+          <span class="material-symbols-outlined">dashboard</span>
+          <span>Dashboard</span>
+        </a>
+        <a href="/pages/event-calendar.html" class="nav-item nav-external">
+          <span class="material-symbols-outlined">calendar_month</span>
+          <span>Event Calendar</span>
+        </a>
+        <a href="/pages/users.html" class="nav-item nav-external admin-only-nav" id="adminNavItem" style="display: none;">
+          <span class="material-symbols-outlined">admin_panel_settings</span>
+          <span>Admin Console</span>
+        </a>
+        <a href="/inventory-management.html" class="nav-item nav-external">
+          <span class="material-symbols-outlined">inventory_2</span>
+          <span>Inventory</span>
+        </a>
+        <a href="/pages/crew-planner.html" class="nav-item nav-external">
+          <span class="material-symbols-outlined">groups</span>
+          <span>Crew Planner</span>
+        </a>
+        <a href="#" class="nav-item active" onclick="event.preventDefault();">
+          <span class="material-symbols-outlined">calendar_month</span>
+          <span>Crew Calendar</span>
+        </a>
+      </nav>
+      
+      <div class="sidebar-user" id="sidebarUserContainer">
+        <div class="sidebar-user-avatar" id="sidebarUserAvatar">
+          <img src="" alt="User" id="sidebarAvatarImg" style="display: none;">
+          <span class="material-symbols-outlined" id="sidebarAvatarIcon">person</span>
+        </div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name" id="sidebarUserName">Loading...</div>
+          <div class="sidebar-user-role" id="sidebarUserRole">User</div>
+        </div>
+        <span class="material-symbols-outlined" style="color: var(--text-tertiary); font-size: 18px;">expand_more</span>
+      </div>
+    </aside>
+
+    <!-- User Dropdown Menu -->
+    <div class="user-menu-dropdown" id="userMenuDropdown">
+      <button class="user-menu-item" id="profileMenuItem">
+        <span class="material-symbols-outlined">person</span>
+        <span>Profile</span>
+      </button>
+      <button class="user-menu-item" id="settingsMenuItem">
+        <span class="material-symbols-outlined">settings</span>
+        <span>Settings</span>
+      </button>
+      <button class="user-menu-item danger" id="logoutMenuItem">
+        <span class="material-symbols-outlined">logout</span>
+        <span>Logout</span>
+      </button>
+    </div>
 
     <!-- Main Content -->
     <main class="main-content">
       <div class="page-header">
-        <div class="page-header-left">
-          <h1>
-            <span class="material-symbols-outlined">calendar_month</span>
-            Crew Calendar
-          </h1>
-          <p>Weekly crew assignments</p>
-        </div>
-        <div class="page-header-right">
-          <div class="header-search">
-            <span class="material-symbols-outlined">search</span>
-            <input type="text" id="searchCrewInput" placeholder="Search crew...">
-          </div>
-        </div>
+        <h1>Crew Calendar</h1>
+        <p>Weekly view of crew assignments across all events</p>
       </div>
 
       <!-- Navigation Controls -->
@@ -597,7 +566,7 @@
     <script src="../js/crew-calendar.js"></script>
     <script>
       // Initialize sidebar functionality
-      document.addEventListener('DOMContentLoaded', async function() {
+      document.addEventListener('DOMContentLoaded', function() {
         // Check admin access first - redirect non-admins
         const token = localStorage.getItem('token');
         if (!token) {
@@ -618,15 +587,17 @@
           return;
         }
         
-        // Inject the shared sidebar
-        const sidebarContainer = document.getElementById('sidebarContainer');
-        if (sidebarContainer && window.injectDashboardSidebar) {
-          await window.injectDashboardSidebar(sidebarContainer, { 
-            position: 'replace',
-            activePage: 'crew-calendar'
-          });
-        } else if (window.initDashboardSidebar) {
+        if (window.initDashboardSidebar) {
           window.initDashboardSidebar();
+        }
+        
+        // Setup logout handler
+        const logoutBtn = document.getElementById('logoutMenuItem');
+        if (logoutBtn) {
+          logoutBtn.onclick = function() {
+            localStorage.clear();
+            window.location.href = '/index.html';
+          };
         }
       });
     </script>

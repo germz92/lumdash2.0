@@ -1,70 +1,10 @@
 <!-- Dark Theme Events/Dashboard Page -->
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
 <link rel="stylesheet" href="css/theme-dark.css">
 
 <div class="dark-theme events-page">
-  <div class="dashboard-layout">
+  <div class="dashboard-layout" id="eventsPageLayout">
     
-    <!-- Sidebar Navigation -->
-    <aside class="dashboard-sidebar" id="dashboardSidebar">
-      <div class="sidebar-header">
-        <div class="sidebar-logo">
-          <img src="assets/Logo - Dark BG.png" alt="Lumetry Media" class="sidebar-logo-img">
-        </div>
-      </div>
-      
-      <nav class="sidebar-nav">
-        <a href="#" class="nav-item active" data-page="events" onclick="event.preventDefault(); window.navigate && window.navigate('events');">
-          <span class="material-symbols-outlined">dashboard</span>
-          <span>Dashboard</span>
-        </a>
-        <a href="#" class="nav-item admin-only-nav" id="adminNavItem" data-page="users" style="display: none;" onclick="event.preventDefault(); window.navigate && window.navigate('users');">
-          <span class="material-symbols-outlined">admin_panel_settings</span>
-          <span>Admin Console</span>
-        </a>
-        <a href="/inventory-management.html" class="nav-item nav-external admin-only-nav" id="inventoryNavItem" style="display: none;">
-          <span class="material-symbols-outlined">inventory_2</span>
-          <span>Inventory</span>
-        </a>
-        <a href="/pages/crew-planner.html" class="nav-item nav-external admin-only-nav" id="crewPlannerNavItem" style="display: none;">
-          <span class="material-symbols-outlined">groups</span>
-          <span>Crew Planner</span>
-        </a>
-        <a href="/pages/crew-calendar.html" class="nav-item nav-external admin-only-nav" id="crewCalendarNavItem" style="display: none;">
-          <span class="material-symbols-outlined">calendar_month</span>
-          <span>Crew Calendar</span>
-        </a>
-      </nav>
-      
-      <div class="sidebar-user" id="sidebarUserContainer">
-        <div class="sidebar-user-avatar" id="sidebarUserAvatar">
-          <img src="" alt="User" id="sidebarAvatarImg" style="display: none;">
-          <span class="material-symbols-outlined" id="sidebarAvatarIcon">person</span>
-        </div>
-        <div class="sidebar-user-info">
-          <div class="sidebar-user-name" id="sidebarUserName">Loading...</div>
-          <div class="sidebar-user-role" id="sidebarUserRole">User</div>
-        </div>
-        <span class="material-symbols-outlined" style="color: var(--text-tertiary); font-size: 18px;">expand_more</span>
-      </div>
-    </aside>
-    
-    <!-- User Dropdown Menu -->
-    <div class="user-menu-dropdown action-dropdown" id="userMenuDropdown">
-      <button class="user-menu-item" id="profileMenuItem">
-        <span class="material-symbols-outlined">person</span>
-        <span>Profile</span>
-      </button>
-      <button class="user-menu-item" id="settingsMenuItem">
-        <span class="material-symbols-outlined">settings</span>
-        <span>Settings</span>
-      </button>
-      <button class="user-menu-item danger" id="logoutMenuItem">
-        <span class="material-symbols-outlined">logout</span>
-        <span>Logout</span>
-      </button>
-    </div>
+    <!-- Sidebar will be injected here by sidebar-dashboard.js -->
     
     <!-- Main Content -->
     <main class="dashboard-main">
@@ -122,6 +62,13 @@
                 <span class="material-symbols-outlined">expand_more</span>
               </button>
               
+              <button class="filter-btn admin-only-nav" id="ownerFilterBtn" style="display: none;">
+                <span class="material-symbols-outlined">person</span>
+                <span id="ownerFilterLabel">All Owners</span>
+                <span class="material-symbols-outlined">expand_more</span>
+              </button>
+              
+              
               <button class="btn-create-event" id="createEventBtn">
                 CREATE EVENT
               </button>
@@ -133,9 +80,6 @@
             <div class="search-input-wrapper">
               <span class="material-symbols-outlined">search</span>
               <input type="text" placeholder="Search events..." id="searchEventsInput">
-              <button class="search-options-btn">
-                <span class="material-symbols-outlined">more_vert</span>
-              </button>
             </div>
             
             <div class="search-actions">
@@ -160,12 +104,8 @@
                   <th class="sortable" data-sort="date">
                     Date <span class="material-symbols-outlined sort-icon">expand_more</span>
                   </th>
-                  <th class="sortable" data-sort="crew">
-                    Crew <span class="material-symbols-outlined sort-icon">expand_more</span>
-                  </th>
-                  <th class="sortable" data-sort="status">
-                    Status <span class="material-symbols-outlined sort-icon">expand_more</span>
-                  </th>
+                  <th>Crew</th>
+                  <th>Owner</th>
                   <th></th>
                 </tr>
               </thead>
@@ -255,6 +195,22 @@
   </div>
 </div>
 
+<!-- Owner Filter Dropdown -->
+<div class="action-dropdown owner-filter-dropdown" id="ownerFilterDropdown">
+  <button class="action-item owner-option active" data-owner="all">
+    <span class="material-symbols-outlined">groups</span>
+    All Owners
+  </button>
+  <button class="action-item owner-option" data-owner="mine">
+    <span class="material-symbols-outlined">person</span>
+    My Events
+  </button>
+  <div class="dropdown-divider"></div>
+  <div id="ownerOptionsList">
+    <!-- Dynamic owner options will be inserted here -->
+  </div>
+</div>
+
 <!-- Create/Edit Event Modal -->
 <div id="createModal" class="dark-modal">
   <div class="dark-modal-content">
@@ -324,7 +280,7 @@
         <div id="ownerList" class="share-list">
           <ul></ul>
         </div>
-      </div>
+    </div>
 
       <!-- Leads Section -->
       <div class="share-section" id="leadSection">
@@ -338,7 +294,7 @@
         <div id="leadList" class="share-list">
           <ul></ul>
         </div>
-      </div>
+    </div>
 
       <!-- Shared With Section -->
       <div class="share-section" id="sharedSection">
@@ -354,7 +310,7 @@
         </div>
       </div>
     </div>
-    
+
     <!-- Add People Section - Outside modal body for dropdown overflow -->
     <div class="share-add-section">
       <div class="form-group-dark">
@@ -366,14 +322,14 @@
           <input id="shareEmail" type="text" placeholder="Search by name or email..." autocomplete="off">
           <div id="userSuggestions" class="suggestions-dropdown"></div>
         </div>
-      </div>
-      
-      <!-- Selected Users Display -->
+    </div>
+    
+    <!-- Selected Users Display -->
       <div id="selectedUsersContainer">
         <div id="selectedUsersList" class="selected-users"></div>
       </div>
     </div>
-    
+
     <div class="modal-footer-dark">
       <button class="btn-secondary" onclick="closeModal()">Cancel</button>
       <button class="btn-primary" onclick="submitShare()">
@@ -383,9 +339,6 @@
     </div>
   </div>
 </div>
-
-<!-- Calendar View Container -->
-<div id="calendarViewContainer" style="display: none;"></div>
 
 <!-- Toast Notification Container -->
 <div id="toastContainer" class="toast-container"></div>
@@ -431,13 +384,13 @@ function initializeDarkTheme() {
   const tabs = document.querySelectorAll('.events-tab');
   tabs.forEach(tab => {
     if (!tab._listenerAttached) {
-      tab.addEventListener('click', function() {
-        tabs.forEach(t => t.classList.remove('active'));
-        this.classList.add('active');
-        filterEvents(this.dataset.filter);
-      });
+    tab.addEventListener('click', function() {
+      tabs.forEach(t => t.classList.remove('active'));
+      this.classList.add('active');
+      filterEvents(this.dataset.filter);
+    });
       tab._listenerAttached = true;
-    }
+  }
   });
   
   // Create event button is set up in events.js
@@ -445,7 +398,7 @@ function initializeDarkTheme() {
   // Use shared dashboard sidebar component
   if (typeof window.initDashboardSidebar === 'function') {
     window.initDashboardSidebar();
-  }
+      }
   
   // Setup search with guard
   const searchInput = document.getElementById('searchEventsInput');
@@ -485,10 +438,15 @@ function debounce(func, wait) {
 // Render event row for the table
 function renderEventRow(event, index) {
   const accentColor = rowAccentColors[index % rowAccentColors.length];
-  const status = getEventStatus(event);
   const crewCount = event.crewCount || event.crew?.length || 0;
   const folderCount = event.folderCount || 0;
   const documentCount = event.documentCount || 0;
+  
+  // Get owner names for display
+  const ownerNames = event.ownerNames || [];
+  const ownerDisplay = ownerNames.length > 0 ? ownerNames[0] : '—';
+  const hasMultipleOwners = ownerNames.length > 1;
+  const ownerListHtml = ownerNames.map(name => `<div class="owner-dropdown-item">${name}</div>`).join('');
   
   // Format date range
   const startDate = event.startDate ? new Date(event.startDate) : null;
@@ -534,8 +492,10 @@ function renderEventRow(event, index) {
         </div>
       </td>
       <td>
-        <div class="event-status">
-          <span class="status-badge ${status.class}">${status.label}</span>
+        <div class="event-owner ${hasMultipleOwners ? 'has-dropdown' : ''}" onclick="${hasMultipleOwners ? 'event.stopPropagation(); toggleOwnerDropdown(this)' : ''}">
+          <span class="owner-name">${ownerDisplay}</span>
+          ${hasMultipleOwners ? `<span class="owner-more">+${ownerNames.length - 1}</span>` : ''}
+          ${hasMultipleOwners ? `<div class="owner-dropdown">${ownerListHtml}</div>` : ''}
         </div>
       </td>
       <td>

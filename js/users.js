@@ -79,11 +79,18 @@ let editingUserId = null;
       if (event.target === deleteUserModal) closeDeleteModal();
     };
     
-    // Initialize shared dashboard sidebar
-    if (typeof window.initDashboardSidebar === 'function') {
+    // Inject and initialize shared dashboard sidebar
+    const layoutContainer = document.getElementById('usersPageLayout');
+    if (layoutContainer && typeof window.injectDashboardSidebar === 'function') {
+      window.injectDashboardSidebar(layoutContainer, { 
+        position: 'prepend',
+        activePage: 'users'
+      });
+    } else if (typeof window.initDashboardSidebar === 'function') {
+      // Fallback: sidebar HTML already exists, just initialize
       window.initDashboardSidebar();
     } else {
-      // Fallback if sidebar script not loaded
+      // Final fallback if sidebar script not loaded
       updateSidebarUserInfo();
       fixPageContainer();
     }

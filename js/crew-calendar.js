@@ -33,6 +33,7 @@
   let currentWeekStart = null; // Will be set to the start of current week (Sunday)
   let crewData = null;
   let eventColors = {}; // Map of event IDs to colors
+  let searchQuery = ''; // Search filter for crew names
 
   // Generate a consistent color from a string (event ID)
   // Uses HSL color space for better color distribution - optimized for dark mode
@@ -182,6 +183,15 @@
         renderCalendar();
       }
     });
+
+    // Search functionality
+    const searchInput = document.getElementById('searchCrewInput');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        searchQuery = e.target.value.toLowerCase().trim();
+        renderCalendar();
+      });
+    }
   }
 
   // Load crew data from API
@@ -306,7 +316,16 @@
     const result = [];
     
     crewData.forEach(event => {
-      const crewMembers = event.crew.filter(crew => crew.date === dateStr);
+      let crewMembers = event.crew.filter(crew => crew.date === dateStr);
+      
+      // Apply search filter if there's a query
+      if (searchQuery) {
+        crewMembers = crewMembers.filter(crew => 
+          crew.name.toLowerCase().includes(searchQuery) ||
+          (crew.role && crew.role.toLowerCase().includes(searchQuery)) ||
+          event.title.toLowerCase().includes(searchQuery)
+        );
+      }
       
       if (crewMembers.length > 0) {
         result.push({

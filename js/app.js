@@ -86,7 +86,7 @@ console.log(' app.js loaded');
 })();
 
 const PAGE_CLASSES = [
-  'events-page', 'general-page', 'crew-page', 'travel-page', 'card-log-page', 'schedule-page', 'dashboard-page', 'login-page', 'register-page', 'users-page', 'crew-planner-page', 'crew-calendar-page'
+  'events-page', 'general-page', 'crew-page', 'travel-page', 'card-log-page', 'schedule-page', 'dashboard-page', 'login-page', 'register-page', 'users-page', 'crew-planner-page', 'crew-calendar-page', 'gear-page'
 ];
 
 function setBodyPageClass(page) {
@@ -99,13 +99,49 @@ function setBodyPageClass(page) {
   }
 }
 
+// Parse hash to extract page and ID (supports #page?id=xxx format)
+function parseHash() {
+  const hash = location.hash.replace('#', '') || 'events';
+  
+  // Split only on the FIRST ? to handle any malformed URLs
+  const questionIndex = hash.indexOf('?');
+  let page, queryString;
+  
+  if (questionIndex !== -1) {
+    page = hash.substring(0, questionIndex);
+    queryString = hash.substring(questionIndex + 1);
+  } else {
+    page = hash;
+    queryString = null;
+  }
+  
+  let id = null;
+  if (queryString) {
+    // Handle potentially malformed query strings (e.g., id=xxx?id=xxx)
+    // Only take the first id parameter
+    const params = new URLSearchParams(queryString.split('?')[0]);
+    id = params.get('id');
+  }
+  
+  console.log(`[parseHash] hash: "${hash}", page: "${page}", id: "${id}"`);
+  
+  return { page: page || 'events', id };
+}
+
 function getTableId() {
+  // First check hash for ID (new approach - bookmarkable URLs)
+  const { id: hashId } = parseHash();
+  
+  // Then check query string (legacy support)
   const params = new URLSearchParams(window.location.search);
   const urlId = params.get('id');
-  const storedId = localStorage.getItem('eventId');
-  const result = urlId || storedId;
   
-  console.log(`[getTableId] URL ID: ${urlId}, localStorage ID: ${storedId}, returning: ${result}`);
+  // Finally fall back to localStorage
+  const storedId = localStorage.getItem('eventId');
+  
+  const result = hashId || urlId || storedId;
+  
+  console.log(`[getTableId] Hash ID: ${hashId}, URL ID: ${urlId}, localStorage ID: ${storedId}, returning: ${result}`);
   
   return result;
 }
@@ -114,6 +150,8 @@ function getTableId() {
 let navigationInProgress = false;
 
 function navigate(page, id) {
+  console.log(`[NAVIGATE] Called with page: "${page}", id: "${id}"`);
+  
   // Prevent double navigation
   if (navigationInProgress) {
     console.log(`[NAVIGATE] Navigation already in progress, skipping duplicate call for page: ${page}`);
@@ -138,13 +176,6 @@ function navigate(page, id) {
     navigationInProgress = false;
     return;
   }
-  
-  // Special handling for gear page - redirect to standalone page
-  if (page === 'gear') {
-    navigationInProgress = false;
-    window.location.href = `pages/gear.html?eventId=${finalId}`;
-    return;
-  }
 
   // Set the correct body class for the page
   setBodyPageClass(page);
@@ -161,6 +192,9 @@ function navigate(page, id) {
   // Clean up any existing page content and scripts
   const pageContainer = document.getElementById('page-container');
   if (pageContainer) {
+    // DON'T clear content yet - we'll do it in injectPageContent after new content is ready
+    // This prevents the flash by keeping old content visible during fetch
+    
     // Call any cleanup function from the current page before removing scripts
     // but only if we're not on the first load (window.currentPage will be set)
     if (window.currentPage) {
@@ -196,12 +230,31 @@ function navigate(page, id) {
       script.remove();
     });
  
-    // Clear page container
-    pageContainer.innerHTML = '';
+    // Note: We don't clear pageContainer.innerHTML here anymore
+    // The content swap happens in injectPageContent for smoother transitions
   }
   
-  // Update hash and load new page
-  location.hash = `#${page}`;
+  // Update hash and load new page (include ID in hash for bookmarkable URLs)
+  const newHash = needsId && finalId ? `#${page}?id=${finalId}` : `#${page}`;
+  
+  console.log(`[NAVIGATE] Current hash: "${location.hash}", New hash: "${newHash}"`);
+  
+  // Parse current hash to check if it already has the correct page and ID
+  const currentParsed = parseHash();
+  const hashAlreadyCorrect = currentParsed.page === page && 
+                             (!needsId || currentParsed.id === finalId);
+  
+  if (!hashAlreadyCorrect) {
+    console.log(`[NAVIGATE] Updating hash to "${newHash}"`);
+    // Use replaceState to avoid creating extra history entries and prevent duplicate IDs
+    if (history.replaceState) {
+      history.replaceState(null, '', newHash);
+    } else {
+      location.hash = newHash;
+    }
+  } else {
+    console.log(`[NAVIGATE] Hash already correct (page: ${currentParsed.page}, id: ${currentParsed.id}), skipping update`);
+  }
   loadPageCSS(page);
   
   // Track the current page to know when we're navigating
@@ -245,11 +298,17 @@ function injectPageContent(html, page, id) {
     return;
   }
 
-  // Clear any existing content
-  targetElement.innerHTML = '';
-  
-  // Add new content to the target element
+  // Swap content immediately, then fade in
+  targetElement.style.opacity = '0';
   targetElement.innerHTML = html;
+  
+  // Use requestAnimationFrame to let the browser parse and apply styles,
+  // then fade in after a brief delay for fonts to apply
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      targetElement.style.opacity = '1';
+    }, 80);
+  });
   
   // Show/hide bottom nav based on page and set it up
   const bottomNav = document.getElementById('bottomNav');
@@ -361,6 +420,36 @@ function injectPageContent(html, page, id) {
     };
     
     document.head.appendChild(script);
+  }
+
+     // Pages that use inline scripts and should NOT load external JS files
+     const pagesWithInlineScripts = ['gear'];
+     
+     if (pagesWithInlineScripts.includes(page)) {
+       console.log(`[SCRIPT_LOAD] Page ${page} uses inline script, skipping external JS load`);
+       // For gear page, the inline script in gear.html handles initialization
+       // Just need to execute inline scripts that may have been injected
+       const inlineScripts = targetElement.querySelectorAll('script');
+       console.log(`[SCRIPT_LOAD] Found ${inlineScripts.length} script(s) in the injected HTML`);
+       
+       inlineScripts.forEach((script, index) => {
+         if (!script.src) {
+           console.log(`[SCRIPT_LOAD] Executing inline script #${index + 1} (${script.textContent.length} chars)`);
+           try {
+             // Execute inline script content
+             const newScript = document.createElement('script');
+             newScript.textContent = script.textContent;
+             document.head.appendChild(newScript);
+             console.log(`[SCRIPT_LOAD] Script #${index + 1} appended to head`);
+             // Don't remove the script - let it stay for async operations
+           } catch (err) {
+             console.error(`[SCRIPT_LOAD] Error executing script #${index + 1}:`, err);
+           }
+         } else {
+           console.log(`[SCRIPT_LOAD] Skipping external script: ${script.src}`);
+         }
+       });
+       return; // Skip loading external gear.js
   }
 
      // Dynamically load JS if it exists
@@ -506,16 +595,7 @@ function setupDropdownMenu(tableId) {
       console.log(`Dropdown link clicked: ${page}, using currentEventId: ${currentEventId}`);
       dropdownMenu.classList.remove('show');
       
-      // Special handling for gear page - redirect to new gear system
-      if (page === 'gear') {
-        if (currentEventId) {
-          window.location.href = `pages/gear.html?eventId=${currentEventId}`;
-        } else {
-          alert('No event selected. Please select an event first.');
-        }
-      } else {
         window.navigate(page, currentEventId);
-      }
     };
     link.addEventListener('click', linkHandler);
     dropdownEventListeners.links.push({ element: link, handler: linkHandler });
@@ -543,6 +623,7 @@ function loadPageCSS(page) {
     case 'schedule': cssFile = 'css/schedule.css'; break;
     case 'shotlist': cssFile = 'css/shotlist.css'; break;
     case 'users': cssFile = 'css/users.css'; break;
+    case 'gear': cssFile = 'css/gear.css'; break;
   }
   if (cssFile) {
     const link = document.createElement('link');
@@ -561,17 +642,19 @@ window.addEventListener('hashchange', () => {
     return;
   }
   
-  const page = location.hash.replace('#', '') || 'events';
-  console.log(`[HASHCHANGE] Hash changed to: ${page}`);
+  // Parse page and ID from hash (supports #page?id=xxx format)
+  const { page, id: hashId } = parseHash();
+  console.log(`[HASHCHANGE] Hash changed to page: ${page}, id: ${hashId}`);
   
   // For hash changes (back/forward navigation), we need to be more careful about event IDs
   // Only pass an event ID if the page actually needs one
   const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management'].includes(page);
   
   if (needsId) {
-    const currentEventId = localStorage.getItem('eventId');
-    console.log(`[HASHCHANGE] Page ${page} needs event ID, using: ${currentEventId}`);
-    navigate(page, currentEventId);
+    // Prefer hash ID, fall back to localStorage
+    const eventId = hashId || localStorage.getItem('eventId');
+    console.log(`[HASHCHANGE] Page ${page} needs event ID, using: ${eventId}`);
+    navigate(page, eventId);
   } else {
     console.log(`[HASHCHANGE] Page ${page} doesn't need event ID`);
     navigate(page);
@@ -603,26 +686,29 @@ window.addEventListener('DOMContentLoaded', () => {
   ];
   PAGE_CLASSES_RESET.forEach(cls => document.body.classList.remove(cls));
   
-  // Get page from hash or default to events
-  const page = location.hash.replace('#', '') || 'events';
-  console.log(`[INITIAL_LOAD] Initial page load: ${page}`);
+  // Parse page and ID from hash (supports #page?id=xxx format)
+  const { page, id: hashId } = parseHash();
+  console.log(`[INITIAL_LOAD] Initial page load: ${page}, hash ID: ${hashId}`);
   
   // Use the same logic as hashchange handler for consistency
   const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management'].includes(page);
   
   if (needsId) {
-    const currentEventId = localStorage.getItem('eventId');
-    console.log(`[INITIAL_LOAD] Page ${page} needs event ID, using: ${currentEventId}`);
-    navigate(page, currentEventId);
+    // Prefer hash ID, fall back to localStorage
+    const eventId = hashId || localStorage.getItem('eventId');
+    console.log(`[INITIAL_LOAD] Page ${page} needs event ID, using: ${eventId}`);
+    navigate(page, eventId);
   } else {
     console.log(`[INITIAL_LOAD] Page ${page} doesn't need event ID`);
     navigate(page);
   }
 });
 
-// Expose navigate globally for nav links
+// Expose navigation functions globally for nav links and external pages
 window.navigate = navigate;
 window.setupBottomNavigation = setupBottomNavigation;
+window.parseHash = parseHash;
+window.getTableId = getTableId;
 
 // PullToRefresh.js integration for PWA/mobile
 if (window.PullToRefresh) {
@@ -770,16 +856,7 @@ function setupDesktopNavigation(navContainer, tableId, currentPage) {
       const currentEventId = localStorage.getItem('eventId');
       console.log(`Desktop nav link clicked: ${page}, using currentEventId: ${currentEventId}`);
       
-      // Special handling for gear page - redirect to new gear system
-      if (page === 'gear') {
-        if (currentEventId) {
-          window.location.href = `pages/gear.html?eventId=${currentEventId}`;
-        } else {
-          alert('No event selected. Please select an event first.');
-        }
-      } else {
         window.navigate(page, currentEventId);
-      }
     });
     
     navContainer.appendChild(navLink);
@@ -884,16 +961,7 @@ function setupRegularNavLinks(navContainer) {
         dropdownMenu.classList.remove('show');
       }
       
-      // Special handling for gear page - redirect to new gear system
-      if (page === 'gear') {
-        if (currentEventId) {
-          window.location.href = `pages/gear.html?eventId=${currentEventId}`;
-        } else {
-          alert('No event selected. Please select an event first.');
-        }
-      } else {
         window.navigate(page, currentEventId);
-      }
     });
   });
   

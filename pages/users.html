@@ -1,70 +1,10 @@
 <!-- Dark Theme Users/Admin Page -->
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
-<link rel="stylesheet" href="../css/theme-dark.css">
+<link rel="stylesheet" href="css/theme-dark.css">
 
 <div class="dark-theme users-page">
-  <div class="dashboard-layout">
+  <div class="dashboard-layout" id="usersPageLayout">
     
-    <!-- Sidebar Navigation (same as events page) -->
-    <aside class="dashboard-sidebar" id="dashboardSidebar">
-      <div class="sidebar-header">
-        <div class="sidebar-logo">
-          <img src="../assets/Logo - Dark BG.png" alt="Lumetry Media" class="sidebar-logo-img">
-        </div>
-      </div>
-      
-      <nav class="sidebar-nav">
-        <a href="/dashboard.html#events" class="nav-item nav-external">
-          <span class="material-symbols-outlined">dashboard</span>
-          <span>Dashboard</span>
-        </a>
-        <a href="#" class="nav-item active" onclick="event.preventDefault();">
-          <span class="material-symbols-outlined">admin_panel_settings</span>
-          <span>Admin Console</span>
-        </a>
-        <a href="/inventory-management.html" class="nav-item nav-external">
-          <span class="material-symbols-outlined">inventory_2</span>
-          <span>Inventory</span>
-        </a>
-        <a href="/pages/crew-planner.html" class="nav-item nav-external">
-          <span class="material-symbols-outlined">groups</span>
-          <span>Crew Planner</span>
-        </a>
-        <a href="/pages/crew-calendar.html" class="nav-item nav-external">
-          <span class="material-symbols-outlined">calendar_month</span>
-          <span>Crew Calendar</span>
-        </a>
-      </nav>
-      
-      <div class="sidebar-user" id="sidebarUserContainer">
-        <div class="sidebar-user-avatar" id="sidebarUserAvatar">
-          <img src="" alt="User" id="sidebarAvatarImg" style="display: none;">
-          <span class="material-symbols-outlined" id="sidebarAvatarIcon">person</span>
-        </div>
-        <div class="sidebar-user-info">
-          <div class="sidebar-user-name" id="sidebarUserName">Loading...</div>
-          <div class="sidebar-user-role" id="sidebarUserRole">Admin</div>
-        </div>
-        <span class="material-symbols-outlined" style="color: var(--text-tertiary); font-size: 18px;">expand_more</span>
-      </div>
-    </aside>
-    
-    <!-- User Dropdown Menu -->
-    <div class="user-menu-dropdown action-dropdown" id="userMenuDropdown">
-      <button class="user-menu-item" id="profileMenuItem">
-        <span class="material-symbols-outlined">person</span>
-        <span>Profile</span>
-      </button>
-      <button class="user-menu-item" id="settingsMenuItem">
-        <span class="material-symbols-outlined">settings</span>
-        <span>Settings</span>
-      </button>
-      <button class="user-menu-item danger" id="logoutMenuItem">
-        <span class="material-symbols-outlined">logout</span>
-        <span>Logout</span>
-      </button>
-    </div>
+    <!-- Sidebar will be injected here by sidebar-dashboard.js -->
     
     <!-- Main Content -->
     <main class="dashboard-main">

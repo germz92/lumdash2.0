@@ -424,7 +424,15 @@ class DocumentsPage {
     const documentModal = document.getElementById('documentModal');
 
     if (closeModal) closeModal.addEventListener('click', this.closeModal.bind(this));
-    if (modalOverlay) modalOverlay.addEventListener('click', this.closeModal.bind(this));
+    // Allow clicking the modal backdrop to close it
+    if (documentModal) {
+      documentModal.addEventListener('click', (e) => {
+        // Only close if clicking the backdrop, not the content
+        if (e.target === documentModal) {
+          this.closeModal();
+        }
+      });
+    }
 
     // Keyboard events
     document.addEventListener('keydown', (e) => {

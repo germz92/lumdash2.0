@@ -1,479 +1,695 @@
-<!-- Dark Theme Gear Page - SPA Partial -->
-<link rel="stylesheet" href="css/theme-dark.css">
-<style>
-    /* Dark theme overrides - MUST use .gear-page.dark-theme for specificity */
-    
-    /* Base overrides */
-    html, body {
-        margin: 0;
-        padding: 0;
-        height: 100%;
-        overflow: hidden;
-        background: #080808 !important;
-    }
-
-    /* Categories Grid Layout */
-    .gear-page.dark-theme .categories-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 24px;
-        margin-bottom: 24px;
-    }
-
-    /* Category Cards - Dark Theme */
-    .gear-page.dark-theme .category-card {
-        background: #1a1a1a !important;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        border: 1px solid #333 !important;
-        transition: all 0.2s ease;
-    }
-
-    .gear-page.dark-theme .category-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
-        border-color: #cc0007 !important;
-    }
-
-    .gear-page.dark-theme .category-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 16px;
-        padding-bottom: 12px;
-        border-bottom: 2px solid #333 !important;
-    }
-
-    .gear-page.dark-theme .category-title {
-        font-size: 18px;
-        font-weight: 600;
-        color: #ffffff !important;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .gear-page.dark-theme .category-icon {
-        color: #cc0007;
-        font-size: 24px;
-    }
-
-    .gear-page.dark-theme .category-count {
-        background: #2a2a2a !important;
-        color: #aaa !important;
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-size: 12px;
-        font-weight: 600;
-    }
-
-    /* Gear List Items - Dark Theme */
-    .gear-page.dark-theme .gear-list {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-    }
-
-    .gear-page.dark-theme .gear-item {
-        display: flex;
-        align-items: center;
-        padding: 12px 16px;
-        background: #0f0f0f !important;
-        border: 1px solid #333 !important;
-        border-radius: 8px;
-        transition: all 0.2s ease;
-        gap: 12px;
-    }
-
-    .gear-page.dark-theme .gear-item:hover {
-        background: #1a1a1a !important;
-        border-color: #cc0007 !important;
-    }
-
-    .gear-page.dark-theme .gear-item.packed {
-        background: rgba(40, 167, 69, 0.15) !important;
-        border-color: #28a745 !important;
-    }
-
-    .gear-page.dark-theme .gear-info {
-        flex: 1;
-    }
-
-    .gear-page.dark-theme .gear-name {
-        font-weight: 500;
-        color: #ffffff !important;
-        margin-bottom: 4px;
-    }
-
-    .gear-page.dark-theme .gear-details {
-        font-size: 13px;
-        color: #888 !important;
-        display: flex;
-        gap: 12px;
-        flex-wrap: wrap;
-    }
-
-    .gear-page.dark-theme .serial-code {
-        font-family: 'Courier New', monospace;
-        background: #2a2a2a !important;
-        color: #aaa !important;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 12px;
-    }
-
-    .gear-page.dark-theme .gear-controls {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        flex-shrink: 0;
-    }
-
-    .gear-page.dark-theme .packed-checkbox {
-        width: 20px;
-        height: 20px;
-        cursor: pointer;
-        accent-color: #28a745;
-        transform: scale(1.2);
-    }
-
-    .gear-page.dark-theme .delete-btn {
-        background: #dc3545;
-        color: white;
-        border: none;
-        padding: 6px 8px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 12px;
-        opacity: 0.7;
-        transition: all 0.2s ease;
-    }
-
-    .gear-page.dark-theme .delete-btn:hover {
-        opacity: 1;
-        transform: scale(1.1);
-    }
-
-    /* Empty Category - Dark Theme */
-    .gear-page.dark-theme .empty-category {
-        text-align: center;
-        padding: 40px 20px;
-        color: #666 !important;
-    }
-
-    .gear-page.dark-theme .empty-category .material-symbols-outlined {
-        font-size: 48px;
-        color: #444 !important;
-        margin-bottom: 12px;
-    }
-
-    .gear-page.dark-theme .empty-category p {
-        margin: 0 0 8px 0;
-        font-size: 16px;
-        font-weight: 500;
-        color: #888 !important;
-    }
-
-    .gear-page.dark-theme .empty-category small {
-        font-size: 14px;
-        color: #666 !important;
-    }
-
-    /* Progress Section - Dark Theme */
-    .gear-page.dark-theme .progress-section {
-        background: #1a1a1a !important;
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-        margin-bottom: 24px;
-        border: 1px solid #333;
-    }
-
-    .gear-page.dark-theme .progress-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 16px;
-    }
-
-    .gear-page.dark-theme .progress-title {
-        font-size: 18px;
-        font-weight: 600;
-        color: #ffffff !important;
-    }
-
-    .gear-page.dark-theme .progress-stats {
-        font-size: 14px;
-        color: #888 !important;
-    }
-
-    .gear-page.dark-theme .progress-bar {
-        width: 100%;
-        height: 12px;
-        background: #333 !important;
-        border-radius: 6px;
-        overflow: hidden;
-    }
-
-    .gear-page.dark-theme .progress-fill {
-        height: 100%;
-        background: linear-gradient(90deg, #28a745, #20c997);
-        transition: width 0.3s ease;
-    }
-
-    /* Loading State - Dark Theme */
-    .gear-page.dark-theme .loading {
-        text-align: center;
-        padding: 60px 20px;
-        color: #888 !important;
-    }
-
-    .gear-page.dark-theme .loading-spinner {
-        width: 40px;
-        height: 40px;
-        border: 4px solid #333 !important;
-        border-top: 4px solid #cc0007 !important;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin: 0 auto 16px;
-    }
-
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-
-    /* Modal Styles - Dark Theme */
-    .gear-page.dark-theme .modal {
-        display: none;
-        position: fixed;
-        z-index: 2000;
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.7);
-        backdrop-filter: blur(4px);
-    }
-
-    .gear-page.dark-theme .modal-content {
-        background: #1a1a1a !important;
-        margin: 5% auto;
-        padding: 0;
-        border-radius: 16px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-        width: 90%;
-        max-width: 500px;
-        max-height: 80vh;
-        overflow: hidden;
-        border: 1px solid #333;
-    }
-
-    .gear-page.dark-theme .modal-header {
-        padding: 24px;
-        border-bottom: 1px solid #333 !important;
-        background: #0f0f0f !important;
-    }
-
-    .gear-page.dark-theme .modal-header h3 {
-        margin: 0;
-        color: #ffffff !important;
-        font-size: 20px;
-        font-weight: 600;
-    }
-
-    .gear-page.dark-theme .modal-body {
-        padding: 24px;
-        max-height: 400px;
-        overflow-y: auto;
-        background: #1a1a1a;
-    }
-
-    .gear-page.dark-theme .modal-footer {
-        padding: 20px 24px;
-        border-top: 1px solid #333 !important;
-        background: #0f0f0f !important;
-        display: flex;
-        gap: 12px;
-        justify-content: flex-end;
-    }
-
-    /* Form Controls - Dark Theme */
-    .gear-page.dark-theme .form-group {
-        margin-bottom: 16px;
-    }
-
-    .gear-page.dark-theme .form-group label {
-        display: block;
-        margin-bottom: 4px;
-        font-weight: 500;
-        color: #ffffff !important;
-    }
-
-    .gear-page.dark-theme .form-group input {
-        width: 100%;
-        padding: 12px;
-        border: 2px solid #333 !important;
-        border-radius: 6px;
-        font-size: 14px;
-        background: #0f0f0f !important;
-        color: #ffffff !important;
-    }
-
-    .gear-page.dark-theme .form-group input:focus {
-        outline: none;
-        border-color: #cc0007 !important;
-    }
-
-    /* Package Items - Dark Theme */
-    .gear-page.dark-theme .package-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 16px;
-        border: 2px solid #333 !important;
-        border-radius: 8px;
-        margin-bottom: 12px;
-        transition: all 0.2s ease;
-        background: #0f0f0f !important;
-    }
-
-    .gear-page.dark-theme .package-item.available {
-        border-color: #28a745 !important;
-        background: rgba(40, 167, 69, 0.1) !important;
-    }
-
-    .gear-page.dark-theme .package-item.unavailable {
-        border-color: #dc3545 !important;
-        background: rgba(220, 53, 69, 0.1) !important;
-        opacity: 0.7;
-    }
-
-    .gear-page.dark-theme .package-item-info {
-        flex: 1;
-    }
-
-    .gear-page.dark-theme .package-item-name {
-        font-weight: 600;
-        color: #ffffff !important;
-        margin-bottom: 4px;
-    }
-
-    .gear-page.dark-theme .package-item-details {
-        font-size: 14px;
-        color: #888 !important;
-        display: flex;
-        gap: 16px;
-        flex-wrap: wrap;
-    }
-
-    .gear-page.dark-theme .status-text.available {
-        color: #28a745 !important;
-        font-weight: 600;
-    }
-
-    .gear-page.dark-theme .status-text.unavailable {
-        color: #dc3545 !important;
-        font-weight: 600;
-    }
-
-    /* Serial Options - Dark Theme */
-    .gear-page.dark-theme .serial-option {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 12px 16px;
-        border: 2px solid #333 !important;
-        border-radius: 8px;
-        margin-bottom: 8px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        background: #0f0f0f !important;
-    }
-
-    .gear-page.dark-theme .serial-option:hover {
-        border-color: #cc0007 !important;
-        background: #1a1a1a !important;
-    }
-
-    .gear-page.dark-theme .serial-option.selected {
-        border-color: #cc0007 !important;
-        background: rgba(204, 0, 7, 0.1) !important;
-    }
-
-    .gear-page.dark-theme .serial-info {
-        flex: 1;
-        color: #ffffff;
-    }
-
-    /* Manual Items - Dark Theme */
-    .gear-page.dark-theme .manual-items-category {
-        margin-top: 20px;
-    }
-
-    .gear-page.dark-theme .manual-items-category .gear-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        width: 100%;
-        padding: 16px 20px;
-        background: #0f0f0f !important;
-        border-bottom: 1px solid #333 !important;
-    }
-
-    .gear-page.dark-theme .manual-items-category .gear-item:last-child {
-        border-bottom: none;
-    }
-
-    .gear-page.dark-theme .manual-items-category .item-content {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        flex: 1;
-    }
-
-    .gear-page.dark-theme .manual-items-category .item-name {
-        font-size: 16px;
-        font-weight: 600;
-        color: #ffffff !important;
-        margin-bottom: 4px;
-    }
-
-    .gear-page.dark-theme .manual-items-category .item-meta {
-        font-size: 12px;
-        color: #888 !important;
-    }
-
-    /* Responsive Styles */
-    @media (max-width: 768px) {
-        .gear-page.dark-theme .categories-grid {
-            grid-template-columns: 1fr;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gear - LumDash</title>
+    <link rel="icon" href="../assets/favicon.png" type="image/png">
+    <!-- Preconnect for faster font loading -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/theme-dark.css">
+    <style>
+        /* Override body styles for standalone page */
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            background: #080808;
         }
 
-        .gear-page.dark-theme .date-controls label {
-            color: #888 !important;
+        .package-select {
+            padding: 8px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+            min-width: 150px;
         }
-    }
 
-    @media (max-width: 480px) {
-        .gear-page.dark-theme .categories-grid {
-            grid-template-columns: 1fr;
+        .package-btn {
+            padding: 8px 16px;
+            border: 2px solid #cc0007;
+            background: white;
+            color: #cc0007;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
         }
-        
-        .gear-page.dark-theme .gear-details {
-            flex-direction: column;
-            gap: 4px;
+
+        .package-btn:hover {
+            background: #cc0007;
+            color: white;
         }
-        
-        .gear-page.dark-theme .modal-footer {
-            flex-direction: column;
+
+        .package-btn.primary {
+            background: #cc0007;
+            color: white;
+        }
+
+        .package-btn.primary:hover {
+            background: #a30006;
+        }
+
+        .categories-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .category-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e0e0e0;
+            transition: all 0.2s ease;
+        }
+
+        .category-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+
+        .category-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #f0f2f5;
+        }
+
+        .category-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            display: flex;
+            align-items: center;
             gap: 8px;
         }
-    }
-</style>
+
+        .category-icon {
+            color: #cc0007;
+            font-size: 24px;
+        }
+
+        .category-count {
+            background: #f8f9fa;
+            color: #495057;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .gear-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .gear-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            background: #fafbfc;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            gap: 12px;
+        }
+
+        .gear-item:hover {
+            background: #f1f3f4;
+            border-color: #cc0007;
+        }
+
+        .gear-item.packed {
+            background: #e8f5e8;
+            border-color: #28a745;
+        }
+
+        .gear-info {
+            flex: 1;
+        }
+
+        .gear-name {
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .gear-details {
+            font-size: 13px;
+            color: #666;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .serial-code {
+            font-family: 'Courier New', monospace;
+            background: #f1f3f4;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .gear-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .packed-checkbox {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: #28a745;
+            transform: scale(1.2);
+        }
+
+        .delete-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 6px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            opacity: 0.7;
+            transition: all 0.2s ease;
+        }
+
+        .delete-btn:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+
+        .empty-category {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+
+        .empty-icon {
+            font-size: 48px;
+            color: #ccc;
+            margin-bottom: 12px;
+        }
 
 
+
+        /* Action buttons - styled by theme-dark.css */
+
+        .progress-section {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 24px;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .progress-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .progress-stats {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 12px;
+            background: #e0e0e0;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745, #20c997);
+            transition: width 0.3s ease;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #cc0007;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Desktop specific styles - action buttons styled by theme-dark.css */
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 12px;
+            }
+
+            .categories-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header-info {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 16px;
+            }
+
+            .package-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .date-controls {
+                flex-direction: row;
+                width: 100%;
+                gap: 8px;
+                align-items: center;
+                flex-wrap: wrap;
+                padding: 8px;
+                margin-bottom: 12px;
+            }
+
+            .date-controls label {
+                font-size: 12px;
+                font-weight: 600;
+                color: #666;
+                white-space: nowrap;
+                margin: 0;
+            }
+
+            .date-input {
+                flex: 1;
+                min-width: 120px;
+                font-size: 13px;
+                padding: 6px 8px;
+            }
+
+            .save-dates-btn {
+                padding: 6px 12px;
+                font-size: 12px;
+                white-space: nowrap;
+            }
+
+            /* Action buttons styled by theme-dark.css */
+
+            /* Compact layout for very small screens */
+            @media (max-width: 480px) {
+                .date-controls {
+                    gap: 6px;
+                }
+
+                .date-controls label {
+                    font-size: 11px;
+                }
+
+                .date-input {
+                    min-width: 100px;
+                    font-size: 12px;
+                    padding: 5px 6px;
+                }
+
+                .save-dates-btn {
+                    padding: 5px 8px;
+                    font-size: 11px;
+                }
+
+                .btn {
+                    flex-direction: column;
+                    gap: 2px;
+                    padding: 10px 12px; /* Increased padding to prevent cutoff */
+                    min-width: 80px;
+                    min-height: 54px; /* Taller to accommodate icon + text */
+                }
+                
+                .btn span:not(.material-symbols-outlined) {
+                    font-size: 11px;
+                    line-height: 1.2;
+                }
+            }
+
+            .gear-item {
+                flex-direction: row;
+                align-items: flex-start;
+                gap: 12px;
+                padding: 16px;
+            }
+
+            .gear-info {
+                margin-top: 2px; /* Align with checkbox */
+            }
+
+            .gear-controls {
+                align-self: flex-start;
+                margin-top: 2px; /* Align with checkbox */
+            }
+            
+            /* Action buttons styled by theme-dark.css */
+        }
+
+        /* Modal styles for package management */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(2px);
+        }
+
+        .modal-content {
+            background: white;
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow: hidden;
+        }
+
+        .modal-header {
+            padding: 24px;
+            border-bottom: 1px solid #e0e0e0;
+            background: #f8f9fa;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            color: #333;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .modal-body {
+            padding: 24px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .modal-footer {
+            padding: 20px 24px;
+            border-top: 1px solid #e0e0e0;
+            background: #f8f9fa;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #cc0007;
+        }
+
+        /* Package modal styles */
+        .package-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .package-item.available {
+            border-color: #28a745;
+            background: #f8fff8;
+        }
+
+        .package-item.unavailable {
+            border-color: #dc3545;
+            background: #fff8f8;
+            opacity: 0.7;
+        }
+
+        .package-item-info {
+            flex: 1;
+        }
+
+        .package-item-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .package-item-details {
+            font-size: 14px;
+            color: #666;
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .status-text.available {
+            color: #28a745;
+            font-weight: 600;
+        }
+
+        .status-text.unavailable {
+            color: #dc3545;
+            font-weight: 600;
+        }
+
+        .package-item-controls {
+            flex-shrink: 0;
+        }
+
+        .serial-option {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .serial-option:hover {
+            border-color: #cc0007;
+            background: #f8f9fa;
+        }
+
+        .serial-option.selected {
+            border-color: #cc0007;
+            background: #fff3f3;
+        }
+
+        .serial-info {
+            flex: 1;
+        }
+
+        /* Button styles for secondary buttons */
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+            box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+        }
+
+        .btn-secondary:hover {
+            background: #545b62;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(108, 117, 125, 0.4);
+        }
+
+        @media (max-width: 480px) {
+            .categories-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .gear-details {
+                flex-direction: column;
+                gap: 4px;
+            }
+            
+            /* Action buttons styled by theme-dark.css */
+            
+            /* Make package button taller on mobile to prevent text cutoff */
+            .package-btn {
+                padding: 12px 16px;
+                line-height: 1.4;
+                min-height: 44px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+                white-space: nowrap;
+                overflow: visible;
+            }
+            
+            /* Special handling for modal footers on mobile */
+            .modal-footer {
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .modal-footer .package-btn {
+                width: 100%;
+                min-height: 48px;
+                font-size: 14px;
+                font-weight: 600;
+                white-space: normal;
+                word-wrap: break-word;
+                line-height: 1.3;
+            }
+        }
+
+        /* Manual Items Styles - Match Regular Categories */
+        .manual-items-category {
+            margin-top: 20px;
+            /* Use same styling as regular gear categories */
+        }
+
+        /* Add Manual Item Section & Form Actions - styled by theme-dark.css */
+
+        .empty-category {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6b7280;
+        }
+
+        .empty-category .material-symbols-outlined {
+            font-size: 48px;
+            color: #d1d5db;
+            margin-bottom: 12px;
+        }
+
+        .empty-category p {
+            margin: 0 0 8px 0;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .empty-category small {
+            font-size: 14px;
+            color: #9ca3af;
+        }
+
+        /* Manual Items Layout Fixes */
+        .manual-items-category .gear-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            padding: 16px 20px;
+            background: white;
+            border-bottom: 1px solid #e0e4e7;
+        }
+
+        .manual-items-category .gear-item:last-child {
+            border-bottom: none;
+        }
+
+        .manual-items-category .item-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+        }
+
+        .manual-items-category .item-details {
+            flex: 1;
+        }
+
+        .manual-items-category .item-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 4px;
+        }
+
+        .manual-items-category .item-info {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .manual-items-category .item-meta {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .manual-items-category .item-actions {
+            flex-shrink: 0;
+        }
+
+        .manual-items-category .delete-btn {
+            padding: 8px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .manual-items-category .delete-btn:hover {
+            background: #dc2626;
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
 <div class="gear-page dark-theme">
   <div class="gear-layout">
     
@@ -481,35 +697,35 @@
     <aside class="general-sidebar" id="gearSidebar">
       <div class="sidebar-header">
         <div class="sidebar-logo">
-          <img src="assets/Logo - Dark BG.png" alt="Lumetry Media" class="sidebar-logo-img">
+          <img src="../assets/Logo - Dark BG.png" alt="Lumetry Media" class="sidebar-logo-img">
                 </div>
       </div>
       
       <nav class="sidebar-nav">
-        <a href="#" class="nav-item" data-page="events" onclick="event.preventDefault(); window.navigate && window.navigate('events');">
+        <a href="#" class="nav-item" data-page="events" onclick="event.preventDefault(); navigateToPage('events');">
           <span class="material-symbols-outlined">arrow_back</span>
           <span>Back to Events</span>
         </a>
         
         <div class="nav-section-label">Event Pages</div>
         
-        <a href="#" class="nav-item" data-page="general" onclick="event.preventDefault(); window.navigate && window.navigate('general');">
+        <a href="#" class="nav-item" data-page="general" onclick="event.preventDefault(); navigateToPage('general');">
           <span class="material-symbols-outlined">home</span>
           <span>Home</span>
         </a>
-        <a href="#" class="nav-item" data-page="crew" onclick="event.preventDefault(); window.navigate && window.navigate('crew');">
+        <a href="#" class="nav-item" data-page="crew" onclick="event.preventDefault(); navigateToPage('crew');">
           <span class="material-symbols-outlined">group</span>
           <span>Crew</span>
         </a>
-        <a href="#" class="nav-item" data-page="schedule" onclick="event.preventDefault(); window.navigate && window.navigate('schedule');">
+        <a href="#" class="nav-item" data-page="schedule" onclick="event.preventDefault(); navigateToPage('schedule');">
           <span class="material-symbols-outlined">calendar_today</span>
           <span>Schedule</span>
         </a>
-        <a href="#" class="nav-item" data-page="shotlist" onclick="event.preventDefault(); window.navigate && window.navigate('shotlist');">
+        <a href="#" class="nav-item" data-page="shotlist" onclick="event.preventDefault(); navigateToPage('shotlist');">
           <span class="material-symbols-outlined">checklist</span>
           <span>Shotlist</span>
         </a>
-        <a href="#" class="nav-item" data-page="travel-accommodation" onclick="event.preventDefault(); window.navigate && window.navigate('travel-accommodation');">
+        <a href="#" class="nav-item" data-page="travel-accommodation" onclick="event.preventDefault(); navigateToPage('travel-accommodation');">
           <span class="material-symbols-outlined">flight_takeoff</span>
           <span>Travel</span>
         </a>
@@ -517,11 +733,11 @@
           <span class="material-symbols-outlined">photo_camera</span>
           <span>Gear</span>
         </a>
-        <a href="#" class="nav-item" data-page="card-log" onclick="event.preventDefault(); window.navigate && window.navigate('card-log');">
+        <a href="#" class="nav-item" data-page="card-log" onclick="event.preventDefault(); navigateToPage('card-log');">
           <span class="material-symbols-outlined">sd_card</span>
           <span>Cards</span>
         </a>
-        <a href="#" class="nav-item" data-page="documents" onclick="event.preventDefault(); window.navigate && window.navigate('documents');">
+        <a href="#" class="nav-item" data-page="documents" onclick="event.preventDefault(); navigateToPage('documents');">
           <span class="material-symbols-outlined">map</span>
           <span>Map</span>
         </a>
@@ -555,9 +771,9 @@
         <div class="gear-header-right">
                 <div class="date-controls">
                     <label>Out:</label>
-                    <input type="date" id="checkoutDate" class="date-input">
+                    <input type="date" id="checkOutDate" class="date-input">
                     <label>In:</label>
-                    <input type="date" id="checkinDate" class="date-input">
+                    <input type="date" id="checkInDate" class="date-input">
                     <button class="save-dates-btn" onclick="saveDates()">Save</button>
                 </div>
             </div>
@@ -575,7 +791,7 @@
                         Gear Lists
                     </h2>
                     <div class="package-controls">
-                        <select id="gearListSelect" class="package-select" onchange="handleListSelection()">
+                        <select id="listSelect" class="package-select" onchange="handleListSelection()">
                             <option value="">Loading lists...</option>
                         </select>
                         <button class="package-btn" onclick="renameCurrentList()">Rename</button>
@@ -749,15 +965,11 @@
           </div>
   
         <!-- Load config and chat scripts -->
-        <script src="js/config.js"></script>
-        <script src="js/chat.js"></script>
+        <script src="../js/config.js"></script>
+        <script src="../js/chat.js"></script>
         
         <script>
-        (function() {
-        'use strict';
-        console.log('[gear.html] Script tag execution started!');
-        
-        // Page-specific variables (scoped to IIFE to prevent redeclaration errors)
+        // Page-specific variables
         let currentEvent = null;
         let currentGear = [];
         let manualItems = [];
@@ -773,29 +985,19 @@
 
         // Navigation function for sidebar
         function navigateToPage(page) {
-            // Get eventId from various sources
-            const id = eventId || localStorage.getItem('eventId');
-            
-            if (!id && page !== 'events') {
+            if (!eventId) {
                 console.error('No event ID available for navigation');
                 return;
             }
             
-            if (page === 'gear') {
+            if (page === 'events') {
+                window.location.href = '../dashboard.html#events';
+            } else if (page === 'gear') {
                 // Already on gear page
                 return;
-            }
-            
-            // Use SPA navigation if available, otherwise fallback to URL
-            if (window.navigate) {
-                window.navigate(page, id);
             } else {
-                // Fallback for non-SPA context
-                if (page === 'events') {
-                    window.location.href = '/dashboard.html#events';
-                } else {
-                    window.location.href = `/dashboard.html#${page}?id=${id}`;
-                }
+                // Navigate using hash-based URL (bookmarkable)
+                window.location.href = `../dashboard.html#${page}?id=${eventId}`;
             }
         }
 
@@ -851,92 +1053,27 @@
             }
         }
 
-        // Get event ID from various sources (SPA hash, query string, localStorage)
-        function getEventId() {
-            // 1. Try SPA hash format: #gear?id=xxx
-            if (window.parseHash) {
-                const { id } = window.parseHash();
-                if (id) return id;
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', async function() {
+            eventId = new URLSearchParams(window.location.search).get('eventId');
+            if (!eventId) {
+                alert('No event ID provided');
+                window.history.back();
+                return;
             }
-            // Manual hash parsing as fallback
-            const hash = location.hash.replace('#', '');
-            const questionIndex = hash.indexOf('?');
-            if (questionIndex !== -1) {
-                const queryString = hash.substring(questionIndex + 1);
-                const params = new URLSearchParams(queryString);
-                if (params.get('id')) return params.get('id');
-            }
-            
-            // 2. Try query string formats: ?eventId=xxx or ?id=xxx
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('eventId')) return urlParams.get('eventId');
-            if (urlParams.get('id')) return urlParams.get('id');
-            
-            // 3. Try localStorage
-            if (localStorage.getItem('eventId')) return localStorage.getItem('eventId');
-            
-            // 4. Try window.getTableId if available
-            if (window.getTableId) return window.getTableId();
-            
-            return null;
-        }
-        
-        // Initialize page - works for both SPA and standalone modes
-        async function initGearPage() {
-            console.log('[gear.html] Initializing gear page...');
-            console.log('[gear.html] API_BASE:', typeof API_BASE !== 'undefined' ? API_BASE : 'UNDEFINED');
-            console.log('[gear.html] location.hash:', location.hash);
-            
-            try {
-                // Get event ID from various sources
-                eventId = getEventId();
-                console.log('[gear.html] Event ID:', eventId);
-                
-                if (!eventId) {
-                    console.error('[gear.html] No event ID provided');
-                    alert('No event ID provided');
-                    if (window.navigate) {
-                        window.navigate('events');
-                    } else {
-                        window.history.back();
-                    }
-                    return;
-                }
 
-                // Setup dark theme components
-                console.log('[gear.html] Setting up mobile sidebar...');
-                setupMobileSidebar();
-                console.log('[gear.html] Updating sidebar user...');
-                updateSidebarUser();
+            // Setup dark theme components
+            setupMobileSidebar();
+            updateSidebarUser();
 
-                console.log('[gear.html] Checking user role...');
-                checkUserRole();
-                console.log('[gear.html] Loading event...');
-                loadEvent();
-                console.log('[gear.html] Loading gear lists...');
-                await loadGearLists(); // Wait for gear lists to load before loading gear
-                console.log('[gear.html] Loading gear...');
-                loadGear();
-                
-                // Initialize chat widget after everything else is set up
-                setTimeout(initializeChatWidget, 100);
-                console.log('[gear.html] Initialization complete!');
-            } catch (err) {
-                console.error('[gear.html] Error during initialization:', err);
-            }
-        }
-        
-        // Initialize on DOMContentLoaded for standalone mode
-        // Also expose for SPA inline script execution
-        console.log('[gear.html] document.readyState:', document.readyState);
-        if (document.readyState === 'loading') {
-            console.log('[gear.html] Adding DOMContentLoaded listener');
-            document.addEventListener('DOMContentLoaded', initGearPage);
-        } else {
-            // DOM already loaded (SPA mode or immediate execution)
-            console.log('[gear.html] DOM ready, calling initGearPage now...');
-            initGearPage();
-        }
+            checkUserRole();
+            loadEvent();
+            await loadGearLists(); // Wait for gear lists to load before loading gear
+            loadGear();
+            
+            // Initialize chat widget after everything else is set up
+            setTimeout(initializeChatWidget, 100);
+        });
 
         // Load event data
         async function loadEvent() {
@@ -1056,10 +1193,6 @@
         // Render gear by categories
         function renderGear() {
             const container = document.getElementById('gearContainer');
-            if (!container) {
-                console.error('[gear.html] gearContainer element not found');
-                return;
-            }
             
             // Update header to show event name and list name
             const gearHeader = document.querySelector('.header h1');
@@ -1256,13 +1389,9 @@
             const totalPacked = packedGear + completedManualItems;
             const percentage = totalItems > 0 ? Math.round((totalPacked / totalItems) * 100) : 0;
 
-            const totalCountEl = document.getElementById('totalCount');
-            const packedCountEl = document.getElementById('packedCount');
-            const progressFillEl = document.getElementById('progressFill');
-            
-            if (totalCountEl) totalCountEl.textContent = totalItems;
-            if (packedCountEl) packedCountEl.textContent = totalPacked;
-            if (progressFillEl) progressFillEl.style.width = `${percentage}%`;
+            document.getElementById('totalCount').textContent = totalItems;
+            document.getElementById('packedCount').textContent = totalPacked;
+            document.getElementById('progressFill').style.width = `${percentage}%`;
         }
 
         // Toggle packed status
@@ -1484,8 +1613,8 @@
 
         // Save dates
         async function saveDates() {
-            const checkOutDate = document.getElementById('checkoutDate').value;
-            const checkInDate = document.getElementById('checkinDate').value;
+            const checkOutDate = document.getElementById('checkOutDate').value;
+            const checkInDate = document.getElementById('checkInDate').value;
 
             if (!checkOutDate || !checkInDate) {
                 alert('Please select both check-out and check-in dates');
@@ -1594,11 +1723,7 @@
 
         // List management functions
         function updateListSelect() {
-            const select = document.getElementById('gearListSelect');
-            if (!select) {
-                console.error('[gear.html] gearListSelect element not found');
-                return;
-            }
+            const select = document.getElementById('listSelect');
             select.innerHTML = '';
             
             gearLists.forEach(list => {
@@ -1619,8 +1744,7 @@
         }
 
         function handleListSelection() {
-            const select = document.getElementById('gearListSelect');
-            if (!select) return;
+            const select = document.getElementById('listSelect');
             const selectedValue = select.value;
             
             if (selectedValue === '__ADD_NEW__') {
@@ -2642,7 +2766,7 @@
 
         // View cart function
         function viewCart() {
-            window.location.href = `/checkout.html?eventId=${eventId}`;
+            window.location.href = `../checkout.html?eventId=${eventId}`;
         }
 
         // Check user role and show admin buttons
@@ -2698,12 +2822,12 @@
 
         // Navigation
         function addItems() {
-            const checkOutDate = document.getElementById('checkoutDate').value;
-            const checkInDate = document.getElementById('checkinDate').value;
+            const checkOutDate = document.getElementById('checkOutDate').value;
+            const checkInDate = document.getElementById('checkInDate').value;
 
             if (!checkOutDate || !checkInDate) {
                 if (confirm('No dates set. Would you like to set check-out and check-in dates first?')) {
-                    document.getElementById('checkoutDate').focus();
+                    document.getElementById('checkOutDate').focus();
                     return;
                 } else {
                     // User clicked Cancel, stay on current page
@@ -2711,7 +2835,7 @@
                 }
             }
 
-            window.location.href = `/inventory.html?eventId=${eventId}`;
+            window.location.href = `../inventory.html?eventId=${eventId}`;
         }
 
         // Setup bottom navigation - matches main dashboard exactly
@@ -2818,10 +2942,10 @@
                     
                     if (page !== 'gear') {
                         if (page === 'events') {
-                            window.location.href = `/dashboard.html#events`;
+                            window.location.href = `../dashboard.html#events`;
                         } else {
                             // Navigate to main dashboard with the specific page
-                            window.location.href = `/dashboard.html#${page}?id=${eventId}`;
+                            window.location.href = `../dashboard.html#${page}?id=${eventId}`;
                         }
                     }
                 });
@@ -2918,10 +3042,10 @@
                     
                     if (page !== 'gear') {
                         if (page === 'events') {
-                            window.location.href = `/dashboard.html#events`;
+                            window.location.href = `../dashboard.html#events`;
                         } else {
                             // Navigate to main dashboard with the specific page
-                            window.location.href = `/dashboard.html#${page}?id=${eventId}`;
+                            window.location.href = `../dashboard.html#${page}?id=${eventId}`;
                         }
                     }
                 });
@@ -3017,10 +3141,10 @@
                     
                     if (page !== 'gear') {
                         if (page === 'events') {
-                            window.location.href = `/dashboard.html#events`;
+                            window.location.href = `../dashboard.html#events`;
                         } else {
                             // Navigate to main dashboard with the specific page
-                            window.location.href = `/dashboard.html#${page}?id=${eventId}`;
+                            window.location.href = `../dashboard.html#${page}?id=${eventId}`;
                         }
                     }
                 };
@@ -3061,27 +3185,27 @@
                 if (currentEvent.gear.checkOutDate) {
                     // If it's already a date string like "2025-07-02", use it directly
                     if (typeof currentEvent.gear.checkOutDate === 'string' && currentEvent.gear.checkOutDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                        document.getElementById('checkoutDate').value = currentEvent.gear.checkOutDate;
+                        document.getElementById('checkOutDate').value = currentEvent.gear.checkOutDate;
                     } else {
                         // Handle other date formats by extracting date part
                         const checkOutDate = new Date(currentEvent.gear.checkOutDate);
                         const checkOutDateStr = checkOutDate.getFullYear() + '-' + 
                             String(checkOutDate.getMonth() + 1).padStart(2, '0') + '-' + 
                             String(checkOutDate.getDate()).padStart(2, '0');
-                        document.getElementById('checkoutDate').value = checkOutDateStr;
+                        document.getElementById('checkOutDate').value = checkOutDateStr;
                     }
                 }
                 if (currentEvent.gear.checkInDate) {
                     // If it's already a date string like "2025-07-02", use it directly
                     if (typeof currentEvent.gear.checkInDate === 'string' && currentEvent.gear.checkInDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                        document.getElementById('checkinDate').value = currentEvent.gear.checkInDate;
+                        document.getElementById('checkInDate').value = currentEvent.gear.checkInDate;
                     } else {
                         // Handle other date formats by extracting date part
                         const checkInDate = new Date(currentEvent.gear.checkInDate);
                         const checkInDateStr = checkInDate.getFullYear() + '-' + 
                             String(checkInDate.getMonth() + 1).padStart(2, '0') + '-' + 
                             String(checkInDate.getDate()).padStart(2, '0');
-                        document.getElementById('checkinDate').value = checkInDateStr;
+                        document.getElementById('checkInDate').value = checkInDateStr;
                     }
                 }
             }
@@ -3163,39 +3287,7 @@
             }
         }
 
-        // Expose functions to global scope for inline event handlers
-        window.saveDates = saveDates;
-        window.handleListSelection = handleListSelection;
-        window.renameCurrentList = renameCurrentList;
-        window.deleteCurrentList = deleteCurrentList;
-        window.openTemplatesModal = openTemplatesModal;
-        window.saveAsTemplate = saveAsTemplate;
-        window.viewCart = viewCart;
-        window.addItems = addItems;
-        window.closeNewPackageModal = closeNewPackageModal;
-        window.createNewPackage = createNewPackage;
-        window.closePackageModal = closePackageModal;
-        window.addAllAvailableToCart = addAllAvailableToCart;
-        window.closePackageSerialModal = closePackageSerialModal;
-        window.addSelectedPackageItemToCart = addSelectedPackageItemToCart;
-        window.closeTemplatesModal = closeTemplatesModal;
-        window.openCreateTemplateModal = openCreateTemplateModal;
-        window.closeCreateTemplateModal = closeCreateTemplateModal;
-        window.createTemplateFromModal = createTemplateFromModal;
-        window.togglePacked = togglePacked;
-        window.deleteGearItem = deleteGearItem;
-        window.toggleManualItem = toggleManualItem;
-        window.deleteManualItem = deleteManualItem;
-        window.addManualItem = addManualItem;
-        window.cancelAddManualItem = cancelAddManualItem;
-        window.showAddManualForm = showAddManualForm;
-        window.loadTemplate = loadTemplate;
-        window.deleteTemplateFromModal = deleteTemplateFromModal;
-        window.addTemplateItemToCart = addTemplateItemToCart;
-        window.selectPackageSerial = selectPackageSerial;
-        window.updatePackageQuantity = updatePackageQuantity;
-        window.addPackageItemToCart = addPackageItemToCart;
-        window.navigateToPage = navigateToPage;
 
-        })(); // End of IIFE
     </script>
+</body>
+</html>

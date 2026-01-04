@@ -745,6 +745,26 @@ function authenticate(req, res, next) {
   });
 }
 
+// Helper function to check if user has access to an event (admin, owner, lead, or shared)
+function hasEventAccess(table, user, requireOwner = false) {
+  if (!table || !user) return false;
+  
+  // Admin users have access to all events
+  if (user.role === 'admin') return true;
+  
+  const userId = user.id;
+  const isOwner = table.owners && table.owners.map(String).includes(userId);
+  
+  if (requireOwner) {
+    return isOwner;
+  }
+  
+  const isLead = table.leads && table.leads.map(String).includes(userId);
+  const isShared = table.sharedWith && table.sharedWith.map(String).includes(userId);
+  
+  return isOwner || isLead || isShared;
+}
+
 // AUTH
 app.post('/api/auth/register', async (req, res) => {
   const { email, password, fullName, role } = req.body; // 🔥 updated
@@ -1364,18 +1384,25 @@ app.post('/api/tables', authenticate, async (req, res) => {
 
 app.get('/api/tables', authenticate, async (req, res) => {
   try {
-    // Get the user to check their archived events
+    // Get the user to check their archived events and role
     const User = require('./models/User');
     const user = await User.findById(req.user.id);
     
-    // Also include leads in the query
-    const tables = await Table.find({
-      $or: [
-        { owners: req.user.id },
-        { sharedWith: req.user.id },
-        { leads: req.user.id }
-      ]
-    });
+    let tables;
+    
+    // Admin users can see ALL events
+    if (req.user.role === 'admin') {
+      tables = await Table.find({}).populate('owners', 'fullName');
+    } else {
+      // Regular users only see events they own, are shared with, or are leads on
+      tables = await Table.find({
+        $or: [
+          { owners: req.user.id },
+          { sharedWith: req.user.id },
+          { leads: req.user.id }
+        ]
+      }).populate('owners', 'fullName');
+    }
 
     // Add user-specific archive status to each table
     const tablesWithUserArchiveStatus = tables.map(table => {
@@ -1385,6 +1412,12 @@ app.get('/api/tables', authenticate, async (req, res) => {
       const userArchivedEvents = user && user.archivedEvents ? user.archivedEvents : [];
       const userArchivedIds = userArchivedEvents.map(id => id.toString());
       tableObj.userArchived = userArchivedIds.includes(table._id.toString());
+      
+      // Extract owner names for display
+      tableObj.ownerNames = (tableObj.owners || [])
+        .filter(owner => owner && owner.fullName)
+        .map(owner => owner.fullName);
+      
       return tableObj;
     });
 
@@ -1400,8 +1433,18 @@ app.get('/api/tables/:id', authenticate, async (req, res) => {
     return res.status(400).json({ error: "Invalid table ID" });
   }
   const table = await Table.findById(req.params.id);
-  if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
-    return res.status(403).json({ error: 'Not authorized or not found' });
+  if (!table) {
+    return res.status(404).json({ error: 'Event not found' });
+  }
+  
+  // Admin users can access any event
+  const isAdmin = req.user.role === 'admin';
+  const isOwner = table.owners.includes(req.user.id);
+  const isShared = table.sharedWith.includes(req.user.id);
+  const isLead = table.leads && table.leads.includes(req.user.id);
+  
+  if (!isAdmin && !isOwner && !isShared && !isLead) {
+    return res.status(403).json({ error: 'Not authorized' });
   }
   res.json(table);
 });
@@ -1440,8 +1483,8 @@ app.post('/api/tables/:id/tasks', authenticate, async (req, res) => {
 app.put('/api/tables/:id/tasks/:taskId', authenticate, async (req, res) => {
   const table = await Table.findById(req.params.id);
   if (!table) return res.status(404).json({ error: 'Table not found' });
-  if (!table.owners.map(String).includes(req.user.id)) {
-    return res.status(403).json({ error: 'Only owners can edit tasks' });
+  if (!hasEventAccess(table, req.user, true)) {
+    return res.status(403).json({ error: 'Only owners and admins can edit tasks' });
   }
   const task = table.tasks.id(req.params.taskId);
   if (!task) return res.status(404).json({ error: 'Task not found' });
@@ -1457,8 +1500,8 @@ app.delete('/api/tables/:id/tasks/:taskId', authenticate, async (req, res) => {
   try {
     const table = await Table.findById(req.params.id);
     if (!table) return res.status(404).json({ error: 'Table not found' });
-    if (!table.owners.map(String).includes(req.user.id)) {
-      return res.status(403).json({ error: 'Only owners can delete tasks' });
+    if (!hasEventAccess(table, req.user, true)) {
+      return res.status(403).json({ error: 'Only owners and admins can delete tasks' });
     }
     const taskIndex = table.tasks.findIndex(t => t._id && t._id.toString() === req.params.taskId);
     if (taskIndex === -1) {
@@ -1513,12 +1556,12 @@ app.post('/api/tables/:id/admin-notes', authenticate, async (req, res) => {
   res.json({ adminNotes: table.adminNotes });
 });
 
-// Edit an admin note (owners only)
+// Edit an admin note (owners and admins only)
 app.put('/api/tables/:id/admin-notes/:noteId', authenticate, async (req, res) => {
   const table = await Table.findById(req.params.id);
   if (!table) return res.status(404).json({ error: 'Table not found' });
-  if (!table.owners.map(String).includes(req.user.id)) {
-    return res.status(403).json({ error: 'Only owners can edit admin notes' });
+  if (!hasEventAccess(table, req.user, true)) {
+    return res.status(403).json({ error: 'Only owners and admins can edit admin notes' });
   }
   const note = table.adminNotes.id(req.params.noteId);
   if (!note) return res.status(404).json({ error: 'Note not found' });
@@ -1531,12 +1574,12 @@ app.put('/api/tables/:id/admin-notes/:noteId', authenticate, async (req, res) =>
   res.json({ adminNotes: table.adminNotes });
 });
 
-// Delete an admin note (owners only)
+// Delete an admin note (owners and admins only)
 app.delete('/api/tables/:id/admin-notes/:noteId', authenticate, async (req, res) => {
   const table = await Table.findById(req.params.id);
   if (!table) return res.status(404).json({ error: 'Table not found' });
-  if (!table.owners.map(String).includes(req.user.id)) {
-    return res.status(403).json({ error: 'Only owners can delete admin notes' });
+  if (!hasEventAccess(table, req.user, true)) {
+    return res.status(403).json({ error: 'Only owners and admins can delete admin notes' });
   }
   table.adminNotes = table.adminNotes.filter(n => n._id.toString() !== req.params.noteId);
   await table.save();
@@ -1566,7 +1609,7 @@ app.put('/api/tables/:id', authenticate, async (req, res) => {
     return res.status(400).json({ error: "Invalid table ID" });
   }
   const table = await Table.findById(req.params.id);
-  if (!table || !table.owners.includes(req.user.id)) {
+  if (!table || !hasEventAccess(table, req.user)) {
     return res.status(403).json({ error: 'Not authorized or not found' });
   }
   table.rows = req.body.rows;
@@ -1799,8 +1842,8 @@ app.put('/api/tables/:id/sd-calculator', authenticate, async (req, res) => {
       return res.status(404).json({ error: "Table not found" });
     }
     
-    // Check permissions
-    if (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id)) {
+    // Check permissions - admin users have access to all events
+    if (!hasEventAccess(table, req.user)) {
       return res.status(403).json({ error: "Not authorized" });
     }
     
@@ -2107,12 +2150,13 @@ app.get('/api/tables/:id/general', authenticate, async (req, res) => {
 app.put('/api/tables/:id/general', authenticate, async (req, res) => {
   const { title, general } = req.body;
   const table = await Table.findById(req.params.id);
-  if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
+  if (!table || !hasEventAccess(table, req.user)) {
     return res.status(403).json({ error: 'Not authorized or not found' });
   }
   
-  // Only allow owners to update title
-  if (table.owners.includes(req.user.id) && title) {
+  // Allow owners and admins to update title
+  const canEditTitle = req.user.role === 'admin' || table.owners.includes(req.user.id);
+  if (canEditTitle && title) {
     table.title = title;
   }
   
@@ -2174,15 +2218,21 @@ app.put('/api/tables/:id/gear', authenticate, async (req, res) => {
     const oldTable = await Table.findById(req.params.id);
     const oldLists = oldTable && oldTable.gear && oldTable.gear.lists ? Object.fromEntries(oldTable.gear.lists) : {};
 
+    // Build query - admins can access any event
+    const isAdmin = req.user.role === 'admin';
+    const query = isAdmin 
+      ? { _id: req.params.id }
+      : {
+          _id: req.params.id,
+          $or: [
+            { owners: req.user.id },
+            { sharedWith: req.user.id }
+          ]
+        };
+
     // Find and update in one atomic operation (fixes versioning issues)
     const result = await Table.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        $or: [
-          { owners: req.user.id },
-          { sharedWith: req.user.id }
-        ]
-      },
+      query,
       {
         $set: {
           'gear.lists': req.body.lists ? new Map(Object.entries(req.body.lists)) : new Map(),
@@ -2251,7 +2301,7 @@ app.put('/api/tables/:id/travel', authenticate, async (req, res) => {
     return res.status(400).json({ error: "Invalid table ID" });
   }
   const table = await Table.findById(req.params.id);
-  if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
+  if (!table || !hasEventAccess(table, req.user)) {
     return res.status(403).json({ error: 'Not authorized or not found' });
   }
   table.travel = req.body.travel || [];
@@ -2265,7 +2315,8 @@ app.put('/api/tables/:id/travel', authenticate, async (req, res) => {
 // DELETE
 app.delete('/api/tables/:id', authenticate, async (req, res) => {
   const table = await Table.findById(req.params.id);
-  if (!table || !table.owners.includes(req.user.id)) {
+  // Only owners and admins can delete events
+  if (!table || !hasEventAccess(table, req.user, true)) {
     return res.status(403).json({ error: 'Not authorized or not found' });
   }
   
@@ -2352,6 +2403,26 @@ app.get('/api/users', authenticate, async (req, res) => {
     email: u.email,
     role: u.role || 'user'
   })));
+});
+
+// Get single user by ID (for profile/photo display)
+app.get('/api/users/:id', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id, 'fullName email role photo');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({
+      _id: user._id,
+      name: user.fullName,
+      email: user.email,
+      role: user.role || 'user',
+      photo: user.photo || null
+    });
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 app.put('/api/users/:id', authenticate, async (req, res) => {

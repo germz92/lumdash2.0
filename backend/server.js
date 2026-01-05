@@ -104,7 +104,10 @@ const io = socketIo(server, {
       const allowedOrigins = [
         'https://www.lumdash.app',
         'https://lumdash.app', 
+        'https://beta.lumdash.app',
+        'https://www.beta.lumdash.app',
         'https://spa-lumdash-backend.onrender.com',
+        'https://lumdash-beta-backend.onrender.com',
         'https://germainedavid.github.io',
         'http://localhost:3000',
         'http://127.0.0.1:3000',
@@ -120,6 +123,9 @@ const io = socketIo(server, {
       
       // For GitHub Pages, allow any github.io domain
       if (origin.includes('.github.io')) return callback(null, true);
+      
+      // For lumdash.app domains (including subdomains like beta.lumdash.app)
+      if (origin.includes('lumdash.app')) return callback(null, true);
       
       // Check explicit allowed origins
       if (allowedOrigins.includes(origin)) return callback(null, true);
@@ -597,12 +603,16 @@ const corsOptions = {
     // Allow any origin
     callback(null, true);
   },
-  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
   credentials: true,
   optionsSuccessStatus: 204,
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['rndr-id']
+  exposedHeaders: ['rndr-id'],
+  preflightContinue: false
 };
+
+// Handle preflight requests explicitly
+app.options('*', cors(corsOptions));
 app.use(cors(corsOptions));
 app.use(express.json());
 

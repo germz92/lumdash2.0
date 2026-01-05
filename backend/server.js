@@ -1406,11 +1406,11 @@ app.get('/api/tables', authenticate, async (req, res) => {
     } else {
       // Regular users only see events they own, are shared with, or are leads on
       tables = await Table.find({
-        $or: [
-          { owners: req.user.id },
-          { sharedWith: req.user.id },
-          { leads: req.user.id }
-        ]
+      $or: [
+        { owners: req.user.id },
+        { sharedWith: req.user.id },
+        { leads: req.user.id }
+      ]
       }).populate('owners', 'fullName');
     }
 
@@ -1460,71 +1460,142 @@ app.get('/api/tables/:id', authenticate, async (req, res) => {
 });
 
 // --- TASKS ENDPOINTS (COLLABORATIVE TO-DO LIST) ---
-app.get('/api/tables/:id/tasks', authenticate, async (req, res) => {
-  const table = await Table.findById(req.params.id);
+// --- TODO LIST ENDPOINTS ---
+// Get all todos for a table
+app.get('/api/tables/:id/todos', authenticate, async (req, res) => {
+  try {
+    const table = await Table.findById(req.params.id).populate('todos.owner', 'fullName photo');
   if (!table) return res.status(404).json({ error: 'Table not found' });
-  if (!table.owners.map(String).includes(req.user.id) && !table.sharedWith.map(String).includes(req.user.id)) {
+    if (!hasEventAccess(table, req.user)) {
     return res.status(403).json({ error: 'Not authorized' });
   }
-  res.json({ tasks: table.tasks || [] });
+    res.json({ todos: table.todos || [] });
+  } catch (err) {
+    console.error('Error fetching todos:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-app.post('/api/tables/:id/tasks', authenticate, async (req, res) => {
+// Create a new todo (owners and admins only)
+app.post('/api/tables/:id/todos', authenticate, async (req, res) => {
+  try {
   const table = await Table.findById(req.params.id);
   if (!table) return res.status(404).json({ error: 'Table not found' });
-  if (!table.owners.map(String).includes(req.user.id)) {
-    return res.status(403).json({ error: 'Only owners can add tasks' });
+    
+    // Only owners and admins can create todos
+    if (!hasEventAccess(table, req.user, true)) {
+      return res.status(403).json({ error: 'Only owners and admins can add tasks' });
   }
-  const { title, deadline } = req.body;
-  if (!title) return res.status(400).json({ error: 'Title is required' });
-  const task = {
-    title,
-    deadline: deadline || '',
-    completed: false,
-    createdBy: req.user.id
+    
+    const { task, status, dueDate, owner, notes } = req.body;
+    if (!task) return res.status(400).json({ error: 'Task is required' });
+    
+    const newTodo = {
+      task,
+      status: status || 'todo',
+      dueDate: dueDate ? new Date(dueDate) : null,
+      owner: owner || null,
+      notes: notes || '',
+      createdBy: req.user.id,
+      createdAt: new Date(),
+      updatedAt: new Date()
   };
-  table.tasks.push(task);
+    
+    table.todos.push(newTodo);
   await table.save();
-  const newTask = table.tasks[table.tasks.length - 1];
-  notifyDataChange('taskAdded', { task: newTask }, req.params.id);
-  res.json({ task: newTask });
+    
+    // Populate the owner before returning
+    await table.populate('todos.owner', 'fullName photo');
+    const savedTodo = table.todos[table.todos.length - 1];
+    
+    notifyDataChange('todoAdded', { todo: savedTodo }, req.params.id);
+    res.json({ todo: savedTodo });
+  } catch (err) {
+    console.error('Error creating todo:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-app.put('/api/tables/:id/tasks/:taskId', authenticate, async (req, res) => {
+// Update a todo
+app.put('/api/tables/:id/todos/:todoId', authenticate, async (req, res) => {
+  try {
   const table = await Table.findById(req.params.id);
   if (!table) return res.status(404).json({ error: 'Table not found' });
-  if (!hasEventAccess(table, req.user, true)) {
-    return res.status(403).json({ error: 'Only owners and admins can edit tasks' });
-  }
-  const task = table.tasks.id(req.params.taskId);
-  if (!task) return res.status(404).json({ error: 'Task not found' });
-  if (typeof req.body.title === 'string') task.title = req.body.title;
-  if (typeof req.body.deadline === 'string') task.deadline = req.body.deadline;
-  if (typeof req.body.completed === 'boolean') task.completed = req.body.completed;
+    
+    const todo = table.todos.id(req.params.todoId);
+    if (!todo) return res.status(404).json({ error: 'Todo not found' });
+    
+    const isOwnerOrAdmin = hasEventAccess(table, req.user, true);
+    const isAssignee = todo.owner && todo.owner.toString() === req.user.id;
+    
+    // Regular users can only update status and notes on tasks assigned to them
+    if (!isOwnerOrAdmin && !isAssignee) {
+      return res.status(403).json({ error: 'Not authorized to edit this task' });
+    }
+    
+    // If not owner/admin, only allow status and notes changes
+    if (!isOwnerOrAdmin) {
+      if (typeof req.body.status === 'string' && ['todo', 'in-progress', 'done'].includes(req.body.status)) {
+        todo.status = req.body.status;
+      }
+      if (typeof req.body.notes === 'string') {
+        todo.notes = req.body.notes;
+      }
+    } else {
+      // Owners/admins can update all fields
+      if (typeof req.body.task === 'string') todo.task = req.body.task;
+      if (typeof req.body.status === 'string' && ['todo', 'in-progress', 'done'].includes(req.body.status)) {
+        todo.status = req.body.status;
+      }
+      if (req.body.dueDate !== undefined) {
+        todo.dueDate = req.body.dueDate ? new Date(req.body.dueDate) : null;
+      }
+      if (req.body.owner !== undefined) {
+        todo.owner = req.body.owner || null;
+      }
+      if (typeof req.body.notes === 'string') {
+        todo.notes = req.body.notes;
+      }
+    }
+    
+    todo.updatedAt = new Date();
   await table.save();
-  notifyDataChange('taskUpdated', { task }, req.params.id);
-  res.json({ task });
+    
+    // Populate owner before returning
+    await table.populate('todos.owner', 'fullName photo');
+    const updatedTodo = table.todos.id(req.params.todoId);
+    
+    notifyDataChange('todoUpdated', { todo: updatedTodo }, req.params.id);
+    res.json({ todo: updatedTodo });
+  } catch (err) {
+    console.error('Error updating todo:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-app.delete('/api/tables/:id/tasks/:taskId', authenticate, async (req, res) => {
+// Delete a todo (owners and admins only)
+app.delete('/api/tables/:id/todos/:todoId', authenticate, async (req, res) => {
   try {
     const table = await Table.findById(req.params.id);
     if (!table) return res.status(404).json({ error: 'Table not found' });
+    
     if (!hasEventAccess(table, req.user, true)) {
       return res.status(403).json({ error: 'Only owners and admins can delete tasks' });
     }
-    const taskIndex = table.tasks.findIndex(t => t._id && t._id.toString() === req.params.taskId);
-    if (taskIndex === -1) {
-      console.error(`Task not found: ${req.params.taskId} in table ${req.params.id}`);
-      return res.status(404).json({ error: 'Task not found' });
+    
+    const todoIndex = table.todos.findIndex(t => t._id && t._id.toString() === req.params.todoId);
+    if (todoIndex === -1) {
+      return res.status(404).json({ error: 'Todo not found' });
     }
-    table.tasks.splice(taskIndex, 1);
+    
+    table.todos.splice(todoIndex, 1);
     await table.save();
-    notifyDataChange('taskDeleted', { taskId: req.params.taskId }, req.params.id);
+    
+    notifyDataChange('todoDeleted', { todoId: req.params.todoId }, req.params.id);
     res.json({ success: true });
   } catch (err) {
-    console.error('Error deleting task:', err);
-    res.status(500).json({ error: 'Server error while deleting task' });
+    console.error('Error deleting todo:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
@@ -2233,11 +2304,11 @@ app.put('/api/tables/:id/gear', authenticate, async (req, res) => {
     const query = isAdmin 
       ? { _id: req.params.id }
       : {
-          _id: req.params.id,
-          $or: [
-            { owners: req.user.id },
-            { sharedWith: req.user.id }
-          ]
+        _id: req.params.id,
+        $or: [
+          { owners: req.user.id },
+          { sharedWith: req.user.id }
+        ]
         };
 
     // Find and update in one atomic operation (fixes versioning issues)

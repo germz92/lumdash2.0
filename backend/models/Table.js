@@ -230,13 +230,17 @@ const tableSchema = new mongoose.Schema({
   // Crew cost calculator rates
   crewRates: { type: Object, default: {} },
   // Collaborative tasks/to-do list
-  tasks: [
+  todos: [
     {
       _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
-      title: { type: String, required: true },
-      deadline: { type: String },
-      completed: { type: Boolean, default: false },
-      createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+      task: { type: String, required: true },
+      status: { type: String, enum: ['todo', 'in-progress', 'done'], default: 'todo' },
+      dueDate: { type: Date },
+      owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      notes: { type: String, default: '' },
+      createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      createdAt: { type: Date, default: Date.now },
+      updatedAt: { type: Date, default: Date.now }
     }
   ],
   // Event documents (PDFs, images) stored in Cloudinary

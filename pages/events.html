@@ -312,20 +312,30 @@
       </div>
     </div>
 
-    <!-- Add People Section - Outside modal body for dropdown overflow -->
+    <!-- Add People Section -->
     <div class="share-add-section">
       <div class="form-group-dark">
-        <label for="shareEmail">
+        <label>
           <span class="material-symbols-outlined">person_add</span>
           Add People
         </label>
-        <div id="userAutofillContainer" class="autofill-container">
-          <input id="shareEmail" type="text" placeholder="Search by name or email..." autocomplete="off">
-          <div id="userSuggestions" class="suggestions-dropdown"></div>
+        <div id="userDropdownContainer" class="share-user-dropdown">
+          <button type="button" class="share-dropdown-trigger" id="userDropdownTrigger">
+            <span class="dropdown-value placeholder">Select a person...</span>
+            <span class="material-symbols-outlined dropdown-arrow">expand_less</span>
+          </button>
+          <div class="share-dropdown-menu" id="userDropdownMenu">
+            <div class="share-dropdown-search">
+              <input type="text" id="userSearchInput" placeholder="Search by name or email..." autocomplete="off">
+            </div>
+            <div class="share-dropdown-options" id="userDropdownOptions">
+              <!-- Options populated by JS -->
+            </div>
+          </div>
         </div>
-    </div>
+      </div>
     
-    <!-- Selected Users Display -->
+      <!-- Selected Users Display -->
       <div id="selectedUsersContainer">
         <div id="selectedUsersList" class="selected-users"></div>
       </div>

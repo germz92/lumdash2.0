@@ -1646,79 +1646,23 @@ async function openShareModal(tableId) {
 }
 
 function setupUserAutofill() {
-  const shareEmailInput = document.getElementById('shareEmail');
-  const suggestionsContainer = document.getElementById('userSuggestions');
+  const dropdownContainer = document.getElementById('userDropdownContainer');
+  const trigger = document.getElementById('userDropdownTrigger');
+  const menu = document.getElementById('userDropdownMenu');
+  const searchInput = document.getElementById('userSearchInput');
+  const optionsContainer = document.getElementById('userDropdownOptions');
   const selectedUsersContainer = document.getElementById('selectedUsersList');
   
-  if (!shareEmailInput || !suggestionsContainer || !selectedUsersContainer) return;
-  
-  // Clear any existing event listeners
-  shareEmailInput.removeEventListener('input', handleUserInput);
-  shareEmailInput.removeEventListener('keydown', handleKeyDown);
-  shareEmailInput.removeEventListener('blur', hideSuggestions);
+  if (!dropdownContainer || !trigger || !menu || !searchInput || !optionsContainer) {
+    console.error('[SHARE_DROPDOWN] Missing dropdown elements');
+    return;
+  }
   
   // Reset selectedUsers array
   selectedUsers = [];
   renderSelectedUsers();
   
-  function handleUserInput(e) {
-    const query = e.target.value.toLowerCase().trim();
-    
-    if (query.length < 1) {
-      hideSuggestions();
-      return;
-    }
-    
-    // Filter users based on name or email
-    const filteredUsers = allUsers.filter(user => {
-      const name = (user.name || user.fullName || '').toLowerCase();
-      const email = (user.email || '').toLowerCase();
-      
-      // Don't show already selected users
-      const isAlreadySelected = selectedUsers.some(selected => selected._id === user._id);
-      
-      return !isAlreadySelected && (name.includes(query) || email.includes(query));
-    });
-    
-    showSuggestions(filteredUsers.slice(0, 8)); // Limit to 8 suggestions
-  }
-  
-  function handleKeyDown(e) {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const activeSuggestion = suggestionsContainer.querySelector('.suggestion-active');
-      if (activeSuggestion) {
-        activeSuggestion.click();
-      }
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      navigateSuggestions(1);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      navigateSuggestions(-1);
-    } else if (e.key === 'Escape') {
-      hideSuggestions();
-    }
-  }
-  
-  function navigateSuggestions(direction) {
-    const suggestions = suggestionsContainer.querySelectorAll('.suggestion-item');
-    const active = suggestionsContainer.querySelector('.suggestion-active');
-    
-    let newIndex = 0;
-    if (active) {
-      const currentIndex = Array.from(suggestions).indexOf(active);
-      newIndex = currentIndex + direction;
-    }
-    
-    if (newIndex < 0) newIndex = suggestions.length - 1;
-    if (newIndex >= suggestions.length) newIndex = 0;
-    
-    suggestions.forEach(s => s.classList.remove('suggestion-active'));
-    if (suggestions[newIndex]) {
-      suggestions[newIndex].classList.add('suggestion-active');
-    }
-  }
+  let isOpen = false;
   
   // Helper to get initials
   function getInitials(name) {
@@ -1730,66 +1674,113 @@ function setupUserAutofill() {
     return name.substring(0, 2).toUpperCase();
   }
   
-  function showSuggestions(users) {
-    if (users.length === 0) {
-      hideSuggestions();
-      return;
-    }
-    
-    suggestionsContainer.innerHTML = users.map(user => {
-      const name = user.name || user.fullName || user.email;
-      const email = user.email;
-      const initials = getInitials(name);
-      return `
-        <div class="suggestion-item" data-user-id="${user._id}">
-          <div class="suggestion-avatar">${initials}</div>
-          <div class="suggestion-info">
-            <div class="suggestion-name">${name}</div>
-            <div class="suggestion-email">${email}</div>
-          </div>
-        </div>
-      `;
-    }).join('');
-    
-    // Add click handlers for suggestions
-    suggestionsContainer.querySelectorAll('.suggestion-item').forEach(suggestion => {
-      suggestion.addEventListener('mouseenter', () => {
-        suggestionsContainer.querySelectorAll('.suggestion-item').forEach(s => {
-          s.classList.remove('suggestion-active');
-        });
-        suggestion.classList.add('suggestion-active');
-      });
-      
-      suggestion.addEventListener('click', () => {
-        const userId = suggestion.getAttribute('data-user-id');
-        const user = allUsers.find(u => u._id === userId);
-        if (user) {
-          addSelectedUser(user);
-          shareEmailInput.value = '';
-          hideSuggestions();
-        }
-      });
+  // Render user options
+  function renderOptions(filter = '') {
+    const filteredUsers = allUsers.filter(user => {
+      const name = (user.name || user.fullName || '').toLowerCase();
+      const email = (user.email || '').toLowerCase();
+      const isAlreadySelected = selectedUsers.some(s => s._id === user._id);
+      const matchesFilter = !filter || name.includes(filter.toLowerCase()) || email.includes(filter.toLowerCase());
+      return !isAlreadySelected && matchesFilter;
     });
     
-    // Position dropdown using fixed positioning to escape modal overflow
-    const inputRect = shareEmailInput.getBoundingClientRect();
-    suggestionsContainer.style.position = 'fixed';
-    suggestionsContainer.style.top = `${inputRect.bottom + 4}px`;
-    suggestionsContainer.style.left = `${inputRect.left}px`;
-    suggestionsContainer.style.width = `${inputRect.width}px`;
-    suggestionsContainer.classList.add('show');
+    if (filteredUsers.length === 0) {
+      optionsContainer.innerHTML = `<div class="share-dropdown-empty">No users found</div>`;
+    } else {
+      optionsContainer.innerHTML = filteredUsers.map(user => {
+        const name = user.name || user.fullName || user.email;
+        const email = user.email;
+        const initials = getInitials(name);
+        return `
+          <button type="button" class="share-dropdown-option" data-user-id="${user._id}">
+            <div class="option-avatar">${initials}</div>
+            <div class="option-info">
+              <span class="option-name">${name}</span>
+              <span class="option-email">${email}</span>
+            </div>
+          </button>
+        `;
+      }).join('');
+      
+      // Add click handlers
+      optionsContainer.querySelectorAll('.share-dropdown-option').forEach(option => {
+        option.onclick = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          const userId = option.dataset.userId;
+          const user = allUsers.find(u => u._id === userId);
+          if (user) {
+            addSelectedUser(user);
+            searchInput.value = '';
+            renderOptions('');
+            closeDropdown();
+          }
+        };
+      });
+    }
   }
   
-  function hideSuggestions() {
-    setTimeout(() => {
-      suggestionsContainer.classList.remove('show');
-      // Reset positioning
-      suggestionsContainer.style.position = '';
-      suggestionsContainer.style.top = '';
-      suggestionsContainer.style.left = '';
-      suggestionsContainer.style.width = '';
-    }, 200);
+  function openDropdown() {
+    console.log('[SHARE_DROPDOWN] Opening dropdown');
+    isOpen = true;
+    dropdownContainer.classList.add('open');
+    
+    // Calculate available space above trigger
+    const triggerRect = trigger.getBoundingClientRect();
+    const availableHeight = Math.min(280, triggerRect.top - 20);
+    
+    // Use CSS positioning within container
+    menu.style.cssText = `
+      display: block !important;
+      position: absolute !important;
+      bottom: calc(100% + 4px) !important;
+      left: 0 !important;
+      right: 0 !important;
+      max-height: ${availableHeight}px !important;
+      z-index: 999999 !important;
+      background: #1a1a1a !important;
+      border: 1px solid #333 !important;
+      border-radius: 8px !important;
+      box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.6) !important;
+      overflow: hidden !important;
+    `;
+    
+    renderOptions(searchInput.value);
+    setTimeout(() => searchInput.focus(), 50);
   }
+  
+  function closeDropdown() {
+    console.log('[SHARE_DROPDOWN] Closing dropdown');
+    isOpen = false;
+    dropdownContainer.classList.remove('open');
+    menu.style.cssText = 'display: none !important;';
+  }
+  
+  // Trigger click
+  trigger.onclick = (e) => {
+    console.log('[SHARE_DROPDOWN] Trigger clicked, isOpen:', isOpen);
+    e.preventDefault();
+    e.stopPropagation();
+    if (isOpen) {
+      closeDropdown();
+    } else {
+      openDropdown();
+    }
+  };
+  
+  // Search input
+  searchInput.oninput = (e) => {
+    renderOptions(e.target.value);
+  };
+  
+  searchInput.onclick = (e) => e.stopPropagation();
+  
+  // Close on outside click
+  document.addEventListener('click', (e) => {
+    if (isOpen && !dropdownContainer.contains(e.target) && !menu.contains(e.target)) {
+      closeDropdown();
+    }
+  });
   
   function addSelectedUser(user) {
     if (!selectedUsers.some(selected => selected._id === user._id)) {
@@ -1801,34 +1792,40 @@ function setupUserAutofill() {
   function removeSelectedUser(userId) {
     selectedUsers = selectedUsers.filter(user => user._id !== userId);
     renderSelectedUsers();
+    // Re-render options to show the user again
+    if (isOpen) renderOptions(searchInput.value);
   }
   
   function renderSelectedUsers() {
+    if (!selectedUsersContainer) return;
+    
     if (selectedUsers.length === 0) {
       selectedUsersContainer.innerHTML = '';
+      trigger.querySelector('.dropdown-value').textContent = 'Select a person...';
+      trigger.querySelector('.dropdown-value').classList.add('placeholder');
       return;
     }
     
     selectedUsersContainer.innerHTML = selectedUsers.map(user => {
       const name = user.name || user.fullName || user.email;
+      const initials = getInitials(name);
       return `
         <div class="selected-user-chip">
-          <span>${name}</span>
-          <button type="button" onclick="removeSelectedUserById('${user._id}')">
-            <span class="material-symbols-outlined" style="font-size: 14px;">close</span>
+          <div class="chip-avatar">${initials}</div>
+          <span class="chip-name">${name}</span>
+          <button type="button" class="chip-remove" onclick="window.removeSelectedUserById('${user._id}')">
+            <span class="material-symbols-outlined">close</span>
           </button>
         </div>
       `;
     }).join('');
+    
+    trigger.querySelector('.dropdown-value').textContent = `${selectedUsers.length} selected`;
+    trigger.querySelector('.dropdown-value').classList.remove('placeholder');
   }
   
-  // Make removeSelectedUser available globally for onclick handlers
+  // Make removeSelectedUser available globally
   window.removeSelectedUserById = removeSelectedUser;
-  
-  // Add event listeners
-  shareEmailInput.addEventListener('input', handleUserInput);
-  shareEmailInput.addEventListener('keydown', handleKeyDown);
-  shareEmailInput.addEventListener('blur', hideSuggestions);
 }
 
 function handleModalClick(e) {
@@ -1855,9 +1852,23 @@ function closeModal() {
   const selectedUsersContainer = document.getElementById('selectedUsersList');
   if (selectedUsersContainer) selectedUsersContainer.innerHTML = '';
   
-  // Hide suggestions
-  const suggestionsContainer = document.getElementById('userSuggestions');
-  if (suggestionsContainer) suggestionsContainer.classList.remove('show');
+  // Hide and reset dropdown
+  const dropdownContainer = document.getElementById('userDropdownContainer');
+  const dropdownMenu = document.getElementById('userDropdownMenu');
+  if (dropdownContainer) dropdownContainer.classList.remove('open');
+  if (dropdownMenu) {
+    dropdownMenu.style.cssText = 'display: none !important;';
+  }
+  
+  // Reset trigger text
+  const trigger = document.getElementById('userDropdownTrigger');
+  if (trigger) {
+    const valueSpan = trigger.querySelector('.dropdown-value');
+    if (valueSpan) {
+      valueSpan.textContent = 'Select a person...';
+      valueSpan.classList.add('placeholder');
+    }
+  }
 
   // Clear lists
   const ownerList = document.getElementById('ownerList');

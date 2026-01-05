@@ -40,8 +40,8 @@ const ENVIRONMENTS = {
     API_BASE: 'http://localhost:3000',
   },
   beta: {
-    // Beta backend on Render (update this URL when you create the beta service)
-    API_BASE: 'https://lumdash-beta-backend.onrender.com', 
+    // Beta backend on Render
+    API_BASE: 'https://lumdash2-0.onrender.com', 
   },
   production: {
     // Production backend on Render

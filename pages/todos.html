@@ -1,0 +1,282 @@
+<!-- Dark Theme To-Dos Page -->
+<link rel="stylesheet" href="css/theme-dark.css">
+
+<div class="dark-theme todos-page">
+  <div class="todos-layout">
+    
+    <!-- Sidebar Navigation -->
+    <aside class="general-sidebar" id="todosSidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">
+          <img src="assets/Logo - Dark BG.png" alt="Lumetry Media" class="sidebar-logo-img">
+        </div>
+      </div>
+      
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item" data-page="events" onclick="event.preventDefault(); window.navigate && window.navigate('events');">
+          <span class="material-symbols-outlined">arrow_back</span>
+          <span>Back to Events</span>
+        </a>
+        
+        <div class="nav-section-label">Event Pages</div>
+        
+        <a href="#" class="nav-item" data-page="general" onclick="event.preventDefault(); window.navigate && window.navigate('general');">
+          <span class="material-symbols-outlined">home</span>
+          <span>Home</span>
+        </a>
+        <a href="#" class="nav-item" data-page="crew" onclick="event.preventDefault(); window.navigate && window.navigate('crew');">
+          <span class="material-symbols-outlined">group</span>
+          <span>Crew</span>
+        </a>
+        <a href="#" class="nav-item" data-page="schedule" onclick="event.preventDefault(); window.navigate && window.navigate('schedule');">
+          <span class="material-symbols-outlined">calendar_today</span>
+          <span>Schedule</span>
+        </a>
+        <a href="#" class="nav-item" data-page="shotlist" onclick="event.preventDefault(); window.navigate && window.navigate('shotlist');">
+          <span class="material-symbols-outlined">checklist</span>
+          <span>Shotlist</span>
+        </a>
+        <a href="#" class="nav-item active" data-page="todos" onclick="event.preventDefault(); window.navigate && window.navigate('todos');">
+          <span class="material-symbols-outlined">task_alt</span>
+          <span>To-Dos</span>
+        </a>
+        <a href="#" class="nav-item" data-page="travel-accommodation" onclick="event.preventDefault(); window.navigate && window.navigate('travel-accommodation');">
+          <span class="material-symbols-outlined">flight_takeoff</span>
+          <span>Travel</span>
+        </a>
+        <a href="#" class="nav-item" data-page="gear" onclick="event.preventDefault(); window.navigate && window.navigate('gear');">
+          <span class="material-symbols-outlined">photo_camera</span>
+          <span>Gear</span>
+        </a>
+        <a href="#" class="nav-item" data-page="card-log" onclick="event.preventDefault(); window.navigate && window.navigate('card-log');">
+          <span class="material-symbols-outlined">sd_card</span>
+          <span>Cards</span>
+        </a>
+        <a href="#" class="nav-item" data-page="documents" onclick="event.preventDefault(); window.navigate && window.navigate('documents');">
+          <span class="material-symbols-outlined">map</span>
+          <span>Map</span>
+        </a>
+      </nav>
+      
+      <div class="sidebar-user" id="sidebarUserContainer">
+        <div class="sidebar-user-avatar" id="sidebarUserAvatar">
+          <img src="" alt="User" id="sidebarAvatarImg" style="display: none;">
+          <span class="material-symbols-outlined" id="sidebarAvatarIcon">person</span>
+        </div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name" id="sidebarUserName">Loading...</div>
+        </div>
+        <div class="sidebar-user-dropdown" id="userDropdownBtn">
+          <span class="material-symbols-outlined">expand_more</span>
+        </div>
+      </div>
+    </aside>
+    
+    <!-- Mobile Sidebar Overlay -->
+    <div class="general-sidebar-overlay" id="todosSidebarOverlay"></div>
+    
+    <!-- Main Content -->
+    <main class="todos-main">
+      
+      <!-- Header - Like crew header -->
+      <header class="todos-header-dark">
+        <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+        <div class="todos-header-left">
+          <h1 class="todos-title" id="tableTitle">Loading Event...</h1>
+          <span class="todos-subtitle">To-Dos</span>
+        </div>
+        <div class="todos-header-right">
+          <div class="progress-section">
+            <span class="progress-text" id="progressText">0 / 0 completed</span>
+            <div class="progress-bar">
+              <div class="progress-fill" id="progressFill" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+      </header>
+      
+      <!-- Filter Bar - Like crew filter bar -->
+      <div class="todos-filter-bar">
+        <div class="filter-left">
+          <div class="search-section">
+            <span class="material-symbols-outlined search-icon">search</span>
+            <input type="text" id="searchTodos" placeholder="Search tasks..." class="search-input">
+          </div>
+        </div>
+        <div class="filter-right">
+          <!-- Can add more actions here later -->
+        </div>
+      </div>
+
+      <!-- Todos Content Container -->
+      <div class="todos-content">
+        <div class="todos-list-container">
+          <table class="todos-table">
+            <thead>
+              <tr>
+                <th class="col-task">Task</th>
+                <th class="col-status">Status</th>
+                <th class="col-due">Due Date</th>
+                <th class="col-owner">Owner</th>
+                <th class="col-notes">Notes</th>
+                <th class="col-actions"></th>
+              </tr>
+            </thead>
+            <tbody id="todosTableBody">
+              <!-- Dynamic rows will be inserted here -->
+            </tbody>
+          </table>
+          
+          <!-- Loading state -->
+          <div class="todos-loading" id="todosLoading">
+            <div class="loading-spinner"></div>
+            <p>Loading tasks...</p>
+          </div>
+          
+          <!-- Empty state message -->
+          <div class="todos-empty-message" id="todosEmptyMessage" style="display: none;">
+            <span class="material-symbols-outlined">task_alt</span>
+            <p>No tasks yet. Add your first task below.</p>
+          </div>
+          
+          <!-- Add Task Section -->
+          <div class="add-task-section" id="addTaskSection" style="display: none;">
+            <div class="add-task-row" id="addTaskRow">
+              <input type="text" id="newTaskInput" placeholder="Enter task description..." class="task-input">
+              
+              <!-- Status Custom Dropdown -->
+              <div class="inline-custom-dropdown" id="newStatusDropdown">
+                <input type="hidden" id="newTaskStatus" value="todo">
+                <button type="button" class="inline-dropdown-trigger status-todo" id="newStatusTrigger">
+                  <span class="status-dot"></span>
+                  <span class="status-text">To Do</span>
+                  <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+                </button>
+              </div>
+              
+              <input type="date" id="newTaskDueDate" class="task-date">
+              
+              <!-- Owner Custom Dropdown -->
+              <div class="inline-custom-dropdown" id="newOwnerDropdown">
+                <input type="hidden" id="newTaskOwner" value="">
+                <button type="button" class="inline-dropdown-trigger owner-trigger" id="newOwnerTrigger">
+                  <span class="material-symbols-outlined">person</span>
+                  <span class="owner-text">Select Owner</span>
+                  <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+                </button>
+              </div>
+              
+              <input type="text" id="newTaskNotes" placeholder="Notes..." class="task-notes-input">
+              <div class="add-task-actions">
+                <button class="btn-save-task" id="saveTaskBtn">
+                  <span class="material-symbols-outlined">check</span>
+                </button>
+                <button class="btn-cancel-task" id="cancelTaskBtn">
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </div>
+            </div>
+            
+          <button class="btn-add-task" id="addTaskBtn">
+            <span class="material-symbols-outlined">add</span>
+            ADD TASK
+          </button>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Edit Task Modal -->
+<div id="editTaskModal" class="dark-modal">
+  <div class="dark-modal-content">
+    <div class="modal-header-dark">
+      <h3>Edit Task</h3>
+      <button class="modal-close-btn" id="closeEditModal">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark">
+      <div class="form-group-dark">
+        <label>Task</label>
+        <input type="text" id="editTaskInput" placeholder="Enter task description">
+      </div>
+      <div class="form-row">
+        <div class="form-group-dark">
+          <label>Status</label>
+          <div class="custom-dropdown" id="editStatusDropdown">
+            <input type="hidden" id="editTaskStatus" value="todo">
+            <button type="button" class="custom-dropdown-trigger" id="editStatusTrigger">
+              <span class="dropdown-value">To Do</span>
+              <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+            </button>
+            <div class="custom-dropdown-menu">
+              <button type="button" class="custom-dropdown-option" data-value="todo">
+                <span class="status-dot status-todo"></span>
+                To Do
+              </button>
+              <button type="button" class="custom-dropdown-option" data-value="in-progress">
+                <span class="status-dot status-in-progress"></span>
+                In Progress
+              </button>
+              <button type="button" class="custom-dropdown-option" data-value="done">
+                <span class="status-dot status-done"></span>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="form-group-dark">
+          <label>Due Date</label>
+          <input type="date" id="editTaskDueDate">
+        </div>
+      </div>
+      <div class="form-group-dark">
+        <label>Owner</label>
+        <div class="custom-dropdown searchable-dropdown" id="editOwnerDropdown">
+          <input type="hidden" id="editTaskOwner" value="">
+          <button type="button" class="custom-dropdown-trigger" id="editOwnerTrigger">
+            <span class="dropdown-value placeholder">Unassigned</span>
+            <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+          </button>
+          <div class="custom-dropdown-menu" id="editOwnerMenu">
+            <!-- Search and options populated by JS -->
+          </div>
+        </div>
+      </div>
+      <div class="form-group-dark">
+        <label>Notes</label>
+        <input type="text" id="editTaskNotes" placeholder="Add notes...">
+      </div>
+    </div>
+    <div class="modal-footer-dark">
+      <button type="button" class="btn-secondary" id="cancelEditBtn">Cancel</button>
+      <button type="button" class="btn-primary" id="saveEditBtn">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div id="deleteTaskModal" class="dark-modal">
+  <div class="dark-modal-content small">
+    <div class="modal-header-dark">
+      <h3>Delete Task</h3>
+      <button class="modal-close-btn" id="closeDeleteModal">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark">
+      <p>Are you sure you want to delete this task? This action cannot be undone.</p>
+      <p class="delete-task-name" id="deleteTaskName"></p>
+    </div>
+    <div class="modal-footer-dark">
+      <button class="btn-secondary" id="cancelDeleteBtn">Cancel</button>
+      <button class="btn-danger" id="confirmDeleteBtn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/todos.js"></script>

@@ -920,7 +920,7 @@ body:has(.events-page) {
   gap: 1px;
   flex: 1;
   min-height: 0;
-  background: #1111;
+  background: #111111;
   width: 100%;
 }
 
@@ -1858,6 +1858,67 @@ body:has(.events-page) {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+/* Task Status Badge */
+.task-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.task-status-badge .material-symbols-outlined {
+  font-size: 14px;
+}
+
+.task-status-badge.not-started {
+  background: rgba(107, 114, 128, 0.15);
+  color: #9ca3af;
+}
+
+.task-status-badge.not-started .material-symbols-outlined {
+  color: #9ca3af;
+}
+
+.task-status-badge.in-progress {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+
+.task-status-badge.in-progress .material-symbols-outlined {
+  color: #60a5fa;
+}
+
+.task-status-badge.up-to-date {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+.task-status-badge.up-to-date .material-symbols-outlined {
+  color: #4ade80;
+}
+
+.task-status-badge.overdue {
+  background: rgba(239, 68, 68, 0.15);
+  color: #f87171;
+}
+
+.task-status-badge.overdue .material-symbols-outlined {
+  color: #f87171;
+}
+
+.task-status-badge.completed {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
+}
+
+.task-status-badge.completed .material-symbols-outlined {
+  color: #22c55e;
 }
 
 .owner-dropdown-item:not(:last-child) {
@@ -8333,6 +8394,99 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   background: #c82333 !important;
 }
 
+/* ========================================
+   GLOBAL MODAL DARK THEME OVERRIDES
+   These apply to all standard modals
+   ======================================== */
+
+/* Override standard modal classes globally */
+.modal-overlay {
+  background: var(--surface-overlay) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+}
+
+.modal-content {
+  background: var(--surface-modal) !important;
+  border: 1px solid var(--border-default) !important;
+  border-radius: var(--radius-xl) !important;
+  box-shadow: var(--shadow-xl) !important;
+  color: var(--text-primary) !important;
+}
+
+.modal-header {
+  background: transparent !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
+}
+
+.modal-header h2,
+.modal-header h3 {
+  color: var(--text-primary) !important;
+}
+
+.modal-body {
+  background: transparent !important;
+}
+
+.modal-body p {
+  color: var(--text-secondary) !important;
+}
+
+.modal-footer {
+  background: var(--bg-tertiary) !important;
+  border-top: 1px solid var(--border-subtle) !important;
+}
+
+.modal-close,
+.close-btn {
+  background: var(--bg-tertiary) !important;
+  border: none !important;
+  color: var(--text-muted) !important;
+  border-radius: var(--radius-md) !important;
+  padding: 8px !important;
+  cursor: pointer !important;
+  transition: all var(--transition-fast) !important;
+}
+
+.modal-close:hover,
+.close-btn:hover {
+  background: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Form elements in standard modals */
+.modal-content .form-group label {
+  color: var(--text-secondary) !important;
+}
+
+.modal-content input[type="text"],
+.modal-content input[type="email"],
+.modal-content input[type="password"],
+.modal-content input[type="date"],
+.modal-content input[type="number"],
+.modal-content input[type="tel"],
+.modal-content textarea,
+.modal-content select {
+  background: var(--bg-tertiary) !important;
+  border: 1px solid var(--border-default) !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--text-primary) !important;
+  color-scheme: dark !important;
+}
+
+.modal-content input::placeholder,
+.modal-content textarea::placeholder {
+  color: var(--text-muted) !important;
+}
+
+.modal-content input:focus,
+.modal-content textarea:focus,
+.modal-content select:focus {
+  border-color: var(--brand-red) !important;
+  outline: none !important;
+  box-shadow: 0 0 0 2px var(--brand-red-muted) !important;
+}
+
 /* Mobile Responsive */
 @media (max-width: 768px) {
   .shotlist-page.dark-theme .shotlist-main {
@@ -8381,6 +8535,1532 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
     opacity: 1;
   }
 }
+
+/* ========================================
+   TO-DOS PAGE - DARK THEME
+   Task management within events
+   ======================================== */
+
+.todos-page.dark-theme {
+  background: var(--bg-primary);
+  min-height: 100vh;
+  font-family: var(--font-family);
+  color: var(--text-primary);
+  
+  /* Override Material Design CSS variables for dark theme */
+  --md-sys-color-surface: #1a1a1a;
+  --md-sys-color-surface-variant: #2a2a2a;
+  --md-sys-color-on-surface: #ffffff;
+  --md-sys-color-on-surface-variant: #9ca3af;
+  --md-sys-color-outline: #333333;
+}
+
+.todos-page.dark-theme .todos-layout {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.todos-page.dark-theme .todos-main {
+  flex: 1;
+  margin-left: 260px;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Header - Match crew header */
+.todos-page.dark-theme .todos-header-dark {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 32px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.todos-page.dark-theme .todos-header-left {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.todos-page.dark-theme .todos-header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.todos-page.dark-theme .mobile-menu-btn {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  padding: 8px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  margin-right: 8px;
+}
+
+.todos-page.dark-theme .todos-title {
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.todos-page.dark-theme .todos-subtitle {
+  font-size: var(--font-size-sm);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Filter Bar - Like crew filter bar */
+.todos-page.dark-theme .todos-filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 32px;
+  background: var(--bg-primary);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.todos-page.dark-theme .todos-filter-bar .filter-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.todos-page.dark-theme .todos-filter-bar .filter-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.todos-page.dark-theme .progress-section {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+
+.todos-page.dark-theme .progress-text {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.todos-page.dark-theme .progress-section .progress-bar {
+  width: 150px !important;
+  height: 6px !important;
+  background: var(--bg-tertiary) !important;
+  border-radius: 3px !important;
+  overflow: hidden !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.todos-page.dark-theme .progress-section .progress-fill {
+  height: 100% !important;
+  background: linear-gradient(90deg, var(--brand-red), #ff6b6b) !important;
+  border-radius: 3px !important;
+  transition: width 0.3s ease !important;
+}
+
+.todos-page.dark-theme .search-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 8px 14px;
+  width: 280px;
+}
+
+.todos-page.dark-theme .search-icon {
+  color: var(--text-muted);
+  font-size: 18px;
+}
+
+.todos-page.dark-theme .search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  outline: none;
+}
+
+.todos-page.dark-theme .search-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Content Container */
+.todos-page.dark-theme .todos-content {
+  flex: 1;
+  overflow: auto;
+  padding: 24px 32px;
+  background: var(--bg-primary);
+}
+
+/* List Container - Card style like crew */
+.todos-page.dark-theme .todos-list-container {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: visible;
+}
+
+/* Table */
+.todos-page.dark-theme .todos-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.todos-page.dark-theme .todos-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg-tertiary);
+}
+
+.todos-page.dark-theme .todos-table th {
+  padding: 14px 16px;
+  text-align: left;
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.todos-page.dark-theme .todos-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.todos-page.dark-theme .todos-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+/* Column widths */
+.todos-page.dark-theme .col-task { width: 25%; }
+.todos-page.dark-theme .col-status { width: 110px; }
+.todos-page.dark-theme .col-due { width: 100px; }
+.todos-page.dark-theme .col-owner { width: 140px; }
+.todos-page.dark-theme .col-notes { width: auto; }
+.todos-page.dark-theme .col-actions { width: 60px; text-align: center; padding-right: 16px !important; }
+
+/* Task cell */
+.todos-page.dark-theme .col-task {
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+}
+
+/* Status Select/Badge */
+.todos-page.dark-theme .status-select {
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  border: 1px solid transparent;
+  font-family: var(--font-family);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 28px;
+  transition: all var(--transition-fast);
+}
+
+.todos-page.dark-theme .status-select:hover {
+  border-color: var(--border-strong);
+}
+
+.todos-page.dark-theme .status-select:focus {
+  outline: none;
+  border-color: var(--brand-red);
+  box-shadow: 0 0 0 2px var(--brand-red-muted);
+}
+
+.todos-page.dark-theme .status-select.status-todo,
+.todos-page.dark-theme .status-badge.status-todo {
+  background: rgba(107, 114, 128, 0.2);
+  color: #9ca3af;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+}
+
+.todos-page.dark-theme .status-select.status-in-progress,
+.todos-page.dark-theme .status-badge.status-in-progress {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2360a5fa' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+}
+
+.todos-page.dark-theme .status-select.status-done,
+.todos-page.dark-theme .status-badge.status-done {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%234ade80' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+}
+
+/* Style native select options on dark mode */
+.todos-page.dark-theme .status-select option,
+.todos-page.dark-theme .task-select option,
+.todos-page.dark-theme select option {
+  background: #1a1a1a !important;
+  color: #ffffff !important;
+  padding: 8px 12px;
+}
+
+/* Force dark mode on all native selects in todos page */
+.todos-page.dark-theme select {
+  color-scheme: dark !important;
+}
+
+/* ========================================
+   INLINE CUSTOM DROPDOWNS FOR TABLE ROWS
+   ======================================== */
+
+.inline-status-dropdown {
+  position: relative;
+}
+
+.inline-dropdown-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  border: none;
+  font-family: var(--font-family);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.inline-dropdown-trigger .status-text {
+  white-space: nowrap;
+}
+
+.inline-dropdown-trigger .dropdown-arrow {
+  font-size: 16px;
+  transition: transform 0.2s ease;
+}
+
+.inline-dropdown-trigger.open .dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+/* Status colors for inline dropdown trigger */
+.inline-dropdown-trigger.status-todo {
+  background: rgba(107, 114, 128, 0.2);
+  color: #9ca3af;
+}
+
+.inline-dropdown-trigger.status-in-progress {
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+}
+
+.inline-dropdown-trigger.status-done {
+  background: rgba(34, 197, 94, 0.2);
+  color: #4ade80;
+}
+
+.inline-dropdown-trigger:hover {
+  filter: brightness(1.1);
+}
+
+/* Inline dropdown menu (appended to body) */
+.inline-dropdown-menu {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  max-height: 300px;
+  min-width: 140px;
+}
+
+.inline-dropdown-menu.searchable-menu {
+  overflow: hidden;
+}
+
+.inline-dropdown-menu .custom-dropdown-search {
+  padding: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--bg-elevated);
+}
+
+.inline-dropdown-menu .custom-dropdown-search input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+}
+
+.inline-dropdown-menu .custom-dropdown-search input:focus {
+  outline: none;
+  border-color: var(--brand-red);
+}
+
+.inline-dropdown-menu .custom-dropdown-search input::placeholder {
+  color: var(--text-muted);
+}
+
+.inline-dropdown-menu .custom-dropdown-options {
+  max-height: 220px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.inline-dropdown-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  text-align: left;
+}
+
+.inline-dropdown-option:hover {
+  background: var(--bg-hover);
+}
+
+.inline-dropdown-option.selected {
+  background: var(--brand-red-muted);
+  color: var(--brand-red);
+}
+
+/* Status dots in inline dropdown */
+.inline-dropdown-trigger .status-dot,
+.inline-dropdown-option .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.inline-dropdown-trigger.status-todo .status-dot,
+.inline-dropdown-option .status-dot.status-todo {
+  background: #9ca3af;
+}
+
+.inline-dropdown-trigger.status-in-progress .status-dot,
+.inline-dropdown-option .status-dot.status-in-progress {
+  background: #60a5fa;
+}
+
+.inline-dropdown-trigger.status-done .status-dot,
+.inline-dropdown-option .status-dot.status-done {
+  background: #4ade80;
+}
+
+/* Inline custom dropdown wrapper */
+.inline-custom-dropdown {
+  position: relative;
+}
+
+/* Owner trigger styling */
+.inline-dropdown-trigger.owner-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  white-space: nowrap;
+  min-width: 140px;
+}
+
+.inline-dropdown-trigger.owner-trigger:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+
+.inline-dropdown-trigger.owner-trigger .material-symbols-outlined:first-child {
+  font-size: 18px;
+  color: var(--text-muted);
+}
+
+.inline-dropdown-trigger.owner-trigger .dropdown-arrow {
+  font-size: 18px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+/* Owner text in trigger */
+.inline-dropdown-trigger .owner-text {
+  flex: 1;
+  text-align: left;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Icon in inline dropdown options */
+.inline-dropdown-option .material-symbols-outlined {
+  font-size: 18px;
+  color: var(--text-muted);
+}
+
+/* ========================================
+   SEARCHABLE DROPDOWN (like crew page)
+   ======================================== */
+
+.searchable-dropdown .custom-dropdown-menu,
+.searchable-menu {
+  overflow: hidden;
+}
+
+.searchable-dropdown .custom-dropdown-options,
+.searchable-menu .custom-dropdown-options {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.custom-dropdown-empty {
+  padding: 12px 16px;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  text-align: center;
+}
+
+/* Search input in modal dropdown */
+#editOwnerMenu .custom-dropdown-search,
+#editStatusDropdown .custom-dropdown-search {
+  padding: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+  position: sticky;
+  top: 0;
+  background: var(--bg-elevated);
+  z-index: 1;
+}
+
+#editOwnerMenu .custom-dropdown-search input,
+#editStatusDropdown .custom-dropdown-search input {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+}
+
+#editOwnerMenu .custom-dropdown-search input:focus,
+#editStatusDropdown .custom-dropdown-search input:focus {
+  outline: none;
+  border-color: var(--brand-red);
+}
+
+#editOwnerMenu .custom-dropdown-search input::placeholder,
+#editStatusDropdown .custom-dropdown-search input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Ensure owner menu has proper height for scrolling */
+#editOwnerMenu {
+  max-height: 300px;
+  overflow: hidden;
+}
+
+#editOwnerMenu .custom-dropdown-options {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.todos-page.dark-theme .status-badge {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Due Date */
+.todos-page.dark-theme .due-date {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+}
+
+.todos-page.dark-theme .due-date.overdue {
+  color: #ef4444;
+  font-weight: var(--font-weight-medium);
+}
+
+.todos-page.dark-theme .due-date.due-soon {
+  color: #f59e0b;
+  font-weight: var(--font-weight-medium);
+}
+
+/* Owner */
+.todos-page.dark-theme .owner-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.todos-page.dark-theme .owner-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.todos-page.dark-theme .owner-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.todos-page.dark-theme .owner-avatar .material-symbols-outlined {
+  font-size: 18px;
+  color: var(--text-muted);
+}
+
+.todos-page.dark-theme .owner-name {
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+}
+
+.todos-page.dark-theme .unassigned {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Notes Input */
+.todos-page.dark-theme .notes-input {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  color: var(--text-secondary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  transition: all var(--transition-fast);
+}
+
+.todos-page.dark-theme .notes-input:hover {
+  background: var(--bg-tertiary);
+}
+
+.todos-page.dark-theme .notes-input:focus {
+  background: var(--bg-tertiary);
+  border-color: var(--border-default);
+  outline: none;
+  color: var(--text-primary);
+}
+
+.todos-page.dark-theme .notes-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Actions Button */
+.todos-page.dark-theme .actions-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.todos-page.dark-theme .actions-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Actions Menu */
+.todos-page.dark-theme .actions-menu,
+.actions-menu {
+  position: fixed;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 6px;
+  min-width: 140px;
+  box-shadow: var(--shadow-lg);
+  z-index: 1000;
+}
+
+.todos-page.dark-theme .actions-menu .action-item,
+.actions-menu .action-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+}
+
+.todos-page.dark-theme .actions-menu .action-item:hover,
+.actions-menu .action-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.todos-page.dark-theme .actions-menu .action-item .material-symbols-outlined,
+.actions-menu .action-item .material-symbols-outlined {
+  font-size: 18px;
+}
+
+/* Empty State Message */
+.todos-page.dark-theme .todos-empty-message {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 20px;
+  text-align: center;
+}
+
+.todos-page.dark-theme .todos-empty-message .material-symbols-outlined {
+  font-size: 40px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.todos-page.dark-theme .todos-empty-message p {
+  font-size: var(--font-size-sm);
+  color: var(--text-muted);
+  margin: 0;
+}
+
+/* Loading State */
+.todos-page.dark-theme .todos-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 20px;
+  gap: 16px;
+}
+
+.todos-page.dark-theme .todos-loading .loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid var(--bg-tertiary);
+  border-top-color: var(--brand-red);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.todos-page.dark-theme .todos-loading p {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+/* Add Task Section */
+.todos-page.dark-theme .add-task-section {
+  padding: 16px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.todos-page.dark-theme .btn-add-task {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--bg-tertiary);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.todos-page.dark-theme .btn-add-task:hover {
+  background: var(--bg-hover);
+  border-color: var(--brand-red);
+  color: var(--brand-red);
+}
+
+.todos-page.dark-theme .btn-add-task .material-symbols-outlined {
+  font-size: 16px;
+}
+
+/* Add Task Row */
+.todos-page.dark-theme .add-task-row {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+  margin-bottom: 12px;
+}
+
+.todos-page.dark-theme .add-task-row.active {
+  display: flex;
+}
+
+/* Inline custom dropdown in add task row */
+.todos-page.dark-theme .add-task-row .inline-custom-dropdown,
+.todos-page.dark-theme .add-task-row .custom-dropdown {
+  flex-shrink: 0;
+}
+
+.todos-page.dark-theme .add-task-row .inline-dropdown-trigger,
+.todos-page.dark-theme .add-task-row .custom-dropdown-trigger {
+  min-width: 120px;
+}
+
+.todos-page.dark-theme .task-input {
+  flex: 2;
+  min-width: 200px;
+  padding: 10px 14px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  transition: all var(--transition-fast);
+}
+
+.todos-page.dark-theme .task-input:focus {
+  border-color: var(--brand-red);
+  outline: none;
+}
+
+.todos-page.dark-theme .task-input::placeholder {
+  color: var(--text-muted);
+}
+
+.todos-page.dark-theme .task-select {
+  padding: 10px 32px 10px 14px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  transition: all var(--transition-fast);
+}
+
+.todos-page.dark-theme .task-select:hover {
+  border-color: var(--border-strong);
+}
+
+.todos-page.dark-theme .task-select:focus {
+  border-color: var(--brand-red);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--brand-red-muted);
+}
+
+.todos-page.dark-theme .task-select option {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  padding: 8px 12px;
+}
+
+.todos-page.dark-theme .task-date {
+  padding: 10px 14px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+}
+
+.todos-page.dark-theme .task-date:focus {
+  border-color: var(--brand-red);
+  outline: none;
+}
+
+.todos-page.dark-theme .owner-select {
+  min-width: 150px;
+}
+
+.todos-page.dark-theme .task-notes-input {
+  flex: 1;
+  min-width: 120px;
+  padding: 10px 14px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+}
+
+.todos-page.dark-theme .task-notes-input:focus {
+  border-color: var(--brand-red);
+  outline: none;
+}
+
+.todos-page.dark-theme .task-notes-input::placeholder {
+  color: var(--text-muted);
+}
+
+.todos-page.dark-theme .add-task-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.todos-page.dark-theme .btn-save-task {
+  width: 36px;
+  height: 36px;
+  background: var(--brand-red);
+  border: none;
+  border-radius: var(--radius-md);
+  color: #ffffff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.todos-page.dark-theme .btn-save-task:hover {
+  background: var(--brand-red-hover);
+}
+
+.todos-page.dark-theme .btn-cancel-task {
+  width: 36px;
+  height: 36px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.todos-page.dark-theme .btn-cancel-task:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Edit/Delete Modals */
+.todos-page.dark-theme .modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8) !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.todos-page.dark-theme .modal-content,
+.todos-page.dark-theme .edit-task-modal,
+.todos-page.dark-theme .delete-confirm-modal,
+#editTaskModal .modal-content,
+#deleteTaskModal .modal-content,
+.todos-page #editTaskModal .modal-content,
+.todos-page #deleteTaskModal .modal-content {
+  background: #1a1a1a !important;
+  border: 1px solid #333 !important;
+  border-radius: 12px !important;
+  width: 90%;
+  max-width: 500px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6) !important;
+  color: #ffffff !important;
+}
+
+/* Force dark theme on all modal elements with high specificity */
+#editTaskModal,
+#deleteTaskModal {
+  background: rgba(0, 0, 0, 0.8) !important;
+}
+
+#editTaskModal .modal-content,
+#deleteTaskModal .modal-content {
+  background: #1a1a1a !important;
+  border: 1px solid #333 !important;
+  color: #ffffff !important;
+}
+
+#editTaskModal .modal-header,
+#deleteTaskModal .modal-header {
+  background: transparent !important;
+  border-bottom: 1px solid #333 !important;
+}
+
+#editTaskModal .modal-header h2,
+#deleteTaskModal .modal-header h2 {
+  color: #ffffff !important;
+}
+
+#editTaskModal .modal-body,
+#deleteTaskModal .modal-body {
+  background: transparent !important;
+}
+
+#editTaskModal .modal-footer,
+#deleteTaskModal .modal-footer {
+  background: transparent !important;
+  border-top: 1px solid #333 !important;
+}
+
+#editTaskModal .form-group label,
+#deleteTaskModal .modal-body p {
+  color: #9ca3af !important;
+}
+
+#editTaskModal .form-input,
+#editTaskModal .form-select {
+  background: #2a2a2a !important;
+  border: 1px solid #444 !important;
+  color: #ffffff !important;
+}
+
+#editTaskModal .modal-close,
+#deleteTaskModal .modal-close {
+  background: #2a2a2a !important;
+  color: #9ca3af !important;
+}
+
+#editTaskModal .modal-close:hover,
+#deleteTaskModal .modal-close:hover {
+  background: #333 !important;
+  color: #ffffff !important;
+}
+
+.todos-page.dark-theme .modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #333 !important;
+  background: transparent !important;
+}
+
+.todos-page.dark-theme .modal-header h2 {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+  color: #ffffff !important;
+  margin: 0;
+}
+
+.todos-page.dark-theme .modal-close {
+  background: #2a2a2a !important;
+  border: none;
+  color: #9ca3af !important;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.todos-page.dark-theme .modal-close:hover {
+  background: #333 !important;
+  color: #ffffff !important;
+}
+
+.todos-page.dark-theme .modal-body {
+  padding: 24px;
+  background: transparent !important;
+  color: #ffffff !important;
+}
+
+.todos-page.dark-theme .form-group {
+  margin-bottom: 16px;
+}
+
+.todos-page.dark-theme .form-group label {
+  display: block;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: #9ca3af !important;
+  margin-bottom: 8px;
+}
+
+.todos-page.dark-theme .form-input,
+.todos-page.dark-theme .form-select {
+  width: 100%;
+  padding: 10px 14px;
+  background: #2a2a2a !important;
+  border: 1px solid #444 !important;
+  border-radius: 8px !important;
+  color: #ffffff !important;
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  box-sizing: border-box;
+}
+
+.todos-page.dark-theme .form-input:focus,
+.todos-page.dark-theme .form-select:focus {
+  border-color: var(--brand-red) !important;
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.2) !important;
+}
+
+.todos-page.dark-theme .form-input::placeholder {
+  color: #6b7280 !important;
+}
+
+/* Custom Dropdown for Todos */
+.todos-page.dark-theme .custom-dropdown {
+  position: relative;
+}
+
+.todos-page.dark-theme .custom-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 10px 14px;
+  background: #2a2a2a !important;
+  border: 1px solid #444 !important;
+  border-radius: 8px !important;
+  color: #ffffff !important;
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+}
+
+.todos-page.dark-theme .custom-dropdown-trigger:hover {
+  border-color: #555 !important;
+  background: #333 !important;
+}
+
+.todos-page.dark-theme .custom-dropdown-trigger.open {
+  border-color: var(--brand-red) !important;
+}
+
+.todos-page.dark-theme .custom-dropdown-trigger .dropdown-value {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todos-page.dark-theme .custom-dropdown-trigger .dropdown-value.placeholder {
+  color: var(--text-muted);
+}
+
+.todos-page.dark-theme .custom-dropdown-trigger .dropdown-arrow {
+  font-size: 18px;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+  margin-left: 8px;
+}
+
+.todos-page.dark-theme .custom-dropdown-trigger.open .dropdown-arrow {
+  transform: rotate(180deg);
+}
+
+.todos-page.dark-theme .custom-dropdown-menu {
+  max-height: 200px;
+  overflow-y: auto;
+  background: #1a1a1a !important;
+  border: 1px solid #333 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6) !important;
+  display: none;
+}
+
+.todos-page.dark-theme .custom-dropdown.open .custom-dropdown-menu {
+  display: block;
+}
+
+/* Modal dropdown specific - use fixed positioning */
+.todos-page.dark-theme .dark-modal .custom-dropdown-menu,
+#editStatusDropdown .custom-dropdown-menu,
+#editOwnerDropdown .custom-dropdown-menu {
+  position: fixed !important;
+  z-index: 999999 !important;
+  top: auto !important;
+  left: auto !important;
+  right: auto !important;
+  margin-top: 0 !important;
+}
+
+/* Ensure modal content has proper border-radius clipping */
+#editTaskModal .dark-modal-content {
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+}
+
+.todos-page.dark-theme .custom-dropdown-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent !important;
+  border: none;
+  color: #e0e0e0 !important;
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  text-align: left;
+}
+
+.todos-page.dark-theme .custom-dropdown-option:hover {
+  background: #2a2a2a !important;
+}
+
+.todos-page.dark-theme .custom-dropdown-option.selected {
+  background: rgba(220, 53, 69, 0.2) !important;
+  color: #dc3545 !important;
+}
+
+.todos-page.dark-theme .custom-dropdown-option .option-avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.todos-page.dark-theme .custom-dropdown-option .option-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.todos-page.dark-theme .custom-dropdown-option .option-avatar .material-symbols-outlined {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+/* Status badge colors in dropdown */
+.todos-page.dark-theme .custom-dropdown-option .status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.todos-page.dark-theme .custom-dropdown-option .status-dot.status-todo {
+  background: #9ca3af;
+}
+
+.todos-page.dark-theme .custom-dropdown-option .status-dot.status-in-progress {
+  background: #60a5fa;
+}
+
+.todos-page.dark-theme .custom-dropdown-option .status-dot.status-done {
+  background: #4ade80;
+}
+
+.todos-page.dark-theme .form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.todos-page.dark-theme .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid #333 !important;
+  background: transparent !important;
+}
+
+.todos-page.dark-theme .btn-secondary {
+  padding: 10px 20px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.todos-page.dark-theme .btn-secondary:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.todos-page.dark-theme .btn-primary {
+  padding: 10px 20px;
+  background: var(--brand-red);
+  border: none;
+  border-radius: var(--radius-md);
+  color: #ffffff;
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.todos-page.dark-theme .btn-primary:hover {
+  background: var(--brand-red-hover);
+}
+
+.todos-page.dark-theme .btn-danger {
+  padding: 10px 20px;
+  background: #dc3545;
+  border: none;
+  border-radius: var(--radius-md);
+  color: #ffffff;
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.todos-page.dark-theme .btn-danger:hover {
+  background: #c82333;
+}
+
+/* Delete modal specific styles */
+/* Todo Delete Modal */
+#deleteTaskModal.dark-modal .dark-modal-content.small {
+  max-width: 400px;
+}
+
+#deleteTaskModal .modal-body-dark p {
+  color: var(--text-secondary);
+  margin: 0 0 16px 0;
+  line-height: 1.5;
+}
+
+#deleteTaskModal .delete-task-name,
+.todos-page .delete-task-name {
+  padding: 12px 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Custom dropdowns in dark modals */
+.dark-modal .custom-dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.dark-modal .custom-dropdown-trigger:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-hover);
+}
+
+.dark-modal .custom-dropdown-trigger.open {
+  border-color: var(--brand-red);
+}
+
+.dark-modal .custom-dropdown-menu {
+  position: fixed;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-xl);
+  z-index: 999999;
+  display: none;
+}
+
+.dark-modal .custom-dropdown.open .custom-dropdown-menu {
+  display: block;
+}
+
+.dark-modal .custom-dropdown-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  text-align: left;
+}
+
+.dark-modal .custom-dropdown-option:hover {
+  background: var(--bg-hover);
+}
+
+.dark-modal .custom-dropdown-option.selected {
+  background: var(--brand-red-muted);
+  color: var(--brand-red);
+  font-weight: var(--font-weight-medium);
+  margin: 0;
+}
+
+.todos-page.dark-theme .delete-task-name {
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  margin-top: 8px;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+  .todos-page.dark-theme .todos-main {
+    margin-left: 0;
+  }
+  
+  .todos-page.dark-theme .mobile-menu-btn {
+    display: flex;
+  }
+  
+  .todos-page.dark-theme .todos-header-dark {
+    padding: 16px 20px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  
+  .todos-page.dark-theme .todos-header-left {
+    flex: 1;
+  }
+  
+  .todos-page.dark-theme .todos-header-right {
+    width: 100%;
+  }
+  
+  .todos-page.dark-theme .todos-filter-bar {
+    padding: 12px 20px;
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .todos-page.dark-theme .todos-filter-bar .filter-right {
+    width: 100%;
+  }
+  
+  .todos-page.dark-theme .search-section {
+    width: 100%;
+  }
+  
+  .todos-page.dark-theme .todos-content {
+    padding: 16px 20px;
+  }
+  
+  .todos-page.dark-theme .todos-list-container {
+    overflow-x: auto;
+  }
+  
+  .todos-page.dark-theme .todos-table {
+    min-width: 700px;
+  }
+  
+  .todos-page.dark-theme .add-task-section {
+    padding: 12px;
+  }
+  
+  .todos-page.dark-theme .add-task-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .todos-page.dark-theme .add-task-row.active {
+    display: flex;
+  }
+  
+  .todos-page.dark-theme .task-input,
+  .todos-page.dark-theme .task-select,
+  .todos-page.dark-theme .task-date,
+  .todos-page.dark-theme .task-notes-input {
+    width: 100%;
+    min-width: auto;
+  }
+  
+  .todos-page.dark-theme .add-task-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  
+  .todos-page.dark-theme .form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 
 /* ========================================
    CARD LOG PAGE - DARK THEME

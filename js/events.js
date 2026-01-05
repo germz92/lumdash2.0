@@ -492,6 +492,62 @@ function renderCrewAvatarsDark(crewMembers, totalCount, eventId = null) {
 }
 
 // Render event row for dark theme table
+// Calculate task status for an event
+function getTaskStatus(todos) {
+  if (!todos || todos.length === 0) {
+    return { label: 'Not Started', class: 'not-started', icon: 'radio_button_unchecked' };
+  }
+  
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  
+  const completed = todos.filter(t => t.status === 'done');
+  const inProgress = todos.filter(t => t.status === 'in-progress');
+  const pending = todos.filter(t => t.status === 'todo');
+  
+  // Check if all tasks are completed
+  if (completed.length === todos.length) {
+    return { label: 'Completed', class: 'completed', icon: 'check_circle' };
+  }
+  
+  // Check for overdue tasks (pending or in-progress with past due date)
+  const hasOverdue = todos.some(t => {
+    if (t.status === 'done') return false;
+    if (!t.dueDate) return false;
+    const dueDate = new Date(t.dueDate);
+    dueDate.setHours(0, 0, 0, 0);
+    return dueDate < now;
+  });
+  
+  if (hasOverdue) {
+    return { label: 'Overdue', class: 'overdue', icon: 'warning' };
+  }
+  
+  // Check if all due tasks are completed (up to date)
+  const dueTasks = todos.filter(t => {
+    if (!t.dueDate) return false;
+    const dueDate = new Date(t.dueDate);
+    dueDate.setHours(0, 0, 0, 0);
+    return dueDate <= now;
+  });
+  
+  const allDueCompleted = dueTasks.length > 0 && dueTasks.every(t => t.status === 'done');
+  if (allDueCompleted || (completed.length > 0 && dueTasks.length === 0)) {
+    // Has completed tasks and no overdue - check if there's work in progress
+    if (inProgress.length > 0 || pending.length > 0) {
+      return { label: 'Up to Date', class: 'up-to-date', icon: 'schedule' };
+    }
+  }
+  
+  // Check if there's any progress
+  if (inProgress.length > 0 || completed.length > 0) {
+    return { label: 'In Progress', class: 'in-progress', icon: 'pending' };
+  }
+  
+  // No completed tasks
+  return { label: 'Not Started', class: 'not-started', icon: 'radio_button_unchecked' };
+}
+
 function renderEventRowDark(table, index, userId) {
   const general = table.general || {};
   const accentColor = rowAccentColors[index % rowAccentColors.length];
@@ -515,6 +571,10 @@ function renderEventRowDark(table, index, userId) {
   const ownerDisplay = ownerNames.length > 0 ? ownerNames[0] : '—';
   const hasMultipleOwners = ownerNames.length > 1;
   const ownerListHtml = ownerNames.map(name => `<div class="owner-dropdown-item">${name}</div>`).join('');
+  
+  // Get task status
+  const todos = table.todos || [];
+  const taskStatus = getTaskStatus(todos);
   
   const row = document.createElement('tr');
   row.className = 'event-row';
@@ -547,6 +607,12 @@ function renderEventRowDark(table, index, userId) {
     <td>
       <div class="crew-avatars">
         ${renderCrewAvatarsDark(crewMembers, crewCount, table._id)}
+      </div>
+    </td>
+    <td>
+      <div class="task-status-badge ${taskStatus.class}">
+        <span class="material-symbols-outlined">${taskStatus.icon}</span>
+        <span class="task-status-label">${taskStatus.label}</span>
       </div>
     </td>
     <td>
@@ -924,12 +990,12 @@ async function loadTables(forceRefresh = false) {
     if (sortField === 'name') {
       comparison = (a.title || '').localeCompare(b.title || '');
     } else if (sortField === 'date') {
-      const parseDateUTC = (dateStr) => {
-        if (!dateStr) return new Date(0);
+    const parseDateUTC = (dateStr) => {
+      if (!dateStr) return new Date(0);
         return new Date(dateStr);
-      };
-      const dateA = parseDateUTC(a.general?.start || a.createdAt || 0);
-      const dateB = parseDateUTC(b.general?.start || b.createdAt || 0);
+    };
+    const dateA = parseDateUTC(a.general?.start || a.createdAt || 0);
+    const dateB = parseDateUTC(b.general?.start || b.createdAt || 0);
       comparison = dateA - dateB;
     }
     

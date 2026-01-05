@@ -86,7 +86,7 @@ console.log(' app.js loaded');
 })();
 
 const PAGE_CLASSES = [
-  'events-page', 'general-page', 'crew-page', 'travel-page', 'card-log-page', 'schedule-page', 'dashboard-page', 'login-page', 'register-page', 'users-page', 'crew-planner-page', 'crew-calendar-page', 'gear-page'
+  'events-page', 'general-page', 'crew-page', 'travel-page', 'card-log-page', 'schedule-page', 'dashboard-page', 'login-page', 'register-page', 'users-page', 'crew-planner-page', 'crew-calendar-page', 'gear-page', 'todos-page'
 ];
 
 function setBodyPageClass(page) {
@@ -1011,6 +1011,7 @@ function updateActiveNavigation(currentPage) {
     'gear': 'photo_camera',
     'card-log': 'sd_card',
     'shotlist': 'checklist',
+    'todos': 'task_alt',
     'documents': 'map'
   };
 

@@ -109,6 +109,10 @@ const io = socketIo(server, {
         'https://spa-lumdash-backend.onrender.com',
         'https://lumdash-beta-backend.onrender.com',
         'https://germainedavid.github.io',
+        'https://lumquote.com',           // LumQuote Invoice App
+        'https://www.lumquote.com',
+        'http://localhost:8000',          // LumQuote local development
+        'http://127.0.0.1:8000',
         'http://localhost:3000',
         'http://127.0.0.1:3000',
         'http://localhost:5000',
@@ -799,6 +803,73 @@ app.post('/api/auth/login', async (req, res) => {
   res.json({ token, fullName: user.fullName, role: user.role });
 });
 
+// ===========================================
+// AUTH REDIRECT - For Cross-App Authentication
+// Allows external apps (like LumQuote) to get a valid token via redirect
+// Flow: ExternalApp -> LumDash /auth/redirect -> Frontend auth-redirect.html handles the logic
+// ===========================================
+app.get('/auth/redirect', (req, res) => {
+  const { callback, app } = req.query;
+  
+  if (!callback) {
+    return res.status(400).send('Missing callback parameter');
+  }
+  
+  // Validate callback URL is from allowed origins
+  const allowedCallbackDomains = [
+    'lumquote.com',
+    'www.lumquote.com',
+    'localhost',
+    '127.0.0.1'
+  ];
+  
+  try {
+    const callbackUrl = new URL(callback);
+    const isAllowed = allowedCallbackDomains.some(domain => 
+      callbackUrl.hostname === domain || callbackUrl.hostname.endsWith('.' + domain)
+    );
+    
+    if (!isAllowed) {
+      console.log('Auth redirect blocked for domain:', callbackUrl.hostname);
+      return res.status(403).send('Callback domain not allowed');
+    }
+  } catch (e) {
+    return res.status(400).send('Invalid callback URL');
+  }
+  
+  // Redirect to frontend auth-redirect page which handles the token check
+  // (Token is stored in localStorage on the frontend, not accessible from backend)
+  // Use the request's host to determine the correct frontend URL for local development
+  const requestHost = req.get('host');
+  let frontendUrl;
+  
+  if (requestHost && (requestHost.includes('localhost') || requestHost.includes('127.0.0.1'))) {
+    // Local development - use the same host
+    const protocol = req.protocol || 'http';
+    frontendUrl = `${protocol}://${requestHost}`;
+  } else {
+    // Production - use APP_URL or default to beta.lumdash.app
+    frontendUrl = process.env.APP_URL || 'https://beta.lumdash.app';
+  }
+  
+  const redirectUrl = `${frontendUrl}/auth-redirect.html?callback=${encodeURIComponent(callback)}&app=${encodeURIComponent(app || 'external')}`;
+  
+  console.log(`Auth redirect: ${requestHost} -> ${redirectUrl}`);
+  return res.redirect(redirectUrl);
+});
+
+// Verify token endpoint (for external apps to validate tokens)
+app.get('/api/auth/verify', authenticate, (req, res) => {
+  res.json({ 
+    valid: true, 
+    user: {
+      id: req.user.id,
+      fullName: req.user.fullName,
+      role: req.user.role
+    }
+  });
+});
+
 // Forgot Password Endpoint
 app.post('/api/auth/forgot-password', async (req, res) => {
   const { email } = req.body;
@@ -1392,6 +1463,119 @@ app.post('/api/tables', authenticate, async (req, res) => {
   res.json(table);
 });
 
+// ===========================================
+// EXTERNAL EVENT CREATION API
+// Allows external apps (like Invoice App) to create events in LumDash
+// Both apps must share the same JWT_SECRET and users collection
+// ===========================================
+app.post('/api/events/external-create', authenticate, async (req, res) => {
+  try {
+    const { 
+      name,           // Required: Event name
+      startDate,      // Optional: Start date (YYYY-MM-DD or ISO format)
+      endDate,        // Optional: End date (YYYY-MM-DD or ISO format)
+      city,           // Optional: City
+      state,          // Optional: State
+      client,         // Optional: Client name
+      location,       // Optional: Location/venue name
+      externalSource, // Required: Source app identifier (e.g., 'invoice-app')
+      externalId      // Optional: ID from source app for linking/dedup
+    } = req.body;
+    
+    // Validate required fields
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Event name is required' 
+      });
+    }
+    
+    if (!externalSource) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'externalSource is required (e.g., "invoice-app")' 
+      });
+    }
+    
+    // Check for duplicate (prevent double-transfers)
+    if (externalId) {
+      const existing = await Table.findOne({ 
+        externalId: externalId,
+        externalSource: externalSource 
+      });
+      
+      if (existing) {
+        console.log(`External event already exists: ${existing.title} (${existing._id}) from ${externalSource}:${externalId}`);
+        return res.json({ 
+          success: true, 
+          eventId: existing._id.toString(),
+          alreadyExists: true,
+          message: 'Event already exists',
+          redirectUrl: `/dashboard.html#general?id=${existing._id}`
+        });
+      }
+    }
+    
+    // Create the event
+    const newTable = new Table({
+      title: name.trim(),
+      owners: [req.user.id],
+      leads: [],
+      sharedWith: [],
+      rows: [],
+      externalSource: externalSource,
+      externalId: externalId || null,
+      general: {
+        start: startDate || '',
+        end: endDate || '',
+        city: city || '',
+        state: state || '',
+        client: client || '',
+        location: location || ''
+      },
+      gear: {
+        lists: {
+          Default: {
+            Cameras: [],
+            Lenses: [],
+            Lighting: [],
+            Support: [],
+            Accessories: []
+          }
+        },
+        gearLists: [{
+          name: 'Main List',
+          createdBy: req.user.id,
+          createdAt: new Date()
+        }],
+        currentList: 'Main List'
+      }
+    });
+    
+    await newTable.save();
+    
+    // Notify clients about the new table
+    notifyDataChange('tableCreated', { tableId: newTable._id });
+    
+    console.log(`External event created: "${newTable.title}" (${newTable._id}) by user ${req.user.id} from ${externalSource}${externalId ? `:${externalId}` : ''}`);
+    
+    res.json({ 
+      success: true, 
+      eventId: newTable._id.toString(),
+      alreadyExists: false,
+      message: 'Event created successfully',
+      redirectUrl: `/dashboard.html#general?id=${newTable._id}`
+    });
+    
+  } catch (err) {
+    console.error('External create error:', err);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to create event' 
+    });
+  }
+});
+
 app.get('/api/tables', authenticate, async (req, res) => {
   try {
     // Get the user to check their archived events and role
@@ -1461,6 +1645,91 @@ app.get('/api/tables/:id', authenticate, async (req, res) => {
 
 // --- TASKS ENDPOINTS (COLLABORATIVE TO-DO LIST) ---
 // --- TODO LIST ENDPOINTS ---
+
+// Get all todos across all events for the current user
+app.get('/api/tasks/all', authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const isAdmin = req.user.role === 'admin';
+    const myTasksOnly = req.query.myTasks === 'true';
+    
+    // Find all tables the user has access to
+    let query = {};
+    if (!isAdmin) {
+      // Non-admins only see events they have access to
+      query = {
+        $or: [
+          { owners: userId },
+          { leads: userId },
+          { sharedWith: userId }
+        ]
+      };
+    }
+    
+    const tables = await Table.find(query)
+      .populate('todos.owner', 'fullName photo email')
+      .populate('owners', 'fullName')
+      .select('title todos owners general');
+    
+    // Flatten todos from all tables and add event info
+    let allTodos = [];
+    
+    for (const table of tables) {
+      if (!table.todos || table.todos.length === 0) continue;
+      
+      const isOwner = table.owners.some(o => o._id.toString() === userId);
+      
+      for (const todo of table.todos) {
+        // If myTasksOnly filter is on, only include tasks assigned to this user
+        if (myTasksOnly && todo.owner && todo.owner._id.toString() !== userId) {
+          continue;
+        }
+        
+        allTodos.push({
+          _id: todo._id.toString(),
+          task: todo.task,
+          status: todo.status,
+          dueDate: todo.dueDate,
+          owner: todo.owner,
+          notes: todo.notes,
+          createdAt: todo.createdAt,
+          event: {
+            _id: table._id.toString(),
+            title: table.title || 'Untitled Event'
+          },
+          canEdit: isAdmin || isOwner,
+          canChangeStatus: true
+        });
+      }
+    }
+    
+    // Sort by due date (soonest first, nulls last), then alphabetically
+    allTodos.sort((a, b) => {
+      // Handle null due dates (put them last)
+      if (!a.dueDate && !b.dueDate) {
+        return (a.task || '').localeCompare(b.task || '');
+      }
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      
+      const dateCompare = new Date(a.dueDate) - new Date(b.dueDate);
+      if (dateCompare !== 0) return dateCompare;
+      
+      // Secondary sort: alphabetical by task name
+      return (a.task || '').localeCompare(b.task || '');
+    });
+    
+    res.json({ 
+      todos: allTodos,
+      totalCount: allTodos.length,
+      isAdmin
+    });
+  } catch (err) {
+    console.error('Error fetching all todos:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Get all todos for a table
 app.get('/api/tables/:id/todos', authenticate, async (req, res) => {
   try {

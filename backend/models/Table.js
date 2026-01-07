@@ -51,6 +51,10 @@ const tableSchema = new mongoose.Schema({
   leads: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Per-event leads
   sharedWith: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   
+  // External app integration (for events created from other apps like Invoice App)
+  externalSource: { type: String, default: null },  // e.g., 'invoice-app'
+  externalId: { type: String, default: null },      // ID from the source app
+  
   // ✅ Updated to use schema with _id
   rows: [crewRowSchema],
   

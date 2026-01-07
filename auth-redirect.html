@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecting... - LumDash</title>
+    <link rel="icon" href="assets/favicon.png" type="image/png">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #111111;
+            color: #ffffff;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            text-align: center;
+            padding: 40px;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 3px solid #333;
+            border-top-color: #dc2626;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 24px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        h1 {
+            font-size: 24px;
+            margin-bottom: 12px;
+        }
+        p {
+            color: #888;
+            font-size: 14px;
+        }
+        .error {
+            color: #dc2626;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <h1>Redirecting...</h1>
+        <p id="status">Checking authentication...</p>
+        <p id="error" class="error" style="display: none;"></p>
+    </div>
+
+    <script>
+        (function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const callback = urlParams.get('callback');
+            const app = urlParams.get('app') || 'external';
+            
+            // Validate callback parameter
+            if (!callback) {
+                showError('Missing callback parameter');
+                return;
+            }
+            
+            // Validate callback is from allowed domains
+            const allowedDomains = [
+                'lumquote.com',
+                'www.lumquote.com',
+                'localhost',
+                '127.0.0.1'
+            ];
+            
+            try {
+                const callbackUrl = new URL(callback);
+                const isAllowed = allowedDomains.some(domain => 
+                    callbackUrl.hostname === domain || 
+                    callbackUrl.hostname.endsWith('.' + domain)
+                );
+                
+                if (!isAllowed) {
+                    showError('Callback domain not allowed: ' + callbackUrl.hostname);
+                    return;
+                }
+            } catch (e) {
+                showError('Invalid callback URL');
+                return;
+            }
+            
+            // Check for token in localStorage
+            const token = localStorage.getItem('token');
+            
+            if (token) {
+                // Verify token is valid by checking with backend
+                verifyAndRedirect(token, callback);
+            } else {
+                // No token - redirect to login with returnTo
+                redirectToLogin(callback, app);
+            }
+            
+            async function verifyAndRedirect(token, callback) {
+                document.getElementById('status').textContent = 'Verifying session...';
+                
+                try {
+                    // Quick verify the token is not expired
+                    const response = await fetch('/api/auth/verify', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    
+                    if (response.ok) {
+                        // Token is valid - redirect to callback with token
+                        document.getElementById('status').textContent = 'Redirecting to ' + app + '...';
+                        const separator = callback.includes('?') ? '&' : '?';
+                        window.location.href = `${callback}${separator}token=${token}`;
+                    } else {
+                        // Token invalid/expired - clear and redirect to login
+                        localStorage.removeItem('token');
+                        redirectToLogin(callback, app);
+                    }
+                } catch (err) {
+                    // Network error - try to redirect anyway (let callback app verify)
+                    console.warn('Could not verify token, redirecting anyway:', err);
+                    const separator = callback.includes('?') ? '&' : '?';
+                    window.location.href = `${callback}${separator}token=${token}`;
+                }
+            }
+            
+            function redirectToLogin(callback, app) {
+                document.getElementById('status').textContent = 'Redirecting to login...';
+                
+                // Build the returnTo URL that will come back here after login
+                const returnTo = `/auth-redirect.html?callback=${encodeURIComponent(callback)}&app=${encodeURIComponent(app)}`;
+                
+                // Redirect to login page
+                setTimeout(() => {
+                    window.location.href = `/index.html?returnTo=${encodeURIComponent(returnTo)}`;
+                }, 500);
+            }
+            
+            function showError(message) {
+                document.querySelector('.spinner').style.display = 'none';
+                document.getElementById('status').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                document.getElementById('error').textContent = 'Error: ' + message;
+            }
+        })();
+    </script>
+</body>
+</html>
+

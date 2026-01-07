@@ -60,9 +60,27 @@
 
     <script>
         (function() {
+            // Determine API base URL based on environment
+            function getApiBase() {
+                const hostname = window.location.hostname;
+                if (hostname === 'localhost' || hostname === '127.0.0.1') {
+                    return 'http://localhost:3000';
+                } else if (hostname === 'beta.lumdash.app' || hostname === 'www.beta.lumdash.app') {
+                    return 'https://lumdash2-0.onrender.com';
+                } else {
+                    // Production
+                    return 'https://lumdash-backend.onrender.com';
+                }
+            }
+            
+            const API_BASE = getApiBase();
+            console.log('[auth-redirect] Using API:', API_BASE);
+            
             const urlParams = new URLSearchParams(window.location.search);
             const callback = urlParams.get('callback');
             const app = urlParams.get('app') || 'external';
+            
+            console.log('[auth-redirect] Callback:', callback, 'App:', app);
             
             // Validate callback parameter
             if (!callback) {
@@ -96,6 +114,7 @@
             
             // Check for token in localStorage
             const token = localStorage.getItem('token');
+            console.log('[auth-redirect] Token found:', !!token);
             
             if (token) {
                 // Verify token is valid by checking with backend
@@ -110,9 +129,11 @@
                 
                 try {
                     // Quick verify the token is not expired
-                    const response = await fetch('/api/auth/verify', {
+                    const response = await fetch(`${API_BASE}/api/auth/verify`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
+                    
+                    console.log('[auth-redirect] Verify response:', response.status);
                     
                     if (response.ok) {
                         // Token is valid - redirect to callback with token
@@ -121,12 +142,13 @@
                         window.location.href = `${callback}${separator}token=${token}`;
                     } else {
                         // Token invalid/expired - clear and redirect to login
+                        console.log('[auth-redirect] Token invalid, redirecting to login');
                         localStorage.removeItem('token');
                         redirectToLogin(callback, app);
                     }
                 } catch (err) {
                     // Network error - try to redirect anyway (let callback app verify)
-                    console.warn('Could not verify token, redirecting anyway:', err);
+                    console.warn('[auth-redirect] Could not verify token, redirecting anyway:', err);
                     const separator = callback.includes('?') ? '&' : '?';
                     window.location.href = `${callback}${separator}token=${token}`;
                 }
@@ -138,6 +160,8 @@
                 // Build the returnTo URL that will come back here after login
                 const returnTo = `/auth-redirect.html?callback=${encodeURIComponent(callback)}&app=${encodeURIComponent(app)}`;
                 
+                console.log('[auth-redirect] Redirecting to login with returnTo:', returnTo);
+                
                 // Redirect to login page
                 setTimeout(() => {
                     window.location.href = `/index.html?returnTo=${encodeURIComponent(returnTo)}`;
@@ -145,6 +169,7 @@
             }
             
             function showError(message) {
+                console.error('[auth-redirect] Error:', message);
                 document.querySelector('.spinner').style.display = 'none';
                 document.getElementById('status').style.display = 'none';
                 document.getElementById('error').style.display = 'block';

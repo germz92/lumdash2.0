@@ -43,10 +43,11 @@ function checkAdminRole() {
 }
 
 // Initialize page
-function initPage() {
+async function initPage() {
   if (!checkAdminRole()) return;
   
-  loadUsers();
+  // Load users first before rendering (await to ensure users are available)
+  await loadUsers();
   loadCustomRoles();
   loadTables();
   attachEventListeners();
@@ -71,6 +72,7 @@ async function loadUsers() {
         const nameB = b.fullName || b.name || b.email || '';
         return nameA.localeCompare(nameB);
       });
+      console.log('Crew planner: Loaded', cachedUsers.length, 'users');
     }
   } catch (error) {
     console.error('Error loading users:', error);
@@ -111,7 +113,267 @@ function getAllRoles() {
   return [...defaultRoles, ...customRoles];
 }
 
-// Create role dropdown HTML
+// Create custom dropdown component (similar to crew.js)
+function createCustomDropdown(options, currentValue, placeholder, onSelect, onAddNew) {
+  const container = document.createElement('div');
+  container.className = 'custom-dropdown';
+  
+  const trigger = document.createElement('button');
+  trigger.type = 'button';
+  trigger.className = 'custom-dropdown-trigger';
+  trigger.innerHTML = `
+    <span class="dropdown-value ${!currentValue ? 'placeholder' : ''}">${escapeHtml(currentValue || placeholder)}</span>
+    <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+  `;
+  
+  const menu = document.createElement('div');
+  menu.className = 'custom-dropdown-menu';
+  
+  // Search input for filtering
+  const searchWrapper = document.createElement('div');
+  searchWrapper.className = 'custom-dropdown-search';
+  searchWrapper.innerHTML = `<input type="text" placeholder="Search..." autocomplete="off">`;
+  
+  const optionsContainer = document.createElement('div');
+  optionsContainer.className = 'custom-dropdown-options';
+  
+  // Render options
+  function renderOptions(filter = '') {
+    const filtered = options.filter(opt => 
+      opt.toLowerCase().includes(filter.toLowerCase())
+    );
+    
+    if (filtered.length === 0 && filter) {
+      optionsContainer.innerHTML = `<div class="custom-dropdown-empty">No results found</div>`;
+    } else {
+      optionsContainer.innerHTML = filtered.map(opt => `
+        <button type="button" class="custom-dropdown-option ${opt === currentValue ? 'selected' : ''}" data-value="${escapeHtml(opt)}">
+          ${escapeHtml(opt)}
+        </button>
+      `).join('');
+      
+      // Add "Add new" option
+      if (onAddNew) {
+        optionsContainer.innerHTML += `
+          <button type="button" class="custom-dropdown-option add-new" data-value="__add_new__">
+            <span class="material-symbols-outlined">add</span>
+            Add new...
+          </button>
+        `;
+      }
+    }
+  }
+  
+  renderOptions();
+  
+  menu.appendChild(searchWrapper);
+  menu.appendChild(optionsContainer);
+  container.appendChild(trigger);
+  container.appendChild(menu);
+  
+  // Event handlers
+  let isOpen = false;
+  
+  function openDropdown() {
+    // Close all other dropdowns first
+    document.querySelectorAll('.custom-dropdown.open').forEach(d => {
+      d.classList.remove('open');
+    });
+    
+    isOpen = true;
+    container.classList.add('open');
+    
+    // Position the menu using fixed positioning
+    const triggerRect = trigger.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const maxMenuHeight = Math.min(250, viewportHeight * 0.35);
+    
+    // Check if menu should open above or below
+    const spaceBelow = viewportHeight - triggerRect.bottom - 10;
+    const spaceAbove = triggerRect.top - 10;
+    
+    // Reset positioning properties
+    menu.style.top = '';
+    menu.style.bottom = '';
+    
+    if (spaceBelow >= 150 || spaceBelow >= spaceAbove) {
+      // Open below - anchor to top of trigger bottom
+      menu.style.top = `${triggerRect.bottom + 2}px`;
+      menu.style.maxHeight = `${Math.min(maxMenuHeight, spaceBelow)}px`;
+    } else {
+      // Open above - use bottom positioning to anchor to trigger top
+      menu.style.bottom = `${viewportHeight - triggerRect.top + 2}px`;
+      menu.style.maxHeight = `${Math.min(maxMenuHeight, spaceAbove)}px`;
+    }
+    
+    menu.style.left = `${triggerRect.left}px`;
+    menu.style.width = `${Math.max(triggerRect.width, 180)}px`;
+    menu.style.position = 'fixed';
+    menu.style.zIndex = '99999';
+    
+    const searchInput = searchWrapper.querySelector('input');
+    searchInput.value = '';
+    renderOptions();
+    setTimeout(() => searchInput.focus(), 50);
+  }
+  
+  function closeDropdown() {
+    isOpen = false;
+    container.classList.remove('open');
+  }
+  
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (isOpen) {
+      closeDropdown();
+    } else {
+      openDropdown();
+    }
+  });
+  
+  // Search filtering
+  const searchInput = searchWrapper.querySelector('input');
+  searchInput.addEventListener('input', (e) => {
+    renderOptions(e.target.value);
+  });
+  
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeDropdown();
+    }
+  });
+  
+  searchInput.addEventListener('click', (e) => {
+    e.stopPropagation();
+  });
+  
+  // Option selection
+  optionsContainer.addEventListener('click', async (e) => {
+    const option = e.target.closest('.custom-dropdown-option');
+    if (!option) return;
+    
+    e.stopPropagation();
+    const value = option.dataset.value;
+    
+    if (value === '__add_new__' && onAddNew) {
+      closeDropdown();
+      const newValue = await onAddNew();
+      if (newValue) {
+        trigger.querySelector('.dropdown-value').textContent = newValue;
+        trigger.querySelector('.dropdown-value').classList.remove('placeholder');
+        onSelect(newValue);
+      }
+    } else {
+      trigger.querySelector('.dropdown-value').textContent = value;
+      trigger.querySelector('.dropdown-value').classList.remove('placeholder');
+      closeDropdown();
+      onSelect(value);
+    }
+  });
+  
+  // Close on outside click
+  document.addEventListener('click', (e) => {
+    if (isOpen && !container.contains(e.target)) {
+      closeDropdown();
+    }
+  });
+  
+  return container;
+}
+
+// Create role dropdown as custom component
+function createRoleDropdownElement(selectedValue, date, eventName, crewIndex) {
+  const allRoles = getAllRoles();
+  
+  return createCustomDropdown(
+    allRoles,
+    selectedValue,
+    'Select Role',
+    (value) => {
+      // Handle role change
+      handleRoleChangeFromDropdown(date, eventName, crewIndex, value);
+    },
+    async () => {
+      // Handle add new role
+      const newRole = prompt('Enter new role:');
+      if (newRole && newRole.trim()) {
+        addCustomRole(newRole.trim());
+        return newRole.trim();
+      }
+      return null;
+    }
+  );
+}
+
+// Create crew dropdown as custom component
+function createCrewDropdownElement(selectedValue, date, eventName, crewIndex) {
+  const crewNames = cachedUsers.map(user => user.fullName || user.name || user.email);
+  
+  // Add the selected value if it's not in the list
+  if (selectedValue && !crewNames.includes(selectedValue)) {
+    crewNames.push(selectedValue);
+  }
+  
+  return createCustomDropdown(
+    crewNames,
+    selectedValue,
+    'Select Crew',
+    (value) => {
+      // Handle crew change
+      handleCrewChangeFromDropdown(date, eventName, crewIndex, value);
+    },
+    async () => {
+      // Handle add new crew name
+      const newName = prompt('Enter crew name:');
+      if (newName && newName.trim()) {
+        return newName.trim();
+      }
+      return null;
+    }
+  );
+}
+
+// Handle role change from custom dropdown
+function handleRoleChangeFromDropdown(date, eventName, crewIndex, value) {
+  const dateData = planningData.dates.find(d => d.date === date);
+  if (!dateData) return;
+  
+  let eventData = dateData.events.find(e => e.name === eventName);
+  if (!eventData) {
+    eventData = { name: eventName, crew: [] };
+    dateData.events.push(eventData);
+  }
+  
+  while (eventData.crew.length <= crewIndex) {
+    eventData.crew.push({ role: '', crewMember: '' });
+  }
+  
+  eventData.crew[crewIndex].role = value;
+  saveToSessionStorage();
+}
+
+// Handle crew change from custom dropdown
+function handleCrewChangeFromDropdown(date, eventName, crewIndex, value) {
+  const dateData = planningData.dates.find(d => d.date === date);
+  if (!dateData) return;
+  
+  let eventData = dateData.events.find(e => e.name === eventName);
+  if (!eventData) {
+    eventData = { name: eventName, crew: [] };
+    dateData.events.push(eventData);
+  }
+  
+  while (eventData.crew.length <= crewIndex) {
+    eventData.crew.push({ role: '', crewMember: '' });
+  }
+  
+  eventData.crew[crewIndex].crewMember = value;
+  saveToSessionStorage();
+  highlightEmptyCrewCells();
+}
+
+// Legacy HTML-based functions for backwards compatibility
 function createRoleDropdown(selectedValue, changeHandler, eventName, crewIndex) {
   const allRoles = getAllRoles();
   let options = '<option value=""></option>';
@@ -130,10 +392,10 @@ function createRoleDropdown(selectedValue, changeHandler, eventName, crewIndex) 
   `;
 }
 
-// Create crew dropdown HTML  
+// Legacy HTML-based function for backwards compatibility  
 function createCrewDropdown(selectedValue, changeHandler, eventName, crewIndex) {
   let options = '<option value=""></option>';
-  let foundSelected = !selectedValue; // Track if we found the selected value
+  let foundSelected = !selectedValue;
   
   cachedUsers.forEach(user => {
     const displayName = user.fullName || user.name || user.email;
@@ -142,7 +404,6 @@ function createCrewDropdown(selectedValue, changeHandler, eventName, crewIndex) 
     options += `<option value="${escapeHtml(displayName)}" ${selected}>${escapeHtml(displayName)}</option>`;
   });
   
-  // If selectedValue exists but wasn't found in users, add it as a custom option
   if (selectedValue && !foundSelected) {
     options += `<option value="${escapeHtml(selectedValue)}" selected>${escapeHtml(selectedValue)}</option>`;
   }
@@ -193,7 +454,13 @@ async function loadTables() {
   }
 }
 
+// Store tables for filtering
+let availableTables = [];
+
 function populateTableSelect(tables) {
+  availableTables = tables;
+  
+  // Keep hidden select for compatibility
   const select = document.getElementById('tableSelect');
   select.innerHTML = '<option value="">Select a table...</option>';
   
@@ -203,6 +470,136 @@ function populateTableSelect(tables) {
     option.textContent = `${table.name} (${new Date(table.updatedAt).toLocaleDateString()})`;
     select.appendChild(option);
   });
+  
+  // Populate custom dropdown
+  renderTableDropdownOptions();
+  setupTableDropdown();
+}
+
+function renderTableDropdownOptions(filter = '') {
+  const optionsContainer = document.getElementById('tableSelectOptions');
+  if (!optionsContainer) return;
+  
+  const filtered = availableTables.filter(table => 
+    table.name.toLowerCase().includes(filter.toLowerCase())
+  );
+  
+  if (filtered.length === 0) {
+    optionsContainer.innerHTML = `<div class="custom-dropdown-empty">No tables found</div>`;
+  } else {
+    optionsContainer.innerHTML = filtered.map(table => `
+      <button type="button" class="custom-dropdown-option" data-value="${table._id}">
+        <span class="table-option-name">${escapeHtml(table.name)}</span>
+        <span class="table-option-date">${new Date(table.updatedAt).toLocaleDateString()}</span>
+      </button>
+    `).join('');
+  }
+}
+
+function setupTableDropdown() {
+  const dropdown = document.getElementById('tableSelectDropdown');
+  if (!dropdown || dropdown._initialized) return;
+  dropdown._initialized = true;
+  
+  const trigger = dropdown.querySelector('.custom-dropdown-trigger');
+  const menu = dropdown.querySelector('.custom-dropdown-menu');
+  const searchInput = dropdown.querySelector('.custom-dropdown-search input');
+  const optionsContainer = dropdown.querySelector('.custom-dropdown-options');
+  
+  let isOpen = false;
+  
+  function openDropdown() {
+    document.querySelectorAll('.custom-dropdown.open').forEach(d => d.classList.remove('open'));
+    isOpen = true;
+    dropdown.classList.add('open');
+    
+    const triggerRect = trigger.getBoundingClientRect();
+    const viewportHeight = window.innerHeight;
+    const maxMenuHeight = 300;
+    const spaceBelow = viewportHeight - triggerRect.bottom - 10;
+    
+    menu.style.top = '';
+    menu.style.bottom = '';
+    
+    if (spaceBelow >= 150) {
+      menu.style.top = `${triggerRect.bottom + 2}px`;
+      menu.style.maxHeight = `${Math.min(maxMenuHeight, spaceBelow)}px`;
+    } else {
+      menu.style.bottom = `${viewportHeight - triggerRect.top + 2}px`;
+      menu.style.maxHeight = `${Math.min(maxMenuHeight, triggerRect.top - 10)}px`;
+    }
+    
+    menu.style.left = `${triggerRect.left}px`;
+    menu.style.width = `${Math.max(triggerRect.width, 250)}px`;
+    menu.style.position = 'fixed';
+    menu.style.zIndex = '99999';
+    
+    searchInput.value = '';
+    renderTableDropdownOptions();
+    setTimeout(() => searchInput.focus(), 50);
+  }
+  
+  function closeDropdown() {
+    isOpen = false;
+    dropdown.classList.remove('open');
+  }
+  
+  trigger.addEventListener('click', (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (isOpen) closeDropdown();
+    else openDropdown();
+  });
+  
+  searchInput.addEventListener('input', (e) => {
+    renderTableDropdownOptions(e.target.value);
+  });
+  
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeDropdown();
+  });
+  
+  searchInput.addEventListener('click', (e) => e.stopPropagation());
+  
+  optionsContainer.addEventListener('click', (e) => {
+    const option = e.target.closest('.custom-dropdown-option');
+    if (!option) return;
+    
+    e.stopPropagation();
+    const tableId = option.dataset.value;
+    const tableName = option.querySelector('.table-option-name')?.textContent || '';
+    
+    // Update trigger display
+    const valueSpan = trigger.querySelector('.dropdown-value');
+    valueSpan.textContent = tableName;
+    valueSpan.classList.remove('placeholder');
+    
+    // Update hidden select for compatibility
+    document.getElementById('tableSelect').value = tableId;
+    
+    closeDropdown();
+  });
+  
+  document.addEventListener('click', (e) => {
+    if (isOpen && !dropdown.contains(e.target)) closeDropdown();
+  });
+}
+
+// Helper to update table dropdown display
+function updateTableDropdownDisplay(tableName) {
+  const dropdown = document.getElementById('tableSelectDropdown');
+  if (!dropdown) return;
+  
+  const valueSpan = dropdown.querySelector('.dropdown-value');
+  if (valueSpan) {
+    if (tableName) {
+      valueSpan.textContent = tableName;
+      valueSpan.classList.remove('placeholder');
+    } else {
+      valueSpan.textContent = 'Select table...';
+      valueSpan.classList.add('placeholder');
+    }
+  }
 }
 
 async function loadSelectedTable() {
@@ -274,8 +671,11 @@ function loadTableData(table) {
   
   // Update UI
   document.getElementById('currentTableName').textContent = table.name;
-  document.getElementById('currentTableDescription').textContent = table.description || 'No description';
-  document.getElementById('currentTableInfo').style.display = 'block';
+  document.getElementById('currentTableDescription').textContent = table.description || '';
+  document.getElementById('currentTableInfo').style.display = 'flex';
+  
+  // Update custom dropdown display
+  updateTableDropdownDisplay(table.name);
   
   updateSaveButtonState();
   renderTable();
@@ -342,6 +742,9 @@ async function deleteCurrentTable() {
       updateUIState();
       renderTable();
       loadTables();
+      
+      // Reset custom dropdown display
+      updateTableDropdownDisplay(null);
     } else {
       alert('Failed to delete table');
     }
@@ -423,8 +826,11 @@ async function createNewTable() {
       
       // Update current table info
       document.getElementById('currentTableName').textContent = currentTable.name;
-      document.getElementById('currentTableDescription').textContent = currentTable.description || 'No description';
-      document.getElementById('currentTableInfo').style.display = 'block';
+      document.getElementById('currentTableDescription').textContent = currentTable.description || '';
+      document.getElementById('currentTableInfo').style.display = 'flex';
+      
+      // Update custom dropdown display
+      updateTableDropdownDisplay(currentTable.name);
     } else {
       const error = await response.json();
       alert(error.error || 'Failed to create table');
@@ -631,14 +1037,23 @@ function highlightEmptyCrewCells() {
       const crewCell = cells[cellIndex + 1];
       
       if (crewCell) {
-        // Check if this row has any actual crew data (not just empty add buttons)
-        const roleSelect = roleCell?.querySelector('select');
-        const crewSelect = crewCell.querySelector('select');
-        const hasCrewData = roleSelect || crewSelect;
+        // Check if this row has any actual crew data (custom dropdown or native select)
+        const roleDropdown = roleCell?.querySelector('.custom-dropdown, select');
+        const crewDropdown = crewCell.querySelector('.custom-dropdown, select');
+        const hasCrewData = roleDropdown || crewDropdown;
         
         // Only highlight if there's actual crew data but crew is empty
-        if (hasCrewData && crewSelect) {
-          const isEmpty = !crewSelect.value || crewSelect.value.trim() === '';
+        if (hasCrewData && crewDropdown) {
+          let isEmpty = false;
+          
+          // Check for custom dropdown
+          if (crewDropdown.classList.contains('custom-dropdown')) {
+            const valueSpan = crewDropdown.querySelector('.dropdown-value');
+            isEmpty = !valueSpan || valueSpan.classList.contains('placeholder') || !valueSpan.textContent.trim();
+          } else {
+            // Native select fallback
+            isEmpty = !crewDropdown.value || crewDropdown.value.trim() === '';
+          }
           
           // Apply or remove empty-crew class
           if (isEmpty) {
@@ -776,38 +1191,49 @@ function renderDateRow(tableBody, dateData, dateIndex) {
         </div>
       `;
     } else {
-      // Show first crew member with controls
+      // Show first crew member with controls using custom dropdowns
       const crewMember = eventData.crew[0];
-      const eventCrewCount = eventData.crew.length;
       
-      roleCell.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 4px;">
-          <div style="flex: 1;">
-            ${createRoleDropdown(crewMember.role, `handleRoleChange('${dateData.date}', '${planningEvent.name}', 0, event)`, planningEvent.name, 0)}
-          </div>
-          <button class="action-btn delete-btn crew-delete-btn" onclick="deleteEventCrewRow('${dateData.date}', '${planningEvent.name}', 0)" title="Delete Crew Row">
-            <span class="material-symbols-outlined">close</span>
-          </button>
-        </div>
-      `;
+      // Create role cell container
+      const roleContainer = document.createElement('div');
+      roleContainer.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+      
+      const roleDropdownWrapper = document.createElement('div');
+      roleDropdownWrapper.style.flex = '1';
+      roleDropdownWrapper.appendChild(createRoleDropdownElement(crewMember.role, dateData.date, planningEvent.name, 0));
+      roleContainer.appendChild(roleDropdownWrapper);
+      
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'action-btn delete-btn crew-delete-btn';
+      deleteBtn.title = 'Delete Crew Row';
+      deleteBtn.innerHTML = '<span class="material-symbols-outlined">close</span>';
+      deleteBtn.onclick = () => deleteEventCrewRow(dateData.date, planningEvent.name, 0);
+      roleContainer.appendChild(deleteBtn);
+      
+      roleCell.appendChild(roleContainer);
       
       // Check if this is the last crew row for this event
       const isLastCrewRow = eventData.crew.length === 1;
       
+      // Create crew cell container
+      const crewContainer = document.createElement('div');
+      crewContainer.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+      
+      const crewDropdownWrapper = document.createElement('div');
+      crewDropdownWrapper.style.flex = '1';
+      crewDropdownWrapper.appendChild(createCrewDropdownElement(crewMember.crewMember, dateData.date, planningEvent.name, 0));
+      crewContainer.appendChild(crewDropdownWrapper);
+      
       if (isLastCrewRow) {
-        crewCell.innerHTML = `
-          <div style="display: flex; align-items: center; gap: 4px;">
-            <div style="flex: 1;">
-              ${createCrewDropdown(crewMember.crewMember, `handleCrewChange('${dateData.date}', '${planningEvent.name}', 0, event)`, planningEvent.name, 0)}
-            </div>
-            <button class="action-btn add-crew-btn" onclick="addCrewToDateEvent('${dateData.date}', '${planningEvent.name}')" title="Add Crew Row">
-              <span class="material-symbols-outlined">add</span>
-            </button>
-          </div>
-        `;
-      } else {
-        crewCell.innerHTML = createCrewDropdown(crewMember.crewMember, `handleCrewChange('${dateData.date}', '${planningEvent.name}', 0, event)`, planningEvent.name, 0);
+        const addBtn = document.createElement('button');
+        addBtn.className = 'action-btn add-crew-btn';
+        addBtn.title = 'Add Crew Row';
+        addBtn.innerHTML = '<span class="material-symbols-outlined">add</span>';
+        addBtn.onclick = () => addCrewToDateEvent(dateData.date, planningEvent.name);
+        crewContainer.appendChild(addBtn);
       }
+      
+      crewCell.appendChild(crewContainer);
     }
     
     row.appendChild(roleCell);
@@ -852,34 +1278,46 @@ function renderAdditionalCrewRow(tableBody, dateData, crewIndex) {
     if (crewIndex < eventData.crew.length) {
       const crewMember = eventData.crew[crewIndex];
       
-      roleCell.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 4px;">
-          <div style="flex: 1;">
-            ${createRoleDropdown(crewMember.role, `handleRoleChange('${dateData.date}', '${planningEvent.name}', ${crewIndex}, event)`, planningEvent.name, crewIndex)}
-          </div>
-          <button class="action-btn delete-btn crew-delete-btn" onclick="deleteEventCrewRow('${dateData.date}', '${planningEvent.name}', ${crewIndex})" title="Delete Crew Row">
-            <span class="material-symbols-outlined">close</span>
-          </button>
-        </div>
-      `;
+      // Create role cell container with custom dropdown
+      const roleContainer = document.createElement('div');
+      roleContainer.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+      
+      const roleDropdownWrapper = document.createElement('div');
+      roleDropdownWrapper.style.flex = '1';
+      roleDropdownWrapper.appendChild(createRoleDropdownElement(crewMember.role, dateData.date, planningEvent.name, crewIndex));
+      roleContainer.appendChild(roleDropdownWrapper);
+      
+      const deleteBtn = document.createElement('button');
+      deleteBtn.className = 'action-btn delete-btn crew-delete-btn';
+      deleteBtn.title = 'Delete Crew Row';
+      deleteBtn.innerHTML = '<span class="material-symbols-outlined">close</span>';
+      deleteBtn.onclick = () => deleteEventCrewRow(dateData.date, planningEvent.name, crewIndex);
+      roleContainer.appendChild(deleteBtn);
+      
+      roleCell.appendChild(roleContainer);
       
       // Check if this is the last crew row for this event
       const isLastCrewRow = crewIndex === eventData.crew.length - 1;
       
+      // Create crew cell container with custom dropdown
+      const crewContainer = document.createElement('div');
+      crewContainer.style.cssText = 'display: flex; align-items: center; gap: 4px;';
+      
+      const crewDropdownWrapper = document.createElement('div');
+      crewDropdownWrapper.style.flex = '1';
+      crewDropdownWrapper.appendChild(createCrewDropdownElement(crewMember.crewMember, dateData.date, planningEvent.name, crewIndex));
+      crewContainer.appendChild(crewDropdownWrapper);
+      
       if (isLastCrewRow) {
-        crewCell.innerHTML = `
-          <div style="display: flex; align-items: center; gap: 4px;">
-            <div style="flex: 1;">
-              ${createCrewDropdown(crewMember.crewMember, `handleCrewChange('${dateData.date}', '${planningEvent.name}', ${crewIndex}, event)`, planningEvent.name, crewIndex)}
-            </div>
-            <button class="action-btn add-crew-btn" onclick="addCrewToDateEvent('${dateData.date}', '${planningEvent.name}')" title="Add Crew Row">
-              <span class="material-symbols-outlined">add</span>
-            </button>
-          </div>
-        `;
-      } else {
-        crewCell.innerHTML = createCrewDropdown(crewMember.crewMember, `handleCrewChange('${dateData.date}', '${planningEvent.name}', ${crewIndex}, event)`, planningEvent.name, crewIndex);
+        const addBtn = document.createElement('button');
+        addBtn.className = 'action-btn add-crew-btn';
+        addBtn.title = 'Add Crew Row';
+        addBtn.innerHTML = '<span class="material-symbols-outlined">add</span>';
+        addBtn.onclick = () => addCrewToDateEvent(dateData.date, planningEvent.name);
+        crewContainer.appendChild(addBtn);
       }
+      
+      crewCell.appendChild(crewContainer);
     } else {
       // Empty cells for events that don't have crew at this index
       roleCell.innerHTML = '';
@@ -1122,14 +1560,17 @@ function restoreFromSessionStorage() {
     
     // Update UI
     document.getElementById('currentTableName').textContent = currentTable.name;
-    document.getElementById('currentTableDescription').textContent = currentTable.description || 'No description';
-    document.getElementById('currentTableInfo').style.display = 'block';
+    document.getElementById('currentTableDescription').textContent = currentTable.description || '';
+    document.getElementById('currentTableInfo').style.display = 'flex';
     
     // Select the table in the dropdown
     const tableSelect = document.getElementById('tableSelect');
     if (tableSelect) {
       tableSelect.value = currentTable._id;
     }
+    
+    // Update custom dropdown display
+    updateTableDropdownDisplay(currentTable.name);
     
     updateSaveButtonState();
     return true;

@@ -966,12 +966,22 @@
   function formatDueDate(dueDate) {
     if (!dueDate) return { text: '—', className: '' };
     
-    const date = new Date(dueDate);
+    // Parse the date string in a timezone-agnostic way
+    // Extract just the date portion (YYYY-MM-DD) to avoid UTC conversion issues
+    let dateStr = dueDate;
+    if (typeof dueDate === 'string' && dueDate.includes('T')) {
+      dateStr = dueDate.split('T')[0]; // Get just YYYY-MM-DD
+    }
+    
+    // Parse as local date (not UTC)
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const date = new Date(year, month - 1, day); // month is 0-indexed
+    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     date.setHours(0, 0, 0, 0);
     
-    const diffDays = Math.floor((date - today) / (1000 * 60 * 60 * 24));
+    const diffDays = Math.round((date - today) / (1000 * 60 * 60 * 24));
     
     if (diffDays < 0) {
       // Overdue

@@ -47,6 +47,7 @@
               <button class="events-tab active" data-filter="upcoming">Upcoming</button>
               <button class="events-tab" data-filter="live">Live</button>
               <button class="events-tab" data-filter="past">Past</button>
+              <button class="events-tab" data-filter="all">All</button>
             </div>
             
             <div class="events-filters">
@@ -343,6 +344,10 @@
 
     <div class="modal-footer-dark">
       <button class="btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn-crew-share" id="shareWithCrewBtn" onclick="shareWithCrew()">
+        <span class="material-symbols-outlined" style="font-size: 18px; margin-right: 6px;">groups</span>
+        Share with Crew
+      </button>
       <button class="btn-primary" onclick="submitShare()">
         <span class="material-symbols-outlined" style="font-size: 18px; margin-right: 6px;">send</span>
         Share

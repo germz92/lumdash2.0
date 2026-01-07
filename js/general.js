@@ -346,13 +346,24 @@ async function fetchWeatherForEvent(city, startDate, endDate) {
     }
     
     // Check if event is too far in the future (beyond 5 days)
-    const fiveDaysFromNow = new Date(today);
-    fiveDaysFromNow.setDate(fiveDaysFromNow.getDate() + 5);
+    // Weather APIs typically provide 5-day forecasts
+    const forecastDays = 5;
+    const forecastLimit = new Date(today);
+    forecastLimit.setDate(forecastLimit.getDate() + forecastDays);
     
-    if (eventStartDate && eventStartDate > fiveDaysFromNow) {
-      const daysUntil = Math.ceil((eventStartDate - today) / (1000 * 60 * 60 * 24));
-      renderWeatherPlaceholder(`Available in ${daysUntil} days`);
-      return;
+    if (eventStartDate && eventStartDate > forecastLimit) {
+      const daysUntilEvent = Math.ceil((eventStartDate - today) / (1000 * 60 * 60 * 24));
+      const daysUntilAvailable = daysUntilEvent - forecastDays;
+      
+      if (daysUntilAvailable <= 0) {
+        // Should be available now, try to fetch anyway
+      } else if (daysUntilAvailable === 1) {
+        renderWeatherPlaceholder('Available tomorrow');
+        return;
+      } else {
+        renderWeatherPlaceholder(`Available in ${daysUntilAvailable} days`);
+        return;
+      }
     }
     
     // Process forecast data - group by day and filter to event dates

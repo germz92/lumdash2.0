@@ -359,37 +359,62 @@ function isDarkThemeActive() {
   return true;
 }
 
-// Get event status
+// Parse date string as local date (ignoring timezone)
+function parseLocalDate(dateStr) {
+  if (!dateStr) return null;
+  // Handle ISO date strings like "2026-01-15" or "2026-01-15T00:00:00.000Z"
+  const str = String(dateStr);
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [, year, month, day] = match;
+    // Create date in local timezone at midnight
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0);
+  }
+  // Fallback to regular parsing
+  return new Date(dateStr);
+}
+
+// Get event status using device's local time
 function getEventStatus(table) {
   const now = new Date();
   const general = table.general || {};
-  const start = general.start ? new Date(general.start) : null;
-  const end = general.end ? new Date(general.end) : null;
   
-  if (table.isLive || (start && end && now >= start && now <= end)) {
+  // Parse dates as local dates for accurate comparison
+  const start = general.start ? parseLocalDate(general.start) : null;
+  const end = general.end ? parseLocalDate(general.end) : null;
+  
+  // Get today's date at midnight (local time) for comparison
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  
+  // Check if event is live (start date <= today <= end date)
+  const isCurrentlyLive = table.isLive || (start && end && start <= todayEnd && end >= todayStart);
+  
+  if (isCurrentlyLive) {
     return { label: 'LIVE', class: 'live' };
-  } else if (start && now < start) {
+  } else if (start && start > todayEnd) {
     return { label: 'Upcoming', class: 'upcoming' };
   } else {
     return { label: 'Past', class: 'past' };
   }
 }
 
-// Format date range for dark theme table
+// Format date range for dark theme table (using local time)
 function formatDateRangeDark(start, end) {
   if (!start) return '—';
   
-  const startDate = new Date(start);
-  const options = { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' };
+  // Parse as local date
+  const startDate = parseLocalDate(start);
+  const options = { weekday: 'short', month: 'short', day: 'numeric' };
   const startStr = startDate.toLocaleDateString('en-US', options);
   
   if (!end || start === end) {
     return startStr;
   }
   
-  const endDate = new Date(end);
-  const endOptions = { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' };
-  const endStr = endDate.toLocaleDateString('en-US', endOptions);
+  // Parse as local date
+  const endDate = parseLocalDate(end);
+  const endStr = endDate.toLocaleDateString('en-US', options);
   
   return `${startStr} – ${endStr}`;
 }
@@ -495,11 +520,24 @@ function renderCrewAvatarsDark(crewMembers, totalCount, eventId = null) {
 // Calculate task status for an event
 function getTaskStatus(todos) {
   if (!todos || todos.length === 0) {
-    return { label: 'Not Started', class: 'not-started', icon: 'radio_button_unchecked' };
+    return { label: 'No Tasks', class: 'no-tasks', icon: 'check_box_outline_blank' };
   }
   
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
+  // Get today's date in user's local timezone (midnight)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+  
+  // Helper to parse due date in timezone-agnostic way
+  function parseDueDate(dueDate) {
+    if (!dueDate) return null;
+    let dateStr = dueDate;
+    if (typeof dueDate === 'string' && dueDate.includes('T')) {
+      dateStr = dueDate.split('T')[0]; // Get just YYYY-MM-DD
+    }
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day); // Local date
+  }
   
   const completed = todos.filter(t => t.status === 'done');
   const inProgress = todos.filter(t => t.status === 'in-progress');
@@ -510,33 +548,33 @@ function getTaskStatus(todos) {
     return { label: 'Completed', class: 'completed', icon: 'check_circle' };
   }
   
-  // Check for overdue tasks (pending or in-progress with past due date)
+  // Check for overdue tasks FIRST (pending or in-progress with PAST due date - before today)
+  // Overdue takes priority over everything else
   const hasOverdue = todos.some(t => {
     if (t.status === 'done') return false;
     if (!t.dueDate) return false;
-    const dueDate = new Date(t.dueDate);
+    const dueDate = parseDueDate(t.dueDate);
+    if (!dueDate) return false;
     dueDate.setHours(0, 0, 0, 0);
-    return dueDate < now;
+    return dueDate < today;
   });
   
   if (hasOverdue) {
     return { label: 'Overdue', class: 'overdue', icon: 'warning' };
   }
   
-  // Check if all due tasks are completed (up to date)
-  const dueTasks = todos.filter(t => {
+  // Check for tasks due today (not yet complete) - "Needs Action"
+  const hasDueToday = todos.some(t => {
+    if (t.status === 'done') return false;
     if (!t.dueDate) return false;
-    const dueDate = new Date(t.dueDate);
-    dueDate.setHours(0, 0, 0, 0);
-    return dueDate <= now;
+    const dueDate = parseDueDate(t.dueDate);
+    if (!dueDate) return false;
+    const dueDateStr = dueDate.toISOString().split('T')[0];
+    return dueDateStr === todayStr;
   });
   
-  const allDueCompleted = dueTasks.length > 0 && dueTasks.every(t => t.status === 'done');
-  if (allDueCompleted || (completed.length > 0 && dueTasks.length === 0)) {
-    // Has completed tasks and no overdue - check if there's work in progress
-    if (inProgress.length > 0 || pending.length > 0) {
-      return { label: 'Up to Date', class: 'up-to-date', icon: 'schedule' };
-    }
+  if (hasDueToday) {
+    return { label: 'Due Today', class: 'due-today', icon: 'today' };
   }
   
   // Check if there's any progress
@@ -544,7 +582,20 @@ function getTaskStatus(todos) {
     return { label: 'In Progress', class: 'in-progress', icon: 'pending' };
   }
   
-  // No completed tasks
+  // Check if there are upcoming tasks with due dates
+  const hasFutureTasks = todos.some(t => {
+    if (!t.dueDate) return false;
+    const dueDate = parseDueDate(t.dueDate);
+    if (!dueDate) return false;
+    dueDate.setHours(0, 0, 0, 0);
+    return dueDate > today;
+  });
+  
+  if (hasFutureTasks) {
+    return { label: 'Up to Date', class: 'up-to-date', icon: 'schedule' };
+  }
+  
+  // No completed tasks and no due dates set
   return { label: 'Not Started', class: 'not-started', icon: 'radio_button_unchecked' };
 }
 
@@ -1945,6 +1996,147 @@ async function submitShare() {
   }
 }
 
+// Share with all crew members on the event
+async function shareWithCrew() {
+  if (!currentTableId) {
+    showToast('Missing event information', 'error');
+    return;
+  }
+  
+  const shareBtn = document.getElementById('shareWithCrewBtn');
+  if (shareBtn) {
+    shareBtn.disabled = true;
+    shareBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px; margin-right: 6px;">hourglass_empty</span> Sharing...';
+  }
+  
+  try {
+    // Fetch table data to get crew and current sharing info
+    const tableRes = await fetch(`${API_BASE}/api/tables/${currentTableId}`, {
+      headers: { Authorization: token }
+    });
+    
+    if (!tableRes.ok) {
+      throw new Error('Failed to fetch event data');
+    }
+    
+    const table = await tableRes.json();
+    const crewRows = table.rows || [];
+    
+    // Get current user ID
+    const currentUserId = getUserIdFromToken();
+    
+    // Get list of users already on the event (owners, leads, sharedWith)
+    const existingUserIds = new Set([
+      ...(table.owners || []),
+      ...(table.leads || []),
+      ...(table.sharedWith || [])
+    ]);
+    
+    // Get unique crew member names (excluding placeholders and empty names)
+    const crewNames = [...new Set(
+      crewRows
+        .filter(row => row.name && row.name.trim() && row.role !== '__placeholder__')
+        .map(row => row.name.trim())
+    )];
+    
+    if (crewNames.length === 0) {
+      showToast('No crew members found on this event.', 'warning');
+      resetShareWithCrewBtn();
+      return;
+    }
+    
+    // Find users that match crew names
+    const usersToShare = allUsers.filter(user => {
+      const userName = user.name || user.fullName || '';
+      
+      // Skip if user is already on the event
+      if (existingUserIds.has(user._id)) return false;
+      
+      // Skip if user is the current user
+      if (user._id === currentUserId) return false;
+      
+      // Check if user's name matches any crew name
+      return crewNames.some(crewName => 
+        userName.toLowerCase() === crewName.toLowerCase()
+      );
+    });
+    
+    if (usersToShare.length === 0) {
+      showToast('All crew members are already shared with this event.', 'info');
+      resetShareWithCrewBtn();
+      return;
+    }
+    
+    // Confirm before sharing
+    const confirmed = await showConfirm(
+      'Share with Crew',
+      `Share this event with ${usersToShare.length} crew member(s)?`,
+      { confirmText: 'Share', type: 'info' }
+    );
+    
+    if (!confirmed) {
+      resetShareWithCrewBtn();
+      return;
+    }
+    
+    // Share with each crew member
+    const results = [];
+    for (const user of usersToShare) {
+      const res = await fetch(`${API_BASE}/api/tables/${currentTableId}/share`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token
+        },
+        body: JSON.stringify({ 
+          email: user.email, 
+          makeOwner: false, 
+          makeLead: false 
+        })
+      });
+      
+      const result = await res.json();
+      
+      if (res.ok) {
+        results.push({ success: true, user: user.name || user.fullName || user.email });
+      } else {
+        results.push({ success: false, user: user.name || user.fullName || user.email, error: result.error });
+      }
+    }
+    
+    // Show summary
+    const successCount = results.filter(r => r.success).length;
+    const failureCount = results.filter(r => !r.success).length;
+    
+    if (successCount > 0) {
+      showToast(`Successfully shared with ${successCount} crew member(s).`, 'success', 5000);
+    }
+    
+    if (failureCount > 0) {
+      showToast(`Failed to share with ${failureCount} member(s).`, 'error', 5000);
+    }
+    
+    // Refresh modal
+    if (successCount > 0) {
+      await openShareModal(currentTableId);
+    }
+    
+  } catch (err) {
+    console.error('Error sharing with crew:', err);
+    showToast('Failed to share with crew. Please try again.', 'error');
+  }
+  
+  resetShareWithCrewBtn();
+}
+
+function resetShareWithCrewBtn() {
+  const shareBtn = document.getElementById('shareWithCrewBtn');
+  if (shareBtn) {
+    shareBtn.disabled = false;
+    shareBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px; margin-right: 6px;">groups</span> Share with Crew';
+  }
+}
+
 async function fetchUserPhotoForSidebar() {
   try {
     const token = localStorage.getItem('token');
@@ -2832,6 +3024,7 @@ window.applyDateFilter = applyDateFilter;
 window.clearDateFilter = clearDateFilter;
 window.submitShare = submitShare;
 window.closeModal = closeModal;
+window.shareWithCrew = shareWithCrew;
 window.submitCreate = submitCreate;
 window.hideCreateModal = hideCreateModal;
 

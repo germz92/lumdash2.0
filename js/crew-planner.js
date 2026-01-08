@@ -897,8 +897,22 @@ function addNewEvent() {
       return;
     }
     
-    // Add event to planning data
+    // Add event to planning data (for UI tracking)
     planningData.events.push({ name, location });
+    
+    // CRITICAL: Also add the event to all existing dates (so it gets saved)
+    // This ensures the event is persisted even if no crew data is added
+    planningData.dates.forEach(dateData => {
+      // Check if event already exists for this date (shouldn't, but be safe)
+      const existsInDate = dateData.events.find(e => e.name === name);
+      if (!existsInDate) {
+        dateData.events.push({
+          name: name,
+          location: location,
+          crew: []
+        });
+      }
+    });
   }
   
   // Save to session storage

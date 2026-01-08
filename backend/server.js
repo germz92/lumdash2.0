@@ -1730,6 +1730,159 @@ app.get('/api/tasks/all', authenticate, async (req, res) => {
   }
 });
 
+// ===========================================
+// CALL TIMES - Get all crew call times across all events
+// ===========================================
+app.get('/api/calltimes/all', authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userFullName = req.user.fullName;
+    const isAdmin = req.user.role === 'admin';
+    const myCallsOnly = req.query.myCalls === 'true';
+    const statusFilter = req.query.status || 'all'; // 'all', 'live', 'upcoming', 'past'
+    const dateFilter = req.query.dateFilter || 'all'; // 'all', 'this-month', 'last-month', 'last-3-months', 'this-year', 'last-year', 'custom'
+    const customStart = req.query.customStart; // ISO date string
+    const customEnd = req.query.customEnd; // ISO date string
+    
+    // Find all tables the user has access to
+    let query = {};
+    if (!isAdmin) {
+      // Non-admins only see events they have access to
+      query = {
+        $or: [
+          { owners: userId },
+          { leads: userId },
+          { sharedWith: userId }
+        ]
+      };
+    }
+    
+    const tables = await Table.find(query)
+      .populate('owners', 'fullName')
+      .select('title rows general');
+    
+    // Get today's date at midnight for comparisons (local time simulation)
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    
+    // Calculate date filter range
+    let filterStartDate = null;
+    let filterEndDate = null;
+    
+    if (dateFilter === 'this-month') {
+      filterStartDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      filterEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else if (dateFilter === 'last-month') {
+      filterStartDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      filterEndDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    } else if (dateFilter === 'last-3-months') {
+      filterStartDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+      filterEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else if (dateFilter === 'this-year') {
+      filterStartDate = new Date(now.getFullYear(), 0, 1);
+      filterEndDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+    } else if (dateFilter === 'last-year') {
+      filterStartDate = new Date(now.getFullYear() - 1, 0, 1);
+      filterEndDate = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
+    } else if (dateFilter === 'custom' && customStart && customEnd) {
+      filterStartDate = new Date(customStart);
+      filterEndDate = new Date(customEnd);
+      filterEndDate.setHours(23, 59, 59, 999);
+    }
+    
+    // Helper to parse date string as local date
+    function parseLocalDate(dateStr) {
+      if (!dateStr) return null;
+      const match = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (match) {
+        const [, year, month, day] = match;
+        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0);
+      }
+      return new Date(dateStr);
+    }
+    
+    // Flatten call times from all tables
+    let allCallTimes = [];
+    
+    for (const table of tables) {
+      if (!table.rows || table.rows.length === 0) continue;
+      
+      for (const row of table.rows) {
+        // Skip if name doesn't exist
+        if (!row.name) continue;
+        
+        // If myCallsOnly filter is on, only include calls for this user
+        if (myCallsOnly && row.name.toLowerCase() !== userFullName.toLowerCase()) {
+          continue;
+        }
+        
+        // For non-admins, only show their own call times
+        if (!isAdmin && row.name.toLowerCase() !== userFullName.toLowerCase()) {
+          continue;
+        }
+        
+        // Parse the crew call date
+        const callDate = parseLocalDate(row.date);
+        
+        // Apply status filter based on crew call date
+        if (statusFilter !== 'all' && callDate) {
+          if (statusFilter === 'live') {
+            // Live = call date is today
+            if (callDate < todayStart || callDate > todayEnd) continue;
+          } else if (statusFilter === 'upcoming') {
+            // Upcoming = call date is after today
+            if (callDate <= todayEnd) continue;
+          } else if (statusFilter === 'past') {
+            // Past = call date is before today
+            if (callDate >= todayStart) continue;
+          }
+        }
+        
+        // Apply date range filter
+        if (filterStartDate && filterEndDate && callDate) {
+          if (callDate < filterStartDate || callDate > filterEndDate) continue;
+        }
+        
+        allCallTimes.push({
+          _id: row._id.toString(),
+          name: row.name || '',
+          date: row.date || '',
+          startTime: row.startTime || '',
+          endTime: row.endTime || '',
+          totalHours: row.totalHours || 0,
+          role: row.role || '',
+          notes: row.notes || '',
+          event: {
+            _id: table._id.toString(),
+            title: table.title || 'Untitled Event',
+            city: table.general?.city || '',
+            state: table.general?.state || ''
+          }
+        });
+      }
+    }
+    
+    // Sort by date (soonest first), then by event name
+    allCallTimes.sort((a, b) => {
+      const dateA = a.date ? new Date(a.date) : new Date(0);
+      const dateB = b.date ? new Date(b.date) : new Date(0);
+      const dateCompare = dateA - dateB;
+      if (dateCompare !== 0) return dateCompare;
+      return (a.event.title || '').localeCompare(b.event.title || '');
+    });
+    
+    res.json({ 
+      callTimes: allCallTimes,
+      totalCount: allCallTimes.length,
+      isAdmin
+    });
+  } catch (err) {
+    console.error('Error fetching all call times:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Get all todos for a table
 app.get('/api/tables/:id/todos', authenticate, async (req, res) => {
   try {

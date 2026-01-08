@@ -371,6 +371,9 @@ function handleCrewChangeFromDropdown(date, eventName, crewIndex, value) {
   eventData.crew[crewIndex].crewMember = value;
   saveToSessionStorage();
   highlightEmptyCrewCells();
+  
+  // Check for collision (same crew member assigned multiple times on same date)
+  checkNameCollisionForDropdown(date, eventName, crewIndex, value);
 }
 
 // Legacy HTML-based functions for backwards compatibility
@@ -1538,6 +1541,51 @@ function showCollisionWarning(message) {
 
 function hideCollisionWarning() {
   document.getElementById('collisionWarning').style.display = 'none';
+}
+
+// Check for name collision when using custom dropdown
+function checkNameCollisionForDropdown(date, eventName, crewIndex, name) {
+  // Don't check collision for empty names
+  if (!name || name.trim() === '') {
+    return;
+  }
+  
+  const trimmedName = name.trim().toLowerCase();
+  let hasCollision = false;
+  let collisionEvent = '';
+  
+  // Check within the same date across all events
+  const dateData = planningData.dates.find(d => d.date === date);
+  if (dateData) {
+    dateData.events.forEach(event => {
+      event.crew.forEach((crew, index) => {
+        if (crew.crewMember && crew.crewMember.toLowerCase() === trimmedName) {
+          // Skip if it's the same cell being edited
+          if (event.name === eventName && index === crewIndex) return;
+          hasCollision = true;
+          collisionEvent = event.name;
+        }
+      });
+    });
+  }
+  
+  // Show warning if collision detected
+  if (hasCollision) {
+    const formattedDate = formatDateWithDayName(parseLocalDate(date));
+    showCollisionWarning(`"${name}" is already assigned to "${collisionEvent}" on ${formattedDate}`);
+    
+    // Add visual indicator to the dropdown trigger
+    const crewCells = document.querySelectorAll('.crew-cell');
+    crewCells.forEach(cell => {
+      const dropdown = cell.querySelector('.custom-dropdown-trigger');
+      if (dropdown) {
+        const valueSpan = dropdown.querySelector('.dropdown-value');
+        if (valueSpan && valueSpan.textContent.trim().toLowerCase() === trimmedName) {
+          cell.classList.add('warning');
+        }
+      }
+    });
+  }
 }
 
 // Session Storage Management

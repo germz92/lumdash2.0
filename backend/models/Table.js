@@ -223,13 +223,18 @@ const tableSchema = new mongoose.Schema({
     }
   ],
   archived: { type: Boolean, default: false },
-  // Admin-only notes for this event/table
+  // Admin-only notes for this event/table (Google Keep style)
   adminNotes: [
     {
       _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
-      title: { type: String, required: true },
-      date: { type: String, required: true }, // ISO date string
-      content: { type: String, default: '' }
+      title: { type: String, default: '' },
+      content: { type: String, default: '' },
+      pinned: { type: Boolean, default: false },
+      color: { type: String, default: 'default' }, // default, red, orange, yellow, green, teal, blue, purple
+      createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+      createdByName: { type: String },
+      createdAt: { type: Date, default: Date.now },
+      updatedAt: { type: Date, default: Date.now }
     }
   ],
   // Crew cost calculator rates

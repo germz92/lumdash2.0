@@ -491,6 +491,9 @@
           <span>Back to Events</span>
         </a>
         
+        <!-- Event Info Section -->
+        <div class="sidebar-event-info" id="sidebarEventInfo"></div>
+        
         <div class="nav-section-label">Event Pages</div>
         
         <a href="#" class="nav-item" data-page="general" onclick="event.preventDefault(); window.navigate && window.navigate('general');">
@@ -517,7 +520,7 @@
           <span class="material-symbols-outlined">flight_takeoff</span>
           <span>Travel</span>
         </a>
-        <a href="#" class="nav-item active" data-page="gear">
+        <a href="#" class="nav-item active" data-page="gear" onclick="event.preventDefault(); window.navigate && window.navigate('gear');">
           <span class="material-symbols-outlined">photo_camera</span>
           <span>Gear</span>
         </a>

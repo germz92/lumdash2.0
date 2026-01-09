@@ -5264,18 +5264,8 @@ function setupDarkThemeListeners() {
     searchInput.oninput = handleSearchInput;
   }
   
-  // Import/Export buttons
-  const importBtn = document.getElementById('importBtn');
-  const fileInput = document.getElementById('fileImport');
-  if (importBtn && fileInput) {
-    importBtn.onclick = () => fileInput.click();
-    fileInput.onchange = handleFileImport;
-  }
-  
-  const exportBtn = document.getElementById('exportBtn');
-  if (exportBtn) {
-    exportBtn.onclick = () => exportScheduleToExcel();
-  }
+  // Import/Export buttons are set up in initPage with cloneNode approach
+  // to prevent duplicate event listener attachment - do not add here
 }
 
 // Setup action menu handlers for dark theme

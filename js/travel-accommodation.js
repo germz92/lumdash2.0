@@ -58,6 +58,185 @@ window.initPage = undefined;
       el.style.height = el.scrollHeight + 'px';
     }
 
+    // Create custom dropdown component (matching crew page style)
+    function createCustomDropdown(options, currentValue, placeholder, onSelect, onAddNew) {
+      const container = document.createElement('div');
+      container.className = 'custom-dropdown';
+      
+      const trigger = document.createElement('button');
+      trigger.type = 'button';
+      trigger.className = 'custom-dropdown-trigger';
+      trigger.innerHTML = `
+        <span class="dropdown-value ${!currentValue ? 'placeholder' : ''}">${currentValue || placeholder}</span>
+        <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+      `;
+      
+      const menu = document.createElement('div');
+      menu.className = 'custom-dropdown-menu';
+      
+      // Search input for filtering
+      const searchWrapper = document.createElement('div');
+      searchWrapper.className = 'custom-dropdown-search';
+      searchWrapper.innerHTML = `<input type="text" placeholder="Search..." autocomplete="off">`;
+      
+      const optionsContainer = document.createElement('div');
+      optionsContainer.className = 'custom-dropdown-options';
+      
+      // Minimal inline styles to override global button styles - CSS handles the rest
+      const optionStyle = 'height: auto !important; min-height: 0 !important; margin: 0 !important; border-radius: 0 !important; box-shadow: none !important;';
+      const addNewStyle = 'height: auto !important; min-height: 0 !important; margin: 0 !important; border-radius: 0 !important; box-shadow: none !important;';
+      
+      // Render options
+      function renderOptions(filter = '') {
+        const filtered = options.filter(opt => 
+          opt.toLowerCase().includes(filter.toLowerCase())
+        );
+        
+        if (filtered.length === 0 && filter) {
+          optionsContainer.innerHTML = `<div class="custom-dropdown-empty">No results found</div>`;
+        } else {
+          optionsContainer.innerHTML = filtered.map(opt => `
+            <button type="button" class="custom-dropdown-option ${opt === currentValue ? 'selected' : ''}" data-value="${opt}" style="${optionStyle}">
+              ${opt}
+            </button>
+          `).join('');
+          
+          // Add "Add new" option
+          if (onAddNew) {
+            optionsContainer.innerHTML += `
+              <button type="button" class="custom-dropdown-option add-new" data-value="__add_new__" style="${addNewStyle}">
+                <span class="material-symbols-outlined" style="font-size: 16px;">add</span>
+                Add new...
+              </button>
+            `;
+          }
+        }
+      }
+      
+      renderOptions();
+      
+      menu.appendChild(searchWrapper);
+      menu.appendChild(optionsContainer);
+      container.appendChild(trigger);
+      container.appendChild(menu);
+      
+      // Event handlers
+      let isOpen = false;
+      
+      function openDropdown() {
+        isOpen = true;
+        container.classList.add('open');
+        
+        // Position the menu using fixed positioning
+        const triggerRect = trigger.getBoundingClientRect();
+        const viewportHeight = window.innerHeight;
+        const menuHeight = Math.min(280, viewportHeight * 0.4);
+        
+        // Check if menu should open above or below
+        const spaceBelow = viewportHeight - triggerRect.bottom - 10;
+        const spaceAbove = triggerRect.top - 10;
+        
+        // Reset positioning
+        menu.style.top = '';
+        menu.style.bottom = '';
+        
+        if (spaceBelow >= menuHeight || spaceBelow >= spaceAbove) {
+          // Open below - position top edge just below trigger
+          menu.style.top = `${triggerRect.bottom + 2}px`;
+          menu.style.maxHeight = `${Math.min(menuHeight, spaceBelow)}px`;
+        } else {
+          // Open above - use bottom positioning to anchor menu bottom to trigger top
+          menu.style.bottom = `${viewportHeight - triggerRect.top + 2}px`;
+          menu.style.maxHeight = `${Math.min(menuHeight, spaceAbove)}px`;
+        }
+        
+        menu.style.left = `${triggerRect.left}px`;
+        menu.style.width = `${Math.max(triggerRect.width, 180)}px`;
+        
+        const searchInput = searchWrapper.querySelector('input');
+        searchInput.value = '';
+        renderOptions();
+        setTimeout(() => searchInput.focus(), 50);
+      }
+      
+      function closeDropdown() {
+        isOpen = false;
+        container.classList.remove('open');
+      }
+      
+      trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (isOpen) {
+          closeDropdown();
+        } else {
+          openDropdown();
+        }
+      });
+      
+      // Search filtering
+      const searchInput = searchWrapper.querySelector('input');
+      searchInput.addEventListener('input', (e) => {
+        renderOptions(e.target.value);
+      });
+      
+      searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+          closeDropdown();
+        }
+      });
+      
+      // Option selection
+      optionsContainer.addEventListener('click', async (e) => {
+        const option = e.target.closest('.custom-dropdown-option');
+        if (!option) return;
+        
+        e.stopPropagation();
+        const value = option.dataset.value;
+        
+        if (value === '__add_new__' && onAddNew) {
+          closeDropdown();
+          const newValue = await onAddNew();
+          if (newValue) {
+            trigger.querySelector('.dropdown-value').textContent = newValue;
+            trigger.querySelector('.dropdown-value').classList.remove('placeholder');
+            onSelect(newValue);
+          }
+        } else {
+          trigger.querySelector('.dropdown-value').textContent = value;
+          trigger.querySelector('.dropdown-value').classList.remove('placeholder');
+          closeDropdown();
+          onSelect(value);
+        }
+      });
+      
+      // Close on outside click
+      function handleOutsideClick(e) {
+        if (!container.contains(e.target)) {
+          closeDropdown();
+        }
+      }
+      
+      document.addEventListener('click', handleOutsideClick);
+      
+      // Store reference to update options later
+      container.updateOptions = (newOptions, newValue) => {
+        options = newOptions;
+        currentValue = newValue;
+        renderOptions();
+        if (newValue) {
+          trigger.querySelector('.dropdown-value').textContent = newValue;
+          trigger.querySelector('.dropdown-value').classList.remove('placeholder');
+        }
+      };
+      
+      container.getValue = () => {
+        const valueEl = trigger.querySelector('.dropdown-value');
+        return valueEl.classList.contains('placeholder') ? '' : valueEl.textContent;
+      };
+      
+      return container;
+    }
+
     // Function to create clickable location links (similar to general page)
     function createLocationLink(hotelValue) {
       if (!hotelValue || !hotelValue.trim()) {
@@ -264,13 +443,7 @@ window.initPage = undefined;
               <td class="date"><input type="date" value="${item.date || ''}"></td>
               <td class="time"><input type="time" value="${item.depart || ''}"></td>
               <td class="time"><input type="time" value="${item.arrive || ''}"></td>
-              <td class="text">
-                <select class="name-select">
-                  <option value="">-- Select Name --</option>
-                  ${cachedUsers.map(u => `<option value="${u.name}" ${u.name === item.name ? 'selected' : ''}>${u.name}</option>`).join('')}
-                  <option value="__add_new__">➕ Add new name</option>
-                </select>
-              </td>
+              <td class="text name-cell"></td>
               <td class="text"><textarea>${item.airline || ''}</textarea></td>
               <td class="text"><textarea>${item.fromTo || ''}</textarea></td>
               <td class="text"><textarea>${item.ref || ''}</textarea></td>
@@ -280,17 +453,37 @@ window.initPage = undefined;
             row.innerHTML = `
               <td class="date"><input type="date" value="${item.checkin || ''}"></td>
               <td class="date"><input type="date" value="${item.checkout || ''}"></td>
-              <td class="text">
-                <select class="name-select">
-                  <option value="">-- Select Name --</option>
-                  ${cachedUsers.map(u => `<option value="${u.name}" ${u.name === item.name ? 'selected' : ''}>${u.name}</option>`).join('')}
-                  <option value="__add_new__">➕ Add new name</option>
-                </select>
-              </td>
+              <td class="text name-cell"></td>
               <td class="text"><textarea>${item.hotel || ''}</textarea></td>
               <td class="text"><textarea>${item.ref || ''}</textarea></td>
               <td class="action"><button type="button" class="delete-btn"><span class="material-symbols-outlined">delete</span></button></td>
             `;
+          }
+          
+          // Create and append custom name dropdown
+          const nameCell = row.querySelector('.name-cell');
+          if (nameCell) {
+            const userNames = cachedUsers.map(u => u.name);
+            const dropdown = createCustomDropdown(
+              userNames,
+              item.name || '',
+              'Select Name',
+              (value) => {
+                // Value is automatically set in the dropdown
+                console.log('Name selected:', value);
+              },
+              async () => {
+                // Add new name handler
+                const newName = prompt('Enter new name:');
+                if (newName && !cachedUsers.some(u => u.name === newName)) {
+                  cachedUsers.push({ name: newName });
+                  cachedUsers.sort((a, b) => a.name.localeCompare(b.name));
+                  return newName;
+                }
+                return null;
+              }
+            );
+            nameCell.appendChild(dropdown);
           }
         }
 
@@ -298,54 +491,31 @@ window.initPage = undefined;
       });
 
       table.querySelectorAll('textarea').forEach(autoResizeTextarea);
-      
-      // Add event listener for name select dropdowns
-      table.querySelectorAll('.name-select').forEach(select => {
-        select.addEventListener('change', function() {
-          if (this.value === '__add_new__') {
-            const newName = prompt('Enter new name:');
-            if (newName && !cachedUsers.some(u => u.name === newName)) {
-              cachedUsers.push({ name: newName });
-              cachedUsers.sort((a, b) => a.name.localeCompare(b.name));
-              
-              // Update this select and all other name selects
-              document.querySelectorAll('.name-select').forEach(sel => {
-                const currentValue = sel.value;
-                sel.innerHTML = `
-                  <option value="">-- Select Name --</option>
-                  ${cachedUsers.map(u => `<option value="${u.name}">${u.name}</option>`).join('')}
-                  <option value="__add_new__">➕ Add new name</option>
-                `;
-                sel.value = sel === this ? newName : currentValue;
-              });
-            } else {
-              // Reset selection if cancelled or duplicate
-              this.value = '';
-            }
-          }
-        });
-      });
     }
 
     function collectTableData(tableId) {
       const table = document.getElementById(tableId)?.querySelectorAll("tbody tr");
       if (!table) return [];
       return Array.from(table).map(row => {
-        const inputs = row.querySelectorAll('input, textarea, select');
+        const inputs = row.querySelectorAll('input, textarea');
+        // Get name from custom dropdown
+        const nameDropdown = row.querySelector('.custom-dropdown');
+        const nameValue = nameDropdown ? nameDropdown.getValue() : '';
+        
         return tableId === 'travelTable' ? {
           date: inputs[0]?.value || '',
           depart: inputs[1]?.value || '',
           arrive: inputs[2]?.value || '',
-          name: inputs[3]?.value || '',
-          airline: inputs[4]?.value || '',
-          fromTo: inputs[5]?.value || '',
-          ref: inputs[6]?.value || ''
+          name: nameValue,
+          airline: inputs[3]?.value || '',
+          fromTo: inputs[4]?.value || '',
+          ref: inputs[5]?.value || ''
         } : {
           checkin: inputs[0]?.value || '',
           checkout: inputs[1]?.value || '',
-          name: inputs[2]?.value || '',
-          hotel: inputs[3]?.value || '',
-          ref: inputs[4]?.value || ''
+          name: nameValue,
+          hotel: inputs[2]?.value || '',
+          ref: inputs[3]?.value || ''
         };
       });
     }
@@ -379,13 +549,7 @@ window.initPage = undefined;
           <td class="date"><input type="date"></td>
           <td class="time"><input type="time"></td>
           <td class="time"><input type="time"></td>
-          <td class="text">
-            <select class="name-select">
-              <option value="">-- Select Name --</option>
-              ${cachedUsers.map(u => `<option value="${u.name}">${u.name}</option>`).join('')}
-              <option value="__add_new__">➕ Add new name</option>
-            </select>
-          </td>
+          <td class="text name-cell"></td>
           <td class="text"><textarea></textarea></td>
           <td class="text"><textarea></textarea></td>
           <td class="text"><textarea></textarea></td>
@@ -394,13 +558,7 @@ window.initPage = undefined;
         : `
           <td class="date"><input type="date"></td>
           <td class="date"><input type="date"></td>
-          <td class="text">
-            <select class="name-select">
-              <option value="">-- Select Name --</option>
-              ${cachedUsers.map(u => `<option value="${u.name}">${u.name}</option>`).join('')}
-              <option value="__add_new__">➕ Add new name</option>
-            </select>
-          </td>
+          <td class="text name-cell"></td>
           <td class="text"><textarea></textarea></td>
           <td class="text"><textarea></textarea></td>
           <td class="action"><button class="delete-btn" onclick="window.removeRow(this)"><span class="material-symbols-outlined">delete</span></button></td>
@@ -409,32 +567,29 @@ window.initPage = undefined;
       table.appendChild(row);
       row.querySelectorAll('textarea').forEach(autoResizeTextarea);
       
-      // Add event listener for name select in the new row
-      const nameSelect = row.querySelector('.name-select');
-      if (nameSelect) {
-        nameSelect.addEventListener('change', function() {
-          if (this.value === '__add_new__') {
+      // Create and append custom name dropdown
+      const nameCell = row.querySelector('.name-cell');
+      if (nameCell) {
+        const userNames = cachedUsers.map(u => u.name);
+        const dropdown = createCustomDropdown(
+          userNames,
+          '',
+          'Select Name',
+          (value) => {
+            console.log('Name selected:', value);
+          },
+          async () => {
+            // Add new name handler
             const newName = prompt('Enter new name:');
             if (newName && !cachedUsers.some(u => u.name === newName)) {
               cachedUsers.push({ name: newName });
               cachedUsers.sort((a, b) => a.name.localeCompare(b.name));
-              
-              // Update all name selects
-              document.querySelectorAll('.name-select').forEach(sel => {
-                const currentValue = sel.value;
-                sel.innerHTML = `
-                  <option value="">-- Select Name --</option>
-                  ${cachedUsers.map(u => `<option value="${u.name}">${u.name}</option>`).join('')}
-                  <option value="__add_new__">➕ Add new name</option>
-                `;
-                sel.value = sel === this ? newName : currentValue;
-              });
-            } else {
-              // Reset selection if cancelled or duplicate
-              this.value = '';
+              return newName;
             }
+            return null;
           }
-        });
+        );
+        nameCell.appendChild(dropdown);
       }
       
       console.log('Row appended to', tableId);

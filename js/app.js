@@ -449,6 +449,14 @@ function injectPageContent(html, page, id) {
            console.log(`[SCRIPT_LOAD] Skipping external script: ${script.src}`);
          }
        });
+       
+       // Populate sidebar event info for inline script pages too
+       setTimeout(() => {
+         if (window.populateSidebarEventInfo) {
+           window.populateSidebarEventInfo();
+         }
+       }, 200);
+       
        return; // Skip loading external gear.js
   }
 
@@ -482,6 +490,12 @@ function injectPageContent(html, page, id) {
           if (needsId && id) {
             console.log(`[INIT_PAGE] Calling initPage with explicit id: ${id}`);
             window.initPage(id);
+            // Populate sidebar event info for event-specific pages (with small delay to ensure DOM is ready)
+            setTimeout(() => {
+              if (window.populateSidebarEventInfo) {
+                window.populateSidebarEventInfo();
+              }
+            }, 100);
           } else if (needsId && !id) {
             console.warn(`[INIT_PAGE] Page ${page} needs event ID but none provided, initPage not called`);
           } else {
@@ -709,6 +723,81 @@ window.navigate = navigate;
 window.setupBottomNavigation = setupBottomNavigation;
 window.parseHash = parseHash;
 window.getTableId = getTableId;
+
+/**
+ * Populate sidebar event info section with event name, location, and dates
+ * Called from each event page's initPage function
+ */
+async function populateSidebarEventInfo() {
+  const eventId = localStorage.getItem('eventId');
+  if (!eventId) return;
+  
+  // Find the event info container (works for any page with the sidebar)
+  const eventInfoContainer = document.getElementById('sidebarEventInfo');
+  if (!eventInfoContainer) {
+    console.log('[SIDEBAR] No sidebarEventInfo container found');
+    return;
+  }
+  
+  try {
+    const token = localStorage.getItem('token');
+    const API_BASE = window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://lumdash2-0.onrender.com');
+    
+    const res = await fetch(`${API_BASE}/api/tables/${eventId}`, {
+      headers: { Authorization: token }
+    });
+    
+    if (!res.ok) {
+      console.error('[SIDEBAR] Failed to load event data for sidebar');
+      return;
+    }
+    
+    const table = await res.json();
+    const general = table.general || {};
+    
+    // Format the date range
+    let dateDisplay = '';
+    if (general.start && general.end) {
+      const startDate = new Date(general.start);
+      const endDate = new Date(general.end);
+      const options = { month: 'short', day: 'numeric' };
+      
+      if (startDate.toDateString() === endDate.toDateString()) {
+        dateDisplay = startDate.toLocaleDateString('en-US', { ...options, year: 'numeric' });
+      } else if (startDate.getFullYear() === endDate.getFullYear()) {
+        dateDisplay = `${startDate.toLocaleDateString('en-US', options)} - ${endDate.toLocaleDateString('en-US', { ...options, year: 'numeric' })}`;
+      } else {
+        dateDisplay = `${startDate.toLocaleDateString('en-US', { ...options, year: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { ...options, year: 'numeric' })}`;
+      }
+    } else if (general.start) {
+      dateDisplay = new Date(general.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+    
+    // Format location
+    let locationDisplay = '';
+    if (general.city && general.state) {
+      locationDisplay = `${general.city}, ${general.state}`;
+    } else if (general.city) {
+      locationDisplay = general.city;
+    } else if (general.state) {
+      locationDisplay = general.state;
+    }
+    
+    // Update the container
+    eventInfoContainer.innerHTML = `
+      <div class="sidebar-event-name">${table.title || 'Untitled Event'}</div>
+      ${locationDisplay ? `<div class="sidebar-event-location"><span class="material-symbols-outlined">location_on</span>${locationDisplay}</div>` : ''}
+      ${dateDisplay ? `<div class="sidebar-event-date"><span class="material-symbols-outlined">calendar_today</span>${dateDisplay}</div>` : ''}
+    `;
+    eventInfoContainer.style.display = 'block';
+    
+  } catch (err) {
+    console.error('[SIDEBAR] Error loading event info:', err);
+  }
+}
+
+// Expose globally
+window.populateSidebarEventInfo = populateSidebarEventInfo;
 
 // PullToRefresh.js integration for PWA/mobile
 if (window.PullToRefresh) {

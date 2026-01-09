@@ -791,6 +791,7 @@ function renderShotlists() {
     if (emptyState) emptyState.style.display = 'block';
     container.innerHTML = '';
     selectedListId = null;
+    updateProgressSummary(); // Update progress even when empty
     return;
   }
 
@@ -852,7 +853,33 @@ function renderShotlists() {
     newContainer.innerHTML = '';
   }
   
+  // Update the overall progress summary
+  updateProgressSummary();
+  
   debugLog('Shotlists rendered successfully');
+}
+
+// Update the overall progress summary in the header
+function updateProgressSummary() {
+  const progressSummary = document.getElementById('progressSummary');
+  if (!progressSummary) return;
+  
+  const progressText = progressSummary.querySelector('.progress-text');
+  if (!progressText) return;
+  
+  // Calculate totals across all shotlists
+  let totalItems = 0;
+  let completedItems = 0;
+  
+  shotlists.forEach(list => {
+    if (list.items && Array.isArray(list.items)) {
+      totalItems += list.items.length;
+      completedItems += list.items.filter(item => item.completed).length;
+    }
+  });
+  
+  progressText.textContent = `${completedItems} / ${totalItems} completed`;
+  debugLog('Progress summary updated:', completedItems, '/', totalItems);
 }
 
 // Update the list selector dropdown

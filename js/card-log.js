@@ -1339,9 +1339,26 @@ async function loadCardLog() {
     }
   }
   
-  if (!table.cardLog || table.cardLog.length === 0) return;
-  
   const container = document.getElementById('table-container');
+  
+  // Remove loading skeleton
+  const skeleton = container.querySelector('.loading-skeleton');
+  if (skeleton) skeleton.remove();
+  
+  // Show empty state if no data
+  if (!table.cardLog || table.cardLog.length === 0) {
+    // Only add empty state if not already present
+    if (!container.querySelector('.empty-state')) {
+      container.innerHTML = `
+        <div class="empty-state">
+          <span class="material-symbols-outlined">sd_card</span>
+          <h3>No Card Log Entries</h3>
+          <p>Click "Add New Day" to start tracking your SD cards</p>
+        </div>
+      `;
+    }
+    return;
+  }
   
   // Get existing days
   const existingDays = new Set(Array.from(document.querySelectorAll('.day-table')).map(div => {
@@ -1471,6 +1488,10 @@ function addDaySection(date, entries = []) {
   // Remove loading skeleton if present
   const skeleton = container.querySelector('.loading-skeleton');
   if (skeleton) skeleton.remove();
+  
+  // Remove empty state if present
+  const emptyState = container.querySelector('.empty-state');
+  if (emptyState) emptyState.remove();
   
   const dayDiv = document.createElement('div');
   

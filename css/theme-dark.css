@@ -17583,12 +17583,14 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   background: var(--bg-secondary);
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  padding: 12px 16px;
+  padding: 16px 20px;
   cursor: pointer;
   transition: all var(--transition-fast);
   display: flex;
   flex-direction: column;
-  min-height: 80px;
+  min-height: 150px;
+  max-height: 350px;
+  overflow: hidden;
 }
 
 .note-card:hover {
@@ -17734,10 +17736,13 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 /* Note Edit Modal */
 .note-modal-content {
   width: 100%;
-  max-width: 600px;
+  max-width: 700px;
+  max-height: 90vh;
   background: var(--bg-secondary);
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .note-modal-header {
@@ -17752,11 +17757,16 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 }
 
 .note-modal-body {
+  flex: 1;
   padding: 0 16px;
+  overflow-y: auto;
+  min-height: 300px;
 }
 
 .note-modal-body .note-content-input {
-  min-height: 150px;
+  min-height: 400px;
+  max-height: 60vh;
+  resize: vertical;
 }
 
 .note-modal-footer {
@@ -17833,8 +17843,9 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   }
   
   .note-card {
-    min-height: 60px;
-    padding: 10px 12px;
+    min-height: 100px;
+    max-height: 250px;
+    padding: 12px 14px;
   }
   
   .note-pin-btn {

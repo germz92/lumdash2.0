@@ -1723,8 +1723,8 @@ function setupUserAutofill() {
       return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
     }
     return name.substring(0, 2).toUpperCase();
-  }
-  
+    }
+    
   // Render user options
   function renderOptions(filter = '') {
     const filteredUsers = allUsers.filter(user => {
@@ -1756,7 +1756,7 @@ function setupUserAutofill() {
       // Add click handlers
       optionsContainer.querySelectorAll('.share-dropdown-option').forEach(option => {
         option.onclick = (e) => {
-          e.preventDefault();
+      e.preventDefault();
           e.stopPropagation();
           const userId = option.dataset.userId;
           const user = allUsers.find(u => u._id === userId);
@@ -1816,7 +1816,7 @@ function setupUserAutofill() {
       closeDropdown();
     } else {
       openDropdown();
-    }
+        }
   };
   
   // Search input
@@ -1830,7 +1830,7 @@ function setupUserAutofill() {
   document.addEventListener('click', (e) => {
     if (isOpen && !dropdownContainer.contains(e.target) && !menu.contains(e.target)) {
       closeDropdown();
-    }
+  }
   });
   
   function addSelectedUser(user) {

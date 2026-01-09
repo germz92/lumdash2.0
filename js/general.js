@@ -137,9 +137,9 @@ function renderDarkThemeSummary(table) {
   if (clientEl) clientEl.textContent = general.client || 'No client';
   
   const cityEl = document.getElementById('summaryCity');
-  const venueEl = document.getElementById('summaryVenue');
-  if (cityEl) cityEl.textContent = general.city || 'City TBD';
-  if (venueEl) venueEl.textContent = general.location || 'Venue TBD';
+  const stateEl = document.getElementById('summaryState');
+  if (cityEl) cityEl.textContent = general.city || 'City';
+  if (stateEl) stateEl.textContent = general.state || 'State';
 }
 
 function renderDarkThemeStats(table) {
@@ -827,6 +827,412 @@ function resetLocationModal() {
   if (deleteBtn) deleteBtn.style.display = 'none';
 }
 
+// Gallery URL Modal Functions
+function openGalleryModal() {
+  console.log('[Gallery] Opening gallery modal');
+  const urlInput = document.getElementById('galleryUrlInput');
+  if (urlInput) {
+    urlInput.value = currentTableData?.general?.galleryUrl || '';
+  }
+  
+  // Show the modal
+  const modal = document.getElementById('galleryUrlModal');
+  if (modal) {
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+  } else {
+    console.error('[Gallery] Gallery modal not found');
+  }
+}
+
+function hideGalleryModal() {
+  const modal = document.getElementById('galleryUrlModal');
+  if (modal) {
+    modal.classList.remove('show');
+    document.body.style.overflow = '';
+  }
+}
+
+async function saveGalleryUrl(tableId) {
+  const saveBtn = document.getElementById('saveGalleryBtn');
+  const urlInput = document.getElementById('galleryUrlInput');
+  
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+  }
+  
+  try {
+    let galleryUrl = urlInput?.value?.trim() || '';
+    
+    // Add https:// if URL doesn't have a protocol
+    if (galleryUrl && !galleryUrl.match(/^https?:\/\//i)) {
+      galleryUrl = 'https://' + galleryUrl;
+    }
+    
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/general`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': window.token
+      },
+      body: JSON.stringify({
+        general: {
+          ...currentTableData?.general,
+          galleryUrl: galleryUrl
+        }
+      })
+    });
+    
+    if (!res.ok) throw new Error('Failed to save gallery URL');
+    
+    // Update local data
+    if (currentTableData && currentTableData.general) {
+      currentTableData.general.galleryUrl = galleryUrl;
+    }
+    
+    hideGalleryModal();
+    
+    // Show success feedback
+    if (galleryUrl) {
+      alert('Gallery link saved! Click "Open Gallery" to visit the link.');
+    }
+  } catch (err) {
+    console.error('Save gallery URL error:', err);
+    alert('Failed to save gallery link');
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+    }
+  }
+}
+
+// Handle gallery button click (for inline onclick handler)
+function handleGalleryClick() {
+  console.log('[Gallery] handleGalleryClick called');
+  const galleryUrl = currentTableData?.general?.galleryUrl;
+  
+  if (galleryUrl && galleryUrl.trim()) {
+    console.log('[Gallery] Opening URL:', galleryUrl);
+    window.open(galleryUrl, '_blank');
+  } else if (isOwner || isAdmin()) {
+    console.log('[Gallery] Opening modal to set URL');
+    openGalleryModal();
+  } else {
+    alert('No gallery link has been set for this event.');
+  }
+}
+
+// ================================
+// FTP Folder Names Functions
+// ================================
+let folderNamesEditMode = false;
+let originalFolderNames = [];
+
+async function loadFolderNames(tableId) {
+  console.log('[FolderNames] Loading folder names for tableId:', tableId);
+  try {
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/folder-logs`, {
+      headers: { Authorization: window.token }
+    });
+    
+    if (!res.ok) {
+      console.error('[FolderNames] Failed to load folder names:', res.status);
+      return;
+    }
+    
+    const data = await res.json();
+    console.log('[FolderNames] Loaded folder names:', data);
+    originalFolderNames = data.folders || [];
+    renderFolderNames(data.folders || []);
+  } catch (error) {
+    console.error('[FolderNames] Error loading folder names:', error);
+  }
+}
+
+function formatFolderDate(dateStr) {
+  if (!dateStr) return '';
+  const [year, month, day] = dateStr.split('-');
+  return new Date(Number(year), Number(month) - 1, Number(day)).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric'
+  });
+}
+
+function renderFolderNames(folders) {
+  const tableBody = document.getElementById('folderNamesTableBody');
+  const emptyEl = document.getElementById('folderNamesEmpty');
+  const editActionsEl = document.getElementById('folderNamesEditActions');
+  const tableWrapper = document.querySelector('.folder-names-table-wrapper');
+  
+  if (!tableBody) return;
+  
+  // Show/hide edit actions based on mode
+  if (editActionsEl) {
+    editActionsEl.style.display = folderNamesEditMode ? 'block' : 'none';
+  }
+  
+  // Handle empty state
+  if (!folders || folders.length === 0) {
+    if (!folderNamesEditMode) {
+      // Show empty state, hide table
+      if (emptyEl) emptyEl.style.display = 'flex';
+      if (tableWrapper) tableWrapper.style.display = 'none';
+      tableBody.innerHTML = '';
+      return;
+    } else {
+      // In edit mode, add one empty row
+      if (emptyEl) emptyEl.style.display = 'none';
+      if (tableWrapper) tableWrapper.style.display = 'block';
+      tableBody.innerHTML = createFolderRowHtml('', '', '', true);
+      return;
+    }
+  }
+  
+  // Show table, hide empty state
+  if (emptyEl) emptyEl.style.display = 'none';
+  if (tableWrapper) tableWrapper.style.display = 'block';
+  
+  // Render table rows
+  tableBody.innerHTML = folders.map(folder => 
+    createFolderRowHtml(folder.date || '', folder.folderName || '', folder.description || '', folderNamesEditMode)
+  ).join('');
+}
+
+function createFolderRowHtml(date, folderName, description, isEditable) {
+  if (isEditable) {
+    return `
+      <tr>
+        <td><input type="date" class="folder-date-input" value="${date}"></td>
+        <td><input type="text" class="folder-name-input" placeholder="Folder Name" value="${escapeHtml(folderName)}"></td>
+        <td><input type="text" class="folder-desc-input" placeholder="Description" value="${escapeHtml(description)}"></td>
+        <td class="action-col">
+          <button type="button" class="delete-row-btn" onclick="window.removeFolderRow(this)">
+            <span class="material-symbols-outlined">delete</span>
+          </button>
+        </td>
+      </tr>
+    `;
+  } else {
+    return `
+      <tr>
+        <td class="folder-date-cell">${formatFolderDate(date)}</td>
+        <td class="folder-name-cell"><span class="folder-name-text">${escapeHtml(folderName) || '—'}</span></td>
+        <td class="folder-desc-cell">${escapeHtml(description) || '—'}</td>
+        <td class="action-col"></td>
+      </tr>
+    `;
+  }
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function enterFolderNamesEditMode() {
+  console.log('[FolderNames] Entering edit mode');
+  if (!isOwner && !isAdmin()) {
+    alert('You do not have permission to edit folder names.');
+    return;
+  }
+  
+  folderNamesEditMode = true;
+  const editBtn = document.getElementById('editFolderNamesBtn');
+  if (editBtn) editBtn.style.display = 'none';
+  
+  renderFolderNames(originalFolderNames);
+}
+
+function exitFolderNamesEditMode() {
+  console.log('[FolderNames] Exiting edit mode');
+  folderNamesEditMode = false;
+  const editBtn = document.getElementById('editFolderNamesBtn');
+  if (editBtn) editBtn.style.display = 'block';
+  
+  renderFolderNames(originalFolderNames);
+}
+
+function addFolderRow() {
+  console.log('[FolderNames] Adding new row');
+  const tableBody = document.getElementById('folderNamesTableBody');
+  if (!tableBody) return;
+  
+  const row = document.createElement('tr');
+  row.innerHTML = createFolderRowHtml('', '', '', true).replace('<tr>', '').replace('</tr>', '');
+  tableBody.appendChild(row);
+}
+
+function removeFolderRow(button) {
+  console.log('[FolderNames] Removing row');
+  const row = button.closest('tr');
+  if (row) row.remove();
+}
+
+function collectFolderNamesData() {
+  const tableBody = document.getElementById('folderNamesTableBody');
+  if (!tableBody) return [];
+  
+  const rows = tableBody.querySelectorAll('tr');
+  return Array.from(rows).map(row => {
+    const dateInput = row.querySelector('.folder-date-input');
+    const nameInput = row.querySelector('.folder-name-input');
+    const descInput = row.querySelector('.folder-desc-input');
+    
+    return {
+      date: dateInput?.value || '',
+      folderName: nameInput?.value || '',
+      description: descInput?.value || ''
+    };
+  }).filter(item => item.date || item.folderName || item.description); // Filter out completely empty rows
+}
+
+async function saveFolderNames(tableId) {
+  console.log('[FolderNames] Saving folder names');
+  const saveBtn = document.getElementById('saveFolderNamesBtn');
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+  }
+  
+  try {
+    const folders = collectFolderNamesData();
+    console.log('[FolderNames] Data to save:', folders);
+    
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/folder-logs`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: window.token
+      },
+      body: JSON.stringify({ folders })
+    });
+    
+    if (!res.ok) {
+      throw new Error('Failed to save folder names');
+    }
+    
+    console.log('[FolderNames] Saved successfully');
+    originalFolderNames = folders;
+    exitFolderNamesEditMode();
+  } catch (error) {
+    console.error('[FolderNames] Error saving folder names:', error);
+    alert('Failed to save folder names. Please try again.');
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+    }
+  }
+}
+
+function setupFolderNamesEventListeners(tableId) {
+  console.log('[FolderNames] Setting up event listeners');
+  
+  const editBtn = document.getElementById('editFolderNamesBtn');
+  if (editBtn && !editBtn._listenerAttached) {
+    editBtn._listenerAttached = true;
+    editBtn.addEventListener('click', enterFolderNamesEditMode);
+    
+    // Hide edit button for non-owners/non-admins
+    if (!isOwner && !isAdmin()) {
+      editBtn.style.display = 'none';
+    }
+  }
+  
+  const addRowBtn = document.getElementById('addFolderRowBtn');
+  if (addRowBtn && !addRowBtn._listenerAttached) {
+    addRowBtn._listenerAttached = true;
+    addRowBtn.addEventListener('click', addFolderRow);
+  }
+  
+  const cancelBtn = document.getElementById('cancelFolderNamesBtn');
+  if (cancelBtn && !cancelBtn._listenerAttached) {
+    cancelBtn._listenerAttached = true;
+    cancelBtn.addEventListener('click', exitFolderNamesEditMode);
+  }
+  
+  const saveBtn = document.getElementById('saveFolderNamesBtn');
+  if (saveBtn && !saveBtn._listenerAttached) {
+    saveBtn._listenerAttached = true;
+    saveBtn.addEventListener('click', () => saveFolderNames(tableId));
+  }
+}
+
+// Expose folder names functions to window
+window.enterFolderNamesEditMode = enterFolderNamesEditMode;
+window.exitFolderNamesEditMode = exitFolderNamesEditMode;
+window.addFolderRow = addFolderRow;
+window.removeFolderRow = removeFolderRow;
+window.saveFolderNames = saveFolderNames;
+
+// ================================
+// Collapsible Cards Functions
+// ================================
+const COLLAPSED_CARDS_KEY = 'general_collapsed_cards';
+
+function getCollapsedCards() {
+  try {
+    const stored = localStorage.getItem(COLLAPSED_CARDS_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveCollapsedCards(collapsed) {
+  try {
+    localStorage.setItem(COLLAPSED_CARDS_KEY, JSON.stringify(collapsed));
+  } catch (e) {
+    console.error('[General] Failed to save collapsed state:', e);
+  }
+}
+
+function toggleCardCollapse(cardElement) {
+  if (!cardElement) return;
+  
+  const cardId = cardElement.dataset.cardId;
+  const isCollapsed = cardElement.classList.toggle('collapsed');
+  
+  // Save state to localStorage
+  const collapsedCards = getCollapsedCards();
+  if (isCollapsed) {
+    collapsedCards[cardId] = true;
+  } else {
+    delete collapsedCards[cardId];
+  }
+  saveCollapsedCards(collapsedCards);
+  
+  console.log('[General] Card', cardId, 'collapsed:', isCollapsed);
+}
+
+function restoreCollapsedStates() {
+  const collapsedCards = getCollapsedCards();
+  const cards = document.querySelectorAll('.collapsible-card');
+  
+  cards.forEach(card => {
+    const cardId = card.dataset.cardId;
+    if (collapsedCards[cardId]) {
+      card.classList.add('collapsed');
+    }
+  });
+  
+  console.log('[General] Restored collapsed states:', Object.keys(collapsedCards));
+}
+
+// Expose collapse function to window
+window.toggleCardCollapse = toggleCardCollapse;
+
+// Expose gallery functions to window
+window.openGalleryModal = openGalleryModal;
+window.hideGalleryModal = hideGalleryModal;
+window.saveGalleryUrl = saveGalleryUrl;
+window.handleGalleryClick = handleGalleryClick;
+
 // Expose to window for onclick handlers
 window.showEditModal = showEditModal;
 window.hideEditModal = hideEditModal;
@@ -909,6 +1315,8 @@ function loadQuill() {
 }
 
 function initDarkThemeEventListeners(tableId) {
+  console.log('[General] initDarkThemeEventListeners called with tableId:', tableId);
+  
   // Edit Summary Button - switches to inline edit mode
   const editSummaryBtn = document.getElementById('editSummaryBtn');
   if (editSummaryBtn && !editSummaryBtn._listenerAttached) {
@@ -977,6 +1385,47 @@ function initDarkThemeEventListeners(tableId) {
   if (saveLocationBtn && !saveLocationBtn._listenerAttached) {
     saveLocationBtn._listenerAttached = true;
     saveLocationBtn.addEventListener('click', () => saveDarkThemeLocation(tableId));
+  }
+  
+  // Open Gallery Button
+  const openGalleryBtn = document.getElementById('openGalleryBtn');
+  console.log('[Gallery] openGalleryBtn found:', !!openGalleryBtn);
+  if (openGalleryBtn && !openGalleryBtn._listenerAttached) {
+    openGalleryBtn._listenerAttached = true;
+    openGalleryBtn.addEventListener('click', (e) => {
+      console.log('[Gallery] Button clicked, currentTableData:', currentTableData?.general?.galleryUrl);
+      console.log('[Gallery] isOwner:', isOwner, 'isAdmin:', isAdmin());
+      
+      const galleryUrl = currentTableData?.general?.galleryUrl;
+      
+      if (galleryUrl && galleryUrl.trim()) {
+        // Open the gallery URL in a new tab
+        console.log('[Gallery] Opening URL:', galleryUrl);
+        window.open(galleryUrl, '_blank');
+      } else if (isOwner || isAdmin()) {
+        // No URL set and user is owner/admin - show modal to set it
+        console.log('[Gallery] Opening modal to set URL');
+        openGalleryModal();
+      } else {
+        // No URL set and user is not owner/admin
+        alert('No gallery link has been set for this event.');
+      }
+    });
+    
+    // Right-click to edit (for owners)
+    openGalleryBtn.addEventListener('contextmenu', (e) => {
+      if (isOwner || isAdmin()) {
+        e.preventDefault();
+        openGalleryModal();
+      }
+    });
+  }
+  
+  // Save Gallery URL Button
+  const saveGalleryBtn = document.getElementById('saveGalleryBtn');
+  if (saveGalleryBtn && !saveGalleryBtn._listenerAttached) {
+    saveGalleryBtn._listenerAttached = true;
+    saveGalleryBtn.addEventListener('click', () => saveGalleryUrl(tableId));
   }
   
   // Load user info in sidebar
@@ -1292,16 +1741,16 @@ function switchToInfoEditMode(tableId) {
     cityEl.replaceWith(input);
   }
   
-  // Convert Venue to input
-  const venueEl = document.getElementById('summaryVenue');
-  if (venueEl) {
+  // Convert State to input
+  const stateEl = document.getElementById('summaryState');
+  if (stateEl) {
     const input = document.createElement('input');
     input.type = 'text';
-    input.id = 'editInfoVenue';
+    input.id = 'editInfoState';
     input.className = 'inline-edit-input';
-    input.value = general.location || '';
-    input.placeholder = 'Venue';
-    venueEl.replaceWith(input);
+    input.value = general.state || '';
+    input.placeholder = 'State';
+    stateEl.replaceWith(input);
   }
   
   // Convert Start Date to input
@@ -1399,12 +1848,12 @@ function restoreInfoCardStructure() {
     cityInput.replaceWith(span);
   }
   
-  const venueInput = document.getElementById('editInfoVenue');
-  if (venueInput) {
+  const stateInput = document.getElementById('editInfoState');
+  if (stateInput) {
     const span = document.createElement('span');
-    span.className = 'info-venue';
-    span.id = 'summaryVenue';
-    venueInput.replaceWith(span);
+    span.className = 'info-state';
+    span.id = 'summaryState';
+    stateInput.replaceWith(span);
   }
   
   const startInput = document.getElementById('editInfoStart');
@@ -1455,7 +1904,7 @@ async function saveInfoEdit(tableId) {
   
   const clientValue = document.getElementById('editInfoClient')?.value || '';
   const cityValue = document.getElementById('editInfoCity')?.value || '';
-  const venueValue = document.getElementById('editInfoVenue')?.value || '';
+  const stateValue = document.getElementById('editInfoState')?.value || '';
   const startValue = document.getElementById('editInfoStart')?.value || '';
   const endValue = document.getElementById('editInfoEnd')?.value || '';
   const budgetValue = document.getElementById('editInfoBudget')?.value || '';
@@ -1468,7 +1917,7 @@ async function saveInfoEdit(tableId) {
         ...currentTableData?.general,
         client: clientValue,
         city: cityValue,
-        location: venueValue,
+        state: stateValue,
         start: startValue,
         end: endValue,
         budget: budgetValue,
@@ -1866,6 +2315,9 @@ function initPageDarkTheme(id) {
       renderDarkThemeContacts(general.contacts);
       renderDarkThemeLocations(general.locations);
       
+      // Load FTP folder names
+      loadFolderNames(id);
+      
       // Fetch weather based on event city and dates
       const city = general.city || '';
       const startDate = general.start || '';
@@ -1874,6 +2326,12 @@ function initPageDarkTheme(id) {
       
       // Set up event listeners
       initDarkThemeEventListeners(id);
+      
+      // Set up folder names event listeners
+      setupFolderNamesEventListeners(id);
+      
+      // Restore collapsed card states
+      restoreCollapsedStates();
     })
     .catch(err => console.error('Error loading event:', err));
 }

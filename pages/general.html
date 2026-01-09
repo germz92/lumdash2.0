@@ -102,7 +102,7 @@
             <span class="material-symbols-outlined">share</span>
             <span>Share</span>
           </button>
-          <button class="header-action-btn" id="openGalleryBtn">
+          <button class="header-action-btn" id="openGalleryBtn" onclick="window.handleGalleryClick && window.handleGalleryClick()">
             <span class="material-symbols-outlined">photo_library</span>
             <span>Open Gallery</span>
           </button>
@@ -116,12 +116,15 @@
         <div class="general-main-column">
           
           <!-- Event Summary Card -->
-          <div class="general-card" id="eventSummaryCard">
-            <div class="card-header">
+          <div class="general-card collapsible-card" id="eventSummaryCard" data-card-id="eventSummary">
+            <div class="card-header" onclick="window.toggleCardCollapse(this.parentElement)">
               <h2>Event Summary</h2>
-              <button class="card-edit-btn" id="editSummaryBtn" title="Edit">
-                <span class="material-symbols-outlined">edit</span>
-              </button>
+              <div class="card-header-actions">
+                <button class="card-edit-btn" id="editSummaryBtn" title="Edit" onclick="event.stopPropagation()">
+                  <span class="material-symbols-outlined">edit</span>
+                </button>
+                <span class="material-symbols-outlined collapse-icon">expand_more</span>
+              </div>
             </div>
             <div class="card-content">
               <div class="summary-notes-section no-border">
@@ -137,9 +140,12 @@
           </div>
           
           <!-- Point of Contacts Card -->
-          <div class="general-card">
-            <div class="card-header">
+          <div class="general-card collapsible-card" id="pointOfContactsCard" data-card-id="pointOfContacts">
+            <div class="card-header" onclick="window.toggleCardCollapse(this.parentElement)">
               <h2>Point of Contacts</h2>
+              <div class="card-header-actions">
+                <span class="material-symbols-outlined collapse-icon">expand_more</span>
+              </div>
             </div>
             <div class="card-content">
               <div class="contacts-grid" id="contactsGrid">
@@ -160,9 +166,12 @@
           </div>
           
           <!-- Locations Card -->
-          <div class="general-card">
-            <div class="card-header">
+          <div class="general-card collapsible-card" id="locationsCard" data-card-id="locations">
+            <div class="card-header" onclick="window.toggleCardCollapse(this.parentElement)">
               <h2>Locations</h2>
+              <div class="card-header-actions">
+                <span class="material-symbols-outlined collapse-icon">expand_more</span>
+              </div>
             </div>
             <div class="card-content">
               <div class="locations-list" id="locationsList">
@@ -182,18 +191,68 @@
             </div>
           </div>
           
+          <!-- FTP Folder Names Card -->
+          <div class="general-card folder-names-card collapsible-card" id="folderNamesCard" data-card-id="folderNames">
+            <div class="card-header" onclick="window.toggleCardCollapse(this.parentElement)">
+              <h2>
+                <span class="material-symbols-outlined">folder</span>
+                FTP Folder Names
+              </h2>
+              <div class="card-header-actions">
+                <button class="card-edit-btn" id="editFolderNamesBtn" title="Edit" onclick="event.stopPropagation()">
+                  <span class="material-symbols-outlined">edit</span>
+                </button>
+                <span class="material-symbols-outlined collapse-icon">expand_more</span>
+              </div>
+            </div>
+            <div class="card-content">
+              <div class="folder-names-table-wrapper">
+                <table class="folder-names-table" id="folderNamesTable">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Folder Name</th>
+                      <th>Description</th>
+                      <th class="action-col"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="folderNamesTableBody">
+                    <!-- Rows will be rendered here by JS -->
+                  </tbody>
+                </table>
+              </div>
+              <div class="folder-names-empty" id="folderNamesEmpty" style="display: none;">
+                <span class="material-symbols-outlined">folder_off</span>
+                <p>No folder names added yet</p>
+              </div>
+              <div class="folder-names-edit-actions" id="folderNamesEditActions" style="display: none;">
+                <button class="add-folder-row-btn" id="addFolderRowBtn">
+                  <span class="material-symbols-outlined">add</span>
+                  Add Row
+                </button>
+                <div class="folder-names-actions">
+                  <button class="btn-secondary" id="cancelFolderNamesBtn">Cancel</button>
+                  <button class="btn-primary" id="saveFolderNamesBtn">Save</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
         </div>
         
         <!-- Sidebar Column -->
         <div class="general-sidebar-column">
           
           <!-- Combined Event Info Widget -->
-          <div class="general-card info-card" id="eventInfoCard">
-            <div class="card-header">
+          <div class="general-card info-card collapsible-card" id="eventInfoCard" data-card-id="eventInfo">
+            <div class="card-header" onclick="window.toggleCardCollapse(this.parentElement)">
               <h2>Event Info</h2>
-              <button class="card-edit-btn" id="editInfoBtn" title="Edit">
-                <span class="material-symbols-outlined">edit</span>
+              <div class="card-header-actions">
+                <button class="card-edit-btn" id="editInfoBtn" title="Edit" onclick="event.stopPropagation()">
+                  <span class="material-symbols-outlined">edit</span>
       </button>
+                <span class="material-symbols-outlined collapse-icon">expand_more</span>
+              </div>
             </div>
             <div class="card-content">
               <div class="info-row">
@@ -208,8 +267,7 @@
                 <div class="info-text">
                   <span class="info-label">Location</span>
                   <div class="info-location">
-                    <span class="info-city" id="summaryCity">City</span>
-                    <span class="info-venue" id="summaryVenue">Venue Name</span>
+                    <span class="info-city" id="summaryCity">City</span><span class="info-separator">, </span><span class="info-state" id="summaryState">State</span>
                   </div>
                 </div>
               </div>
@@ -242,10 +300,13 @@
   </div>
           
           <!-- Weather Widget -->
-          <div class="general-card weather-card">
-            <div class="card-header">
+          <div class="general-card weather-card collapsible-card" id="weatherCard" data-card-id="weather">
+            <div class="card-header" onclick="window.toggleCardCollapse(this.parentElement)">
               <h2>Weather</h2>
-              <span class="weather-condition" id="weatherCondition">Loading...</span>
+              <div class="card-header-actions">
+                <span class="weather-condition" id="weatherCondition">Loading...</span>
+                <span class="material-symbols-outlined collapse-icon">expand_more</span>
+              </div>
             </div>
             <div class="weather-forecast" id="weatherForecast">
               <!-- Weather days will be rendered here -->
@@ -392,6 +453,29 @@
       <button class="btn-primary" id="saveLocationBtn">Add Location</button>
     </div>
   </div>
+    </div>      
+
+<!-- Gallery URL Modal -->
+<div class="dark-modal" id="galleryUrlModal">
+  <div class="dark-modal-content" style="max-width: 500px;">
+    <div class="modal-header-dark">
+      <h3><span class="material-symbols-outlined">photo_library</span> Gallery Link</h3>
+      <button class="modal-close-btn" onclick="hideGalleryModal()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark">
+      <div class="form-group-dark">
+        <label for="galleryUrlInput">Gallery URL</label>
+        <input type="url" id="galleryUrlInput" placeholder="https://example.com/gallery" class="form-input-dark">
+        <span class="form-hint">Enter the external URL for the event gallery (e.g., Google Photos, Dropbox, SmugMug)</span>
+      </div>
+    </div>
+    <div class="modal-footer-dark">
+      <button class="btn-secondary" onclick="hideGalleryModal()">Cancel</button>
+      <button class="btn-primary" id="saveGalleryBtn">Save</button>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -432,11 +516,25 @@ function showLocationModal() {
   document.body.style.overflow = 'hidden';
 }
 
+function hideGalleryModal() {
+  const modal = document.getElementById('galleryUrlModal');
+  if (modal) modal.classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+function showGalleryModal() {
+  const modal = document.getElementById('galleryUrlModal');
+  if (modal) modal.classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
 // Make functions globally available
 window.hideEditModal = hideEditModal;
 window.showEditModal = showEditModal;
 window.hideContactModal = hideContactModal;
 window.showContactModal = showContactModal;
+window.hideGalleryModal = hideGalleryModal;
+window.showGalleryModal = showGalleryModal;
 window.hideLocationModal = hideLocationModal;
 window.showLocationModal = showLocationModal;
 

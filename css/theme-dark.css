@@ -3090,6 +3090,40 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
   color: var(--text-muted);
 }
 
+.form-group-dark .form-hint {
+  display: block;
+  margin-top: 8px;
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.form-input-dark {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--bg-tertiary) !important;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-primary) !important;
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.form-input-dark:hover {
+  border-color: var(--border-hover);
+}
+
+.form-input-dark:focus {
+  outline: none;
+  border-color: var(--brand-red);
+  box-shadow: 0 0 0 3px rgba(204, 0, 7, 0.1);
+}
+
+.form-input-dark::placeholder {
+  color: var(--text-muted);
+}
+
 .form-group-dark input:hover,
 .form-group-dark select:hover,
 .form-group-dark textarea:hover {
@@ -4762,6 +4796,53 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
   border-bottom: 1px solid var(--border-subtle);
 }
 
+/* Collapsible Cards */
+.collapsible-card .card-header {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s ease;
+}
+
+.collapsible-card .card-header:hover {
+  background: var(--bg-hover);
+}
+
+.collapsible-card .card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.collapsible-card .collapse-icon {
+  font-size: 20px;
+  color: var(--text-tertiary);
+  transition: transform 0.3s ease;
+}
+
+.collapsible-card.collapsed .collapse-icon {
+  transform: rotate(-90deg);
+}
+
+.collapsible-card .card-content,
+.collapsible-card .weather-forecast {
+  max-height: 2000px;
+  overflow: hidden;
+  transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.2s ease;
+  opacity: 1;
+}
+
+.collapsible-card.collapsed .card-content,
+.collapsible-card.collapsed .weather-forecast {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+}
+
+.collapsible-card.collapsed .card-header {
+  border-bottom-color: transparent;
+}
+
 .general-card .card-header h2 {
   font-size: var(--font-size-md);
   font-weight: var(--font-weight-semibold);
@@ -4931,8 +5012,8 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
 
 .info-location {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  flex-direction: row;
+  align-items: baseline;
 }
 
 .info-city {
@@ -4940,9 +5021,13 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
   color: var(--text-primary);
 }
 
-.info-venue {
+.info-separator {
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+}
+
+.info-state {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
 }
 
 .info-dates {
@@ -5217,6 +5302,20 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
   margin-bottom: 16px;
 }
 
+/* Contacts & Locations Empty State */
+#contactsGrid .empty-state,
+#locationsList .empty-state {
+  color: var(--text-primary);
+  padding: 24px 16px;
+  text-align: center;
+  font-size: var(--font-size-sm);
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  grid-column: 1 / -1; /* Span all columns in the grid */
+}
+
 .contact-card {
   display: flex;
   align-items: flex-start;
@@ -5470,6 +5569,293 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
 
 .add-item-btn .material-symbols-outlined {
   font-size: 18px;
+}
+
+/* ================================
+   FTP Folder Names Card
+   ================================ */
+.folder-names-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.folder-names-card .card-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.folder-names-card .card-header h2 .material-symbols-outlined {
+  font-size: 20px;
+  color: var(--text-tertiary);
+}
+
+.card-edit-btn {
+  background: transparent;
+  border: none;
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.card-edit-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.folder-names-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.folder-names-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.folder-names-empty .material-symbols-outlined {
+  font-size: 40px;
+  margin-bottom: 8px;
+  opacity: 0.5;
+}
+
+.folder-names-empty p {
+  font-size: var(--font-size-sm);
+  margin: 0;
+}
+
+.folder-name-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  transition: all 0.2s ease;
+}
+
+.folder-name-item:hover {
+  border-color: var(--border-default);
+  background: var(--bg-hover);
+}
+
+.folder-name-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: var(--bg-active);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.folder-name-icon .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.folder-name-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.folder-name-date {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+  margin-bottom: 4px;
+}
+
+.folder-name-text {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', 'Droid Sans Mono', monospace;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  background: var(--bg-active);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  display: inline-block;
+  word-break: break-all;
+}
+
+.folder-name-description {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-top: 6px;
+}
+
+/* Edit Section */
+.folder-names-edit-section {
+  padding-top: 12px;
+}
+
+.folder-names-table-wrapper {
+  overflow-x: auto;
+  margin-bottom: 12px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.folder-names-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+
+.folder-names-table th,
+.folder-names-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.folder-names-table th {
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-medium);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.folder-names-table tr:last-child td {
+  border-bottom: none;
+}
+
+.folder-names-table .action-col {
+  width: 40px;
+  text-align: center;
+}
+
+.folder-names-table .folder-date-cell {
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.folder-names-table .folder-name-cell .folder-name-text {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Fira Mono', 'Droid Sans Mono', monospace;
+  background: var(--bg-active);
+  padding: 4px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+}
+
+.folder-names-table .folder-desc-cell {
+  color: var(--text-secondary);
+}
+
+.folder-names-table input[type="date"],
+.folder-names-table input[type="text"],
+.folder-names-table textarea {
+  width: 100%;
+  padding: 8px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+}
+
+.folder-names-table input[type="date"]:focus,
+.folder-names-table input[type="text"]:focus,
+.folder-names-table textarea:focus {
+  outline: none;
+  border-color: var(--brand-red);
+  background: var(--bg-secondary);
+}
+
+.folder-names-table textarea {
+  min-height: 60px;
+  resize: vertical;
+}
+
+.folder-names-table .delete-row-btn {
+  background: transparent;
+  border: none;
+  padding: 6px;
+  border-radius: var(--radius-sm);
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.folder-names-table .delete-row-btn:hover {
+  background: var(--bg-hover);
+  color: var(--status-error);
+}
+
+.add-folder-row-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 10px;
+  background: transparent;
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-tertiary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 16px;
+}
+
+.add-folder-row-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-strong);
+  color: var(--text-secondary);
+}
+
+.folder-names-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.folder-names-actions .btn-secondary {
+  padding: 10px 20px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.folder-names-actions .btn-secondary:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.folder-names-actions .btn-primary {
+  padding: 10px 20px;
+  background: var(--brand-red);
+  border: 1px solid var(--brand-red);
+  border-radius: var(--radius-md);
+  color: #ffffff;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.folder-names-actions .btn-primary:hover {
+  background: var(--brand-red-dark);
+  border-color: var(--brand-red-dark);
 }
 
 /* Weather Card */

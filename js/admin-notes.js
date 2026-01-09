@@ -3,7 +3,8 @@
  * Only accessible by admins and event owners
  */
 
-// Use global API_BASE from config.js
+(function() {
+// Use global API_BASE from config.js - wrapped in IIFE to prevent redeclaration errors
 const NOTES_API_BASE = window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://lumdash2-0.onrender.com');
 
 let notes = [];
@@ -228,9 +229,9 @@ function createNoteCard(note) {
     minute: '2-digit'
   });
   
-  // Truncate content for preview
+  // Truncate content for preview - show more since cards are taller
   const previewContent = note.content ? 
-    (note.content.length > 200 ? note.content.substring(0, 200) + '...' : note.content) : '';
+    (note.content.length > 500 ? note.content.substring(0, 500) + '...' : note.content) : '';
   
   return `
     <div class="note-card" data-note-id="${note._id}">
@@ -613,3 +614,4 @@ function loadSidebarUser() {
   }
 }
 
+})(); // End of IIFE

@@ -69,6 +69,7 @@ const tableSchema = new mongoose.Schema({
     attendees: Number,
     budget: String,
     summary: { type: String, default: "" },
+    galleryUrl: { type: String, default: "" },
     contacts: [
       {
         name: String,

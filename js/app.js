@@ -455,6 +455,9 @@ function injectPageContent(html, page, id) {
          if (window.populateSidebarEventInfo) {
            window.populateSidebarEventInfo();
          }
+         if (window.checkAdminNotesAccess) {
+           window.checkAdminNotesAccess();
+         }
        }, 200);
        
        return; // Skip loading external gear.js
@@ -494,6 +497,9 @@ function injectPageContent(html, page, id) {
             setTimeout(() => {
               if (window.populateSidebarEventInfo) {
                 window.populateSidebarEventInfo();
+              }
+              if (window.checkAdminNotesAccess) {
+                window.checkAdminNotesAccess();
               }
             }, 100);
           } else if (needsId && !id) {
@@ -798,6 +804,63 @@ async function populateSidebarEventInfo() {
 
 // Expose globally
 window.populateSidebarEventInfo = populateSidebarEventInfo;
+
+/**
+ * Show/hide admin notes link in sidebar based on user permissions
+ * Only visible to admins and event owners
+ */
+async function checkAdminNotesAccess() {
+  const eventId = localStorage.getItem('eventId');
+  if (!eventId) return;
+  
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    
+    const API_BASE = window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://lumdash2-0.onrender.com');
+    
+    // Decode JWT token to get user info
+    let userId, userRole;
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      userId = payload.id || payload._id || payload.userId;
+      userRole = payload.role;
+    } catch (e) {
+      console.error('[SIDEBAR] Failed to decode token:', e);
+      return;
+    }
+    
+    // Get table info to check owners
+    const tableRes = await fetch(`${API_BASE}/api/tables/${eventId}`, {
+      headers: { Authorization: token }
+    });
+    if (!tableRes.ok) return;
+    const table = await tableRes.json();
+    
+    // Check if admin or owner
+    const isAdmin = userRole === 'admin';
+    const isOwner = table.owners && table.owners.includes(userId);
+    
+    console.log('[SIDEBAR] Admin notes access check:', { userId, userRole, isAdmin, isOwner, owners: table.owners });
+    
+    if (isAdmin || isOwner) {
+      // Show admin notes section
+      const adminSectionLabel = document.getElementById('adminSectionLabel');
+      const adminNotesLink = document.querySelector('.admin-only-nav[data-page="admin-notes"]');
+      
+      if (adminSectionLabel) adminSectionLabel.style.display = 'block';
+      if (adminNotesLink) adminNotesLink.style.display = 'flex';
+      
+      console.log('[SIDEBAR] Admin notes link shown');
+    }
+    
+  } catch (err) {
+    console.error('[SIDEBAR] Error checking admin notes access:', err);
+  }
+}
+
+// Expose globally
+window.checkAdminNotesAccess = checkAdminNotesAccess;
 
 // PullToRefresh.js integration for PWA/mobile
 if (window.PullToRefresh) {

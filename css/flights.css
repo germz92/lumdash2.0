@@ -1804,7 +1804,7 @@
    =========================================== */
 
 .flights-dark .edit-booked-modal {
-  max-width: 600px;
+  max-width: 750px;
 }
 
 .flights-dark .booked-flight-edit-section {
@@ -1863,9 +1863,18 @@
 }
 
 .flights-dark .airport-code-input {
-  text-transform: uppercase;
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: 1px;
+  font-weight: var(--font-weight-medium);
+  letter-spacing: 0;
+  min-width: 200px;
+  width: 100%;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.flights-dark .airport-code-input:focus {
+  white-space: normal;
+  text-overflow: clip;
 }
 
 .flights-dark .passengers-list-compact {
@@ -1889,6 +1898,43 @@
 .flights-dark .passenger-chip .material-symbols-outlined {
   font-size: 16px;
   color: var(--text-secondary);
+}
+
+.flights-dark .passenger-chip.removable {
+  padding-right: 8px;
+}
+
+.flights-dark .passenger-chip .remove-passenger-chip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  padding: 2px;
+  margin-left: 4px;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background 0.2s ease;
+}
+
+.flights-dark .passenger-chip .remove-passenger-chip:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.flights-dark .passenger-chip .remove-passenger-chip .material-symbols-outlined {
+  font-size: 14px;
+  color: var(--text-muted);
+}
+
+.flights-dark .passenger-chip .remove-passenger-chip:hover .material-symbols-outlined {
+  color: var(--brand-red);
+}
+
+.flights-dark .no-passengers {
+  padding: 12px 16px;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  font-style: italic;
 }
 
 .flights-dark .edit-booked-footer {

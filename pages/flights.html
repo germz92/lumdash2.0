@@ -392,7 +392,8 @@
                 <div class="route-point">
                   <div class="form-group">
                     <label>From</label>
-                    <input type="text" id="editBookedFromCode" placeholder="SAN" class="airport-code-input">
+                    <input type="text" id="editBookedFromCode" placeholder="Search airport..." class="airport-code-input" autocomplete="off">
+                    <div class="airport-suggestions" id="editBookedFromSuggestions"></div>
                   </div>
                   <div class="form-group">
                     <label>Depart Time</label>
@@ -405,7 +406,8 @@
                 <div class="route-point">
                   <div class="form-group">
                     <label>To</label>
-                    <input type="text" id="editBookedToCode" placeholder="MCO" class="airport-code-input">
+                    <input type="text" id="editBookedToCode" placeholder="Search airport..." class="airport-code-input" autocomplete="off">
+                    <div class="airport-suggestions" id="editBookedToSuggestions"></div>
                   </div>
                   <div class="form-group">
                     <label>Arrive Time</label>
@@ -437,7 +439,8 @@
                 <div class="route-point">
                   <div class="form-group">
                     <label>From</label>
-                    <input type="text" id="editBookedReturnFromCode" placeholder="MCO" class="airport-code-input">
+                    <input type="text" id="editBookedReturnFromCode" placeholder="Search airport..." class="airport-code-input" autocomplete="off">
+                    <div class="airport-suggestions" id="editBookedReturnFromSuggestions"></div>
                   </div>
                   <div class="form-group">
                     <label>Depart Time</label>
@@ -450,7 +453,8 @@
                 <div class="route-point">
                   <div class="form-group">
                     <label>To</label>
-                    <input type="text" id="editBookedReturnToCode" placeholder="SAN" class="airport-code-input">
+                    <input type="text" id="editBookedReturnToCode" placeholder="Search airport..." class="airport-code-input" autocomplete="off">
+                    <div class="airport-suggestions" id="editBookedReturnToSuggestions"></div>
                   </div>
                   <div class="form-group">
                     <label>Arrive Time</label>
@@ -463,8 +467,19 @@
             <!-- Passengers Section -->
             <div class="form-section passengers-section">
               <label class="section-label">Passengers</label>
+              <div class="passenger-select-row">
+                <div class="select-wrapper passenger-select">
+                  <select id="editBookedPassengerSelect">
+                    <option value="">Select passenger to add...</option>
+                  </select>
+                </div>
+                <button type="button" class="btn-add-passenger" id="editBookedAddPassengerBtn">
+                  <span class="material-symbols-outlined">add</span>
+                  Add
+                </button>
+              </div>
               <div class="passengers-list-compact" id="editBookedPassengers">
-                <!-- Passengers will be rendered here -->
+                <!-- Passengers will be rendered here as removable chips -->
               </div>
             </div>
 

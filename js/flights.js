@@ -16,6 +16,7 @@
   let passengers = [];
   let users = [];
   let selectedPassengers = [];
+  let editBookedSelectedPassengers = []; // For edit booked modal
   let currentEditingRequest = null;
   let currentEditingPassenger = null;
 
@@ -74,6 +75,17 @@
     cancelEditBookedBtn: document.getElementById('cancelEditBookedBtn'),
     editBookedReturnSection: document.getElementById('editBookedReturnSection'),
     editBookedPassengers: document.getElementById('editBookedPassengers'),
+    editBookedPassengerSelect: document.getElementById('editBookedPassengerSelect'),
+    editBookedAddPassengerBtn: document.getElementById('editBookedAddPassengerBtn'),
+    // Edit booked airport inputs and suggestions
+    editBookedFromCode: document.getElementById('editBookedFromCode'),
+    editBookedToCode: document.getElementById('editBookedToCode'),
+    editBookedFromSuggestions: document.getElementById('editBookedFromSuggestions'),
+    editBookedToSuggestions: document.getElementById('editBookedToSuggestions'),
+    editBookedReturnFromCode: document.getElementById('editBookedReturnFromCode'),
+    editBookedReturnToCode: document.getElementById('editBookedReturnToCode'),
+    editBookedReturnFromSuggestions: document.getElementById('editBookedReturnFromSuggestions'),
+    editBookedReturnToSuggestions: document.getElementById('editBookedReturnToSuggestions'),
 
     // Manage Passengers Modal
     managePassengersBtn: document.getElementById('managePassengersBtn'),
@@ -316,6 +328,15 @@
     elements.editBookedForm?.addEventListener('submit', handleSaveBookedFlight);
     document.getElementById('deleteBookedFlightBtn')?.addEventListener('click', handleDeleteCurrentBookedFlight);
 
+    // Edit booked airport autocomplete
+    elements.editBookedFromCode?.addEventListener('input', (e) => handleEditBookedAirportSearch(e, 'editBookedFrom'));
+    elements.editBookedToCode?.addEventListener('input', (e) => handleEditBookedAirportSearch(e, 'editBookedTo'));
+    elements.editBookedReturnFromCode?.addEventListener('input', (e) => handleEditBookedAirportSearch(e, 'editBookedReturnFrom'));
+    elements.editBookedReturnToCode?.addEventListener('input', (e) => handleEditBookedAirportSearch(e, 'editBookedReturnTo'));
+
+    // Edit Booked Passenger Add
+    elements.editBookedAddPassengerBtn?.addEventListener('click', handleEditBookedAddPassenger);
+
     // Manage Passengers Modal
     elements.managePassengersBtn?.addEventListener('click', openManagePassengersModal);
     elements.closeManagePassengersModal?.addEventListener('click', closeManagePassengersModal);
@@ -343,6 +364,11 @@
         elements.fromSuggestions?.classList.remove('show');
         elements.toSuggestions?.classList.remove('show');
         elements.eventSuggestions?.classList.remove('show');
+        // Also close edit booked modal suggestions
+        elements.editBookedFromSuggestions?.classList.remove('show');
+        elements.editBookedToSuggestions?.classList.remove('show');
+        elements.editBookedReturnFromSuggestions?.classList.remove('show');
+        elements.editBookedReturnToSuggestions?.classList.remove('show');
       }
     });
   }
@@ -779,6 +805,24 @@
     const createNotesEl = document.getElementById('createNotes');
     if (createNotesEl) createNotesEl.value = '';
     elements.selectedPassengers.innerHTML = '';
+    
+    // Clear airport input datasets (city/state data from autocomplete)
+    if (elements.fromAirport) {
+      delete elements.fromAirport.dataset.code;
+      delete elements.fromAirport.dataset.city;
+      delete elements.fromAirport.dataset.state;
+      delete elements.fromAirport.dataset.name;
+    }
+    if (elements.toAirport) {
+      delete elements.toAirport.dataset.code;
+      delete elements.toAirport.dataset.city;
+      delete elements.toAirport.dataset.state;
+      delete elements.toAirport.dataset.name;
+    }
+    // Clear event name dataset
+    if (elements.eventName) {
+      delete elements.eventName.dataset.eventId;
+    }
   }
 
   /**
@@ -819,6 +863,57 @@
     suggestionsEl.querySelectorAll('.suggestion-item').forEach(item => {
       item.addEventListener('click', () => {
         const input = type === 'from' ? elements.fromAirport : elements.toAirport;
+        input.value = `${item.dataset.code} - ${item.dataset.city}, ${item.dataset.state}`;
+        input.dataset.code = item.dataset.code;
+        input.dataset.city = item.dataset.city;
+        input.dataset.state = item.dataset.state;
+        input.dataset.name = item.dataset.name;
+        suggestionsEl.classList.remove('show');
+      });
+    });
+
+    suggestionsEl.classList.add('show');
+  }
+
+  /**
+   * Handle airport search for edit booked modal
+   */
+  function handleEditBookedAirportSearch(e, type) {
+    const value = e.target.value;
+    
+    // Map type to input and suggestions elements
+    const inputMap = {
+      'editBookedFrom': { input: elements.editBookedFromCode, suggestions: elements.editBookedFromSuggestions },
+      'editBookedTo': { input: elements.editBookedToCode, suggestions: elements.editBookedToSuggestions },
+      'editBookedReturnFrom': { input: elements.editBookedReturnFromCode, suggestions: elements.editBookedReturnFromSuggestions },
+      'editBookedReturnTo': { input: elements.editBookedReturnToCode, suggestions: elements.editBookedReturnToSuggestions }
+    };
+    
+    const { input, suggestions: suggestionsEl } = inputMap[type] || {};
+    if (!input || !suggestionsEl) return;
+
+    if (!value || value.length < 1) {
+      suggestionsEl.classList.remove('show');
+      return;
+    }
+
+    // Use the global searchAirports function from airports.js
+    const matches = window.searchAirports ? window.searchAirports(value, 8) : [];
+
+    if (matches.length === 0) {
+      suggestionsEl.classList.remove('show');
+      return;
+    }
+
+    suggestionsEl.innerHTML = matches.map(airport => `
+      <div class="suggestion-item" data-code="${airport.code}" data-city="${airport.city}" data-state="${airport.state}" data-name="${airport.name}">
+        <span class="airport-code">${airport.code} - ${airport.name}</span>
+        <span class="airport-city">${airport.city}, ${airport.state}</span>
+      </div>
+    `).join('');
+
+    suggestionsEl.querySelectorAll('.suggestion-item').forEach(item => {
+      item.addEventListener('click', () => {
         input.value = `${item.dataset.code} - ${item.dataset.city}, ${item.dataset.state}`;
         input.dataset.code = item.dataset.code;
         input.dataset.city = item.dataset.city;
@@ -1427,8 +1522,33 @@
     // Outbound flight
     document.getElementById('editBookedDepartDate').value = formatDateForInput(flight.departDate);
     document.getElementById('editBookedFlightNumber').value = bookedDetails.flightNumber || '';
-    document.getElementById('editBookedFromCode').value = flight.from?.code || '';
-    document.getElementById('editBookedToCode').value = flight.to?.code || '';
+    
+    // Outbound From airport - display with city/state and set dataset
+    const fromInput = document.getElementById('editBookedFromCode');
+    if (fromInput) {
+      const fromDisplay = flight.from?.city 
+        ? `${flight.from.code} - ${flight.from.city}, ${flight.from.state || ''}`
+        : flight.from?.code || '';
+      fromInput.value = fromDisplay;
+      fromInput.dataset.code = flight.from?.code || '';
+      fromInput.dataset.city = flight.from?.city || '';
+      fromInput.dataset.state = flight.from?.state || '';
+      fromInput.dataset.name = flight.from?.name || '';
+    }
+    
+    // Outbound To airport - display with city/state and set dataset
+    const toInput = document.getElementById('editBookedToCode');
+    if (toInput) {
+      const toDisplay = flight.to?.city 
+        ? `${flight.to.code} - ${flight.to.city}, ${flight.to.state || ''}`
+        : flight.to?.code || '';
+      toInput.value = toDisplay;
+      toInput.dataset.code = flight.to?.code || '';
+      toInput.dataset.city = flight.to?.city || '';
+      toInput.dataset.state = flight.to?.state || '';
+      toInput.dataset.name = flight.to?.name || '';
+    }
+    
     document.getElementById('editBookedDepartTime').value = bookedDetails.departTime || '';
     document.getElementById('editBookedArriveTime').value = bookedDetails.arriveTime || '';
 
@@ -1441,8 +1561,33 @@
     if (isRoundtrip) {
       document.getElementById('editBookedReturnDate').value = formatDateForInput(flight.returnDate);
       document.getElementById('editBookedReturnFlightNumber').value = returnBookedDetails.flightNumber || '';
-      document.getElementById('editBookedReturnFromCode').value = flight.to?.code || '';
-      document.getElementById('editBookedReturnToCode').value = flight.from?.code || '';
+      
+      // Return From airport (which is the original destination)
+      const returnFromInput = document.getElementById('editBookedReturnFromCode');
+      if (returnFromInput) {
+        const returnFromDisplay = flight.to?.city 
+          ? `${flight.to.code} - ${flight.to.city}, ${flight.to.state || ''}`
+          : flight.to?.code || '';
+        returnFromInput.value = returnFromDisplay;
+        returnFromInput.dataset.code = flight.to?.code || '';
+        returnFromInput.dataset.city = flight.to?.city || '';
+        returnFromInput.dataset.state = flight.to?.state || '';
+        returnFromInput.dataset.name = flight.to?.name || '';
+      }
+      
+      // Return To airport (which is the original departure)
+      const returnToInput = document.getElementById('editBookedReturnToCode');
+      if (returnToInput) {
+        const returnToDisplay = flight.from?.city 
+          ? `${flight.from.code} - ${flight.from.city}, ${flight.from.state || ''}`
+          : flight.from?.code || '';
+        returnToInput.value = returnToDisplay;
+        returnToInput.dataset.code = flight.from?.code || '';
+        returnToInput.dataset.city = flight.from?.city || '';
+        returnToInput.dataset.state = flight.from?.state || '';
+        returnToInput.dataset.name = flight.from?.name || '';
+      }
+      
       document.getElementById('editBookedReturnDepartTime').value = returnBookedDetails.departTime || '';
       document.getElementById('editBookedReturnArriveTime').value = returnBookedDetails.arriveTime || '';
     }
@@ -1451,8 +1596,15 @@
     const editBookedNotesEl = document.getElementById('editBookedNotes');
     if (editBookedNotesEl) editBookedNotesEl.value = flight.notes || '';
 
-    // Render passengers as chips
-    renderBookedPassengersChips(flight.passengers || []);
+    // Initialize passengers for editing
+    editBookedSelectedPassengers = (flight.passengers || []).map(p => ({
+      passengerId: p.passengerId,
+      name: p.name
+    }));
+    
+    // Render passengers and populate dropdown
+    renderBookedPassengersChips();
+    populateEditBookedPassengerDropdown();
   }
 
   /**
@@ -1466,15 +1618,81 @@
   /**
    * Render passengers as chips in the edit booked modal
    */
-  function renderBookedPassengersChips(requestPassengers) {
+  function renderBookedPassengersChips() {
     if (!elements.editBookedPassengers) return;
 
-    elements.editBookedPassengers.innerHTML = requestPassengers.map(p => `
-      <div class="passenger-chip">
+    if (editBookedSelectedPassengers.length === 0) {
+      elements.editBookedPassengers.innerHTML = '<div class="no-passengers">No passengers added</div>';
+      return;
+    }
+
+    elements.editBookedPassengers.innerHTML = editBookedSelectedPassengers.map(p => `
+      <div class="passenger-chip removable" data-id="${p.passengerId}">
         <span class="material-symbols-outlined">person</span>
         <span>${p.name}</span>
+        <button type="button" class="remove-passenger-chip" data-id="${p.passengerId}">
+          <span class="material-symbols-outlined">close</span>
+        </button>
       </div>
     `).join('');
+
+    // Add click handlers for remove buttons
+    elements.editBookedPassengers.querySelectorAll('.remove-passenger-chip').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const passengerId = btn.dataset.id;
+        editBookedSelectedPassengers = editBookedSelectedPassengers.filter(p => p.passengerId !== passengerId);
+        renderBookedPassengersChips();
+        populateEditBookedPassengerDropdown();
+      });
+    });
+  }
+
+  /**
+   * Populate passenger dropdown for edit booked modal
+   */
+  function populateEditBookedPassengerDropdown() {
+    if (!elements.editBookedPassengerSelect) return;
+
+    elements.editBookedPassengerSelect.innerHTML = '<option value="">Select passenger to add...</option>';
+    
+    // Filter out already selected passengers
+    const selectedIds = editBookedSelectedPassengers.map(p => p.passengerId);
+    const availablePassengers = passengers.filter(p => !selectedIds.includes(p._id));
+    
+    availablePassengers.forEach(passenger => {
+      const option = document.createElement('option');
+      option.value = passenger._id;
+      option.textContent = `${passenger.firstName} ${passenger.lastName}`;
+      elements.editBookedPassengerSelect.appendChild(option);
+    });
+  }
+
+  /**
+   * Handle adding passenger in edit booked modal
+   */
+  function handleEditBookedAddPassenger() {
+    const select = elements.editBookedPassengerSelect;
+    if (!select || !select.value) return;
+
+    const passengerId = select.value;
+    const passenger = passengers.find(p => p._id === passengerId);
+    
+    if (!passenger) return;
+
+    // Check if already added
+    if (editBookedSelectedPassengers.some(p => p.passengerId === passengerId)) {
+      return;
+    }
+
+    editBookedSelectedPassengers.push({
+      passengerId: passenger._id,
+      name: `${passenger.firstName} ${passenger.lastName}`
+    });
+
+    renderBookedPassengersChips();
+    populateEditBookedPassengerDropdown();
+    select.value = '';
   }
 
   /**
@@ -1486,20 +1704,33 @@
     if (!currentEditingRequest) return;
 
     const isRoundtrip = currentEditingRequest.tripType === 'roundtrip';
+    
+    // Parse airport inputs with city/state from dataset
+    const fromInput = document.getElementById('editBookedFromCode');
+    const toInput = document.getElementById('editBookedToCode');
+    
+    const fromAirport = {
+      code: fromInput?.dataset.code || fromInput?.value?.substring(0, 3).toUpperCase() || '',
+      city: fromInput?.dataset.city || currentEditingRequest.from?.city || '',
+      state: fromInput?.dataset.state || currentEditingRequest.from?.state || '',
+      name: fromInput?.dataset.name || currentEditingRequest.from?.name || ''
+    };
+    
+    const toAirport = {
+      code: toInput?.dataset.code || toInput?.value?.substring(0, 3).toUpperCase() || '',
+      city: toInput?.dataset.city || currentEditingRequest.to?.city || '',
+      state: toInput?.dataset.state || currentEditingRequest.to?.state || '',
+      name: toInput?.dataset.name || currentEditingRequest.to?.name || ''
+    };
 
     const updateData = {
       eventName: document.getElementById('editBookedEventName').value,
       departDate: document.getElementById('editBookedDepartDate').value,
       returnDate: isRoundtrip ? document.getElementById('editBookedReturnDate').value : null,
-      from: {
-        code: document.getElementById('editBookedFromCode').value.toUpperCase(),
-        city: currentEditingRequest.from?.city || ''
-      },
-      to: {
-        code: document.getElementById('editBookedToCode').value.toUpperCase(),
-        city: currentEditingRequest.to?.city || ''
-      },
+      from: fromAirport,
+      to: toAirport,
       notes: document.getElementById('editBookedNotes')?.value?.trim() || '',
+      passengers: editBookedSelectedPassengers,
       bookedDetails: {
         ...currentEditingRequest.bookedDetails,
         confirmationCode: document.getElementById('editBookedConfirmation').value,

@@ -723,6 +723,8 @@ const PackageTemplate = require('./models/PackageTemplate');
 const Cart = require('./models/Cart');
 const FolderLog = require('./models/FolderLog');
 const ManualReservation = require('./models/ManualReservation');
+const FlightRequest = require('./models/FlightRequest');
+const Passenger = require('./models/Passenger');
 
 
 
@@ -7037,6 +7039,432 @@ app.get('/api/crew-calendar', authenticate, async (req, res) => {
 
 // ========= END CREW CALENDAR API =========
 
+// ===========================================
+// FLIGHT MANAGEMENT API ROUTES
+// ===========================================
+
+// Helper function to check if user has planner/admin access
+// Note: 'owner' role is for event ownership, not system-wide admin access
+function hasPlannerAccess(user) {
+  return user && (user.role === 'admin' || user.role === 'planner');
+}
+
+// ===== PASSENGER ROUTES =====
+
+// Get all passengers
+app.get('/api/passengers', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const passengers = await Passenger.find({ isActive: true })
+      .sort({ lastName: 1, firstName: 1 });
+    
+    res.json(passengers);
+  } catch (error) {
+    console.error('Get passengers error:', error);
+    res.status(500).json({ error: 'Failed to fetch passengers' });
+  }
+});
+
+// Get single passenger
+app.get('/api/passengers/:id', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const passenger = await Passenger.findById(req.params.id);
+    if (!passenger) {
+      return res.status(404).json({ error: 'Passenger not found' });
+    }
+    
+    res.json(passenger);
+  } catch (error) {
+    console.error('Get passenger error:', error);
+    res.status(500).json({ error: 'Failed to fetch passenger' });
+  }
+});
+
+// Create new passenger
+app.post('/api/passengers', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const passengerData = {
+      ...req.body,
+      createdBy: req.user.id
+    };
+
+    const passenger = new Passenger(passengerData);
+    await passenger.save();
+    
+    console.log('✅ New passenger created:', passenger.fullName);
+    res.status(201).json(passenger);
+  } catch (error) {
+    console.error('Create passenger error:', error);
+    res.status(500).json({ error: 'Failed to create passenger' });
+  }
+});
+
+// Update passenger
+app.put('/api/passengers/:id', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const passenger = await Passenger.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    );
+    
+    if (!passenger) {
+      return res.status(404).json({ error: 'Passenger not found' });
+    }
+    
+    console.log('✅ Passenger updated:', passenger.fullName);
+    res.json(passenger);
+  } catch (error) {
+    console.error('Update passenger error:', error);
+    res.status(500).json({ error: 'Failed to update passenger' });
+  }
+});
+
+// Delete (soft delete) passenger
+app.delete('/api/passengers/:id', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const passenger = await Passenger.findByIdAndUpdate(
+      req.params.id,
+      { isActive: false },
+      { new: true }
+    );
+    
+    if (!passenger) {
+      return res.status(404).json({ error: 'Passenger not found' });
+    }
+    
+    console.log('✅ Passenger deleted (soft):', passenger.fullName);
+    res.json({ message: 'Passenger deleted', passenger });
+  } catch (error) {
+    console.error('Delete passenger error:', error);
+    res.status(500).json({ error: 'Failed to delete passenger' });
+  }
+});
+
+// ===== FLIGHT REQUEST ROUTES =====
+
+// Get all flight requests (with optional status filter)
+app.get('/api/flights', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const { status, eventId } = req.query;
+    const query = {};
+    
+    if (status) {
+      query.status = status;
+    }
+    if (eventId) {
+      query.eventId = eventId;
+    }
+
+    const flights = await FlightRequest.find(query)
+      .populate('createdBy', 'fullName email')
+      .populate('eventId', 'title')
+      .sort({ createdAt: -1 });
+    
+    res.json(flights);
+  } catch (error) {
+    console.error('Get flights error:', error);
+    res.status(500).json({ error: 'Failed to fetch flight requests' });
+  }
+});
+
+// Get pending requests
+app.get('/api/flights/pending', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const flights = await FlightRequest.find({ status: 'pending' })
+      .populate('createdBy', 'fullName email')
+      .populate('eventId', 'title')
+      .sort({ departDate: 1 });
+    
+    res.json(flights);
+  } catch (error) {
+    console.error('Get pending flights error:', error);
+    res.status(500).json({ error: 'Failed to fetch pending requests' });
+  }
+});
+
+// Get booked flights
+app.get('/api/flights/booked', authenticate, async (req, res) => {
+  try {
+    const { eventName } = req.query;
+    
+    // If filtering by eventName, allow any authenticated user
+    // (they can only see flights for events they have access to via travel page)
+    // If no eventName filter, require planner access (for Flight Management page)
+    if (!eventName && !hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    // Build query
+    const query = { status: 'booked' };
+    
+    // Filter by event name if provided (case-insensitive match)
+    if (eventName) {
+      query.eventName = { $regex: new RegExp(`^${eventName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') };
+    }
+
+    const flights = await FlightRequest.find(query)
+      .populate('createdBy', 'fullName email')
+      .populate('eventId', 'title')
+      .sort({ departDate: 1 });
+    
+    res.json(flights);
+  } catch (error) {
+    console.error('Get booked flights error:', error);
+    res.status(500).json({ error: 'Failed to fetch booked flights' });
+  }
+});
+
+// Get events for linking to flight requests (autocomplete) - must be before :id route
+app.get('/api/flights/events/search', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const { q } = req.query;
+    const query = { archived: { $ne: true } };
+    
+    if (q) {
+      query.title = { $regex: q, $options: 'i' };
+    }
+
+    const events = await Table.find(query)
+      .select('title general.startDate general.endDate')
+      .sort({ createdAt: -1 })
+      .limit(10);
+    
+    res.json(events);
+  } catch (error) {
+    console.error('Search events error:', error);
+    res.status(500).json({ error: 'Failed to search events' });
+  }
+});
+
+// Get single flight request
+app.get('/api/flights/:id', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const flight = await FlightRequest.findById(req.params.id)
+      .populate('createdBy', 'fullName email')
+      .populate('eventId', 'title');
+    
+    if (!flight) {
+      return res.status(404).json({ error: 'Flight request not found' });
+    }
+    
+    res.json(flight);
+  } catch (error) {
+    console.error('Get flight error:', error);
+    res.status(500).json({ error: 'Failed to fetch flight request' });
+  }
+});
+
+// Create new flight request
+app.post('/api/flights', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const flightData = {
+      ...req.body,
+      createdBy: req.user.id,
+      status: 'pending'
+    };
+
+    const flight = new FlightRequest(flightData);
+    await flight.save();
+    
+    // Populate for response
+    await flight.populate('createdBy', 'fullName email');
+    if (flight.eventId) {
+      await flight.populate('eventId', 'title');
+    }
+    
+    console.log('✅ New flight request created:', flight._id);
+    
+    // Notify connected clients
+    notifyDataChange('flightRequestCreated', { flightId: flight._id });
+    
+    res.status(201).json(flight);
+  } catch (error) {
+    console.error('Create flight error:', error);
+    res.status(500).json({ error: 'Failed to create flight request' });
+  }
+});
+
+// Update flight request
+app.put('/api/flights/:id', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const flight = await FlightRequest.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    ).populate('createdBy', 'fullName email')
+     .populate('eventId', 'title');
+    
+    if (!flight) {
+      return res.status(404).json({ error: 'Flight request not found' });
+    }
+    
+    console.log('✅ Flight request updated:', flight._id);
+    
+    // Notify connected clients
+    notifyDataChange('flightRequestUpdated', { flightId: flight._id });
+    
+    res.json(flight);
+  } catch (error) {
+    console.error('Update flight error:', error);
+    res.status(500).json({ error: 'Failed to update flight request' });
+  }
+});
+
+// Book a flight (update status to booked with booking details)
+app.patch('/api/flights/:id/book', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const { bookedDetails, returnBookedDetails } = req.body;
+
+    const updateData = {
+      status: 'booked',
+      bookedDetails: {
+        ...bookedDetails,
+        bookedAt: new Date(),
+        bookedBy: req.user.id
+      }
+    };
+
+    // If roundtrip and return details provided
+    if (returnBookedDetails) {
+      updateData.returnBookedDetails = {
+        ...returnBookedDetails,
+        bookedAt: new Date(),
+        bookedBy: req.user.id
+      };
+    }
+
+    const flight = await FlightRequest.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true, runValidators: true }
+    ).populate('createdBy', 'fullName email')
+     .populate('eventId', 'title');
+    
+    if (!flight) {
+      return res.status(404).json({ error: 'Flight request not found' });
+    }
+    
+    console.log('✅ Flight booked:', flight._id);
+    
+    // Notify connected clients
+    notifyDataChange('flightBooked', { flightId: flight._id });
+    
+    res.json(flight);
+  } catch (error) {
+    console.error('Book flight error:', error);
+    res.status(500).json({ error: 'Failed to book flight' });
+  }
+});
+
+// Cancel flight request
+app.patch('/api/flights/:id/cancel', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const flight = await FlightRequest.findByIdAndUpdate(
+      req.params.id,
+      { status: 'cancelled' },
+      { new: true }
+    );
+    
+    if (!flight) {
+      return res.status(404).json({ error: 'Flight request not found' });
+    }
+    
+    console.log('✅ Flight request cancelled:', flight._id);
+    
+    // Notify connected clients
+    notifyDataChange('flightRequestCancelled', { flightId: flight._id });
+    
+    res.json(flight);
+  } catch (error) {
+    console.error('Cancel flight error:', error);
+    res.status(500).json({ error: 'Failed to cancel flight request' });
+  }
+});
+
+// Delete flight request (hard delete - use with caution)
+app.delete('/api/flights/:id', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    // Only admins can hard delete
+    if (req.user.role !== 'admin' && req.user.role !== 'owner') {
+      return res.status(403).json({ error: 'Only admins can delete flight requests' });
+    }
+
+    const flight = await FlightRequest.findByIdAndDelete(req.params.id);
+    
+    if (!flight) {
+      return res.status(404).json({ error: 'Flight request not found' });
+    }
+    
+    console.log('✅ Flight request deleted:', req.params.id);
+    
+    // Notify connected clients
+    notifyDataChange('flightRequestDeleted', { flightId: req.params.id });
+    
+    res.json({ message: 'Flight request deleted' });
+  } catch (error) {
+    console.error('Delete flight error:', error);
+    res.status(500).json({ error: 'Failed to delete flight request' });
+  }
+});
+
+// ========= END FLIGHT MANAGEMENT API =========
+
 // SERVER
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => console.log(`Server started on port ${PORT}`));
@@ -7373,5 +7801,3 @@ app.get('/api/tables/:id/documents/:documentId/view', authenticate, async (req, 
     res.status(500).json({ error: 'Failed to view document' });
   }
 });
-
-// End of server.js

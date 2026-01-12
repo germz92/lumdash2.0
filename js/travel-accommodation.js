@@ -414,7 +414,7 @@ window.initPage = undefined;
 
       rows.forEach(item => {
         const row = document.createElement("tr");
-        
+
         // Check if this is a flight management entry (read-only)
         const isFromFlightManagement = item._fromFlightManagement === true;
         if (isFromFlightManagement) {
@@ -512,32 +512,32 @@ window.initPage = undefined;
         // Skip flight management rows - they are read-only and managed separately
         .filter(row => !row.classList.contains('flight-management-row'))
         .map(row => {
-          // Get all inputs/textareas, but exclude the dropdown search input
-          const allInputs = row.querySelectorAll('input, textarea');
-          const inputs = Array.from(allInputs).filter(input => 
-            !input.closest('.custom-dropdown-search')
-          );
-          
-          // Get name from custom dropdown
-          const nameDropdown = row.querySelector('.custom-dropdown');
-          const nameValue = nameDropdown ? nameDropdown.getValue() : '';
-          
-          return tableId === 'travelTable' ? {
-            date: inputs[0]?.value || '',
-            depart: inputs[1]?.value || '',
-            arrive: inputs[2]?.value || '',
-            name: nameValue,
-            airline: inputs[3]?.value || '',
-            fromTo: inputs[4]?.value || '',
-            ref: inputs[5]?.value || ''
-          } : {
-            checkin: inputs[0]?.value || '',
-            checkout: inputs[1]?.value || '',
-            name: nameValue,
-            hotel: inputs[2]?.value || '',
-            ref: inputs[3]?.value || ''
-          };
-        });
+        // Get all inputs/textareas, but exclude the dropdown search input
+        const allInputs = row.querySelectorAll('input, textarea');
+        const inputs = Array.from(allInputs).filter(input => 
+          !input.closest('.custom-dropdown-search')
+        );
+        
+        // Get name from custom dropdown
+        const nameDropdown = row.querySelector('.custom-dropdown');
+        const nameValue = nameDropdown ? nameDropdown.getValue() : '';
+        
+        return tableId === 'travelTable' ? {
+          date: inputs[0]?.value || '',
+          depart: inputs[1]?.value || '',
+          arrive: inputs[2]?.value || '',
+          name: nameValue,
+          airline: inputs[3]?.value || '',
+          fromTo: inputs[4]?.value || '',
+          ref: inputs[5]?.value || ''
+        } : {
+          checkin: inputs[0]?.value || '',
+          checkout: inputs[1]?.value || '',
+          name: nameValue,
+          hotel: inputs[2]?.value || '',
+          ref: inputs[3]?.value || ''
+        };
+      });
     }
 
     function addRow(tableId) {

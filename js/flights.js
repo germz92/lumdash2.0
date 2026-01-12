@@ -7,8 +7,8 @@
 (function() {
   'use strict';
 
-  // API Base URL
-  const API_BASE = window.API_BASE_URL || '';
+  // API Base URL (from config.js)
+  const API_BASE = window.API_BASE || '';
 
   // State
   let flightRequests = [];

@@ -53,6 +53,23 @@
           <h2>Pending Requests</h2>
           <span class="section-count" id="pendingCount">0 Requests</span>
         </div>
+        <div class="flights-toolbar">
+          <div class="search-box">
+            <span class="material-symbols-outlined">search</span>
+            <input type="text" id="pendingSearch" placeholder="Search requests...">
+          </div>
+          <div class="toolbar-filters">
+            <select id="pendingFilter" class="toolbar-select">
+              <option value="all">All</option>
+              <option value="upcoming">Upcoming</option>
+              <option value="past">Past</option>
+            </select>
+            <select id="pendingSort" class="toolbar-select">
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+            </select>
+          </div>
+        </div>
         <div class="flights-grid" id="pendingRequestsGrid">
           <!-- Pending request cards will be rendered here -->
         </div>
@@ -67,6 +84,23 @@
         <div class="section-header">
           <h2>Booked Flights</h2>
           <span class="section-count" id="bookedCount">0 Flights</span>
+        </div>
+        <div class="flights-toolbar">
+          <div class="search-box">
+            <span class="material-symbols-outlined">search</span>
+            <input type="text" id="bookedSearch" placeholder="Search flights...">
+          </div>
+          <div class="toolbar-filters">
+            <select id="bookedFilter" class="toolbar-select">
+              <option value="all">All</option>
+              <option value="upcoming">Upcoming</option>
+              <option value="past">Past</option>
+            </select>
+            <select id="bookedSort" class="toolbar-select">
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+            </select>
+          </div>
         </div>
         <div class="flights-grid" id="bookedFlightsGrid">
           <!-- Booked flight cards will be rendered here -->
@@ -255,6 +289,11 @@
             <div class="form-group">
               <label>Notes</label>
               <textarea id="viewNotes" rows="2" placeholder="Any special requests or notes..."></textarea>
+            </div>
+
+            <!-- Created By Info -->
+            <div class="request-meta-info" id="viewRequestCreatedBy">
+              <!-- Will be populated by JS -->
             </div>
 
             <div class="modal-actions">
@@ -487,6 +526,11 @@
             <div class="form-group">
               <label>Notes</label>
               <textarea id="editBookedNotes" rows="3" placeholder="Add any notes about this booked flight..."></textarea>
+            </div>
+
+            <!-- Booked By Info -->
+            <div class="request-meta-info" id="editBookedByInfo">
+              <!-- Will be populated by JS -->
             </div>
 
             <div class="modal-actions">

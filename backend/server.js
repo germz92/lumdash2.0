@@ -7232,6 +7232,8 @@ app.get('/api/flights/booked', authenticate, async (req, res) => {
 
     const flights = await FlightRequest.find(query)
       .populate('createdBy', 'fullName email')
+      .populate('bookedDetails.bookedBy', 'fullName email')
+      .populate('returnBookedDetails.bookedBy', 'fullName email')
       .populate('eventId', 'title')
       .sort({ departDate: 1 });
     
@@ -7386,6 +7388,8 @@ app.patch('/api/flights/:id/book', authenticate, async (req, res) => {
       updateData,
       { new: true, runValidators: true }
     ).populate('createdBy', 'fullName email')
+     .populate('bookedDetails.bookedBy', 'fullName email')
+     .populate('returnBookedDetails.bookedBy', 'fullName email')
      .populate('eventId', 'title');
     
     if (!flight) {

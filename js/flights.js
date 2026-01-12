@@ -20,6 +20,19 @@
   let currentEditingRequest = null;
   let currentEditingPassenger = null;
 
+  // Debounce utility for search
+  function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+
   // DOM Elements
   const elements = {
     // Grids
@@ -29,6 +42,14 @@
     bookedEmptyState: document.getElementById('bookedEmptyState'),
     pendingCount: document.getElementById('pendingCount'),
     bookedCount: document.getElementById('bookedCount'),
+    
+    // Search, Filter, Sort
+    pendingSearch: document.getElementById('pendingSearch'),
+    pendingFilter: document.getElementById('pendingFilter'),
+    pendingSort: document.getElementById('pendingSort'),
+    bookedSearch: document.getElementById('bookedSearch'),
+    bookedFilter: document.getElementById('bookedFilter'),
+    bookedSort: document.getElementById('bookedSort'),
 
     // Create Request Modal
     createRequestBtn: document.getElementById('createRequestBtn'),
@@ -265,6 +286,16 @@
    * Setup all event listeners
    */
   function setupEventListeners() {
+    // Search, Filter, Sort for Pending
+    elements.pendingSearch?.addEventListener('input', debounce(() => renderPendingRequests(), 300));
+    elements.pendingFilter?.addEventListener('change', () => renderPendingRequests());
+    elements.pendingSort?.addEventListener('change', () => renderPendingRequests());
+    
+    // Search, Filter, Sort for Booked
+    elements.bookedSearch?.addEventListener('input', debounce(() => renderBookedFlights(), 300));
+    elements.bookedFilter?.addEventListener('change', () => renderBookedFlights());
+    elements.bookedSort?.addEventListener('change', () => renderBookedFlights());
+
     // Create Request Modal
     elements.createRequestBtn?.addEventListener('click', openCreateModal);
     elements.closeCreateModal?.addEventListener('click', closeCreateModal);
@@ -397,20 +428,67 @@
 
     elements.pendingRequestsGrid.innerHTML = '';
     
-    if (flightRequests.length === 0) {
+    // Get filter values
+    const searchTerm = (elements.pendingSearch?.value || '').toLowerCase().trim();
+    const filterValue = elements.pendingFilter?.value || 'all';
+    const sortValue = elements.pendingSort?.value || 'newest';
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Filter flights
+    let filteredRequests = flightRequests.filter(request => {
+      // Search filter
+      if (searchTerm) {
+        const searchFields = [
+          request.eventName,
+          request.from?.code,
+          request.from?.city,
+          request.to?.code,
+          request.to?.city,
+          ...(request.passengers || []).map(p => p.name),
+          request.notes
+        ].filter(Boolean).join(' ').toLowerCase();
+        
+        if (!searchFields.includes(searchTerm)) return false;
+      }
+      
+      // Date filter
+      if (filterValue !== 'all') {
+        const departDate = new Date(request.departDate + 'T12:00:00');
+        departDate.setHours(0, 0, 0, 0);
+        
+        if (filterValue === 'upcoming' && departDate < today) return false;
+        if (filterValue === 'past' && departDate >= today) return false;
+      }
+      
+      return true;
+    });
+    
+    // Sort flights
+    filteredRequests.sort((a, b) => {
+      const dateA = new Date(a.departDate + 'T12:00:00');
+      const dateB = new Date(b.departDate + 'T12:00:00');
+      return sortValue === 'oldest' ? dateA - dateB : dateB - dateA;
+    });
+    
+    if (filteredRequests.length === 0) {
       elements.pendingRequestsGrid.style.display = 'none';
       elements.pendingEmptyState.style.display = 'block';
     } else {
       elements.pendingRequestsGrid.style.display = 'grid';
       elements.pendingEmptyState.style.display = 'none';
 
-      flightRequests.forEach(request => {
+      filteredRequests.forEach(request => {
         const card = createPendingRequestCard(request);
         elements.pendingRequestsGrid.appendChild(card);
       });
     }
 
-    elements.pendingCount.textContent = `${flightRequests.length} Request${flightRequests.length !== 1 ? 's' : ''}`;
+    // Show filtered count vs total
+    const countText = searchTerm || filterValue !== 'all' 
+      ? `${filteredRequests.length} of ${flightRequests.length} Request${flightRequests.length !== 1 ? 's' : ''}`
+      : `${flightRequests.length} Request${flightRequests.length !== 1 ? 's' : ''}`;
+    elements.pendingCount.textContent = countText;
   }
 
   /**
@@ -421,35 +499,101 @@
 
     elements.bookedFlightsGrid.innerHTML = '';
     
-    if (bookedFlights.length === 0) {
+    // Get filter values
+    const searchTerm = (elements.bookedSearch?.value || '').toLowerCase().trim();
+    const filterValue = elements.bookedFilter?.value || 'all';
+    const sortValue = elements.bookedSort?.value || 'newest';
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Filter flights
+    let filteredFlights = bookedFlights.filter(flight => {
+      // Search filter
+      if (searchTerm) {
+        const searchFields = [
+          flight.eventName,
+          flight.from?.code,
+          flight.from?.city,
+          flight.to?.code,
+          flight.to?.city,
+          flight.bookedDetails?.airline,
+          flight.bookedDetails?.confirmationCode,
+          flight.bookedDetails?.flightNumber,
+          ...(flight.passengers || []).map(p => p.name),
+          flight.notes
+        ].filter(Boolean).join(' ').toLowerCase();
+        
+        if (!searchFields.includes(searchTerm)) return false;
+      }
+      
+      // Date filter - use the earliest date (depart or return)
+      if (filterValue !== 'all') {
+        const departDate = new Date(flight.departDate + 'T12:00:00');
+        departDate.setHours(0, 0, 0, 0);
+        const returnDate = flight.returnDate ? new Date(flight.returnDate + 'T12:00:00') : null;
+        if (returnDate) returnDate.setHours(0, 0, 0, 0);
+        
+        // For upcoming: at least one date is in the future
+        // For past: all dates are in the past
+        if (filterValue === 'upcoming') {
+          const latestDate = returnDate && returnDate > departDate ? returnDate : departDate;
+          if (latestDate < today) return false;
+        }
+        if (filterValue === 'past') {
+          const latestDate = returnDate && returnDate > departDate ? returnDate : departDate;
+          if (latestDate >= today) return false;
+        }
+      }
+      
+      return true;
+    });
+    
+    // Sort flights
+    filteredFlights.sort((a, b) => {
+      const dateA = new Date(a.departDate + 'T12:00:00');
+      const dateB = new Date(b.departDate + 'T12:00:00');
+      return sortValue === 'oldest' ? dateA - dateB : dateB - dateA;
+    });
+    
+    if (filteredFlights.length === 0) {
       elements.bookedFlightsGrid.style.display = 'none';
       elements.bookedEmptyState.style.display = 'block';
-    } else {
-      elements.bookedFlightsGrid.style.display = 'grid';
-      elements.bookedEmptyState.style.display = 'none';
-
-      // Create separate cards for outbound and return flights
-      let totalFlightCards = 0;
-      
-      bookedFlights.forEach(flight => {
-        // Always create outbound card
-        const outboundCard = createBookedFlightCard(flight, false);
-        elements.bookedFlightsGrid.appendChild(outboundCard);
-        totalFlightCards++;
-        
-        // Create return card for roundtrip flights
-        if (flight.tripType === 'roundtrip' && flight.returnDate) {
-          const returnCard = createBookedFlightCard(flight, true);
-          elements.bookedFlightsGrid.appendChild(returnCard);
-          totalFlightCards++;
-        }
-      });
-      
-      elements.bookedCount.textContent = `${totalFlightCards} Flight${totalFlightCards !== 1 ? 's' : ''}`;
+      const countText = searchTerm || filterValue !== 'all' 
+        ? `0 of ${bookedFlights.length} Flight${bookedFlights.length !== 1 ? 's' : ''}`
+        : `0 Flights`;
+      elements.bookedCount.textContent = countText;
       return;
     }
+    
+    elements.bookedFlightsGrid.style.display = 'grid';
+    elements.bookedEmptyState.style.display = 'none';
 
-    elements.bookedCount.textContent = `0 Flights`;
+    // Create separate cards for outbound and return flights
+    let totalFlightCards = 0;
+    
+    filteredFlights.forEach(flight => {
+      // Always create outbound card
+      const outboundCard = createBookedFlightCard(flight, false);
+      elements.bookedFlightsGrid.appendChild(outboundCard);
+      totalFlightCards++;
+      
+      // Create return card for roundtrip flights
+      if (flight.tripType === 'roundtrip' && flight.returnDate) {
+        const returnCard = createBookedFlightCard(flight, true);
+        elements.bookedFlightsGrid.appendChild(returnCard);
+        totalFlightCards++;
+      }
+    });
+    
+    // Show filtered count vs total
+    const totalBookedCards = bookedFlights.reduce((acc, f) => {
+      return acc + 1 + (f.tripType === 'roundtrip' && f.returnDate ? 1 : 0);
+    }, 0);
+    
+    const countText = searchTerm || filterValue !== 'all' 
+      ? `${totalFlightCards} of ${totalBookedCards} Flight${totalBookedCards !== 1 ? 's' : ''}`
+      : `${totalFlightCards} Flight${totalFlightCards !== 1 ? 's' : ''}`;
+    elements.bookedCount.textContent = countText;
   }
 
   /**
@@ -595,6 +739,12 @@
           <span>${request.notes}</span>
         </div>
         ` : ''}
+        ${request.createdBy ? `
+        <div class="request-created-by">
+          <span class="material-symbols-outlined">person_edit</span>
+          <span>Created by ${request.createdBy.fullName || request.createdBy.email || 'Unknown'}</span>
+        </div>
+        ` : ''}
       </div>
       <div class="flight-card-footer">
         <button class="btn-view-request" data-request-id="${request._id}">
@@ -729,6 +879,12 @@
             <span>${flight.notes}</span>
           </div>
         ` : ''}
+        ${mainBookedDetails.bookedBy ? `
+          <div class="booked-by-info">
+            <span class="material-symbols-outlined">check_circle</span>
+            <span>Booked by ${mainBookedDetails.bookedBy.fullName || mainBookedDetails.bookedBy.email || 'Unknown'}${mainBookedDetails.bookedAt ? ` on ${new Date(mainBookedDetails.bookedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}` : ''}</span>
+          </div>
+        ` : ''}
       </div>
     `;
 
@@ -737,7 +893,7 @@
     if (copyBtn) {
       copyBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        navigator.clipboard.writeText(bookedDetails.confirmationCode);
+        navigator.clipboard.writeText(mainBookedDetails.confirmationCode);
         // Could add a toast notification here
       });
     }
@@ -1111,6 +1267,28 @@
     // Populate notes
     const viewNotesEl = document.getElementById('viewNotes');
     if (viewNotesEl) viewNotesEl.value = request.notes || '';
+
+    // Populate created by info
+    const createdByEl = document.getElementById('viewRequestCreatedBy');
+    if (createdByEl) {
+      if (request.createdBy) {
+        const creatorName = request.createdBy.fullName || request.createdBy.email || 'Unknown';
+        const createdDate = request.createdAt ? new Date(request.createdAt).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit'
+        }) : '';
+        createdByEl.innerHTML = `
+          <span class="material-symbols-outlined">person_edit</span>
+          <span>Created by <strong>${creatorName}</strong>${createdDate ? ` on ${createdDate}` : ''}</span>
+        `;
+        createdByEl.style.display = 'flex';
+      } else {
+        createdByEl.style.display = 'none';
+      }
+    }
 
     // Set trip type
     document.querySelectorAll('.trip-type-btn').forEach(btn => {
@@ -1595,6 +1773,29 @@
     // Populate notes
     const editBookedNotesEl = document.getElementById('editBookedNotes');
     if (editBookedNotesEl) editBookedNotesEl.value = flight.notes || '';
+
+    // Populate booked by info
+    const bookedByInfoEl = document.getElementById('editBookedByInfo');
+    if (bookedByInfoEl) {
+      const bookedDetails = flight.bookedDetails || {};
+      if (bookedDetails.bookedBy) {
+        const bookerName = bookedDetails.bookedBy.fullName || bookedDetails.bookedBy.email || 'Unknown';
+        const bookedDate = bookedDetails.bookedAt ? new Date(bookedDetails.bookedAt).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit'
+        }) : '';
+        bookedByInfoEl.innerHTML = `
+          <span class="material-symbols-outlined">check_circle</span>
+          <span>Booked by <strong>${bookerName}</strong>${bookedDate ? ` on ${bookedDate}` : ''}</span>
+        `;
+        bookedByInfoEl.style.display = 'flex';
+      } else {
+        bookedByInfoEl.style.display = 'none';
+      }
+    }
 
     // Initialize passengers for editing
     editBookedSelectedPassengers = (flight.passengers || []).map(p => ({

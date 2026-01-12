@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const airportSchema = new mongoose.Schema({
   code: { type: String, required: true },
   city: { type: String, default: '' },
+  state: { type: String, default: '' },
   name: { type: String, default: '' }
 }, { _id: false });
 

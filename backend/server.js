@@ -7444,11 +7444,6 @@ app.delete('/api/flights/:id', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
     }
 
-    // Only admins can hard delete
-    if (req.user.role !== 'admin' && req.user.role !== 'owner') {
-      return res.status(403).json({ error: 'Only admins can delete flight requests' });
-    }
-
     const flight = await FlightRequest.findByIdAndDelete(req.params.id);
     
     if (!flight) {

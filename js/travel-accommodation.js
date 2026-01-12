@@ -497,7 +497,12 @@ window.initPage = undefined;
       const table = document.getElementById(tableId)?.querySelectorAll("tbody tr");
       if (!table) return [];
       return Array.from(table).map(row => {
-        const inputs = row.querySelectorAll('input, textarea');
+        // Get all inputs/textareas, but exclude the dropdown search input
+        const allInputs = row.querySelectorAll('input, textarea');
+        const inputs = Array.from(allInputs).filter(input => 
+          !input.closest('.custom-dropdown-search')
+        );
+        
         // Get name from custom dropdown
         const nameDropdown = row.querySelector('.custom-dropdown');
         const nameValue = nameDropdown ? nameDropdown.getValue() : '';

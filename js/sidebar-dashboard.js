@@ -30,6 +30,7 @@
     if (path.includes('inventory-management')) return 'inventory-management';
     if (path.includes('crew-planner')) return 'crew-planner';
     if (path.includes('crew-calendar')) return 'crew-calendar';
+    if (path.includes('flights')) return 'flights';
     
     return 'events';
   }
@@ -427,8 +428,9 @@
   }
   
   /**
-   * Check admin access and show/hide admin-only nav items
-   * These include: Admin Console, Inventory, Crew Planner, Crew Calendar
+   * Check admin/planner access and show/hide role-specific nav items
+   * Admin-only: Admin Console, Inventory, Crew Planner, Crew Calendar
+   * Planner (and admin): Flight Tracker
    */
   function checkAdminAccess() {
     let user = {};
@@ -447,13 +449,24 @@
       }
     }
     
-    const isAdmin = user.role === 'owner' || user.role === 'admin';
-    console.log('Admin access check:', { role: user.role, isAdmin });
+    const isAdmin = user.role === 'admin';
+    const isOwner = user.role === 'owner'; // Event owner, not system admin
+    const isPlanner = user.role === 'planner';
+    const canAccessAdminPages = isAdmin || isOwner; // Admin-only nav items
+    const canAccessPlannerPages = isAdmin || isPlanner; // Planner nav items (NOT owners)
     
-    // Show/hide all admin-only nav items
+    console.log('Access check:', { role: user.role, isAdmin, isOwner, isPlanner, canAccessAdminPages, canAccessPlannerPages });
+    
+    // Show/hide all admin-only nav items (admins and owners)
     const adminOnlyNavItems = document.querySelectorAll('.admin-only-nav');
     adminOnlyNavItems.forEach(item => {
-      item.style.display = isAdmin ? 'flex' : 'none';
+      item.style.display = canAccessAdminPages ? 'flex' : 'none';
+    });
+    
+    // Show/hide planner nav items (visible to planners AND admins, NOT owners)
+    const plannerNavItems = document.querySelectorAll('.planner-nav');
+    plannerNavItems.forEach(item => {
+      item.style.display = canAccessPlannerPages ? 'flex' : 'none';
     });
   }
   

@@ -12362,6 +12362,22 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   background: var(--bg-hover) !important;
 }
 
+/* Flight Management imported rows */
+.travel-page.dark-theme .flight-management-row td {
+  background: rgba(204, 0, 7, 0.04) !important;
+}
+
+.travel-page.dark-theme .flight-management-row:hover td {
+  background: rgba(204, 0, 7, 0.08) !important;
+}
+
+.travel-page.dark-theme .flight-mgmt-icon {
+  font-size: 14px;
+  color: var(--brand-red);
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
 .travel-page.dark-theme .dark-table tbody tr:last-child td {
   border-bottom: none;
 }

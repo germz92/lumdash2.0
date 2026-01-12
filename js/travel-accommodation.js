@@ -414,18 +414,30 @@ window.initPage = undefined;
 
       rows.forEach(item => {
         const row = document.createElement("tr");
+        
+        // Check if this is a flight management entry (read-only)
+        const isFromFlightManagement = item._fromFlightManagement === true;
+        if (isFromFlightManagement) {
+          row.classList.add('flight-management-row');
+        }
 
-        if (!isEditMode) {
-          console.log('Not in edit mode, showing readonly view without action column');
+        // Flight management entries are always read-only
+        if (!isEditMode || isFromFlightManagement) {
+          console.log('Showing readonly view', isFromFlightManagement ? '(from Flight Management)' : '');
           if (tableId === 'travelTable') {
+            // Add flight icon indicator for flight management entries
+            const flightIcon = isFromFlightManagement 
+              ? '<span class="material-symbols-outlined flight-mgmt-icon" title="From Flight Management">airplane_ticket</span>' 
+              : '';
             row.innerHTML = `
               <td class="date"><span class="readonly-span">${formatDateReadable(item.date)}</span></td>
               <td class="time"><span class="readonly-span">${formatTo12Hour(item.depart)}</span></td>
               <td class="time"><span class="readonly-span">${formatTo12Hour(item.arrive)}</span></td>
-              <td class="text"><span class="readonly-span">${item.name || ''}</span></td>
+              <td class="text"><span class="readonly-span">${flightIcon}${item.name || ''}</span></td>
               <td class="text"><span class="readonly-span">${item.airline || ''}</span></td>
               <td class="text"><span class="readonly-span">${item.fromTo || ''}</span></td>
               <td class="text"><span class="readonly-span">${item.ref || ''}</span></td>
+              ${isEditMode ? '<td class="action"></td>' : ''}
             `;
           } else {
             row.innerHTML = `
@@ -496,33 +508,36 @@ window.initPage = undefined;
     function collectTableData(tableId) {
       const table = document.getElementById(tableId)?.querySelectorAll("tbody tr");
       if (!table) return [];
-      return Array.from(table).map(row => {
-        // Get all inputs/textareas, but exclude the dropdown search input
-        const allInputs = row.querySelectorAll('input, textarea');
-        const inputs = Array.from(allInputs).filter(input => 
-          !input.closest('.custom-dropdown-search')
-        );
-        
-        // Get name from custom dropdown
-        const nameDropdown = row.querySelector('.custom-dropdown');
-        const nameValue = nameDropdown ? nameDropdown.getValue() : '';
-        
-        return tableId === 'travelTable' ? {
-          date: inputs[0]?.value || '',
-          depart: inputs[1]?.value || '',
-          arrive: inputs[2]?.value || '',
-          name: nameValue,
-          airline: inputs[3]?.value || '',
-          fromTo: inputs[4]?.value || '',
-          ref: inputs[5]?.value || ''
-        } : {
-          checkin: inputs[0]?.value || '',
-          checkout: inputs[1]?.value || '',
-          name: nameValue,
-          hotel: inputs[2]?.value || '',
-          ref: inputs[3]?.value || ''
-        };
-      });
+      return Array.from(table)
+        // Skip flight management rows - they are read-only and managed separately
+        .filter(row => !row.classList.contains('flight-management-row'))
+        .map(row => {
+          // Get all inputs/textareas, but exclude the dropdown search input
+          const allInputs = row.querySelectorAll('input, textarea');
+          const inputs = Array.from(allInputs).filter(input => 
+            !input.closest('.custom-dropdown-search')
+          );
+          
+          // Get name from custom dropdown
+          const nameDropdown = row.querySelector('.custom-dropdown');
+          const nameValue = nameDropdown ? nameDropdown.getValue() : '';
+          
+          return tableId === 'travelTable' ? {
+            date: inputs[0]?.value || '',
+            depart: inputs[1]?.value || '',
+            arrive: inputs[2]?.value || '',
+            name: nameValue,
+            airline: inputs[3]?.value || '',
+            fromTo: inputs[4]?.value || '',
+            ref: inputs[5]?.value || ''
+          } : {
+            checkin: inputs[0]?.value || '',
+            checkout: inputs[1]?.value || '',
+            name: nameValue,
+            hotel: inputs[2]?.value || '',
+            ref: inputs[3]?.value || ''
+          };
+        });
     }
 
     function addRow(tableId) {
@@ -612,6 +627,80 @@ window.initPage = undefined;
 
     let travelData = [];
     let accommodationData = [];
+    let flightManagementData = []; // Booked flights from Flight Management
+
+    /**
+     * Transform a booked flight from Flight Management to travel table format
+     * Creates one row per passenger for the outbound flight
+     */
+    function transformFlightToTravelRow(flight, passenger, isReturn = false) {
+      const mainBookedDetails = flight.bookedDetails || {};
+      const returnBookedDetails = flight.returnBookedDetails || {};
+      const flightDetails = isReturn ? returnBookedDetails : mainBookedDetails;
+      const fromCode = isReturn ? (flight.to?.code || '') : (flight.from?.code || '');
+      const toCode = isReturn ? (flight.from?.code || '') : (flight.to?.code || '');
+      const date = isReturn ? flight.returnDate : flight.departDate;
+      
+      // Airline and confirmation are shared across both legs (stored in main bookedDetails)
+      const airline = mainBookedDetails.airline || '';
+      const confirmationCode = mainBookedDetails.confirmationCode || '';
+      
+      return {
+        date: date ? date.split('T')[0] : '',
+        depart: flightDetails.departTime || '',
+        arrive: flightDetails.arriveTime || '',
+        name: passenger.name || '',
+        airline: airline,
+        fromTo: `${fromCode} → ${toCode}`,
+        ref: confirmationCode,
+        _fromFlightManagement: true, // Flag to identify flight management entries
+        _flightId: flight._id,
+        _isReturn: isReturn
+      };
+    }
+
+    /**
+     * Fetch booked flights for this event from Flight Management
+     */
+    async function loadFlightManagementData(eventName) {
+      if (!eventName) return [];
+      
+      try {
+        const res = await fetch(`${API_BASE}/api/flights/booked?eventName=${encodeURIComponent(eventName)}`, {
+          headers: { Authorization: token }
+        });
+        
+        if (!res.ok) {
+          console.log('No flight management data available for this event');
+          return [];
+        }
+        
+        const flights = await res.json();
+        const rows = [];
+        
+        // Transform each flight into travel rows (one per passenger, separate for outbound/return)
+        flights.forEach(flight => {
+          const passengers = flight.passengers || [];
+          
+          // Outbound flight rows
+          passengers.forEach(passenger => {
+            rows.push(transformFlightToTravelRow(flight, passenger, false));
+          });
+          
+          // Return flight rows (for roundtrip)
+          if (flight.tripType === 'roundtrip' && flight.returnBookedDetails) {
+            passengers.forEach(passenger => {
+              rows.push(transformFlightToTravelRow(flight, passenger, true));
+            });
+          }
+        });
+        
+        return rows;
+      } catch (error) {
+        console.log('Could not load flight management data:', error);
+        return [];
+      }
+    }
 
     async function loadData() {
       console.log('Fetching table data for tableId:', tableId);
@@ -624,16 +713,42 @@ window.initPage = undefined;
       });
       const data = await res.json();
       
-      // Store data globally for filtering
+      // Store manual travel data globally for filtering
       travelData = data.travel || [];
       accommodationData = data.accommodation || [];
       
-      populateTable('travelTable', travelData);
+      // Also fetch booked flights from Flight Management for this event
+      const eventTitle = document.getElementById('eventTitle')?.textContent || '';
+      if (eventTitle && eventTitle !== 'Loading Event...') {
+        flightManagementData = await loadFlightManagementData(eventTitle);
+        console.log('Loaded flight management data:', flightManagementData.length, 'rows');
+      }
+      
+      // Combine manual travel data with flight management data
+      // Sort by date ascending (oldest first)
+      const combinedTravelData = [...flightManagementData, ...travelData].sort((a, b) => {
+        const dateA = a.date || '9999-99-99'; // Empty dates go to end
+        const dateB = b.date || '9999-99-99';
+        if (dateA < dateB) return -1;
+        if (dateA > dateB) return 1;
+        return 0;
+      });
+      
+      populateTable('travelTable', combinedTravelData);
       populateTable('accommodationTable', accommodationData);
     }
     
     function filterTables() {
-      populateTable('travelTable', travelData);
+      // Combine manual travel data with flight management data
+      // Sort by date ascending (oldest first)
+      const combinedTravelData = [...flightManagementData, ...travelData].sort((a, b) => {
+        const dateA = a.date || '9999-99-99';
+        const dateB = b.date || '9999-99-99';
+        if (dateA < dateB) return -1;
+        if (dateA > dateB) return 1;
+        return 0;
+      });
+      populateTable('travelTable', combinedTravelData);
       populateTable('accommodationTable', accommodationData);
     }
 
@@ -724,7 +839,16 @@ window.initPage = undefined;
       if (saveTravelBtn) saveTravelBtn.style.display = 'flex';
       if (addTravelBtn) addTravelBtn.style.display = 'flex';
       
-      populateTable('travelTable', travelData);
+      // Combine manual travel data with flight management data
+      // Sort by date ascending (oldest first)
+      const combinedTravelData = [...flightManagementData, ...travelData].sort((a, b) => {
+        const dateA = a.date || '9999-99-99';
+        const dateB = b.date || '9999-99-99';
+        if (dateA < dateB) return -1;
+        if (dateA > dateB) return 1;
+        return 0;
+      });
+      populateTable('travelTable', combinedTravelData);
     }
 
     function enterAccommodationEditMode() {

@@ -474,7 +474,9 @@ function renderEventRow(event, index) {
       <td>
         <div class="event-name-cell">
           <div class="event-name">
-            ${event.name || event.title || 'Untitled Event'}
+            <a href="#" class="event-name-link" onclick="openEvent('${event._id}'); return false;">
+              ${event.name || event.title || 'Untitled Event'}
+            </a>
             <span class="material-symbols-outlined edit-icon">edit</span>
           </div>
           <div class="event-badges">
@@ -633,8 +635,10 @@ function toggleEventMenu(e, eventId) {
 function openEvent(eventId) {
   // Navigate to the event
   localStorage.setItem('eventId', eventId);
-  if (typeof navigate === 'function') {
-    navigate('general', eventId);
+  if (window.navigate) {
+    window.navigate('general', eventId);
+  } else {
+    window.location.href = `/dashboard.html#general?id=${eventId}`;
   }
 }
 

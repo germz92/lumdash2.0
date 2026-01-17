@@ -37,6 +37,12 @@
             <span class="material-symbols-outlined">search</span>
             <input type="text" id="taskSearch" placeholder="Search tasks...">
           </div>
+          <!-- Status Filter Tabs -->
+          <div class="status-filter-tabs">
+            <button class="status-tab active" data-status="all">All</button>
+            <button class="status-tab" data-status="pending">Pending</button>
+            <button class="status-tab" data-status="completed">Completed</button>
+          </div>
         </div>
         <div class="filter-right">
           <button class="filter-btn" id="myTasksFilterBtn">
@@ -60,7 +66,10 @@
                 <th class="col-task">Task</th>
                 <th class="col-event">Event</th>
                 <th class="col-status">Status</th>
-                <th class="col-due">Due Date</th>
+                <th class="col-due sortable" id="dueDateHeader" onclick="window.toggleDueDateSort && window.toggleDueDateSort()">
+                  Due Date
+                  <span class="material-symbols-outlined sort-icon" id="dueDateSortIcon">unfold_more</span>
+                </th>
                 <th class="col-owner">Owner</th>
                 <th class="col-notes">Notes</th>
                 <th class="col-actions"></th>

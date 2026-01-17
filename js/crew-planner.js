@@ -186,9 +186,9 @@ function createCustomDropdown(options, currentValue, placeholder, onSelect, onAd
     // Position the menu using fixed positioning
     const triggerRect = trigger.getBoundingClientRect();
     const viewportHeight = window.innerHeight;
-    const maxMenuHeight = Math.min(250, viewportHeight * 0.35);
+    const desiredMenuHeight = 350; // Desired max height for the dropdown
     
-    // Check if menu should open above or below
+    // Check available space above and below
     const spaceBelow = viewportHeight - triggerRect.bottom - 10;
     const spaceAbove = triggerRect.top - 10;
     
@@ -196,20 +196,22 @@ function createCustomDropdown(options, currentValue, placeholder, onSelect, onAd
     menu.style.top = '';
     menu.style.bottom = '';
     
-    if (spaceBelow >= 150 || spaceBelow >= spaceAbove) {
-      // Open below - anchor to top of trigger bottom
+    // Always open in the direction with MORE space
+    if (spaceBelow >= spaceAbove) {
+      // Open below
       menu.style.top = `${triggerRect.bottom + 2}px`;
-      menu.style.maxHeight = `${Math.min(maxMenuHeight, spaceBelow)}px`;
+      menu.style.maxHeight = `${Math.min(desiredMenuHeight, spaceBelow)}px`;
     } else {
-      // Open above - use bottom positioning to anchor to trigger top
+      // Open above
       menu.style.bottom = `${viewportHeight - triggerRect.top + 2}px`;
-      menu.style.maxHeight = `${Math.min(maxMenuHeight, spaceAbove)}px`;
+      menu.style.maxHeight = `${Math.min(desiredMenuHeight, spaceAbove)}px`;
     }
     
     menu.style.left = `${triggerRect.left}px`;
     menu.style.width = `${Math.max(triggerRect.width, 180)}px`;
     menu.style.position = 'fixed';
     menu.style.zIndex = '99999';
+    menu.style.overflowY = 'auto';
     
     const searchInput = searchWrapper.querySelector('input');
     searchInput.value = '';
@@ -470,7 +472,7 @@ function populateTableSelect(tables) {
   tables.forEach(table => {
     const option = document.createElement('option');
     option.value = table._id;
-    option.textContent = `${table.name} (${new Date(table.updatedAt).toLocaleDateString()})`;
+    option.textContent = `${table.name} (${getTableDateRange(table)})`;
     select.appendChild(option);
   });
   
@@ -493,10 +495,37 @@ function renderTableDropdownOptions(filter = '') {
     optionsContainer.innerHTML = filtered.map(table => `
       <button type="button" class="custom-dropdown-option" data-value="${table._id}">
         <span class="table-option-name">${escapeHtml(table.name)}</span>
-        <span class="table-option-date">${new Date(table.updatedAt).toLocaleDateString()}</span>
+        <span class="table-option-date">${getTableDateRange(table)}</span>
       </button>
     `).join('');
   }
+}
+
+// Helper function to get date range string from table
+function getTableDateRange(table) {
+  if (!table.dates || table.dates.length === 0) {
+    return 'No dates';
+  }
+  
+  // Sort dates and get first/last
+  const sortedDates = [...table.dates]
+    .map(d => d.date)
+    .sort((a, b) => new Date(a) - new Date(b));
+  
+  const firstDate = sortedDates[0];
+  const lastDate = sortedDates[sortedDates.length - 1];
+  
+  // Format dates nicely (e.g., "Jan 15 - Jan 20")
+  const formatShortDate = (dateStr) => {
+    const date = new Date(dateStr + 'T00:00:00');
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+  
+  if (firstDate === lastDate) {
+    return formatShortDate(firstDate);
+  }
+  
+  return `${formatShortDate(firstDate)} - ${formatShortDate(lastDate)}`;
 }
 
 function setupTableDropdown() {
@@ -518,24 +547,27 @@ function setupTableDropdown() {
     
     const triggerRect = trigger.getBoundingClientRect();
     const viewportHeight = window.innerHeight;
-    const maxMenuHeight = 300;
+    const desiredMenuHeight = 350;
     const spaceBelow = viewportHeight - triggerRect.bottom - 10;
+    const spaceAbove = triggerRect.top - 10;
     
     menu.style.top = '';
     menu.style.bottom = '';
     
-    if (spaceBelow >= 150) {
+    // Always open in the direction with MORE space
+    if (spaceBelow >= spaceAbove) {
       menu.style.top = `${triggerRect.bottom + 2}px`;
-      menu.style.maxHeight = `${Math.min(maxMenuHeight, spaceBelow)}px`;
+      menu.style.maxHeight = `${Math.min(desiredMenuHeight, spaceBelow)}px`;
     } else {
       menu.style.bottom = `${viewportHeight - triggerRect.top + 2}px`;
-      menu.style.maxHeight = `${Math.min(maxMenuHeight, triggerRect.top - 10)}px`;
+      menu.style.maxHeight = `${Math.min(desiredMenuHeight, spaceAbove)}px`;
     }
     
     menu.style.left = `${triggerRect.left}px`;
     menu.style.width = `${Math.max(triggerRect.width, 250)}px`;
     menu.style.position = 'fixed';
     menu.style.zIndex = '99999';
+    menu.style.overflowY = 'auto';
     
     searchInput.value = '';
     renderTableDropdownOptions();
@@ -944,6 +976,8 @@ function addDate() {
   const existingDate = planningData.dates.find(d => d.date === date);
   if (existingDate) {
     alert('This date already exists in the table');
+    // Still advance to next day so user can continue
+    advanceDateInput(dateInput, date);
     return;
   }
   
@@ -963,8 +997,20 @@ function addDate() {
   // Save to session storage
   saveToSessionStorage();
   
-  dateInput.value = '';
+  // Advance date input to next day for quick sequential adding
+  advanceDateInput(dateInput, date);
+  
   renderTable();
+}
+
+// Helper function to advance date input to the next day
+function advanceDateInput(dateInput, currentDate) {
+  const current = new Date(currentDate + 'T00:00:00');
+  current.setDate(current.getDate() + 1);
+  
+  // Format as YYYY-MM-DD for the input
+  const nextDate = current.toISOString().split('T')[0];
+  dateInput.value = nextDate;
 }
 
 function deleteDate(date) {
@@ -999,6 +1045,39 @@ function deleteEvent(eventName) {
   // Save to session storage
   saveToSessionStorage();
   
+  renderTable();
+}
+
+// Move event left or right in the order
+function moveEvent(eventName, direction) {
+  const currentIndex = planningData.events.findIndex(e => e.name === eventName);
+  if (currentIndex === -1) return;
+  
+  const newIndex = direction === 'left' ? currentIndex - 1 : currentIndex + 1;
+  
+  // Check bounds
+  if (newIndex < 0 || newIndex >= planningData.events.length) return;
+  
+  // Swap events in the array
+  const temp = planningData.events[currentIndex];
+  planningData.events[currentIndex] = planningData.events[newIndex];
+  planningData.events[newIndex] = temp;
+  
+  // Also reorder events within each date's data to maintain consistency
+  planningData.dates.forEach(dateData => {
+    const eventsCopy = [...dateData.events];
+    const orderedEvents = planningData.events.map(pe => {
+      return eventsCopy.find(e => e.name === pe.name) || {
+        name: pe.name,
+        location: pe.location,
+        crew: []
+      };
+    });
+    dateData.events = orderedEvents;
+  });
+  
+  // Save and re-render
+  saveToSessionStorage();
   renderTable();
 }
 
@@ -1094,18 +1173,40 @@ function buildTableHeader(headerRow) {
     <th class="date-header">Date</th>
   `;
   
+  const totalEvents = planningData.events.length;
+  
   planningData.events.forEach((event, index) => {
     const eventHeader = document.createElement('th');
     eventHeader.className = 'event-header';
     if (index > 0) eventHeader.classList.add('event-separator');
     eventHeader.colSpan = 2;
+    
+    // Determine if arrows should be disabled
+    const isFirst = index === 0;
+    const isLast = index === totalEvents - 1;
+    const showArrows = totalEvents > 1;
+    
     eventHeader.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <div>
           <div style="font-weight: bold;">${escapeHtml(event.name)}</div>
           <div style="font-size: 0.9em; color: #666;">${escapeHtml(event.location)}</div>
         </div>
-        <div style="display: flex; gap: 4px;">
+        <div style="display: flex; gap: 2px; align-items: center;">
+          ${showArrows ? `
+            <button class="action-btn reorder-btn ${isFirst ? 'disabled' : ''}" 
+                    onclick="moveEvent('${escapeHtml(event.name)}', 'left')" 
+                    title="Move Left"
+                    ${isFirst ? 'disabled' : ''}>
+              <span class="material-symbols-outlined">chevron_left</span>
+            </button>
+            <button class="action-btn reorder-btn ${isLast ? 'disabled' : ''}" 
+                    onclick="moveEvent('${escapeHtml(event.name)}', 'right')" 
+                    title="Move Right"
+                    ${isLast ? 'disabled' : ''}>
+              <span class="material-symbols-outlined">chevron_right</span>
+            </button>
+          ` : ''}
           <button class="action-btn edit-btn" onclick="editEvent('${escapeHtml(event.name)}')" title="Edit Event">
             <span class="material-symbols-outlined">edit</span>
           </button>
@@ -1759,6 +1860,7 @@ window.deleteDate = deleteDate;
 window.deleteEvent = deleteEvent;
 window.editDate = editDate;
 window.editEvent = editEvent;
+window.moveEvent = moveEvent;
 window.addCrewToDateEvent = addCrewToDateEvent;
 window.deleteEventCrewRow = deleteEventCrewRow;
 window.updateCrewData = updateCrewData;

@@ -8,6 +8,8 @@
   let currentUser = null;
   let isOwnerOrAdmin = false;
   let editingTodoId = null;
+  let statusFilter = 'all'; // 'all', 'pending', 'completed'
+  let dueDateSort = 'none'; // 'none', 'asc', 'desc'
 
   // Initialize the page
   window.initPage = async function(eventId) {
@@ -831,19 +833,60 @@
     
     if (!tableBody) return;
     
-    // Filter todos by search
-    let filteredTodos = todos;
+    // Start with all todos
+    let filteredTodos = [...todos];
+    
+    // Apply status filter
+    if (statusFilter === 'pending') {
+      filteredTodos = filteredTodos.filter(todo => todo.status === 'todo' || todo.status === 'in-progress');
+    } else if (statusFilter === 'completed') {
+      filteredTodos = filteredTodos.filter(todo => todo.status === 'done');
+    }
+    
+    // Apply search filter
     if (searchValue) {
-      filteredTodos = todos.filter(todo => 
+      filteredTodos = filteredTodos.filter(todo => 
         todo.task.toLowerCase().includes(searchValue) ||
         (todo.notes && todo.notes.toLowerCase().includes(searchValue)) ||
         (todo.owner?.fullName && todo.owner.fullName.toLowerCase().includes(searchValue))
       );
     }
     
+    // Apply due date sorting
+    if (dueDateSort !== 'none') {
+      filteredTodos.sort((a, b) => {
+        const dateA = a.dueDate ? new Date(a.dueDate) : null;
+        const dateB = b.dueDate ? new Date(b.dueDate) : null;
+        
+        // Handle null dates - put them at the end
+        if (!dateA && !dateB) return 0;
+        if (!dateA) return 1;
+        if (!dateB) return -1;
+        
+        const diff = dateA - dateB;
+        return dueDateSort === 'asc' ? diff : -diff;
+      });
+    }
+    
     // Show/hide empty message
     if (emptyMessageEl) {
-      emptyMessageEl.style.display = filteredTodos.length === 0 ? 'flex' : 'none';
+      if (filteredTodos.length === 0) {
+        emptyMessageEl.style.display = 'flex';
+        const msgP = emptyMessageEl.querySelector('p');
+        if (msgP) {
+          if (searchValue) {
+            msgP.textContent = 'No tasks match your search';
+          } else if (statusFilter === 'pending') {
+            msgP.textContent = 'No pending tasks';
+          } else if (statusFilter === 'completed') {
+            msgP.textContent = 'No completed tasks';
+          } else {
+            msgP.textContent = 'No tasks yet. Add your first task below.';
+          }
+        }
+      } else {
+        emptyMessageEl.style.display = 'none';
+      }
     }
     
     tableBody.innerHTML = '';
@@ -857,11 +900,15 @@
   // Create a todo row
   function createTodoRow(todo) {
     const row = document.createElement('tr');
-    row.className = 'todo-row';
     row.dataset.id = todo._id;
     
     const isAssignee = todo.owner && todo.owner._id === currentUser?.id;
     const canEdit = isOwnerOrAdmin || isAssignee;
+    
+    // Check if overdue (not completed and past due)
+    const dueInfo = formatDueDate(todo.dueDate);
+    const isOverdue = dueInfo.className === 'overdue' && todo.status !== 'done';
+    row.className = `todo-row${isOverdue ? ' overdue-row' : ''}`;
     
     // Task column
     const taskCell = document.createElement('td');
@@ -887,8 +934,7 @@
     // Due Date column
     const dueDateCell = document.createElement('td');
     dueDateCell.className = 'col-due';
-    const { text, className } = formatDueDate(todo.dueDate);
-    dueDateCell.innerHTML = `<span class="due-date ${className}">${text}</span>`;
+    dueDateCell.innerHTML = `<span class="due-date ${dueInfo.className}">${dueInfo.text}</span>`;
     row.appendChild(dueDateCell);
     
     // Owner column
@@ -1401,6 +1447,12 @@
       });
     }
     
+    // Status filter tabs
+    setupStatusFilterTabs();
+    
+    // Update sort icon
+    updateSortIcon();
+    
     // Edit modal buttons
     document.getElementById('closeEditModal')?.addEventListener('click', closeEditModal);
     document.getElementById('cancelEditBtn')?.addEventListener('click', closeEditModal);
@@ -1444,6 +1496,59 @@
         sidebar.classList.remove('open');
         overlay.classList.remove('open');
       });
+    }
+  }
+
+  // Setup status filter tabs
+  function setupStatusFilterTabs() {
+    const tabs = document.querySelectorAll('.todos-filter-bar .status-tab');
+    
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        // Update active state
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        // Update filter
+        statusFilter = tab.dataset.status;
+        
+        // Re-render
+        renderTodos();
+      });
+    });
+  }
+
+  // Toggle due date sort
+  window.toggleDueDateSort = function() {
+    // Cycle through: none -> asc -> desc -> none
+    if (dueDateSort === 'none') {
+      dueDateSort = 'asc';
+    } else if (dueDateSort === 'asc') {
+      dueDateSort = 'desc';
+    } else {
+      dueDateSort = 'none';
+    }
+    
+    updateSortIcon();
+    renderTodos();
+  };
+
+  // Update sort icon based on current sort state
+  function updateSortIcon() {
+    const icon = document.getElementById('dueDateSortIcon');
+    const header = document.getElementById('dueDateHeader');
+    
+    if (!icon || !header) return;
+    
+    if (dueDateSort === 'asc') {
+      icon.textContent = 'arrow_upward';
+      header.classList.add('sorted');
+    } else if (dueDateSort === 'desc') {
+      icon.textContent = 'arrow_downward';
+      header.classList.add('sorted');
+    } else {
+      icon.textContent = 'unfold_more';
+      header.classList.remove('sorted');
     }
   }
 

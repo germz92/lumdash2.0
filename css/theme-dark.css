@@ -1346,6 +1346,18 @@ body:has(.events-page) {
   gap: 8px;
 }
 
+.event-name .event-name-link {
+  cursor: pointer;
+  transition: color var(--transition-fast);
+  color: inherit;
+  text-decoration: none;
+}
+
+.event-name .event-name-link:hover {
+  color: var(--primary-color);
+  text-decoration: underline;
+}
+
 .event-name .edit-icon {
   color: var(--text-tertiary);
   font-size: 16px;
@@ -9971,13 +9983,106 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 }
 
 .todos-page.dark-theme .due-date.overdue {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  color: #f87171;
+  font-weight: var(--font-weight-semibold);
+  animation: overdue-pulse 2s ease-in-out infinite;
+  white-space: nowrap;
+}
+
+.todos-page.dark-theme .due-date.overdue::before {
+  content: 'warning';
+  font-family: 'Material Symbols Outlined';
+  font-size: 16px;
   color: #ef4444;
-  font-weight: var(--font-weight-medium);
+  flex-shrink: 0;
+}
+
+/* Highlight entire row for overdue tasks */
+.todos-page.dark-theme .todo-row.overdue-row {
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.todos-page.dark-theme .todo-row.overdue-row:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* Red left border accent for overdue rows */
+.todos-page.dark-theme .todo-row.overdue-row td:first-child {
+  border-left: 3px solid #ef4444;
 }
 
 .todos-page.dark-theme .due-date.due-soon {
   color: #f59e0b;
   font-weight: var(--font-weight-medium);
+}
+
+/* Sortable column header */
+.todos-page.dark-theme .todos-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition-fast);
+}
+
+.todos-page.dark-theme .todos-table th.sortable:hover {
+  background: var(--bg-hover);
+}
+
+.todos-page.dark-theme .todos-table th.sortable .sort-icon {
+  font-size: 16px;
+  vertical-align: middle;
+  margin-left: 4px;
+  opacity: 0.5;
+  transition: opacity var(--transition-fast);
+}
+
+.todos-page.dark-theme .todos-table th.sortable:hover .sort-icon {
+  opacity: 0.8;
+}
+
+.todos-page.dark-theme .todos-table th.sortable.sorted .sort-icon {
+  opacity: 1;
+  color: var(--brand-red);
+}
+
+/* Status Filter Tabs for todos page */
+.todos-filter-bar .status-filter-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.todos-filter-bar .status-tab {
+  padding: 6px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.todos-filter-bar .status-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.todos-filter-bar .status-tab.active {
+  background: var(--brand-red);
+  color: white;
 }
 
 /* Owner */
@@ -10857,12 +10962,28 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
     gap: 12px;
   }
   
+  .todos-page.dark-theme .todos-filter-bar .filter-left {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  
   .todos-page.dark-theme .todos-filter-bar .filter-right {
     width: 100%;
   }
   
   .todos-page.dark-theme .search-section {
     width: 100%;
+  }
+  
+  .todos-filter-bar .status-filter-tabs {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .todos-filter-bar .status-tab {
+    flex: 1;
+    text-align: center;
+    padding: 8px 10px;
   }
   
   .todos-page.dark-theme .todos-content {
@@ -15894,6 +16015,68 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   background: var(--bg-hover);
 }
 
+/* Status Filter Tabs */
+.status-filter-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 4px;
+}
+
+.status-tab {
+  padding: 6px 14px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.status-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.status-tab.active {
+  background: var(--brand-red);
+  color: white;
+}
+
+/* Sortable Column Header */
+.my-tasks-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition-fast);
+}
+
+.my-tasks-table th.sortable:hover {
+  background: var(--bg-hover);
+}
+
+.my-tasks-table th.sortable .sort-icon {
+  font-size: 16px;
+  vertical-align: middle;
+  margin-left: 4px;
+  opacity: 0.5;
+  transition: opacity var(--transition-fast);
+}
+
+.my-tasks-table th.sortable:hover .sort-icon {
+  opacity: 0.8;
+}
+
+.my-tasks-table th.sortable.sorted .sort-icon {
+  opacity: 1;
+  color: var(--brand-red);
+}
+
 /* Tasks List Container */
 .my-tasks-list-container {
   flex: 1;
@@ -15982,13 +16165,13 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 
 /* Event link */
 .my-tasks-table .event-link {
-  color: var(--brand-red);
+  color: var(--text-primary);
   text-decoration: none;
   transition: color var(--transition-fast);
 }
 
 .my-tasks-table .event-link:hover {
-  color: var(--brand-red-light);
+  color: var(--brand-red);
   text-decoration: underline;
 }
 
@@ -16061,8 +16244,49 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 }
 
 .my-tasks-table .due-date.overdue {
-  color: var(--status-error);
-  font-weight: var(--font-weight-medium);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  color: #f87171;
+  font-weight: var(--font-weight-semibold);
+  animation: overdue-pulse 2s ease-in-out infinite;
+  white-space: nowrap;
+}
+
+.my-tasks-table .due-date.overdue::before {
+  content: 'warning';
+  font-family: 'Material Symbols Outlined';
+  font-size: 16px;
+  color: #ef4444;
+  flex-shrink: 0;
+}
+
+/* Subtle pulse animation for overdue */
+@keyframes overdue-pulse {
+  0%, 100% { 
+    background: rgba(239, 68, 68, 0.15); 
+  }
+  50% { 
+    background: rgba(239, 68, 68, 0.25); 
+  }
+}
+
+/* Highlight entire row for overdue tasks */
+.my-tasks-table tr.overdue-row {
+  background: rgba(239, 68, 68, 0.05);
+}
+
+.my-tasks-table tr.overdue-row:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* Red left border accent for overdue rows */
+.my-tasks-table tr.overdue-row td:first-child {
+  border-left: 3px solid #ef4444;
 }
 
 .my-tasks-table .due-date.due-soon {
@@ -16555,6 +16779,11 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
     flex-wrap: wrap;
   }
   
+  .my-tasks-filter-bar .filter-left {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+  
   .my-tasks-page .search-box {
     width: 100% !important;
     flex: 1 !important;
@@ -16562,6 +16791,17 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   
   .my-tasks-page .search-box input {
     width: 100% !important;
+  }
+  
+  .status-filter-tabs {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .status-tab {
+    flex: 1;
+    text-align: center;
+    padding: 8px 10px;
   }
   
   .my-tasks-list-container {

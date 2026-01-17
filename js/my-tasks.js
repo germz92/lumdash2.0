@@ -9,6 +9,8 @@
   let editingTaskId = null;
   let editingEventId = null;
   let myTasksOnly = localStorage.getItem('myTasksFilter') === 'true';
+  let statusFilter = localStorage.getItem('myTasksStatusFilter') || 'all'; // 'all', 'pending', 'completed'
+  let dueDateSort = localStorage.getItem('myTasksDueDateSort') || 'none'; // 'none', 'asc', 'desc'
 
   // Initialize the page
   window.initPage = async function() {
@@ -144,10 +146,18 @@
     
     // Apply search filter
     const searchValue = (document.getElementById('taskSearch')?.value || '').toLowerCase();
-    let filteredTasks = tasks;
+    let filteredTasks = [...tasks];
     
+    // Apply status filter
+    if (statusFilter === 'pending') {
+      filteredTasks = filteredTasks.filter(task => task.status === 'todo' || task.status === 'in-progress');
+    } else if (statusFilter === 'completed') {
+      filteredTasks = filteredTasks.filter(task => task.status === 'done');
+    }
+    
+    // Apply search filter
     if (searchValue) {
-      filteredTasks = tasks.filter(task => 
+      filteredTasks = filteredTasks.filter(task => 
         (task.task || '').toLowerCase().includes(searchValue) ||
         (task.event?.title || '').toLowerCase().includes(searchValue) ||
         (task.owner?.fullName || task.owner?.name || '').toLowerCase().includes(searchValue) ||
@@ -155,13 +165,37 @@
       );
     }
     
+    // Apply due date sorting
+    if (dueDateSort !== 'none') {
+      filteredTasks.sort((a, b) => {
+        const dateA = a.dueDate ? new Date(a.dueDate) : null;
+        const dateB = b.dueDate ? new Date(b.dueDate) : null;
+        
+        // Handle null dates - put them at the end
+        if (!dateA && !dateB) return 0;
+        if (!dateA) return 1;
+        if (!dateB) return -1;
+        
+        const diff = dateA - dateB;
+        return dueDateSort === 'asc' ? diff : -diff;
+      });
+    }
+    
     if (filteredTasks.length === 0) {
       tbody.innerHTML = '';
       if (emptyEl) {
         emptyEl.style.display = 'flex';
-        emptyEl.querySelector('p').textContent = searchValue 
-          ? 'No tasks match your search' 
-          : (myTasksOnly ? 'No tasks assigned to you' : 'No tasks found');
+        let emptyMessage = 'No tasks found';
+        if (searchValue) {
+          emptyMessage = 'No tasks match your search';
+        } else if (statusFilter === 'pending') {
+          emptyMessage = 'No pending tasks';
+        } else if (statusFilter === 'completed') {
+          emptyMessage = 'No completed tasks';
+        } else if (myTasksOnly) {
+          emptyMessage = 'No tasks assigned to you';
+        }
+        emptyEl.querySelector('p').textContent = emptyMessage;
       }
       return;
     }
@@ -182,9 +216,10 @@
     const ownerName = task.owner?.fullName || task.owner?.name || 'Unassigned';
     const statusLabel = getStatusLabel(task.status);
     const canEdit = task.canEdit || isAdmin;
+    const isOverdue = dueInfo.className === 'overdue' && task.status !== 'done';
     
     return `
-      <tr data-task-id="${task._id}" data-event-id="${task.event?._id || ''}">
+      <tr data-task-id="${task._id}" data-event-id="${task.event?._id || ''}" class="${isOverdue ? 'overdue-row' : ''}">
         <td class="col-task">
           <span class="task-name">${escapeHtml(task.task || '')}</span>
         </td>
@@ -357,6 +392,12 @@
       });
     }
     
+    // Status filter tabs
+    setupStatusFilterTabs();
+    
+    // Update sort icon on load
+    updateSortIcon();
+    
     // Close dropdowns on outside click
     document.addEventListener('click', (e) => {
       if (!e.target.closest('.inline-dropdown-trigger') && 
@@ -366,6 +407,68 @@
         closeAllDropdowns();
       }
     });
+  }
+
+  // Setup status filter tabs
+  function setupStatusFilterTabs() {
+    const tabs = document.querySelectorAll('.status-tab');
+    
+    // Set initial active state
+    tabs.forEach(tab => {
+      if (tab.dataset.status === statusFilter) {
+        tab.classList.add('active');
+      } else {
+        tab.classList.remove('active');
+      }
+      
+      tab.addEventListener('click', () => {
+        // Update active state
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        // Update filter
+        statusFilter = tab.dataset.status;
+        localStorage.setItem('myTasksStatusFilter', statusFilter);
+        
+        // Re-render
+        renderTasks();
+      });
+    });
+  }
+
+  // Toggle due date sort
+  window.toggleDueDateSort = function() {
+    // Cycle through: none -> asc -> desc -> none
+    if (dueDateSort === 'none') {
+      dueDateSort = 'asc';
+    } else if (dueDateSort === 'asc') {
+      dueDateSort = 'desc';
+    } else {
+      dueDateSort = 'none';
+    }
+    
+    localStorage.setItem('myTasksDueDateSort', dueDateSort);
+    updateSortIcon();
+    renderTasks();
+  };
+
+  // Update sort icon based on current sort state
+  function updateSortIcon() {
+    const icon = document.getElementById('dueDateSortIcon');
+    const header = document.getElementById('dueDateHeader');
+    
+    if (!icon || !header) return;
+    
+    if (dueDateSort === 'asc') {
+      icon.textContent = 'arrow_upward';
+      header.classList.add('sorted');
+    } else if (dueDateSort === 'desc') {
+      icon.textContent = 'arrow_downward';
+      header.classList.add('sorted');
+    } else {
+      icon.textContent = 'unfold_more';
+      header.classList.remove('sorted');
+    }
   }
 
   // Setup filter dropdown

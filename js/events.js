@@ -638,7 +638,9 @@ function renderEventRowDark(table, index, userId) {
     <td style="--row-accent: ${accentColor};">
       <div class="event-name-cell">
         <div class="event-name">
-          ${table.title || 'Untitled Event'}
+          <a href="#" class="event-name-link" onclick="window.navigate('general', '${table._id}'); return false;">
+            ${table.title || 'Untitled Event'}
+          </a>
           <span class="material-symbols-outlined edit-icon" onclick="event.stopPropagation(); openEditEventModal('${table._id}', this)">edit</span>
         </div>
         ${cityState ? `

@@ -236,7 +236,7 @@
           </button>
         </td>
         <td class="col-due">
-          <span class="due-date ${dueInfo.className}">${dueInfo.text}</span>
+          <span class="due-date ${isOverdue ? 'overdue' : (dueInfo.className === 'overdue' ? '' : dueInfo.className)}">${dueInfo.text}</span>
         </td>
         <td class="col-owner">
           <div class="owner-info">

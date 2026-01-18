@@ -934,7 +934,9 @@
     // Due Date column
     const dueDateCell = document.createElement('td');
     dueDateCell.className = 'col-due';
-    dueDateCell.innerHTML = `<span class="due-date ${dueInfo.className}">${dueInfo.text}</span>`;
+    // Don't show overdue styling for completed tasks
+    const dueDateClass = isOverdue ? 'overdue' : (dueInfo.className === 'overdue' ? '' : dueInfo.className);
+    dueDateCell.innerHTML = `<span class="due-date ${dueDateClass}">${dueInfo.text}</span>`;
     row.appendChild(dueDateCell);
     
     // Owner column

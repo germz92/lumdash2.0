@@ -599,6 +599,20 @@ function getTaskStatus(todos) {
   return { label: 'Not Started', class: 'not-started', icon: 'radio_button_unchecked' };
 }
 
+// Navigate to the todos page for a specific event
+function navigateToTodos(eventId) {
+  if (!eventId) return;
+  localStorage.setItem('eventId', eventId);
+  if (typeof window.navigate === 'function') {
+    window.navigate('todos', eventId);
+  } else {
+    window.location.hash = `todos?id=${eventId}`;
+  }
+}
+
+// Make it globally available
+window.navigateToTodos = navigateToTodos;
+
 function renderEventRowDark(table, index, userId) {
   const general = table.general || {};
   const accentColor = rowAccentColors[index % rowAccentColors.length];
@@ -663,7 +677,7 @@ function renderEventRowDark(table, index, userId) {
       </div>
     </td>
     <td>
-      <div class="task-status-badge ${taskStatus.class}">
+      <div class="task-status-badge ${taskStatus.class}" onclick="event.stopPropagation(); navigateToTodos('${table._id}')" style="cursor: pointer;" title="View tasks">
         <span class="material-symbols-outlined">${taskStatus.icon}</span>
         <span class="task-status-label">${taskStatus.label}</span>
       </div>

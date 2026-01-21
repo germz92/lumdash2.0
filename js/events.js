@@ -519,10 +519,11 @@ function renderCrewAvatarsDark(crewMembers, totalCount, eventId = null, unassign
   
   html += '</div>';
   
-  // Always show total crew count (assigned only)
-  if (totalCount > 0 || unassignedCount > 0) {
+  // Always show total crew count (assigned + unassigned)
+  const displayCount = totalCount + unassignedCount;
+  if (displayCount > 0) {
     html += `
-      <span class="crew-total-count">${totalCount}</span>
+      <span class="crew-total-count">${displayCount}</span>
     `;
   }
   

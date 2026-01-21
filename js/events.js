@@ -450,13 +450,13 @@ function renderCrewAvatarsDark(crewMembers, totalCount, eventId = null) {
       
       if (photo) {
         html += `
-          <div class="crew-avatar" title="${name}">
+          <div class="crew-avatar" title="${name}" onclick="event.stopPropagation(); navigateToCrew('${eventId}')" style="cursor: pointer;">
             <img src="${photo}" alt="${name}" onerror="this.parentElement.innerHTML='<span class=\\'initials\\'>${initials}</span>'">
           </div>
         `;
       } else {
         html += `
-          <div class="crew-avatar initials-avatar" title="${name}">
+          <div class="crew-avatar initials-avatar" title="${name}" onclick="event.stopPropagation(); navigateToCrew('${eventId}')" style="cursor: pointer;">
             <span class="initials">${initials}</span>
           </div>
         `;
@@ -467,7 +467,7 @@ function renderCrewAvatarsDark(crewMembers, totalCount, eventId = null) {
     const placeholderCount = hasOverflow ? maxVisible - 1 : Math.min(totalCount, maxVisible);
     for (let i = 0; i < placeholderCount; i++) {
     html += `
-      <div class="crew-avatar placeholder">
+      <div class="crew-avatar placeholder" onclick="event.stopPropagation(); navigateToCrew('${eventId}')" style="cursor: pointer;">
           <span class="material-symbols-outlined avatar-icon">person</span>
       </div>
     `;
@@ -610,8 +610,20 @@ function navigateToTodos(eventId) {
   }
 }
 
-// Make it globally available
+// Navigate to the crew page for a specific event
+function navigateToCrew(eventId) {
+  if (!eventId) return;
+  localStorage.setItem('eventId', eventId);
+  if (typeof window.navigate === 'function') {
+    window.navigate('crew', eventId);
+  } else {
+    window.location.hash = `crew?id=${eventId}`;
+  }
+}
+
+// Make them globally available
 window.navigateToTodos = navigateToTodos;
+window.navigateToCrew = navigateToCrew;
 
 function renderEventRowDark(table, index, userId) {
   const general = table.general || {};

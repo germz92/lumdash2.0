@@ -430,53 +430,60 @@ function getInitials(name) {
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
 }
 
-function renderCrewAvatarsDark(crewMembers, totalCount, eventId = null) {
+function renderCrewAvatarsDark(crewMembers, totalCount, eventId = null, unassignedCount = 0) {
   const maxVisible = 4;
   const crewArray = Array.isArray(crewMembers) ? crewMembers : [];
-  const hasOverflow = totalCount > maxVisible;
-  // If overflow, show 3 avatars + overflow indicator; otherwise show up to 4
-  const avatarsToShow = hasOverflow ? Math.min(crewArray.length, maxVisible - 1) : Math.min(crewArray.length, maxVisible);
-  const overflow = totalCount - avatarsToShow;
+  
+  // Calculate total items to show (assigned crew + unassigned positions)
+  const totalItems = crewArray.length + unassignedCount;
+  const hasOverflow = totalItems > maxVisible;
+  
+  // Determine how many slots we have for avatars (leave room for +N if overflow)
+  const maxAvatarSlots = hasOverflow ? maxVisible - 1 : maxVisible;
+  
+  // Show assigned crew first, then fill remaining slots with unassigned
+  const assignedToShow = Math.min(crewArray.length, maxAvatarSlots);
+  const remainingSlots = maxAvatarSlots - assignedToShow;
+  const unassignedToShow = Math.min(unassignedCount, remainingSlots);
+  
+  const overflow = totalItems - assignedToShow - unassignedToShow;
   
   let html = '<div class="avatar-stack">';
   
-  // Show actual crew members if available
-  if (crewArray.length > 0) {
-    for (let i = 0; i < avatarsToShow; i++) {
-      const member = crewArray[i];
-      const name = member?.name || member?.fullName || member?.email || 'Crew';
-      const photo = member?.photo || member?.avatar || member?.profileImage;
-      const initials = getInitials(name);
-      
-      if (photo) {
-        html += `
-          <div class="crew-avatar" title="${name}" onclick="event.stopPropagation(); navigateToCrew('${eventId}')" style="cursor: pointer;">
-            <img src="${photo}" alt="${name}" onerror="this.parentElement.innerHTML='<span class=\\'initials\\'>${initials}</span>'">
-          </div>
-        `;
-      } else {
-        html += `
-          <div class="crew-avatar initials-avatar" title="${name}" onclick="event.stopPropagation(); navigateToCrew('${eventId}')" style="cursor: pointer;">
-            <span class="initials">${initials}</span>
-          </div>
-        `;
-      }
+  // Show assigned crew members first
+  for (let i = 0; i < assignedToShow; i++) {
+    const member = crewArray[i];
+    const name = member?.name || member?.fullName || member?.email || 'Crew';
+    const photo = member?.photo || member?.avatar || member?.profileImage;
+    const initials = getInitials(name);
+    
+    if (photo) {
+      html += `
+        <div class="crew-avatar" title="${name}" onclick="event.stopPropagation(); navigateToCrew('${eventId}')" style="cursor: pointer;">
+          <img src="${photo}" alt="${name}" onerror="this.parentElement.innerHTML='<span class=\\'initials\\'>${initials}</span>'">
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="crew-avatar initials-avatar" title="${name}" onclick="event.stopPropagation(); navigateToCrew('${eventId}')" style="cursor: pointer;">
+          <span class="initials">${initials}</span>
+        </div>
+      `;
     }
-  } else if (totalCount > 0) {
-    // No crew member details, just show placeholders based on count
-    const placeholderCount = hasOverflow ? maxVisible - 1 : Math.min(totalCount, maxVisible);
-    for (let i = 0; i < placeholderCount; i++) {
+  }
+  
+  // Show unassigned position placeholders (red avatars)
+  for (let i = 0; i < unassignedToShow; i++) {
     html += `
-      <div class="crew-avatar placeholder" onclick="event.stopPropagation(); navigateToCrew('${eventId}')" style="cursor: pointer;">
-          <span class="material-symbols-outlined avatar-icon">person</span>
+      <div class="crew-avatar unassigned-avatar" title="Unassigned position" onclick="event.stopPropagation(); navigateToCrew('${eventId}')" style="cursor: pointer;">
+        <span class="material-symbols-outlined avatar-icon">person</span>
       </div>
     `;
-  }
   }
   
   // Show +N overflow indicator as part of the avatar stack
   if (hasOverflow && overflow > 0) {
-    // Build crew list for the expanded view
+    // Build crew list for the expanded view (including unassigned)
     const crewListItems = crewArray.map(member => {
       const name = member?.name || member?.fullName || member?.email || 'Crew';
       const initials = getInitials(name);
@@ -487,13 +494,19 @@ function renderCrewAvatarsDark(crewMembers, totalCount, eventId = null) {
       return `<div class="crew-list-item"><div class="crew-list-avatar">${avatarHtml}</div><span class="crew-list-name">${name}</span></div>`;
     }).join('');
     
+    // Add unassigned to the list
+    let unassignedListItems = '';
+    for (let i = 0; i < unassignedCount; i++) {
+      unassignedListItems += `<div class="crew-list-item unassigned-list-item"><div class="crew-list-avatar unassigned"><span class="material-symbols-outlined">person</span></div><span class="crew-list-name">Unassigned</span></div>`;
+    }
+    
     html += `
-      <div class="crew-avatar overflow-count crew-expand-trigger" data-crew-count="${totalCount}">
+      <div class="crew-avatar overflow-count crew-expand-trigger" data-crew-count="${totalItems}">
         +${overflow}
         <div class="crew-expanded-view">
-          <div class="crew-expanded-header">Crew Members (${totalCount})</div>
-          <div class="crew-expanded-list-wrapper ${totalCount > 5 ? 'has-scroll' : ''}">
-            <div class="crew-expanded-list">${crewListItems}</div>
+          <div class="crew-expanded-header">Crew Members (${totalCount})${unassignedCount > 0 ? ` <span class="unassigned-header-count">+ ${unassignedCount} unassigned</span>` : ''}</div>
+          <div class="crew-expanded-list-wrapper ${totalItems > 5 ? 'has-scroll' : ''}">
+            <div class="crew-expanded-list">${crewListItems}${unassignedListItems}</div>
           </div>
           <button class="crew-view-all-btn" onclick="event.stopPropagation(); ${eventId ? `window.navigate && window.navigate('crew', '${eventId}');` : `window.location.href = '/pages/crew-planner.html';`}">
             <span class="material-symbols-outlined">group</span>
@@ -506,8 +519,8 @@ function renderCrewAvatarsDark(crewMembers, totalCount, eventId = null) {
   
   html += '</div>';
   
-  // Always show total crew count
-  if (totalCount > 0) {
+  // Always show total crew count (assigned only)
+  if (totalCount > 0 || unassignedCount > 0) {
     html += `
       <span class="crew-total-count">${totalCount}</span>
     `;
@@ -635,6 +648,15 @@ function renderEventRowDark(table, index, userId) {
   const crewMembers = uniqueCrewNames.map(name => ({ name }));
   const crewCount = crewMembers.length;
   
+  // Count unassigned positions (rows with a real role but no name assigned)
+  // Exclude placeholder rows (role === '__placeholder__') and empty roles
+  const unassignedCount = rows.filter(r => {
+    const role = r.role && r.role.trim();
+    const hasRealRole = role && role !== '__placeholder__';
+    const hasName = r.name && r.name.trim();
+    return hasRealRole && !hasName;
+  }).length;
+  
   const dateStr = formatDateRangeDark(general.start, general.end);
   
   // Check if current user is owner (handle both populated and unpopulated owners)
@@ -685,7 +707,7 @@ function renderEventRowDark(table, index, userId) {
     </td>
     <td>
       <div class="crew-avatars">
-        ${renderCrewAvatarsDark(crewMembers, crewCount, table._id)}
+        ${renderCrewAvatarsDark(crewMembers, crewCount, table._id, unassignedCount)}
       </div>
     </td>
     <td>

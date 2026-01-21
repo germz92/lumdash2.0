@@ -1522,6 +1522,45 @@ body:has(.events-page) {
   font-size: 16px;
 }
 
+/* Unassigned crew position avatar (red placeholder) */
+.crew-avatar.unassigned-avatar {
+  background: linear-gradient(135deg, #dc3545 0%, #b02a37 100%);
+  border: 2px solid var(--surface-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.crew-avatar.unassigned-avatar .avatar-icon {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.crew-avatar.unassigned-avatar:hover {
+  background: linear-gradient(135deg, #e04555 0%, #c82333 100%);
+}
+
+/* Unassigned items in expanded crew list */
+.crew-list-item.unassigned-list-item .crew-list-name {
+  color: #dc3545;
+  font-style: italic;
+}
+
+.crew-list-avatar.unassigned {
+  background: linear-gradient(135deg, #dc3545 0%, #b02a37 100%);
+}
+
+.crew-list-avatar.unassigned .material-symbols-outlined {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.unassigned-header-count {
+  color: #dc3545;
+  font-size: 11px;
+  font-weight: 500;
+}
+
 .crew-count {
   display: inline-flex;
   align-items: center;

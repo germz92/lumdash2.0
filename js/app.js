@@ -730,6 +730,21 @@ window.setupBottomNavigation = setupBottomNavigation;
 window.parseHash = parseHash;
 window.getTableId = getTableId;
 
+// Parse date string as local date to avoid timezone shifts
+function parseLocalDateApp(dateStr) {
+  if (!dateStr) return null;
+  // Handle ISO date strings like "2026-01-15" or "2026-01-15T00:00:00.000Z"
+  const str = String(dateStr);
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [, year, month, day] = match;
+    // Create date in local timezone at midnight
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0);
+  }
+  // Fallback to regular parsing
+  return new Date(dateStr);
+}
+
 /**
  * Populate sidebar event info section with event name, location, and dates
  * Called from each event page's initPage function
@@ -761,11 +776,11 @@ async function populateSidebarEventInfo() {
     const table = await res.json();
     const general = table.general || {};
     
-    // Format the date range
+    // Format the date range (using parseLocalDateApp to avoid timezone shifts)
     let dateDisplay = '';
     if (general.start && general.end) {
-      const startDate = new Date(general.start);
-      const endDate = new Date(general.end);
+      const startDate = parseLocalDateApp(general.start);
+      const endDate = parseLocalDateApp(general.end);
       const options = { month: 'short', day: 'numeric' };
       
       if (startDate.toDateString() === endDate.toDateString()) {
@@ -776,7 +791,7 @@ async function populateSidebarEventInfo() {
         dateDisplay = `${startDate.toLocaleDateString('en-US', { ...options, year: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { ...options, year: 'numeric' })}`;
       }
     } else if (general.start) {
-      dateDisplay = new Date(general.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      dateDisplay = parseLocalDateApp(general.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
     }
     
     // Format location

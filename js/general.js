@@ -16,17 +16,32 @@ function isDarkTheme() {
   return document.querySelector('.dark-theme.general-page') !== null;
 }
 
+// Parse date string as local date to avoid timezone shifts
+function parseLocalDate(dateStr) {
+  if (!dateStr) return null;
+  // Handle ISO date strings like "2026-01-15" or "2026-01-15T00:00:00.000Z"
+  const str = String(dateStr);
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [, year, month, day] = match;
+    // Create date in local timezone at midnight
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0);
+  }
+  // Fallback to regular parsing
+  return new Date(dateStr);
+}
+
 function formatDate(dateStr) {
   if (!dateStr) return '';
-  const date = new Date(dateStr);
+  const date = parseLocalDate(dateStr);
   const options = { month: 'short', day: 'numeric', year: 'numeric' };
   return date.toLocaleDateString('en-US', options);
 }
 
 function formatDateRange(start, end) {
   if (!start) return 'Dates not set';
-  const startDate = new Date(start);
-  const endDate = end ? new Date(end) : null;
+  const startDate = parseLocalDate(start);
+  const endDate = end ? parseLocalDate(end) : null;
   
   const startMonth = startDate.toLocaleDateString('en-US', { month: 'short' });
   const startDay = startDate.getDate();

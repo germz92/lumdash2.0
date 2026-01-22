@@ -36,6 +36,15 @@ const passengerSchema = new mongoose.Schema({
     default: '',
     trim: true
   },
+  passportNumber: {
+    type: String,
+    default: '',
+    trim: true
+  },
+  passportExpiration: {
+    type: Date,
+    default: null
+  },
   
   // Loyalty programs (can have multiple)
   rewardsNumbers: [{

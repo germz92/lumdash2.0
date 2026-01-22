@@ -82,8 +82,14 @@
       <!-- Booked Flights Section -->
       <section class="flights-section">
         <div class="section-header">
-          <h2>Booked Flights</h2>
-          <span class="section-count" id="bookedCount">0 Flights</span>
+          <div class="section-header-left">
+            <h2>Booked Flights</h2>
+            <span class="section-count" id="bookedCount">0 Flights</span>
+          </div>
+          <button class="btn-create-booking" id="createBookingBtn">
+            <span class="material-symbols-outlined">airplane_ticket</span>
+            Create Booking
+          </button>
         </div>
         <div class="flights-toolbar">
           <div class="search-box">
@@ -164,11 +170,23 @@
             </div>
 
             <!-- Time Preference -->
-            <div class="form-row half-row">
+            <div class="form-row">
               <div class="form-group">
-                <label>Time</label>
+                <label>Depart Time Preferred</label>
                 <div class="select-wrapper">
                   <select id="departTimePreference">
+                    <option value="any">Any</option>
+                    <option value="morning">Morning (5am-12pm)</option>
+                    <option value="afternoon">Afternoon (12pm-5pm)</option>
+                    <option value="evening">Evening (5pm-10pm)</option>
+                    <option value="redeye">Red-eye (10pm-5am)</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-group" id="returnTimePreferenceGroup">
+                <label>Return Time Preferred</label>
+                <div class="select-wrapper">
+                  <select id="returnTimePreference">
                     <option value="any">Any</option>
                     <option value="morning">Morning (5am-12pm)</option>
                     <option value="afternoon">Afternoon (12pm-5pm)</option>
@@ -219,6 +237,164 @@
       </div>
     </div>
 
+    <!-- Create Booking Modal -->
+    <div class="dark-modal" id="createBookingModal">
+      <div class="dark-modal-content create-booking-modal">
+        <div class="modal-header">
+          <h2>Create Booking</h2>
+          <button class="modal-close-btn" id="closeCreateBookingModal">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="createBookingForm">
+            <!-- Trip Type Toggle -->
+            <div class="trip-type-toggle">
+              <label class="radio-option">
+                <input type="radio" name="bookingTripType" value="roundtrip" checked>
+                <span class="radio-custom"></span>
+                <span class="radio-label">Roundtrip</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="bookingTripType" value="oneway">
+                <span class="radio-custom"></span>
+                <span class="radio-label">One-way</span>
+              </label>
+            </div>
+
+            <!-- Event Name -->
+            <div class="form-group">
+              <label>Event Name</label>
+              <input type="text" id="bookingEventName" placeholder="Search events..." autocomplete="off">
+              <div class="event-suggestions" id="bookingEventSuggestions"></div>
+            </div>
+
+            <!-- From / To -->
+            <div class="form-row">
+              <div class="form-group">
+                <label>From</label>
+                <input type="text" id="bookingFromAirport" placeholder="Search airport or city..." autocomplete="off">
+                <div class="airport-suggestions" id="bookingFromSuggestions"></div>
+              </div>
+              <div class="form-group">
+                <label>To</label>
+                <input type="text" id="bookingToAirport" placeholder="Search airport or city..." autocomplete="off">
+                <div class="airport-suggestions" id="bookingToSuggestions"></div>
+              </div>
+            </div>
+
+            <!-- Booking Details Header -->
+            <div class="form-section-header">
+              <span class="material-symbols-outlined">confirmation_number</span>
+              <h3>Booking Information</h3>
+            </div>
+
+            <!-- Confirmation & Airline -->
+            <div class="form-row">
+              <div class="form-group">
+                <label>Confirmation Number *</label>
+                <input type="text" id="bookingConfirmationNumber" placeholder="e.g., ABC123" required>
+              </div>
+              <div class="form-group">
+                <label>Airline</label>
+                <input type="text" id="bookingAirlineName" placeholder="e.g., Delta, United">
+              </div>
+            </div>
+
+            <!-- Outbound Flight Section -->
+            <div class="booking-flight-section">
+              <div class="section-title">
+                <span class="material-symbols-outlined">flight_takeoff</span>
+                <h3>Outbound Flight</h3>
+              </div>
+              
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Depart Date *</label>
+                  <input type="date" id="bookingDepartDate" required>
+                </div>
+                <div class="form-group">
+                  <label>Flight Number</label>
+                  <input type="text" id="bookingOutboundFlightNumber" placeholder="e.g., DL1234">
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Depart Time</label>
+                  <input type="time" id="bookingDepartTime">
+                </div>
+                <div class="form-group">
+                  <label>Arrive Time</label>
+                  <input type="time" id="bookingArriveTime">
+                </div>
+              </div>
+            </div>
+
+            <!-- Return Flight Section -->
+            <div class="booking-flight-section" id="bookingReturnFlightSection">
+              <div class="section-title">
+                <span class="material-symbols-outlined">flight_land</span>
+                <h3>Return Flight</h3>
+              </div>
+              
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Return Date *</label>
+                  <input type="date" id="bookingReturnDate">
+                </div>
+                <div class="form-group">
+                  <label>Flight Number</label>
+                  <input type="text" id="bookingReturnFlightNumber" placeholder="e.g., DL5678">
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Depart Time</label>
+                  <input type="time" id="bookingReturnDepartTime">
+                </div>
+                <div class="form-group">
+                  <label>Arrive Time</label>
+                  <input type="time" id="bookingReturnArriveTime">
+                </div>
+              </div>
+            </div>
+
+            <!-- Passengers Section -->
+            <div class="form-section">
+              <label class="section-label">Passengers *</label>
+              <div class="passenger-select-row">
+                <div class="select-wrapper passenger-select">
+                  <select id="bookingPassengerSelect">
+                    <option value="">Select passenger...</option>
+                  </select>
+                </div>
+                <button type="button" class="btn-add-passenger" id="bookingAddPassengerBtn">
+                  <span class="material-symbols-outlined">add</span>
+                  Add Passenger
+                </button>
+              </div>
+              <div class="selected-passengers" id="bookingSelectedPassengers">
+                <!-- Selected passengers will appear here -->
+              </div>
+            </div>
+
+            <!-- Notes -->
+            <div class="form-group">
+              <label>Notes</label>
+              <textarea id="bookingNotes" rows="2" placeholder="Add any notes about this booking..."></textarea>
+            </div>
+
+            <div class="modal-actions">
+              <button type="button" class="btn-cancel" id="cancelCreateBookingBtn">Cancel</button>
+              <button type="submit" class="btn-submit">Create Booking</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
     <!-- View/Edit Request Modal -->
     <div class="dark-modal" id="viewRequestModal">
       <div class="dark-modal-content view-request-modal">
@@ -241,6 +417,29 @@
               <input type="text" id="viewEventName" placeholder="Event Name">
             </div>
 
+            <!-- Route Display -->
+            <div class="view-route-display" id="viewRouteDisplay">
+              <div class="route-info">
+                <div class="route-airport from">
+                  <span class="airport-label">From</span>
+                  <div class="airport-details">
+                    <span class="airport-code" id="viewFromCode">---</span>
+                    <span class="airport-city" id="viewFromCity">Select airport</span>
+                  </div>
+                </div>
+                <div class="route-arrow-icon">
+                  <span class="material-symbols-outlined">flight_takeoff</span>
+                </div>
+                <div class="route-airport to">
+                  <span class="airport-label">To</span>
+                  <div class="airport-details">
+                    <span class="airport-code" id="viewToCode">---</span>
+                    <span class="airport-city" id="viewToCity">Select airport</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <!-- Dates and Times -->
             <div class="form-row">
               <div class="form-group">
@@ -251,10 +450,10 @@
                   <div class="select-wrapper compact">
                     <select id="viewDepartTimePreference">
                       <option value="any">Any</option>
-                      <option value="morning">Morning</option>
-                      <option value="afternoon">Afternoon</option>
-                      <option value="evening">Evening</option>
-                      <option value="redeye">Red-eye</option>
+                      <option value="morning">Morning (5am-12pm)</option>
+                      <option value="afternoon">Afternoon (12pm-5pm)</option>
+                      <option value="evening">Evening (5pm-10pm)</option>
+                      <option value="redeye">Red-eye (10pm-5am)</option>
                     </select>
                   </div>
                 </div>
@@ -267,10 +466,10 @@
                   <div class="select-wrapper compact">
                     <select id="viewReturnTimePreference">
                       <option value="any">Any</option>
-                      <option value="morning">Morning</option>
-                      <option value="afternoon">Afternoon</option>
-                      <option value="evening">Evening</option>
-                      <option value="redeye">Red-eye</option>
+                      <option value="morning">Morning (5am-12pm)</option>
+                      <option value="afternoon">Afternoon (12pm-5pm)</option>
+                      <option value="evening">Evening (5pm-10pm)</option>
+                      <option value="redeye">Red-eye (10pm-5am)</option>
                     </select>
                   </div>
                 </div>
@@ -312,7 +511,7 @@
               <div class="booking-form">
                 <div class="form-group">
                   <label>Confirmation Number *</label>
-                  <input type="text" id="bookingConfirmation" placeholder="e.g., ABC123" required>
+                  <input type="text" id="bookingConfirmation" placeholder="e.g., ABC123">
                 </div>
                 <div class="form-group">
                   <label>Airline</label>
@@ -603,12 +802,28 @@
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label>Rewards Number</label>
-                <input type="text" id="newPassengerRewards">
-              </div>
-              <div class="form-group">
                 <label>KTN (Known Traveler Number)</label>
                 <input type="text" id="newPassengerKtn">
+              </div>
+              <div class="form-group">
+                <label>Passport Number</label>
+                <input type="text" id="newPassengerPassport">
+              </div>
+              <div class="form-group">
+                <label>Passport Expiration</label>
+                <input type="date" id="newPassengerPassportExp">
+              </div>
+            </div>
+            <div class="form-section">
+              <div class="section-header-with-button">
+                <label class="section-label">Airline Rewards</label>
+                <button type="button" class="btn-add-rewards" id="addNewPassengerRewards">
+                  <span class="material-symbols-outlined">add</span>
+                  Add Rewards
+                </button>
+              </div>
+              <div class="rewards-list" id="newPassengerRewardsList">
+                <!-- Rewards entries will be rendered here -->
               </div>
             </div>
             <div class="form-group">
@@ -652,6 +867,7 @@
                   <th>Linked User</th>
                   <th>Rewards #</th>
                   <th>KTN</th>
+                  <th>Passport</th>
                   <th>Actions</th>
                 </tr>
               </thead>
@@ -721,12 +937,28 @@
             </div>
             <div class="form-row">
               <div class="form-group">
-                <label>Rewards Number</label>
-                <input type="text" id="editPassengerRewards">
-              </div>
-              <div class="form-group">
                 <label>KTN (Known Traveler Number)</label>
                 <input type="text" id="editPassengerKtn">
+              </div>
+              <div class="form-group">
+                <label>Passport Number</label>
+                <input type="text" id="editPassengerPassport">
+              </div>
+              <div class="form-group">
+                <label>Passport Expiration</label>
+                <input type="date" id="editPassengerPassportExp">
+              </div>
+            </div>
+            <div class="form-section">
+              <div class="section-header-with-button">
+                <label class="section-label">Airline Rewards</label>
+                <button type="button" class="btn-add-rewards" id="addEditPassengerRewards">
+                  <span class="material-symbols-outlined">add</span>
+                  Add Rewards
+                </button>
+              </div>
+              <div class="rewards-list" id="editPassengerRewardsList">
+                <!-- Rewards entries will be rendered here -->
               </div>
             </div>
             <div class="form-group">

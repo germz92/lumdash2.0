@@ -9,12 +9,14 @@ let currentTableId = null;
 let showArchived = false;
 let statusFilter = localStorage.getItem('eventsStatusFilter') || 'active'; // 'active', 'archived', or 'all'
 let ownerFilter = localStorage.getItem('eventsOwnerFilter') || 'all'; // 'all', 'mine', or a specific owner ID
+let clientFilter = null; // null means no filter, otherwise it's the client name
 let searchEventsValue = '';
 let dateFilterStart = null;
 let dateFilterEnd = null;
 let sortField = localStorage.getItem('eventsSortField') || 'date'; // 'name' or 'date'
 let sortOrder = localStorage.getItem('eventsSortOrder') || 'asc'; // 'asc' or 'desc'
 let allOwners = []; // Store unique owners for the dropdown
+let allClients = []; // Store unique client names for the dropdown
 let allUsers = [];
 let selectedUsers = [];
 let isInitialLoad = true; // Track if this is the first load to auto-switch to Live tab
@@ -172,9 +174,29 @@ window.showConfirm = showConfirm;
 function showCreateModal() {
   const modal = document.getElementById('createModal');
   if (modal) {
+    // Populate client datalist with existing clients
+    populateClientDatalist();
+    
     modal.classList.add('show');
     document.body.style.overflow = 'hidden';
   }
+}
+
+function populateClientDatalist() {
+  const datalist = document.getElementById('clientDatalist');
+  if (!datalist) return;
+  
+  // Clear existing options
+  datalist.innerHTML = '';
+  
+  // Add each unique client
+  allClients.forEach(client => {
+    if (client && client.trim()) {
+      const option = document.createElement('option');
+      option.value = client;
+      datalist.appendChild(option);
+    }
+  });
 }
 
 function hideCreateModal() {
@@ -1023,6 +1045,16 @@ async function loadTables(forceRefresh = false) {
   }
   // 'all' shows everything
 
+  // Extract unique clients for the dropdown (before filtering)
+  const clientSet = new Set();
+  tables.forEach(table => {
+    const client = table.general?.client;
+    if (client && client.trim()) {
+      clientSet.add(client.trim());
+    }
+  });
+  allClients = Array.from(clientSet).sort();
+
   // Filter by owner selection
   if (ownerFilter === 'mine') {
     const userId = getUserIdFromToken();
@@ -1040,6 +1072,14 @@ async function loadTables(forceRefresh = false) {
         (typeof owner === 'string' && owner === ownerFilter) || 
         (owner && owner._id && owner._id.toString() === ownerFilter)
       );
+    });
+  }
+
+  // Filter by client selection
+  if (clientFilter) {
+    filteredTables = filteredTables.filter(table => {
+      const client = table.general?.client || '';
+      return client === clientFilter;
     });
   }
 
@@ -3687,6 +3727,70 @@ function showMessage(message, type = 'info') {
 }
 
 // ========= END ADD TO CALENDAR FUNCTIONALITY =========
+
+// ========================================
+// CLIENT FILTERING FUNCTIONALITY
+// ========================================
+
+function filterByClient(clientName) {
+  console.log('Filtering by client:', clientName);
+  
+  if (!clientName) {
+    // Clear filter if no client name provided
+    clientFilter = null;
+  } else {
+    clientFilter = clientName;
+  }
+  
+  // Update UI to show active filter
+  updateClientFilterDisplay();
+  
+  // Reload events with filter applied
+  loadTables();
+}
+
+function clearClientFilter() {
+  clientFilter = null;
+  updateClientFilterDisplay();
+  loadTables();
+}
+
+function updateClientFilterDisplay() {
+  const headerFilters = document.querySelector('.events-filters');
+  if (!headerFilters) return;
+  
+  // Remove existing client filter badge if any
+  const existingBadge = document.getElementById('clientFilterBadge');
+  if (existingBadge) {
+    existingBadge.remove();
+  }
+  
+  // Add new badge if filter is active
+  if (clientFilter) {
+    const badge = document.createElement('div');
+    badge.id = 'clientFilterBadge';
+    badge.className = 'filter-badge';
+    badge.innerHTML = `
+      <span class="material-symbols-outlined">business</span>
+      <span>${clientFilter}</span>
+      <button onclick="clearClientFilter(); event.stopPropagation();" title="Clear client filter">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    `;
+    
+    // Insert before the create event button
+    const createBtn = document.getElementById('createEventBtn');
+    if (createBtn) {
+      headerFilters.insertBefore(badge, createBtn);
+    } else {
+      headerFilters.appendChild(badge);
+    }
+  }
+}
+
+// Make functions globally available
+window.filterByClient = filterByClient;
+window.clearClientFilter = clearClientFilter;
 
 })();
 

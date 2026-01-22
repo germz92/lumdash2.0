@@ -19,6 +19,9 @@
   let editBookedSelectedPassengers = []; // For edit booked modal
   let currentEditingRequest = null;
   let currentEditingPassenger = null;
+  let newPassengerRewards = []; // For add passenger modal
+  let editPassengerRewards = []; // For edit passenger modal
+  let bookingSelectedPassengers = []; // For create booking modal
 
   // Debounce utility for search
   function debounce(func, wait) {
@@ -64,6 +67,8 @@
     returnDate: document.getElementById('returnDate'),
     returnDateGroup: document.getElementById('returnDateGroup'),
     departTimePreference: document.getElementById('departTimePreference'),
+    returnTimePreference: document.getElementById('returnTimePreference'),
+    returnTimePreferenceGroup: document.getElementById('returnTimePreferenceGroup'),
     passengerSelect: document.getElementById('passengerSelect'),
     addPassengerBtn: document.getElementById('addPassengerBtn'),
     selectedPassengers: document.getElementById('selectedPassengers'),
@@ -121,7 +126,24 @@
     editPassengerModal: document.getElementById('editPassengerModal'),
     closeEditPassengerModal: document.getElementById('closeEditPassengerModal'),
     editPassengerForm: document.getElementById('editPassengerForm'),
-    cancelEditPassengerBtn: document.getElementById('cancelEditPassengerBtn')
+    cancelEditPassengerBtn: document.getElementById('cancelEditPassengerBtn'),
+
+    // Create Booking Modal
+    createBookingBtn: document.getElementById('createBookingBtn'),
+    createBookingModal: document.getElementById('createBookingModal'),
+    closeCreateBookingModal: document.getElementById('closeCreateBookingModal'),
+    createBookingForm: document.getElementById('createBookingForm'),
+    cancelCreateBookingBtn: document.getElementById('cancelCreateBookingBtn'),
+    bookingFromAirport: document.getElementById('bookingFromAirport'),
+    bookingToAirport: document.getElementById('bookingToAirport'),
+    bookingFromSuggestions: document.getElementById('bookingFromSuggestions'),
+    bookingToSuggestions: document.getElementById('bookingToSuggestions'),
+    bookingEventName: document.getElementById('bookingEventName'),
+    bookingEventSuggestions: document.getElementById('bookingEventSuggestions'),
+    bookingPassengerSelect: document.getElementById('bookingPassengerSelect'),
+    bookingAddPassengerBtn: document.getElementById('bookingAddPassengerBtn'),
+    bookingSelectedPassengers: document.getElementById('bookingSelectedPassengers'),
+    bookingReturnFlightSection: document.getElementById('bookingReturnFlightSection')
   };
 
   /**
@@ -389,6 +411,35 @@
     elements.editPassengerForm?.addEventListener('submit', handleSavePassenger);
     document.getElementById('deletePassengerBtn')?.addEventListener('click', handleDeletePassenger);
 
+    // Rewards management
+    document.getElementById('addNewPassengerRewards')?.addEventListener('click', () => addRewardsEntry('new'));
+    document.getElementById('addEditPassengerRewards')?.addEventListener('click', () => addRewardsEntry('edit'));
+
+    // Create Booking Modal
+    elements.createBookingBtn?.addEventListener('click', openCreateBookingModal);
+    elements.closeCreateBookingModal?.addEventListener('click', closeCreateBookingModal);
+    elements.cancelCreateBookingBtn?.addEventListener('click', closeCreateBookingModal);
+    elements.createBookingModal?.addEventListener('click', (e) => {
+      if (e.target === elements.createBookingModal) closeCreateBookingModal();
+    });
+    elements.createBookingForm?.addEventListener('submit', handleCreateBooking);
+
+    // Booking trip type toggle
+    document.querySelectorAll('input[name="bookingTripType"]').forEach(radio => {
+      radio.addEventListener('change', handleBookingTripTypeChange);
+    });
+
+    // Booking airport search inputs
+    elements.bookingFromAirport?.addEventListener('input', (e) => handleAirportSearch(e, 'bookingFrom'));
+    elements.bookingToAirport?.addEventListener('input', (e) => handleAirportSearch(e, 'bookingTo'));
+
+    // Booking event name search
+    elements.bookingEventName?.addEventListener('input', handleBookingEventSearch);
+
+    // Booking add passenger from dropdown
+    elements.bookingPassengerSelect?.addEventListener('change', handleBookingPassengerSelect);
+    elements.bookingAddPassengerBtn?.addEventListener('click', openAddPassengerModal);
+
     // Close suggestions on click outside
     document.addEventListener('click', (e) => {
       if (!e.target.closest('.form-group')) {
@@ -400,6 +451,10 @@
         elements.editBookedToSuggestions?.classList.remove('show');
         elements.editBookedReturnFromSuggestions?.classList.remove('show');
         elements.editBookedReturnToSuggestions?.classList.remove('show');
+        // Also close booking modal suggestions
+        elements.bookingFromSuggestions?.classList.remove('show');
+        elements.bookingToSuggestions?.classList.remove('show');
+        elements.bookingEventSuggestions?.classList.remove('show');
       }
     });
   }
@@ -692,9 +747,9 @@
       <div class="flight-card-body">
         
         <div class="flight-info-row">
-          <div class="flight-info-label">Depart</div>
           <div class="flight-dates">
             <div class="flight-date-info">
+              <span class="date-label">Depart</span>
               <span class="date-value">${departDisplay}</span>
             </div>
             ${returnDisplay ? `
@@ -948,6 +1003,9 @@
     // Set default trip type
     document.querySelector('input[name="tripType"][value="roundtrip"]').checked = true;
     elements.returnDateGroup.style.display = 'block';
+    if (elements.returnTimePreferenceGroup) {
+      elements.returnTimePreferenceGroup.style.display = 'block';
+    }
   }
 
   /**
@@ -987,6 +1045,249 @@
   function handleTripTypeChange(e) {
     const isRoundtrip = e.target.value === 'roundtrip';
     elements.returnDateGroup.style.display = isRoundtrip ? 'block' : 'none';
+    if (elements.returnTimePreferenceGroup) {
+      elements.returnTimePreferenceGroup.style.display = isRoundtrip ? 'block' : 'none';
+    }
+  }
+
+  /**
+   * Open create booking modal
+   */
+  function openCreateBookingModal() {
+    elements.createBookingModal?.classList.add('show');
+    bookingSelectedPassengers = [];
+    renderBookingSelectedPassengers();
+    
+    // Reset form
+    elements.createBookingForm?.reset();
+    
+    // Set default trip type
+    document.querySelector('input[name="bookingTripType"][value="roundtrip"]').checked = true;
+    if (elements.bookingReturnFlightSection) {
+      elements.bookingReturnFlightSection.style.display = 'block';
+    }
+    
+    // Populate passenger dropdown
+    populateBookingPassengerDropdown();
+  }
+
+  /**
+   * Close create booking modal
+   */
+  function closeCreateBookingModal() {
+    elements.createBookingModal?.classList.remove('show');
+    bookingSelectedPassengers = [];
+    elements.createBookingForm?.reset();
+    elements.bookingSelectedPassengers.innerHTML = '';
+    
+    // Clear airport input datasets
+    if (elements.bookingFromAirport) {
+      delete elements.bookingFromAirport.dataset.code;
+      delete elements.bookingFromAirport.dataset.city;
+      delete elements.bookingFromAirport.dataset.state;
+      delete elements.bookingFromAirport.dataset.name;
+    }
+    if (elements.bookingToAirport) {
+      delete elements.bookingToAirport.dataset.code;
+      delete elements.bookingToAirport.dataset.city;
+      delete elements.bookingToAirport.dataset.state;
+      delete elements.bookingToAirport.dataset.name;
+    }
+    // Clear event name dataset
+    if (elements.bookingEventName) {
+      delete elements.bookingEventName.dataset.eventId;
+    }
+  }
+
+  /**
+   * Handle booking trip type change
+   */
+  function handleBookingTripTypeChange(e) {
+    const isRoundtrip = e.target.value === 'roundtrip';
+    if (elements.bookingReturnFlightSection) {
+      elements.bookingReturnFlightSection.style.display = isRoundtrip ? 'block' : 'none';
+    }
+  }
+
+  /**
+   * Handle booking event search
+   */
+  async function handleBookingEventSearch(e) {
+    const value = e.target.value;
+
+    if (value.length < 2) {
+      elements.bookingEventSuggestions?.classList.remove('show');
+      return;
+    }
+
+    try {
+      const events = await apiRequest(`/api/flights/events/search?q=${encodeURIComponent(value)}`);
+      
+      if (events.length === 0) {
+        elements.bookingEventSuggestions?.classList.remove('show');
+        return;
+      }
+
+      elements.bookingEventSuggestions.innerHTML = events.map(event => {
+        const startDate = event.general?.startDate ? formatDateDisplay(event.general.startDate) : '';
+        const endDate = event.general?.endDate ? formatDateDisplay(event.general.endDate) : '';
+        const dateRange = startDate && endDate ? `${startDate} - ${endDate}` : startDate || '';
+        
+        return `
+          <div class="suggestion-item" data-event-id="${event._id}" data-event-name="${event.title}">
+            <span class="event-title">${event.title}</span>
+            <span class="event-date">${dateRange}</span>
+          </div>
+        `;
+      }).join('');
+
+      elements.bookingEventSuggestions.querySelectorAll('.suggestion-item').forEach(item => {
+        item.addEventListener('click', () => {
+          elements.bookingEventName.value = item.dataset.eventName;
+          elements.bookingEventName.dataset.eventId = item.dataset.eventId;
+          elements.bookingEventSuggestions.classList.remove('show');
+        });
+      });
+
+      elements.bookingEventSuggestions.classList.add('show');
+    } catch (error) {
+      console.error('Event search error:', error);
+    }
+  }
+
+  /**
+   * Populate booking passenger dropdown
+   */
+  function populateBookingPassengerDropdown() {
+    if (!elements.bookingPassengerSelect) return;
+
+    elements.bookingPassengerSelect.innerHTML = '<option value="">Select passenger...</option>';
+    
+    passengers.forEach(passenger => {
+      const option = document.createElement('option');
+      option.value = passenger._id;
+      option.textContent = passenger.fullName || `${passenger.firstName} ${passenger.lastName}`;
+      elements.bookingPassengerSelect.appendChild(option);
+    });
+  }
+
+  /**
+   * Handle booking passenger selection from dropdown
+   */
+  function handleBookingPassengerSelect(e) {
+    const passengerId = e.target.value;
+    if (!passengerId) return;
+
+    const passenger = passengers.find(p => p._id === passengerId);
+    if (!passenger) return;
+
+    // Check if already selected
+    if (bookingSelectedPassengers.find(p => p.passengerId === passengerId)) {
+      e.target.value = '';
+      return;
+    }
+
+    bookingSelectedPassengers.push({
+      passengerId: passenger._id,
+      name: passenger.fullName || `${passenger.firstName} ${passenger.lastName}`
+    });
+
+    renderBookingSelectedPassengers();
+    e.target.value = '';
+  }
+
+  /**
+   * Render booking selected passengers chips
+   */
+  function renderBookingSelectedPassengers() {
+    if (!elements.bookingSelectedPassengers) return;
+
+    elements.bookingSelectedPassengers.innerHTML = bookingSelectedPassengers.map(p => `
+      <div class="selected-passenger-chip">
+        <span class="material-symbols-outlined">person</span>
+        <span>${p.name}</span>
+        <button class="remove-passenger" data-id="${p.passengerId}">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+    `).join('');
+
+    // Add click handlers for remove buttons
+    elements.bookingSelectedPassengers.querySelectorAll('.remove-passenger').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const id = e.currentTarget.dataset.id;
+        bookingSelectedPassengers = bookingSelectedPassengers.filter(p => p.passengerId !== id);
+        renderBookingSelectedPassengers();
+      });
+    });
+  }
+
+  /**
+   * Handle create booking form submission
+   */
+  async function handleCreateBooking(e) {
+    e.preventDefault();
+
+    // Validate required fields
+    const confirmationNumber = document.getElementById('bookingConfirmationNumber').value.trim();
+    if (!confirmationNumber) {
+      alert('Confirmation number is required for direct bookings.');
+      return;
+    }
+
+    if (bookingSelectedPassengers.length === 0) {
+      alert('Please add at least one passenger.');
+      return;
+    }
+
+    const tripType = document.querySelector('input[name="bookingTripType"]:checked').value;
+    const fromAirport = parseAirportInput(elements.bookingFromAirport);
+    const toAirport = parseAirportInput(elements.bookingToAirport);
+
+    const bookingData = {
+      eventName: elements.bookingEventName.value || 'Flight',
+      eventId: elements.bookingEventName.dataset.eventId || null,
+      tripType: tripType,
+      from: fromAirport,
+      to: toAirport,
+      departDate: document.getElementById('bookingDepartDate').value,
+      returnDate: tripType === 'roundtrip' ? document.getElementById('bookingReturnDate').value : null,
+      passengers: bookingSelectedPassengers,
+      notes: document.getElementById('bookingNotes')?.value?.trim() || '',
+      status: 'booked',
+      bookedDetails: {
+        confirmationCode: confirmationNumber,
+        airline: document.getElementById('bookingAirlineName').value.trim(),
+        flightNumber: document.getElementById('bookingOutboundFlightNumber').value.trim(),
+        departTime: document.getElementById('bookingDepartTime').value,
+        arriveTime: document.getElementById('bookingArriveTime').value
+      }
+    };
+
+    // Add return flight details for roundtrip
+    if (tripType === 'roundtrip') {
+      bookingData.returnBookedDetails = {
+        flightNumber: document.getElementById('bookingReturnFlightNumber').value.trim(),
+        departTime: document.getElementById('bookingReturnDepartTime').value,
+        arriveTime: document.getElementById('bookingReturnArriveTime').value
+      };
+    }
+
+    try {
+      const newBooking = await apiRequest('/api/flights', {
+        method: 'POST',
+        body: JSON.stringify(bookingData)
+      });
+
+      bookedFlights.unshift(newBooking);
+      renderBookedFlights();
+      closeCreateBookingModal();
+
+      console.log('✅ Direct booking created:', newBooking._id);
+    } catch (error) {
+      console.error('Failed to create booking:', error);
+      alert('Failed to create booking. Please try again.');
+    }
   }
 
   /**
@@ -994,7 +1295,24 @@
    */
   function handleAirportSearch(e, type) {
     const value = e.target.value;
-    const suggestionsEl = type === 'from' ? elements.fromSuggestions : elements.toSuggestions;
+    let suggestionsEl;
+    
+    switch(type) {
+      case 'from':
+        suggestionsEl = elements.fromSuggestions;
+        break;
+      case 'to':
+        suggestionsEl = elements.toSuggestions;
+        break;
+      case 'bookingFrom':
+        suggestionsEl = elements.bookingFromSuggestions;
+        break;
+      case 'bookingTo':
+        suggestionsEl = elements.bookingToSuggestions;
+        break;
+      default:
+        return;
+    }
 
     if (!value || value.length < 1) {
       suggestionsEl?.classList.remove('show');
@@ -1018,12 +1336,29 @@
 
     suggestionsEl.querySelectorAll('.suggestion-item').forEach(item => {
       item.addEventListener('click', () => {
-        const input = type === 'from' ? elements.fromAirport : elements.toAirport;
-        input.value = `${item.dataset.code} - ${item.dataset.city}, ${item.dataset.state}`;
-        input.dataset.code = item.dataset.code;
-        input.dataset.city = item.dataset.city;
-        input.dataset.state = item.dataset.state;
-        input.dataset.name = item.dataset.name;
+        let input;
+        switch(type) {
+          case 'from':
+            input = elements.fromAirport;
+            break;
+          case 'to':
+            input = elements.toAirport;
+            break;
+          case 'bookingFrom':
+            input = elements.bookingFromAirport;
+            break;
+          case 'bookingTo':
+            input = elements.bookingToAirport;
+            break;
+        }
+        
+        if (input) {
+          input.value = `${item.dataset.code} - ${item.dataset.city}, ${item.dataset.state}`;
+          input.dataset.code = item.dataset.code;
+          input.dataset.city = item.dataset.city;
+          input.dataset.state = item.dataset.state;
+          input.dataset.name = item.dataset.name;
+        }
         suggestionsEl.classList.remove('show');
       });
     });
@@ -1223,6 +1558,7 @@
       departDate: elements.departDate.value,
       returnDate: tripType === 'roundtrip' ? elements.returnDate.value : null,
       departTimePreference: elements.departTimePreference.value,
+      returnTimePreference: tripType === 'roundtrip' ? (elements.returnTimePreference?.value || 'any') : null,
       passengers: selectedPassengers,
       notes: document.getElementById('createNotes')?.value?.trim() || ''
     };
@@ -1263,6 +1599,32 @@
     elements.viewReturnDate.value = request.returnDate ? formatDateForInput(request.returnDate) : '';
     elements.viewDepartTimePreference.value = request.departTimePreference || 'any';
     elements.viewReturnTimePreference.value = request.returnTimePreference || 'any';
+
+    // Populate route information
+    const fromCodeEl = document.getElementById('viewFromCode');
+    const fromCityEl = document.getElementById('viewFromCity');
+    const toCodeEl = document.getElementById('viewToCode');
+    const toCityEl = document.getElementById('viewToCity');
+
+    if (fromCodeEl && request.from) {
+      fromCodeEl.textContent = request.from.code || '---';
+      if (fromCityEl) {
+        const cityState = request.from.city 
+          ? `${request.from.city}${request.from.state ? ', ' + request.from.state : ''}`
+          : 'Not specified';
+        fromCityEl.textContent = cityState;
+      }
+    }
+
+    if (toCodeEl && request.to) {
+      toCodeEl.textContent = request.to.code || '---';
+      if (toCityEl) {
+        const cityState = request.to.city 
+          ? `${request.to.city}${request.to.state ? ', ' + request.to.state : ''}`
+          : 'Not specified';
+        toCityEl.textContent = cityState;
+      }
+    }
     
     // Populate notes
     const viewNotesEl = document.getElementById('viewNotes');
@@ -1379,16 +1741,31 @@
                 </div>
               </div>
             </div>
-            <div class="passenger-form-full">
-              <div class="form-group">
-                <label>Rewards</label>
-                <input type="text" value="${fullPassenger.rewards || ''}" data-field="rewards">
-              </div>
+            <div class="passenger-form-row">
               <div class="form-group">
                 <label>KTN</label>
                 <input type="text" value="${fullPassenger.knownTravelerNumber || ''}" data-field="knownTravelerNumber">
               </div>
+              <div class="form-group">
+                <label>Passport Number</label>
+                <input type="text" value="${fullPassenger.passportNumber || ''}" data-field="passportNumber">
+              </div>
+              <div class="form-group">
+                <label>Passport Expiration</label>
+                <input type="date" value="${fullPassenger.passportExpiration ? formatDateForInput(fullPassenger.passportExpiration) : ''}" data-field="passportExpiration">
+              </div>
             </div>
+            ${fullPassenger.rewardsNumbers && fullPassenger.rewardsNumbers.length > 0 ? `
+              <div class="passenger-rewards-display">
+                <label style="font-size: var(--font-size-sm); color: var(--text-secondary); margin-bottom: 6px; display: block;">Airline Rewards</label>
+                ${fullPassenger.rewardsNumbers.map(reward => `
+                  <div class="passenger-rewards-item">
+                    <span class="airline-name">${reward.airline}</span>
+                    <span class="rewards-number">${reward.number}</span>
+                  </div>
+                `).join('')}
+              </div>
+            ` : ''}
             <div class="passenger-notes-row">
               <div class="form-group">
                 <label>Notes</label>
@@ -1487,11 +1864,111 @@
   }
 
   /**
+   * Add a new rewards entry
+   */
+  function addRewardsEntry(modalType) {
+    const rewardsArray = modalType === 'new' ? newPassengerRewards : editPassengerRewards;
+    rewardsArray.push({ airline: '', number: '' });
+    renderRewardsList(modalType);
+  }
+
+  /**
+   * Remove a rewards entry
+   */
+  function removeRewardsEntry(modalType, index) {
+    const rewardsArray = modalType === 'new' ? newPassengerRewards : editPassengerRewards;
+    rewardsArray.splice(index, 1);
+    renderRewardsList(modalType);
+  }
+
+  /**
+   * Update a rewards entry field
+   */
+  function updateRewardsEntry(modalType, index, field, value) {
+    const rewardsArray = modalType === 'new' ? newPassengerRewards : editPassengerRewards;
+    if (rewardsArray[index]) {
+      rewardsArray[index][field] = value;
+    }
+  }
+
+  /**
+   * Render rewards list
+   */
+  function renderRewardsList(modalType) {
+    const listId = modalType === 'new' ? 'newPassengerRewardsList' : 'editPassengerRewardsList';
+    const listEl = document.getElementById(listId);
+    if (!listEl) return;
+
+    const rewardsArray = modalType === 'new' ? newPassengerRewards : editPassengerRewards;
+
+    if (rewardsArray.length === 0) {
+      listEl.innerHTML = '<div class="rewards-list empty">No airline rewards added</div>';
+      return;
+    }
+
+    listEl.innerHTML = rewardsArray.map((reward, index) => `
+      <div class="rewards-entry">
+        <div class="form-group">
+          <label>Airline</label>
+          <input 
+            type="text" 
+            class="rewards-airline" 
+            data-modal="${modalType}"
+            data-index="${index}"
+            value="${reward.airline || ''}" 
+            placeholder="e.g., Delta, United">
+        </div>
+        <div class="form-group">
+          <label>Rewards Number</label>
+          <input 
+            type="text" 
+            class="rewards-number" 
+            data-modal="${modalType}"
+            data-index="${index}"
+            value="${reward.number || ''}" 
+            placeholder="Enter rewards number">
+        </div>
+        <button type="button" class="btn-remove-rewards" data-modal="${modalType}" data-index="${index}" title="Remove rewards">
+          <span class="material-symbols-outlined">delete</span>
+        </button>
+      </div>
+    `).join('');
+
+    // Add event listeners for input changes
+    listEl.querySelectorAll('.rewards-airline').forEach(input => {
+      input.addEventListener('input', (e) => {
+        const modal = e.target.dataset.modal;
+        const index = parseInt(e.target.dataset.index);
+        updateRewardsEntry(modal, index, 'airline', e.target.value);
+      });
+    });
+
+    listEl.querySelectorAll('.rewards-number').forEach(input => {
+      input.addEventListener('input', (e) => {
+        const modal = e.target.dataset.modal;
+        const index = parseInt(e.target.dataset.index);
+        updateRewardsEntry(modal, index, 'number', e.target.value);
+      });
+    });
+
+    // Add event listeners for remove buttons
+    listEl.querySelectorAll('.btn-remove-rewards').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const modal = e.currentTarget.dataset.modal;
+        const index = parseInt(e.currentTarget.dataset.index);
+        removeRewardsEntry(modal, index);
+      });
+    });
+  }
+
+  /**
    * Open add passenger modal
    */
   function openAddPassengerModal() {
     elements.addPassengerModal?.classList.add('show');
     elements.addPassengerForm?.reset();
+    newPassengerRewards = [];
+    renderRewardsList('new');
   }
 
   /**
@@ -1507,6 +1984,9 @@
   async function handleAddNewPassenger(e) {
     e.preventDefault();
 
+    // Filter out empty rewards entries
+    const rewardsNumbers = newPassengerRewards.filter(r => r.airline && r.number);
+
     const passengerData = {
       firstName: document.getElementById('newPassengerFirst').value,
       middleName: document.getElementById('newPassengerMiddle').value,
@@ -1514,8 +1994,10 @@
       userId: document.getElementById('newPassengerUserId').value || null,
       dateOfBirth: document.getElementById('newPassengerDob').value || null,
       gender: document.getElementById('newPassengerGender').value,
-      rewards: document.getElementById('newPassengerRewards').value,
+      rewardsNumbers: rewardsNumbers,
       knownTravelerNumber: document.getElementById('newPassengerKtn').value,
+      passportNumber: document.getElementById('newPassengerPassport').value,
+      passportExpiration: document.getElementById('newPassengerPassportExp').value || null,
       notes: document.getElementById('newPassengerNotes').value
     };
 
@@ -1527,13 +2009,22 @@
 
       passengers.push(newPassenger);
       populatePassengerDropdown();
+      populateBookingPassengerDropdown();
 
-      // Also add to selected passengers
-      selectedPassengers.push({
-        passengerId: newPassenger._id,
-        name: newPassenger.fullName || `${newPassenger.firstName} ${newPassenger.lastName}`
-      });
-      renderSelectedPassengers();
+      // Also add to selected passengers (for whichever modal is open)
+      if (elements.createRequestModal?.classList.contains('show')) {
+        selectedPassengers.push({
+          passengerId: newPassenger._id,
+          name: newPassenger.fullName || `${newPassenger.firstName} ${newPassenger.lastName}`
+        });
+        renderSelectedPassengers();
+      } else if (elements.createBookingModal?.classList.contains('show')) {
+        bookingSelectedPassengers.push({
+          passengerId: newPassenger._id,
+          name: newPassenger.fullName || `${newPassenger.firstName} ${newPassenger.lastName}`
+        });
+        renderBookingSelectedPassengers();
+      }
 
       closeAddPassengerModal();
 
@@ -2053,6 +2544,31 @@
       const linkedUser = passenger.userId ? users.find(u => u._id === passenger.userId) : null;
       const fullName = passenger.fullName || `${passenger.firstName} ${passenger.middleName || ''} ${passenger.lastName}`.replace(/\s+/g, ' ').trim();
       
+      // Display rewards numbers
+      let rewardsDisplay = '-';
+      if (passenger.rewardsNumbers && passenger.rewardsNumbers.length > 0) {
+        rewardsDisplay = `<div class="passenger-rewards-compact">
+          ${passenger.rewardsNumbers.map(r => `<span class="rewards-badge">${r.airline}: ${r.number}</span>`).join('')}
+        </div>`;
+      } else if (passenger.rewards) {
+        // Fallback for legacy rewards field
+        rewardsDisplay = passenger.rewards;
+      }
+
+      // Display passport info
+      let passportDisplay = '-';
+      if (passenger.passportNumber) {
+        const expDate = passenger.passportExpiration ? new Date(passenger.passportExpiration) : null;
+        const isExpiringSoon = expDate && expDate < new Date(Date.now() + 180 * 24 * 60 * 60 * 1000); // Within 6 months
+        const isExpired = expDate && expDate < new Date();
+        const expClass = isExpired ? 'passport-expired' : (isExpiringSoon ? 'passport-expiring' : '');
+        const expText = expDate ? formatDateDisplay(passenger.passportExpiration) : 'No expiration';
+        passportDisplay = `<div class="passport-info ${expClass}" title="${passenger.passportNumber}">
+          <div class="passport-number">${passenger.passportNumber}</div>
+          <div class="passport-exp">${expText}</div>
+        </div>`;
+      }
+
       return `
         <tr data-passenger-id="${passenger._id}">
           <td class="passenger-name-cell">${fullName}</td>
@@ -2064,8 +2580,9 @@
               </span>
             ` : '<span class="no-linked-user">Not linked</span>'}
           </td>
-          <td>${passenger.rewards || '-'}</td>
+          <td>${rewardsDisplay}</td>
           <td>${passenger.knownTravelerNumber || '-'}</td>
+          <td>${passportDisplay}</td>
           <td class="passenger-actions">
             <button class="btn-edit-passenger" data-passenger-id="${passenger._id}" title="Edit passenger">
               <span class="material-symbols-outlined">edit</span>
@@ -2123,9 +2640,16 @@
     document.getElementById('editPassengerUserId').value = passenger.userId || '';
     document.getElementById('editPassengerDob').value = passenger.dateOfBirth ? formatDateForInput(passenger.dateOfBirth) : '';
     document.getElementById('editPassengerGender').value = passenger.gender || '';
-    document.getElementById('editPassengerRewards').value = passenger.rewards || '';
     document.getElementById('editPassengerKtn').value = passenger.knownTravelerNumber || '';
+    document.getElementById('editPassengerPassport').value = passenger.passportNumber || '';
+    document.getElementById('editPassengerPassportExp').value = passenger.passportExpiration ? formatDateForInput(passenger.passportExpiration) : '';
     document.getElementById('editPassengerNotes').value = passenger.notes || '';
+
+    // Load rewards numbers
+    editPassengerRewards = passenger.rewardsNumbers && passenger.rewardsNumbers.length > 0 
+      ? [...passenger.rewardsNumbers] 
+      : [];
+    renderRewardsList('edit');
   }
 
   /**
@@ -2144,6 +2668,9 @@
 
     if (!currentEditingPassenger) return;
 
+    // Filter out empty rewards entries
+    const rewardsNumbers = editPassengerRewards.filter(r => r.airline && r.number);
+
     const passengerData = {
       firstName: document.getElementById('editPassengerFirst').value,
       middleName: document.getElementById('editPassengerMiddle').value,
@@ -2151,8 +2678,10 @@
       userId: document.getElementById('editPassengerUserId').value || null,
       dateOfBirth: document.getElementById('editPassengerDob').value || null,
       gender: document.getElementById('editPassengerGender').value,
-      rewards: document.getElementById('editPassengerRewards').value,
+      rewardsNumbers: rewardsNumbers,
       knownTravelerNumber: document.getElementById('editPassengerKtn').value,
+      passportNumber: document.getElementById('editPassengerPassport').value,
+      passportExpiration: document.getElementById('editPassengerPassportExp').value || null,
       notes: document.getElementById('editPassengerNotes').value
     };
 

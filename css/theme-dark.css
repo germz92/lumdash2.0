@@ -746,6 +746,63 @@ body:has(.events-page) {
   font-size: 18px;
 }
 
+/* Client Filter Badge */
+.filter-badge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: rgba(204, 0, 7, 0.1);
+  border: 1px solid var(--brand-red);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+.filter-badge .material-symbols-outlined {
+  font-size: 18px;
+  color: var(--brand-red);
+}
+
+.filter-badge button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.filter-badge button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.filter-badge button .material-symbols-outlined {
+  font-size: 16px;
+  color: inherit;
+}
+
+/* Clickable Client Names */
+.event-client.clickable {
+  cursor: pointer;
+  color: var(--brand-red);
+  font-weight: var(--font-weight-medium);
+  transition: all var(--transition-fast);
+  text-decoration: none;
+  border-bottom: 1px dashed transparent;
+}
+
+.event-client.clickable:hover {
+  color: #e00008;
+  border-bottom-color: var(--brand-red);
+}
+
 /* Calendar View Button */
 .btn-calendar-view {
   display: flex;

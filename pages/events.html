@@ -230,7 +230,10 @@
       </div>
       <div class="form-group-dark">
         <label for="newClient">Client Name</label>
-        <input id="newClient" type="text" placeholder="Enter client name" autocomplete="off">
+        <input id="newClient" type="text" list="clientDatalist" placeholder="Select or enter client name" autocomplete="off">
+        <datalist id="clientDatalist">
+          <!-- Populated dynamically with existing clients -->
+        </datalist>
       </div>
       <div class="form-row">
         <div class="form-group-dark">
@@ -494,7 +497,7 @@ function renderEventRow(event, index) {
         </div>
       </td>
       <td>
-        <span class="event-client">${event.client || '—'}</span>
+        <span class="event-client ${event.client ? 'clickable' : ''}" onclick="${event.client ? `filterByClient('${event.client.replace(/'/g, "\\'")}'); event.stopPropagation();` : ''}">${event.client || '—'}</span>
         <div class="event-stats">
           <span><span class="material-symbols-outlined">person</span> ${crewCount}</span>
           <span><span class="material-symbols-outlined">folder</span> ${folderCount}</span>

@@ -304,7 +304,23 @@
                   <span class="info-label">Attendees</span>
                   <span class="info-value" id="statAttendees">2,500</span>
                 </div>
-      </div>
+              </div>
+              
+              <!-- Contract Button (Owner/Admin only) -->
+              <div class="info-row contract-row" id="contractRow" style="display: none;">
+                <button class="contract-btn" id="contractBtn">
+                  <span class="material-symbols-outlined">description</span>
+                  <span>Contract</span>
+                </button>
+              </div>
+              
+              <!-- Invoice Button (Owner/Admin only) -->
+              <div class="info-row invoice-row" id="invoiceRow" style="display: none;">
+                <button class="invoice-btn" id="invoiceBtn">
+                  <span class="material-symbols-outlined">receipt_long</span>
+                  <span>Invoice</span>
+                </button>
+              </div>
     </div>
   </div>
           
@@ -487,6 +503,52 @@
   </div>
 </div>
 
+<!-- Contract URL Modal -->
+<div class="dark-modal" id="contractUrlModal">
+  <div class="dark-modal-content" style="max-width: 500px;">
+    <div class="modal-header-dark">
+      <h3><span class="material-symbols-outlined">description</span> Contract Link</h3>
+      <button class="modal-close-btn" onclick="hideContractModal()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark">
+      <div class="form-group-dark">
+        <label for="contractUrlInput">Contract URL</label>
+        <input type="url" id="contractUrlInput" placeholder="https://example.com/contract" class="form-input-dark">
+        <span class="form-hint">Enter the external URL for the contract</span>
+      </div>
+    </div>
+    <div class="modal-footer-dark">
+      <button class="btn-secondary" onclick="hideContractModal()">Cancel</button>
+      <button class="btn-primary" id="saveContractBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Invoice URL Modal -->
+<div class="dark-modal" id="invoiceUrlModal">
+  <div class="dark-modal-content" style="max-width: 500px;">
+    <div class="modal-header-dark">
+      <h3><span class="material-symbols-outlined">receipt_long</span> Invoice Link</h3>
+      <button class="modal-close-btn" onclick="hideInvoiceModal()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark">
+      <div class="form-group-dark">
+        <label for="invoiceUrlInput">Invoice URL</label>
+        <input type="url" id="invoiceUrlInput" placeholder="https://example.com/invoice" class="form-input-dark">
+        <span class="form-hint">Enter the external URL for the invoice</span>
+      </div>
+    </div>
+    <div class="modal-footer-dark">
+      <button class="btn-secondary" onclick="hideInvoiceModal()">Cancel</button>
+      <button class="btn-primary" id="saveInvoiceBtn">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // Modal functions
 function hideEditModal() {
@@ -537,6 +599,30 @@ function showGalleryModal() {
   document.body.style.overflow = 'hidden';
 }
 
+function hideContractModal() {
+  const modal = document.getElementById('contractUrlModal');
+  if (modal) modal.classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+function showContractModal() {
+  const modal = document.getElementById('contractUrlModal');
+  if (modal) modal.classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function hideInvoiceModal() {
+  const modal = document.getElementById('invoiceUrlModal');
+  if (modal) modal.classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+function showInvoiceModal() {
+  const modal = document.getElementById('invoiceUrlModal');
+  if (modal) modal.classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
 // Make functions globally available
 window.hideEditModal = hideEditModal;
 window.showEditModal = showEditModal;
@@ -544,6 +630,10 @@ window.hideContactModal = hideContactModal;
 window.showContactModal = showContactModal;
 window.hideGalleryModal = hideGalleryModal;
 window.showGalleryModal = showGalleryModal;
+window.hideContractModal = hideContractModal;
+window.showContractModal = showContractModal;
+window.hideInvoiceModal = hideInvoiceModal;
+window.showInvoiceModal = showInvoiceModal;
 window.hideLocationModal = hideLocationModal;
 window.showLocationModal = showLocationModal;
 

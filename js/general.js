@@ -940,6 +940,236 @@ function handleGalleryClick() {
 }
 
 // ================================
+// Contract URL Modal Functions
+// ================================
+
+function openContractModal() {
+  console.log('[Contract] Opening contract modal');
+  const urlInput = document.getElementById('contractUrlInput');
+  if (urlInput) {
+    urlInput.value = currentTableData?.general?.contractUrl || '';
+  }
+  
+  // Show the modal
+  const modal = document.getElementById('contractUrlModal');
+  if (modal) {
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+  } else {
+    console.error('[Contract] Contract modal not found');
+  }
+}
+
+function hideContractModal() {
+  const modal = document.getElementById('contractUrlModal');
+  if (modal) {
+    modal.classList.remove('show');
+    document.body.style.overflow = '';
+  }
+}
+
+async function saveContractUrl(tableId) {
+  const saveBtn = document.getElementById('saveContractBtn');
+  const urlInput = document.getElementById('contractUrlInput');
+  
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+  }
+  
+  try {
+    let contractUrl = urlInput?.value?.trim() || '';
+    
+    // Add https:// if URL doesn't have a protocol
+    if (contractUrl && !contractUrl.match(/^https?:\/\//i)) {
+      contractUrl = 'https://' + contractUrl;
+    }
+    
+    console.log('[Contract] Saving contract URL:', contractUrl);
+    
+    const payload = {
+      general: {
+        ...currentTableData?.general,
+        contractUrl: contractUrl
+      }
+    };
+    
+    console.log('[Contract] Sending payload to server:', payload);
+    
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/general`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': window.token
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error('[Contract] Save failed:', errorText);
+      throw new Error('Failed to save contract URL');
+    }
+    
+    const savedData = await res.json();
+    console.log('[Contract] Server response:', savedData);
+    console.log('[Contract] Server response general:', savedData.general);
+    console.log('[Contract] Server response contractUrl:', savedData.general?.contractUrl);
+    
+    // Update local data
+    if (currentTableData && currentTableData.general) {
+      currentTableData.general.contractUrl = contractUrl;
+      console.log('[Contract] Updated local contractUrl:', currentTableData.general.contractUrl);
+    } else if (currentTableData) {
+      // Create general object if it doesn't exist
+      currentTableData.general = { contractUrl: contractUrl };
+      console.log('[Contract] Created general object with contractUrl:', contractUrl);
+    }
+    
+    hideContractModal();
+  } catch (err) {
+    console.error('Save contract URL error:', err);
+    alert('Failed to save contract link: ' + err.message);
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+    }
+  }
+}
+
+// Handle contract button click (for inline onclick handler)
+function handleContractClick() {
+  console.log('[Contract] handleContractClick called');
+  const contractUrl = currentTableData?.general?.contractUrl;
+  
+  if (contractUrl && contractUrl.trim()) {
+    console.log('[Contract] Opening URL:', contractUrl);
+    window.open(contractUrl, '_blank');
+  } else if (isOwner || isAdmin()) {
+    console.log('[Contract] Opening modal to set URL');
+    openContractModal();
+  } else {
+    alert('No contract link has been set for this event.');
+  }
+}
+
+// ================================
+// Invoice URL Modal Functions
+// ================================
+
+function openInvoiceModal() {
+  console.log('[Invoice] Opening invoice modal');
+  const urlInput = document.getElementById('invoiceUrlInput');
+  if (urlInput) {
+    urlInput.value = currentTableData?.general?.invoiceUrl || '';
+  }
+  
+  // Show the modal
+  const modal = document.getElementById('invoiceUrlModal');
+  if (modal) {
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+  } else {
+    console.error('[Invoice] Invoice modal not found');
+  }
+}
+
+function hideInvoiceModal() {
+  const modal = document.getElementById('invoiceUrlModal');
+  if (modal) {
+    modal.classList.remove('show');
+    document.body.style.overflow = '';
+  }
+}
+
+async function saveInvoiceUrl(tableId) {
+  const saveBtn = document.getElementById('saveInvoiceBtn');
+  const urlInput = document.getElementById('invoiceUrlInput');
+  
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+  }
+  
+  try {
+    let invoiceUrl = urlInput?.value?.trim() || '';
+    
+    // Add https:// if URL doesn't have a protocol
+    if (invoiceUrl && !invoiceUrl.match(/^https?:\/\//i)) {
+      invoiceUrl = 'https://' + invoiceUrl;
+    }
+    
+    console.log('[Invoice] Saving invoice URL:', invoiceUrl);
+    
+    const payload = {
+      general: {
+        ...currentTableData?.general,
+        invoiceUrl: invoiceUrl
+      }
+    };
+    
+    console.log('[Invoice] Sending payload to server:', payload);
+    
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/general`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': window.token
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error('[Invoice] Save failed:', errorText);
+      throw new Error('Failed to save invoice URL');
+    }
+    
+    const savedData = await res.json();
+    console.log('[Invoice] Server response:', savedData);
+    console.log('[Invoice] Server response general:', savedData.general);
+    console.log('[Invoice] Server response invoiceUrl:', savedData.general?.invoiceUrl);
+    
+    // Update local data
+    if (currentTableData && currentTableData.general) {
+      currentTableData.general.invoiceUrl = invoiceUrl;
+      console.log('[Invoice] Updated local invoiceUrl:', currentTableData.general.invoiceUrl);
+    } else if (currentTableData) {
+      // Create general object if it doesn't exist
+      currentTableData.general = { invoiceUrl: invoiceUrl };
+      console.log('[Invoice] Created general object with invoiceUrl:', invoiceUrl);
+    }
+    
+    hideInvoiceModal();
+  } catch (err) {
+    console.error('Save invoice URL error:', err);
+    alert('Failed to save invoice link: ' + err.message);
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+    }
+  }
+}
+
+// Handle invoice button click (for inline onclick handler)
+function handleInvoiceClick() {
+  console.log('[Invoice] handleInvoiceClick called');
+  const invoiceUrl = currentTableData?.general?.invoiceUrl;
+  
+  if (invoiceUrl && invoiceUrl.trim()) {
+    console.log('[Invoice] Opening URL:', invoiceUrl);
+    window.open(invoiceUrl, '_blank');
+  } else if (isOwner || isAdmin()) {
+    console.log('[Invoice] Opening modal to set URL');
+    openInvoiceModal();
+  } else {
+    alert('No invoice link has been set for this event.');
+  }
+}
+
+// ================================
 // FTP Folder Names Functions
 // ================================
 let folderNamesEditMode = false;
@@ -1248,6 +1478,18 @@ window.hideGalleryModal = hideGalleryModal;
 window.saveGalleryUrl = saveGalleryUrl;
 window.handleGalleryClick = handleGalleryClick;
 
+// Expose contract functions to window
+window.openContractModal = openContractModal;
+window.hideContractModal = hideContractModal;
+window.saveContractUrl = saveContractUrl;
+window.handleContractClick = handleContractClick;
+
+// Expose invoice functions to window
+window.openInvoiceModal = openInvoiceModal;
+window.hideInvoiceModal = hideInvoiceModal;
+window.saveInvoiceUrl = saveInvoiceUrl;
+window.handleInvoiceClick = handleInvoiceClick;
+
 // Expose to window for onclick handlers
 window.showEditModal = showEditModal;
 window.hideEditModal = hideEditModal;
@@ -1441,6 +1683,114 @@ function initDarkThemeEventListeners(tableId) {
   if (saveGalleryBtn && !saveGalleryBtn._listenerAttached) {
     saveGalleryBtn._listenerAttached = true;
     saveGalleryBtn.addEventListener('click', () => saveGalleryUrl(tableId));
+  }
+  
+  // Contract Button - Only visible to owners/admins
+  const contractRow = document.getElementById('contractRow');
+  const contractBtn = document.getElementById('contractBtn');
+  
+  if (contractRow && contractBtn) {
+    // Show contract button only for owners/admins
+    if (isOwner || isAdmin()) {
+      contractRow.style.display = '';
+      
+      if (!contractBtn._listenerAttached) {
+        contractBtn._listenerAttached = true;
+        
+        // Left-click to open the URL
+        contractBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          console.log('[Contract] ===== LEFT CLICK =====');
+          console.log('[Contract] currentTableData:', currentTableData);
+          console.log('[Contract] currentTableData.general:', currentTableData?.general);
+          console.log('[Contract] contractUrl:', currentTableData?.general?.contractUrl);
+          console.log('[Contract] isOwner:', isOwner, 'isAdmin:', isAdmin());
+          
+          const contractUrl = currentTableData?.general?.contractUrl;
+          
+          if (contractUrl && contractUrl.trim()) {
+            // Open the contract URL in a new tab
+            console.log('[Contract] Opening URL:', contractUrl);
+            window.open(contractUrl, '_blank');
+          } else {
+            // No URL set - show modal to set it
+            console.log('[Contract] No URL set, opening modal');
+            openContractModal();
+          }
+        });
+        
+        // Right-click to always open modal for editing
+        contractBtn.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          console.log('[Contract] ===== RIGHT CLICK =====');
+          openContractModal();
+        });
+      }
+    } else {
+      // Hide contract button for non-owners/non-admins
+      contractRow.style.display = 'none';
+    }
+  }
+  
+  // Save Contract URL Button
+  const saveContractBtn = document.getElementById('saveContractBtn');
+  if (saveContractBtn && !saveContractBtn._listenerAttached) {
+    saveContractBtn._listenerAttached = true;
+    saveContractBtn.addEventListener('click', () => saveContractUrl(tableId));
+  }
+  
+  // Invoice Button - Only visible to owners/admins
+  const invoiceRow = document.getElementById('invoiceRow');
+  const invoiceBtn = document.getElementById('invoiceBtn');
+  
+  if (invoiceRow && invoiceBtn) {
+    // Show invoice button only for owners/admins
+    if (isOwner || isAdmin()) {
+      invoiceRow.style.display = '';
+      
+      if (!invoiceBtn._listenerAttached) {
+        invoiceBtn._listenerAttached = true;
+        
+        // Left-click to open the URL
+        invoiceBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          console.log('[Invoice] ===== LEFT CLICK =====');
+          console.log('[Invoice] currentTableData:', currentTableData);
+          console.log('[Invoice] currentTableData.general:', currentTableData?.general);
+          console.log('[Invoice] invoiceUrl:', currentTableData?.general?.invoiceUrl);
+          console.log('[Invoice] isOwner:', isOwner, 'isAdmin:', isAdmin());
+          
+          const invoiceUrl = currentTableData?.general?.invoiceUrl;
+          
+          if (invoiceUrl && invoiceUrl.trim()) {
+            // Open the invoice URL in a new tab
+            console.log('[Invoice] Opening URL:', invoiceUrl);
+            window.open(invoiceUrl, '_blank');
+          } else {
+            // No URL set - show modal to set it
+            console.log('[Invoice] No URL set, opening modal');
+            openInvoiceModal();
+          }
+        });
+        
+        // Right-click to always open modal for editing
+        invoiceBtn.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          console.log('[Invoice] ===== RIGHT CLICK =====');
+          openInvoiceModal();
+        });
+      }
+    } else {
+      // Hide invoice button for non-owners/non-admins
+      invoiceRow.style.display = 'none';
+    }
+  }
+  
+  // Save Invoice URL Button
+  const saveInvoiceBtn = document.getElementById('saveInvoiceBtn');
+  if (saveInvoiceBtn && !saveInvoiceBtn._listenerAttached) {
+    saveInvoiceBtn._listenerAttached = true;
+    saveInvoiceBtn.addEventListener('click', () => saveInvoiceUrl(tableId));
   }
   
   // Load user info in sidebar
@@ -2321,6 +2671,10 @@ function initPageDarkTheme(id) {
     .then(res => res.json())
     .then(table => {
       currentTableData = table;
+      console.log('[General] currentTableData set:', currentTableData);
+      console.log('[General] general object:', table.general);
+      console.log('[General] contractUrl:', table.general?.contractUrl);
+      console.log('[General] invoiceUrl:', table.general?.invoiceUrl);
       const general = table.general || {};
       
       // Render all sections

@@ -1996,6 +1996,9 @@
       // Find full passenger details
       const fullPassenger = passengers.find(fp => fp._id === p.passengerId) || {};
       
+      // Get email from passenger or linked user
+      const email = fullPassenger.email || (fullPassenger.userId && fullPassenger.userId.email) || '';
+      
       return `
         <div class="passenger-accordion-item" data-passenger-id="${p.passengerId}">
           <div class="passenger-accordion-header">
@@ -2006,6 +2009,15 @@
             <span class="material-symbols-outlined expand-icon">expand_more</span>
           </div>
           <div class="passenger-accordion-body">
+            ${email ? `
+              <div class="passenger-email-display">
+                <span class="material-symbols-outlined">email</span>
+                <span class="email-text">${email}</span>
+                <button class="email-copy-btn" onclick="navigator.clipboard.writeText('${email}'); event.stopPropagation();" title="Copy email">
+                  <span class="material-symbols-outlined">content_copy</span>
+                </button>
+              </div>
+            ` : ''}
             <div class="passenger-form-grid">
               <div class="form-group">
                 <label>First</label>
@@ -2722,21 +2734,25 @@
       notes: document.getElementById('editBookedNotes')?.value?.trim() || '',
       passengers: editBookedSelectedPassengers,
       bookedDetails: {
-        ...currentEditingRequest.bookedDetails,
         confirmationCode: document.getElementById('editBookedConfirmation').value,
         airline: document.getElementById('editBookedAirline').value,
         flightNumber: document.getElementById('editBookedFlightNumber').value,
         departTime: document.getElementById('editBookedDepartTime').value,
-        arriveTime: document.getElementById('editBookedArriveTime').value
+        arriveTime: document.getElementById('editBookedArriveTime').value,
+        // Preserve original booking metadata
+        bookedBy: currentEditingRequest.bookedDetails?.bookedBy?._id || currentEditingRequest.bookedDetails?.bookedBy,
+        bookedAt: currentEditingRequest.bookedDetails?.bookedAt
       }
     };
 
     if (isRoundtrip) {
       updateData.returnBookedDetails = {
-        ...currentEditingRequest.returnBookedDetails,
         flightNumber: document.getElementById('editBookedReturnFlightNumber').value,
         departTime: document.getElementById('editBookedReturnDepartTime').value,
-        arriveTime: document.getElementById('editBookedReturnArriveTime').value
+        arriveTime: document.getElementById('editBookedReturnArriveTime').value,
+        // Preserve original booking metadata
+        bookedBy: currentEditingRequest.returnBookedDetails?.bookedBy?._id || currentEditingRequest.returnBookedDetails?.bookedBy,
+        bookedAt: currentEditingRequest.returnBookedDetails?.bookedAt
       };
     }
 

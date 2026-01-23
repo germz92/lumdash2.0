@@ -1382,6 +1382,52 @@
   display: block;
 }
 
+.flights-dark .passenger-email-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: 16px;
+}
+
+.flights-dark .passenger-email-display .material-symbols-outlined {
+  font-size: 18px;
+  color: var(--text-secondary);
+}
+
+.flights-dark .passenger-email-display .email-text {
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  font-family: monospace;
+  flex: 1;
+}
+
+.flights-dark .email-copy-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  transition: var(--transition-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+}
+
+.flights-dark .email-copy-btn .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.flights-dark .email-copy-btn:hover {
+  background: var(--surface-hover);
+  color: var(--brand-red);
+}
+
 .flights-dark .passenger-form-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

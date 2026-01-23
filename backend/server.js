@@ -4243,6 +4243,19 @@ app.post('/api/gear-inventory/:id/release-all', authenticate, async (req, res) =
 
 // ========= GEAR PACKAGES API =========
 
+// Get list of events that have gear reserved (for dashboard badges)
+// This route MUST be defined BEFORE the gearPackagesRoutes router to avoid being caught by /:id
+app.get('/api/gear-packages/events-with-gear', authenticate, async (req, res) => {
+  try {
+    // Get distinct eventIds that have reserved gear items
+    const eventIds = await ReservedGearItem.distinct('eventId');
+    res.json({ eventIds });
+  } catch (err) {
+    console.error('[EVENTS WITH GEAR] Error:', err);
+    res.status(500).json({ error: 'Failed to fetch events with gear' });
+  }
+});
+
 // Use the gear packages routes
 const gearPackagesRoutes = require('./routes/gearPackages');
 app.use('/api/gear-packages', authenticate, gearPackagesRoutes);

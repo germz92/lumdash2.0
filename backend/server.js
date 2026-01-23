@@ -7059,6 +7059,7 @@ app.get('/api/passengers', authenticate, async (req, res) => {
     }
 
     const passengers = await Passenger.find({ isActive: true })
+      .populate('userId', 'fullName email')
       .sort({ lastName: 1, firstName: 1 });
     
     res.json(passengers);
@@ -7075,7 +7076,8 @@ app.get('/api/passengers/:id', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
     }
 
-    const passenger = await Passenger.findById(req.params.id);
+    const passenger = await Passenger.findById(req.params.id)
+      .populate('userId', 'fullName email');
     if (!passenger) {
       return res.status(404).json({ error: 'Passenger not found' });
     }
@@ -7182,6 +7184,8 @@ app.get('/api/flights', authenticate, async (req, res) => {
     const flights = await FlightRequest.find(query)
       .populate('createdBy', 'fullName email')
       .populate('eventId', 'title')
+      .populate('bookedDetails.bookedBy', 'fullName email')
+      .populate('returnBookedDetails.bookedBy', 'fullName email')
       .sort({ createdAt: -1 });
     
     res.json(flights);
@@ -7201,6 +7205,8 @@ app.get('/api/flights/pending', authenticate, async (req, res) => {
     const flights = await FlightRequest.find({ status: 'pending' })
       .populate('createdBy', 'fullName email')
       .populate('eventId', 'title')
+      .populate('bookedDetails.bookedBy', 'fullName email')
+      .populate('returnBookedDetails.bookedBy', 'fullName email')
       .sort({ departDate: 1 });
     
     res.json(flights);
@@ -7279,7 +7285,9 @@ app.get('/api/flights/:id', authenticate, async (req, res) => {
 
     const flight = await FlightRequest.findById(req.params.id)
       .populate('createdBy', 'fullName email')
-      .populate('eventId', 'title');
+      .populate('eventId', 'title')
+      .populate('bookedDetails.bookedBy', 'fullName email')
+      .populate('returnBookedDetails.bookedBy', 'fullName email');
     
     if (!flight) {
       return res.status(404).json({ error: 'Flight request not found' });
@@ -7302,8 +7310,20 @@ app.post('/api/flights', authenticate, async (req, res) => {
     const flightData = {
       ...req.body,
       createdBy: req.user.id,
-      status: 'pending'
+      status: req.body.status || 'pending'  // Use provided status or default to 'pending'
     };
+
+    // If status is 'booked', add bookedBy and bookedAt to bookedDetails
+    if (flightData.status === 'booked' && flightData.bookedDetails) {
+      flightData.bookedDetails.bookedBy = req.user.id;
+      flightData.bookedDetails.bookedAt = new Date();
+      
+      // Also for return flight if exists
+      if (flightData.returnBookedDetails) {
+        flightData.returnBookedDetails.bookedBy = req.user.id;
+        flightData.returnBookedDetails.bookedAt = new Date();
+      }
+    }
 
     const flight = new FlightRequest(flightData);
     await flight.save();
@@ -7313,11 +7333,18 @@ app.post('/api/flights', authenticate, async (req, res) => {
     if (flight.eventId) {
       await flight.populate('eventId', 'title');
     }
+    if (flight.bookedDetails?.bookedBy) {
+      await flight.populate('bookedDetails.bookedBy', 'fullName email');
+    }
+    if (flight.returnBookedDetails?.bookedBy) {
+      await flight.populate('returnBookedDetails.bookedBy', 'fullName email');
+    }
     
-    console.log('✅ New flight request created:', flight._id);
+    console.log(`✅ New flight ${flight.status === 'booked' ? 'booking' : 'request'} created:`, flight._id);
     
     // Notify connected clients
-    notifyDataChange('flightRequestCreated', { flightId: flight._id });
+    const eventType = flight.status === 'booked' ? 'flightBookingCreated' : 'flightRequestCreated';
+    notifyDataChange(eventType, { flightId: flight._id, status: flight.status });
     
     res.status(201).json(flight);
   } catch (error) {
@@ -7338,7 +7365,9 @@ app.put('/api/flights/:id', authenticate, async (req, res) => {
       req.body,
       { new: true, runValidators: true }
     ).populate('createdBy', 'fullName email')
-     .populate('eventId', 'title');
+     .populate('eventId', 'title')
+     .populate('bookedDetails.bookedBy', 'fullName email')
+     .populate('returnBookedDetails.bookedBy', 'fullName email');
     
     if (!flight) {
       return res.status(404).json({ error: 'Flight request not found' });

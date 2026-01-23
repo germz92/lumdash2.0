@@ -70,6 +70,8 @@ const tableSchema = new mongoose.Schema({
     budget: String,
     summary: { type: String, default: "" },
     galleryUrl: { type: String, default: "" },
+    contractUrl: { type: String, default: "" },
+    invoiceUrl: { type: String, default: "" },
     contacts: [
       {
         name: String,

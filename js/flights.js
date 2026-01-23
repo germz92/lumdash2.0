@@ -2448,13 +2448,15 @@
     
     if (!confirmed) return;
 
+    const requestId = currentEditingRequest._id; // Save ID before closing modal
+
     try {
-      await apiRequest(`/api/flights/${currentEditingRequest._id}`, {
+      await apiRequest(`/api/flights/${requestId}`, {
         method: 'DELETE'
       });
 
       // Remove from pending list
-      flightRequests = flightRequests.filter(f => f._id !== currentEditingRequest._id);
+      flightRequests = flightRequests.filter(f => f._id !== requestId);
       
       // Re-render
       renderPendingRequests();
@@ -2462,7 +2464,7 @@
       // Close modal
       closeViewModal();
 
-      console.log('✅ Flight request deleted:', currentEditingRequest._id);
+      console.log('✅ Flight request deleted:', requestId);
     } catch (error) {
       console.error('Failed to delete flight request:', error);
       alert('Failed to delete flight request. Please try again.');

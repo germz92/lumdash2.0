@@ -1503,6 +1503,31 @@ body:has(.events-page) {
   line-height: 1;
 }
 
+.event-name .gear-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 4px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 4px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.event-name .gear-badge:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  transform: scale(1.1);
+}
+
+.event-name .gear-badge .material-symbols-outlined {
+  font-size: 18px;
+}
+
 .event-name .edit-icon {
   color: var(--text-tertiary);
   font-size: 16px;

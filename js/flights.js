@@ -567,7 +567,7 @@
       elements.pendingEmptyState.style.display = 'block';
     } else {
       elements.pendingEmptyState.style.display = 'none';
-      
+
       if (pendingViewType === 'table') {
         elements.pendingRequestsGrid.style.display = 'none';
         elements.pendingRequestsTable.style.display = 'block';
@@ -575,10 +575,10 @@
       } else {
         elements.pendingRequestsGrid.style.display = 'grid';
         elements.pendingRequestsTable.style.display = 'none';
-        filteredRequests.forEach(request => {
-          const card = createPendingRequestCard(request);
-          elements.pendingRequestsGrid.appendChild(card);
-        });
+      filteredRequests.forEach(request => {
+        const card = createPendingRequestCard(request);
+        elements.pendingRequestsGrid.appendChild(card);
+      });
       }
     }
 
@@ -683,7 +683,7 @@
     }
     
     elements.bookedEmptyState.style.display = 'none';
-    
+
     if (bookedViewType === 'table') {
       elements.bookedFlightsGrid.style.display = 'none';
       elements.bookedFlightsTable.style.display = 'block';
@@ -692,18 +692,18 @@
       elements.bookedFlightsGrid.style.display = 'grid';
       elements.bookedFlightsTable.style.display = 'none';
       
-      // Create separate cards for outbound and return flights
-      filteredFlights.forEach(flight => {
-        // Always create outbound card
-        const outboundCard = createBookedFlightCard(flight, false);
-        elements.bookedFlightsGrid.appendChild(outboundCard);
-        
-        // Create return card for roundtrip flights
-        if (flight.tripType === 'roundtrip' && flight.returnDate) {
-          const returnCard = createBookedFlightCard(flight, true);
-          elements.bookedFlightsGrid.appendChild(returnCard);
-        }
-      });
+    // Create separate cards for outbound and return flights
+    filteredFlights.forEach(flight => {
+      // Always create outbound card
+      const outboundCard = createBookedFlightCard(flight, false);
+      elements.bookedFlightsGrid.appendChild(outboundCard);
+      
+      // Create return card for roundtrip flights
+      if (flight.tripType === 'roundtrip' && flight.returnDate) {
+        const returnCard = createBookedFlightCard(flight, true);
+        elements.bookedFlightsGrid.appendChild(returnCard);
+      }
+    });
     }
     
     // Show filtered count vs total
@@ -1649,11 +1649,11 @@
         }
         
         if (input) {
-          input.value = `${item.dataset.code} - ${item.dataset.city}, ${item.dataset.state}`;
-          input.dataset.code = item.dataset.code;
-          input.dataset.city = item.dataset.city;
-          input.dataset.state = item.dataset.state;
-          input.dataset.name = item.dataset.name;
+        input.value = `${item.dataset.code} - ${item.dataset.city}, ${item.dataset.state}`;
+        input.dataset.code = item.dataset.code;
+        input.dataset.city = item.dataset.city;
+        input.dataset.state = item.dataset.state;
+        input.dataset.name = item.dataset.name;
         }
         suggestionsEl.classList.remove('show');
       });
@@ -2057,7 +2057,7 @@
               <div class="form-group">
                 <label>Passport Number</label>
                 <input type="text" value="${fullPassenger.passportNumber || ''}" data-field="passportNumber">
-              </div>
+            </div>
               <div class="form-group">
                 <label>Passport Expiration</label>
                 <input type="date" value="${fullPassenger.passportExpiration ? formatDateForInput(fullPassenger.passportExpiration) : ''}" data-field="passportExpiration">
@@ -2321,11 +2321,11 @@
 
       // Also add to selected passengers (for whichever modal is open)
       if (elements.createRequestModal?.classList.contains('show')) {
-        selectedPassengers.push({
-          passengerId: newPassenger._id,
-          name: newPassenger.fullName || `${newPassenger.firstName} ${newPassenger.lastName}`
-        });
-        renderSelectedPassengers();
+      selectedPassengers.push({
+        passengerId: newPassenger._id,
+        name: newPassenger.fullName || `${newPassenger.firstName} ${newPassenger.lastName}`
+      });
+      renderSelectedPassengers();
       } else if (elements.createBookingModal?.classList.contains('show')) {
         bookingSelectedPassengers.push({
           passengerId: newPassenger._id,
@@ -2882,7 +2882,7 @@
           <div class="passport-exp">${expText}</div>
         </div>`;
       }
-
+      
       return `
         <tr data-passenger-id="${passenger._id}">
           <td class="passenger-name-cell">${fullName}</td>

@@ -728,6 +728,36 @@ function checkScheduleContent(tables) {
   return scheduleStatus;
 }
 
+/**
+ * Fetch events that have gear reserved
+ * Returns Set of eventIds that have gear
+ */
+async function fetchEventsWithGear() {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_BASE}/api/gear-packages/events-with-gear`, {
+      headers: {
+        'Authorization': token,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      console.error('Failed to fetch events with gear');
+      return new Set();
+    }
+    
+    const data = await response.json();
+    // Convert ObjectIds to strings for comparison
+    const eventIdStrings = (data.eventIds || []).map(id => id.toString());
+    console.log('[GEAR DEBUG] Events with gear:', eventIdStrings);
+    return new Set(eventIdStrings);
+  } catch (error) {
+    console.error('Error fetching events with gear:', error);
+    return new Set();
+  }
+}
+
 function renderEventRowDark(table, index, userId) {
   const general = table.general || {};
   const accentColor = rowAccentColors[index % rowAccentColors.length];
@@ -794,6 +824,11 @@ function renderEventRowDark(table, index, userId) {
           ${table.hasSchedule ? `
             <span class="schedule-badge" onclick="event.stopPropagation(); window.navigate('schedule', '${table._id}'); return false;" title="Has program schedule">
               <span class="material-symbols-outlined">calendar_month</span>
+            </span>
+          ` : ''}
+          ${table.hasGear ? `
+            <span class="gear-badge" onclick="event.stopPropagation(); window.navigate('gear', '${table._id}'); return false;" title="Has gear reserved">
+              <span class="material-symbols-outlined">photo_camera</span>
             </span>
           ` : ''}
           <span class="material-symbols-outlined edit-icon" onclick="event.stopPropagation(); openEditEventModal('${table._id}', this)">edit</span>
@@ -1124,6 +1159,16 @@ async function loadTables(forceRefresh = false) {
   const scheduleStatus = checkScheduleContent(tables);
   tables.forEach(table => {
     table.hasSchedule = scheduleStatus[table._id] || false;
+  });
+  
+  // Check which events have gear reserved
+  const eventsWithGear = await fetchEventsWithGear();
+  tables.forEach(table => {
+    const tableId = table._id.toString();
+    table.hasGear = eventsWithGear.has(tableId);
+    if (eventsWithGear.size > 0) {
+      console.log('[GEAR DEBUG] Checking table:', tableId, 'hasGear:', table.hasGear);
+    }
   });
   
   // Calculate share count for each table (owners + leads + sharedWith)

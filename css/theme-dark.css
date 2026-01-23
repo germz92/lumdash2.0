@@ -1415,6 +1415,90 @@ body:has(.events-page) {
   text-decoration: underline;
 }
 
+.event-name .flight-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--primary-color);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 8px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-decoration: none;
+}
+
+.event-name .flight-badge:hover {
+  background: var(--primary-color-hover);
+  transform: scale(1.05);
+}
+
+.event-name .flight-badge .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.event-name .flight-badge .flight-count {
+  line-height: 1;
+}
+
+.event-name .schedule-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 4px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 4px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-decoration: none;
+}
+
+.event-name .schedule-badge:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  transform: scale(1.1);
+}
+
+.event-name .schedule-badge .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.event-name .share-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 4px 6px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 4px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-decoration: none;
+}
+
+.event-name .share-badge:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.event-name .share-badge .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.event-name .share-badge .share-count {
+  line-height: 1;
+}
+
 .event-name .edit-icon {
   color: var(--text-tertiary);
   font-size: 16px;
@@ -3735,6 +3819,15 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
   background: rgba(220, 53, 69, 0.15);
   border-color: #dc3545;
   color: #dc3545;
+}
+
+.share-empty-item {
+  background: transparent !important;
+  padding: 0 !important;
+}
+
+.share-empty-item:hover {
+  background: transparent !important;
 }
 
 .share-empty {

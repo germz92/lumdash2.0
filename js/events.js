@@ -365,6 +365,7 @@ async function openEditEventModal(eventId, clickedElement) {
 }
 
 window.openEditEventModal = openEditEventModal;
+window.openShareModal = openShareModal;
 
 // Row accent colors for dark theme table view
 const rowAccentColors = [
@@ -661,6 +662,72 @@ function navigateToCrew(eventId) {
 window.navigateToTodos = navigateToTodos;
 window.navigateToCrew = navigateToCrew;
 
+/**
+ * Fetch passenger counts for all events (unique passengers per event)
+ */
+async function fetchFlightCounts() {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_BASE}/api/flights/booked`, {
+      headers: {
+        'Authorization': token,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      console.warn('Failed to fetch flight counts');
+      return {};
+    }
+    
+    const flights = await response.json();
+    
+    // Group flights by event name and count unique passengers
+    const passengerCounts = {};
+    flights.forEach(flight => {
+      const eventName = flight.eventName || 'Flight';
+      if (!passengerCounts[eventName]) {
+        passengerCounts[eventName] = new Set();
+      }
+      // Add all passenger IDs to the set for this event
+      if (flight.passengers && Array.isArray(flight.passengers)) {
+        flight.passengers.forEach(passenger => {
+          if (passenger.passengerId) {
+            passengerCounts[eventName].add(passenger.passengerId);
+          }
+        });
+      }
+    });
+    
+    // Convert Sets to counts
+    const counts = {};
+    Object.keys(passengerCounts).forEach(eventName => {
+      counts[eventName] = passengerCounts[eventName].size;
+    });
+    
+    return counts;
+  } catch (error) {
+    console.error('Error fetching flight counts:', error);
+    return {};
+  }
+}
+
+/**
+ * Check which events have schedule content
+ * Returns object with eventId as key and boolean as value
+ */
+function checkScheduleContent(tables) {
+  const scheduleStatus = {};
+  tables.forEach(table => {
+    // Check if programSchedule exists and has content
+    const hasSchedule = table.programSchedule && 
+                       Array.isArray(table.programSchedule) && 
+                       table.programSchedule.length > 0;
+    scheduleStatus[table._id] = hasSchedule;
+  });
+  return scheduleStatus;
+}
+
 function renderEventRowDark(table, index, userId) {
   const general = table.general || {};
   const accentColor = rowAccentColors[index % rowAccentColors.length];
@@ -712,6 +779,23 @@ function renderEventRowDark(table, index, userId) {
           <a href="#" class="event-name-link" onclick="window.navigate('general', '${table._id}'); return false;">
             ${table.title || 'Untitled Event'}
           </a>
+          ${table.flightCount > 0 ? `
+            <span class="flight-badge" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" title="${table.flightCount} passenger${table.flightCount !== 1 ? 's' : ''} with flights">
+              <span class="material-symbols-outlined">flight</span>
+              <span class="flight-count">${table.flightCount}</span>
+            </span>
+          ` : ''}
+          ${table.shareCount > 0 ? `
+            <span class="share-badge" onclick="event.stopPropagation(); openShareModal('${table._id}');" title="Shared with ${table.shareCount} ${table.shareCount === 1 ? 'person' : 'people'}">
+              <span class="material-symbols-outlined">send</span>
+              <span class="share-count">${table.shareCount}</span>
+            </span>
+          ` : ''}
+          ${table.hasSchedule ? `
+            <span class="schedule-badge" onclick="event.stopPropagation(); window.navigate('schedule', '${table._id}'); return false;" title="Has program schedule">
+              <span class="material-symbols-outlined">calendar_month</span>
+            </span>
+          ` : ''}
           <span class="material-symbols-outlined edit-icon" onclick="event.stopPropagation(); openEditEventModal('${table._id}', this)">edit</span>
         </div>
         ${cityState ? `
@@ -1028,6 +1112,27 @@ async function loadTables(forceRefresh = false) {
     cachedTables = tables;
     cacheTimestamp = now;
   }
+  
+  // Always fetch passenger counts to ensure they're up to date
+  const passengerCounts = await fetchFlightCounts();
+  tables.forEach(table => {
+    const eventTitle = table.title || 'Untitled Event';
+    table.flightCount = passengerCounts[eventTitle] || 0; // flightCount stores unique passenger count
+  });
+  
+  // Check which events have schedule content
+  const scheduleStatus = checkScheduleContent(tables);
+  tables.forEach(table => {
+    table.hasSchedule = scheduleStatus[table._id] || false;
+  });
+  
+  // Calculate share count for each table (owners + leads + sharedWith)
+  tables.forEach(table => {
+    const ownersCount = Array.isArray(table.owners) ? table.owners.length : 0;
+    const leadsCount = Array.isArray(table.leads) ? table.leads.length : 0;
+    const sharedWithCount = Array.isArray(table.sharedWith) ? table.sharedWith.length : 0;
+    table.shareCount = ownersCount + leadsCount + sharedWithCount;
+  });
   
   // Hide loading
   if (loadingEl) loadingEl.style.display = 'none';
@@ -1553,8 +1658,6 @@ function renderEventCard(table, container, userId) {
 
 async function openShareModal(tableId) {
   try {
-    console.log('[SHARE_MODAL] Opening share modal for table:', tableId);
-    
     // First fetch the table to check ownership
     const res = await fetch(`${API_BASE}/api/tables/${tableId}`, {
       headers: { Authorization: token }
@@ -1579,8 +1682,6 @@ async function openShareModal(tableId) {
     // If owner, proceed with opening the share modal
     currentTableId = tableId;
     const shareModal = document.getElementById('shareModal');
-    console.log('[SHARE_MODAL] Found shareModal element:', !!shareModal);
-    
     if (!shareModal) {
       console.error('[SHARE_MODAL] shareModal element not found in DOM!');
       showToast('Error: Share modal not found. Please refresh the page.', 'error');
@@ -1590,7 +1691,6 @@ async function openShareModal(tableId) {
     if (shareModal) {
       shareModal.classList.add('show');
       document.body.style.overflow = 'hidden';
-      console.log('[SHARE_MODAL] Modal shown');
     }
 
     // Fetch users for the lists
@@ -1607,9 +1707,27 @@ async function openShareModal(tableId) {
     const shared = users.filter(u => table.sharedWith.includes(u._id) && !table.leads.includes(u._id) && !table.owners.includes(u._id));
 
     // Render into <ul> elements
-    const ownerList = document.getElementById('ownerList')?.querySelector('ul');
-    const leadList = document.getElementById('leadList')?.querySelector('ul');
-    const sharedList = document.getElementById('sharedList')?.querySelector('ul');
+    const ownerListContainer = document.getElementById('ownerList');
+    const leadListContainer = document.getElementById('leadList');
+    const sharedListContainer = document.getElementById('sharedList');
+    
+    let ownerList = ownerListContainer?.querySelector('ul');
+    let leadList = leadListContainer?.querySelector('ul');
+    let sharedList = sharedListContainer?.querySelector('ul');
+    
+    // If UL elements are missing, recreate them
+    if (ownerListContainer && !ownerList) {
+      ownerListContainer.innerHTML = '<ul></ul>';
+      ownerList = ownerListContainer.querySelector('ul');
+    }
+    if (leadListContainer && !leadList) {
+      leadListContainer.innerHTML = '<ul></ul>';
+      leadList = leadListContainer.querySelector('ul');
+    }
+    if (sharedListContainer && !sharedList) {
+      sharedListContainer.innerHTML = '<ul></ul>';
+      sharedList = sharedListContainer.querySelector('ul');
+    }
 
     // Helper to check if user is a lead
     const isLead = (user) => Array.isArray(table.leads) && table.leads.includes(user._id);
@@ -1663,7 +1781,7 @@ async function openShareModal(tableId) {
 
     // Render empty state if no users
     function renderEmptyState(message) {
-      return `<div class="share-empty">${message}</div>`;
+      return `<li class="share-empty-item"><div class="share-empty">${message}</div></li>`;
     }
 
     // Populate lists and update counts
@@ -1673,17 +1791,17 @@ async function openShareModal(tableId) {
     
     if (ownerList) {
       ownerList.innerHTML = owners.length > 0 
-        ? `<ul>${owners.map(u => renderUser(u, true)).join('')}</ul>` 
+        ? owners.map(u => renderUser(u, true)).join('') 
         : renderEmptyState('No owners');
     }
     if (leadList) {
       leadList.innerHTML = leads.length > 0 
-        ? `<ul>${leads.map(u => renderUser(u, false)).join('')}</ul>` 
+        ? leads.map(u => renderUser(u, false)).join('') 
         : renderEmptyState('No leads assigned');
     }
     if (sharedList) {
       sharedList.innerHTML = shared.length > 0 
-        ? `<ul>${shared.map(u => renderUser(u, false)).join('')}</ul>` 
+        ? shared.map(u => renderUser(u, false)).join('') 
         : renderEmptyState('No users shared with');
     }
     
@@ -1727,11 +1845,6 @@ async function openShareModal(tableId) {
     // Initialize autofill functionality
     setupUserAutofill();
     
-    console.log('[SHARE_MODAL] Modal setup complete. Lists populated:', {
-      owners: owners.length,
-      leads: leads.length,
-      shared: shared.length
-    });
 
     // Helper to submit role change and refresh modal
     async function submitRoleChange(email, makeOwner, makeLead) {

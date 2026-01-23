@@ -6,11 +6,12 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
 
 :root {
-  --auth-bg-primary: #0a0a0a;
-  --auth-bg-secondary: #111111;
-  --auth-bg-card: #151515;
-  --auth-bg-input: #1a1a1a;
-  --auth-border: rgba(255, 255, 255, 0.08);
+  /* Softer dark grays - easier on the eyes */
+  --auth-bg-primary: #121216;
+  --auth-bg-secondary: #18181c;
+  --auth-bg-card: #1e1e26;
+  --auth-bg-input: #14141a;
+  --auth-border: rgba(255, 255, 255, 0.10);
   --auth-border-focus: rgba(204, 0, 7, 0.5);
   --auth-text-primary: #ffffff;
   --auth-text-secondary: rgba(255, 255, 255, 0.7);

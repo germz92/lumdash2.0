@@ -36,24 +36,28 @@
 }
 
 :root {
-  /* Dark Theme Colors - Rich, deep blacks */
-  --bg-primary: #080808;
-  --bg-secondary: #0d0d0d;
-  --bg-tertiary: #141414;
-  --bg-elevated: #1a1a1a;
-  --bg-hover: #1f1f1f;
-  --bg-active: #262626;
+  /* Dark Theme Colors - Softer dark grays for comfort */
+  /* Raised from near-black to dark charcoal with subtle cool tint */
+  --bg-primary: #121216;
+  --bg-secondary: #18181c;
+  --bg-tertiary: #1e1e24;
+  --bg-elevated: #252530;
+  --bg-hover: #2a2a36;
+  --bg-active: #32323e;
   
-  /* Surface Colors */
-  --surface-card: #111111;
-  --surface-modal: #151515;
-  --surface-input: #0a0a0a;
-  --surface-overlay: rgba(0, 0, 0, 0.8);
+  /* Surface Colors - More distinction between layers */
+  --surface-card: #1a1a20;
+  --surface-modal: #1e1e26;
+  --surface-input: #14141a;
+  --surface-overlay: rgba(0, 0, 0, 0.75);
+  --surface-secondary: #222228;
+  --surface-tertiary: #28282f;
+  --surface-hover: #2e2e38;
   
-  /* Border Colors - Subtle luminosity */
-  --border-subtle: rgba(255, 255, 255, 0.04);
-  --border-default: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.12);
+  /* Border Colors - More visible for better section separation */
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.16);
   --border-focus: rgba(204, 0, 7, 0.5);
   
   /* Text Colors - Hierarchy */
@@ -200,8 +204,8 @@
 
 /* Ensure the entire page has dark background */
 html, body {
-  background: #080808 !important;
-  background-color: #080808 !important;
+  background: #121216 !important;
+  background-color: #121216 !important;
   margin: 0;
   padding: 0;
   height: 100%;
@@ -838,7 +842,7 @@ body:has(.events-page) {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: #080808;
+  background: var(--bg-primary);
   z-index: 10000;
   overflow: hidden;
 }
@@ -868,7 +872,7 @@ body:has(.events-page) {
 }
 
 .calendar-close-inline:hover {
-  background: #2a2a2a;
+  background: var(--bg-hover);
   border-color: var(--brand-red);
   color: var(--brand-red);
 }
@@ -885,7 +889,7 @@ body:has(.events-page) {
 
 /* Calendar View Dark Theme */
 #calendarViewContainer {
-  background: #080808;
+  background: var(--bg-primary);
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -902,7 +906,7 @@ body:has(.events-page) {
   padding: 16px 0;
   border-bottom: none;
   flex-shrink: 0;
-  background: #080808;
+  background: var(--bg-primary);
   width: 100%;
 }
 
@@ -926,7 +930,7 @@ body:has(.events-page) {
   justify-content: center;
   width: 40px;
   height: 40px;
-  background: #1a1a1a;
+  background: var(--surface-card);
   border: 1px solid #333;
   border-radius: 50%;
   color: #999;
@@ -935,9 +939,9 @@ body:has(.events-page) {
 }
 
 .calendar-nav-btn:hover {
-  background: #2a2a2a;
+  background: var(--bg-hover);
   border-color: var(--brand-red);
-  color: #fff;
+  color: var(--text-primary);
 }
 
 #todayBtn {
@@ -955,7 +959,7 @@ body:has(.events-page) {
   grid-template-columns: repeat(7, 1fr);
   gap: 1px;
   flex-shrink: 0;
-  background: #333;
+  background: var(--bg-active);
   width: 100%;
 }
 
@@ -967,7 +971,7 @@ body:has(.events-page) {
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 12px 0;
-  background: #080808;
+  background: var(--bg-primary);
 }
 
 .calendar-grid {
@@ -977,7 +981,7 @@ body:has(.events-page) {
   gap: 1px;
   flex: 1;
   min-height: 0;
-  background: #111111;
+  background: var(--surface-card);
   width: 100%;
 }
 
@@ -1002,14 +1006,14 @@ body:has(.events-page) {
   left: 0;
   right: 0;
   bottom: 0;
-  background: #1a1a1a;
+  background: var(--surface-card);
   z-index: 0;
   transition: background var(--transition-fast);
   pointer-events: none;
 }
 
 .calendar-day:hover::before {
-  background: #252525;
+  background: var(--bg-elevated);
 }
 
 
@@ -1022,11 +1026,11 @@ body:has(.events-page) {
 }
 
 .calendar-day.other-month::before {
-  background: #151515;
+  background: var(--bg-secondary);
 }
 
 .calendar-day.today::before {
-  background: #1a1a1a;
+  background: var(--bg-tertiary);
 }
 
 .calendar-day-num {
@@ -1161,10 +1165,10 @@ body:has(.events-page) {
 
 /* Expanded state for showing all events */
 .calendar-day.events-expanded .calendar-day-events {
-  background: #1a1a1a;
+  background: var(--bg-tertiary);
   border-radius: 4px;
   padding: 4px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-lg);
 }
 
 .calendar-empty-state {
@@ -1625,7 +1629,7 @@ body:has(.events-page) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%);
+  background: linear-gradient(135deg, var(--bg-active) 0%, var(--bg-hover) 100%);
   border: 2px solid var(--border-default);
 }
 
@@ -1641,7 +1645,7 @@ body:has(.events-page) {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%);
+  background: linear-gradient(135deg, var(--bg-active) 0%, var(--bg-hover) 100%);
   border-radius: var(--radius-full);
 }
 
@@ -1717,7 +1721,7 @@ body:has(.events-page) {
 
 /* Initials avatar for crew without photos */
 .crew-avatar.initials-avatar {
-  background: linear-gradient(135deg, #3a3a3a 0%, #2a2a2a 100%);
+  background: linear-gradient(135deg, var(--bg-active) 0%, var(--bg-hover) 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2750,8 +2754,8 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
   
   /* Dark theme styling for bottom nav */
   body:not(.events-page):not(.login-page):not(.register-page) #bottomNav {
-    background: #0d0d0d !important;
-    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+    background: var(--bg-secondary) !important;
+    border-top: 1px solid var(--border-default) !important;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5) !important;
   }
   
@@ -2783,7 +2787,7 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
   
   /* Dropdown menu - dark theme */
   body:not(.events-page):not(.login-page):not(.register-page) #bottomNav .dropdown-menu {
-    background: #151515 !important;
+    background: var(--bg-secondary) !important;
     border: 1px solid rgba(255, 255, 255, 0.12) !important;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
   }
@@ -3090,7 +3094,7 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
   position: fixed;
   max-height: 250px;
   overflow-y: auto;
-  background: #1a1a1a !important;
+  background: var(--surface-card) !important;
   border: 1px solid #333 !important;
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
@@ -3138,7 +3142,7 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
 #card-entry-modal .custom-dropdown-option:hover,
 #cameraDropdownMenu .custom-dropdown-option:hover,
 #userDropdownMenu .custom-dropdown-option:hover {
-  background: #2a2a2a !important;
+  background: var(--bg-hover) !important;
 }
 
 .card-log-page.dark-theme .custom-dropdown-option.selected,
@@ -3339,10 +3343,10 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
 .dark-modal input:-webkit-autofill:hover,
 .dark-modal input:-webkit-autofill:focus,
 .dark-modal input:-webkit-autofill:active {
-  -webkit-box-shadow: 0 0 0 1000px #141414 inset !important;
+  -webkit-box-shadow: 0 0 0 1000px var(--bg-tertiary) inset !important;
   -webkit-text-fill-color: #ffffff !important;
-  background-color: #141414 !important;
-  border-color: #2a2a2a !important;
+  background-color: var(--bg-tertiary) !important;
+  border-color: var(--border-strong) !important;
   caret-color: #ffffff !important;
   transition: background-color 5000s ease-in-out 0s;
 }
@@ -3354,8 +3358,8 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
 .dark-modal input[type="email"],
 .dark-modal input[type="tel"],
 .dark-modal textarea {
-  background: #141414 !important;
-  background-color: #141414 !important;
+  background: var(--bg-tertiary) !important;
+  background-color: var(--bg-tertiary) !important;
   color: #ffffff !important;
 }
 
@@ -3925,7 +3929,7 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
 .share-dropdown-search input {
   width: 100%;
   padding: 10px 12px;
-  background: #2a2a2a;
+  background: var(--bg-hover);
   border: 1px solid #444;
   border-radius: 6px;
   color: #fff;
@@ -3962,7 +3966,7 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
 }
 
 .share-dropdown-option:hover {
-  background: #2a2a2a;
+  background: var(--bg-hover);
 }
 
 .share-dropdown-option .option-avatar {
@@ -5186,15 +5190,15 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
 .general-card.info-card,
 .dark-theme .info-card,
 .general-page .info-card {
-  background: #111111 !important;
-  background-color: #111111 !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: var(--surface-card) !important;
+  background-color: var(--surface-card) !important;
+  border: 1px solid var(--border-default) !important;
 }
 
 .general-card.info-card .card-header,
 .dark-theme .info-card .card-header,
 .general-page .info-card .card-header {
-  background: #141414 !important;
+  background: var(--bg-tertiary) !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
 
@@ -5202,7 +5206,7 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
 .dark-theme .info-card .card-content,
 .general-page .info-card .card-content {
   padding: 16px 20px;
-  background: #111111 !important;
+  background: var(--surface-card) !important;
 }
 
 .info-row {
@@ -9662,8 +9666,8 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   color: var(--text-primary);
   
   /* Override Material Design CSS variables for dark theme */
-  --md-sys-color-surface: #1a1a1a;
-  --md-sys-color-surface-variant: #2a2a2a;
+  --md-sys-color-surface: var(--surface-card);
+  --md-sys-color-surface-variant: var(--bg-hover);
   --md-sys-color-on-surface: #ffffff;
   --md-sys-color-on-surface-variant: #9ca3af;
   --md-sys-color-outline: #333333;
@@ -9940,7 +9944,7 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 .todos-page.dark-theme .status-select option,
 .todos-page.dark-theme .task-select option,
 .todos-page.dark-theme select option {
-  background: #1a1a1a !important;
+  background: var(--surface-card) !important;
   color: #ffffff !important;
   padding: 8px 12px;
 }
@@ -10729,7 +10733,7 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 #deleteTaskModal .modal-content,
 .todos-page #editTaskModal .modal-content,
 .todos-page #deleteTaskModal .modal-content {
-  background: #1a1a1a !important;
+  background: var(--surface-card) !important;
   border: 1px solid #333 !important;
   border-radius: 12px !important;
   width: 90%;
@@ -10746,7 +10750,7 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 
 #editTaskModal .modal-content,
 #deleteTaskModal .modal-content {
-  background: #1a1a1a !important;
+  background: var(--surface-card) !important;
   border: 1px solid #333 !important;
   color: #ffffff !important;
 }
@@ -10780,14 +10784,14 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 
 #editTaskModal .form-input,
 #editTaskModal .form-select {
-  background: #2a2a2a !important;
+  background: var(--bg-hover) !important;
   border: 1px solid #444 !important;
   color: #ffffff !important;
 }
 
 #editTaskModal .modal-close,
 #deleteTaskModal .modal-close {
-  background: #2a2a2a !important;
+  background: var(--bg-hover) !important;
   color: #9ca3af !important;
 }
 
@@ -10814,7 +10818,7 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 }
 
 .todos-page.dark-theme .modal-close {
-  background: #2a2a2a !important;
+  background: var(--bg-hover) !important;
   border: none;
   color: #9ca3af !important;
   padding: 8px;
@@ -10853,7 +10857,7 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 .todos-page.dark-theme .form-select {
   width: 100%;
   padding: 10px 14px;
-  background: #2a2a2a !important;
+  background: var(--bg-hover) !important;
   border: 1px solid #444 !important;
   border-radius: 8px !important;
   color: #ffffff !important;
@@ -10884,7 +10888,7 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   justify-content: space-between;
   width: 100%;
   padding: 10px 14px;
-  background: #2a2a2a !important;
+  background: var(--bg-hover) !important;
   border: 1px solid #444 !important;
   border-radius: 8px !important;
   color: #ffffff !important;
@@ -10929,7 +10933,7 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 .todos-page.dark-theme .custom-dropdown-menu {
   max-height: 200px;
   overflow-y: auto;
-  background: #1a1a1a !important;
+  background: var(--surface-card) !important;
   border: 1px solid #333 !important;
   border-radius: 8px !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6) !important;
@@ -10975,7 +10979,7 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 }
 
 .todos-page.dark-theme .custom-dropdown-option:hover {
-  background: #2a2a2a !important;
+  background: var(--bg-hover) !important;
 }
 
 .todos-page.dark-theme .custom-dropdown-option.selected {

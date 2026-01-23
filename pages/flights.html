@@ -61,17 +61,28 @@
           <div class="toolbar-filters">
             <select id="pendingFilter" class="toolbar-select">
               <option value="all">All</option>
-              <option value="upcoming">Upcoming</option>
+              <option value="upcoming" selected>Upcoming</option>
               <option value="past">Past</option>
             </select>
             <select id="pendingSort" class="toolbar-select">
-              <option value="newest">Newest First</option>
-              <option value="oldest">Oldest First</option>
+              <option value="soonest" selected>Soonest First</option>
+              <option value="latest">Latest First</option>
             </select>
+            <div class="view-toggle">
+              <button class="view-toggle-btn active" data-view="cards" id="pendingCardsViewBtn" title="Card view">
+                <span class="material-symbols-outlined">grid_view</span>
+              </button>
+              <button class="view-toggle-btn" data-view="table" id="pendingTableViewBtn" title="Table view">
+                <span class="material-symbols-outlined">table_rows</span>
+              </button>
+            </div>
           </div>
         </div>
         <div class="flights-grid" id="pendingRequestsGrid">
           <!-- Pending request cards will be rendered here -->
+        </div>
+        <div class="flights-table-container" id="pendingRequestsTable" style="display: none;">
+          <!-- Pending requests table will be rendered here -->
         </div>
         <div class="empty-state" id="pendingEmptyState" style="display: none;">
           <span class="material-symbols-outlined">pending_actions</span>
@@ -99,17 +110,28 @@
           <div class="toolbar-filters">
             <select id="bookedFilter" class="toolbar-select">
               <option value="all">All</option>
-              <option value="upcoming">Upcoming</option>
+              <option value="upcoming" selected>Upcoming</option>
               <option value="past">Past</option>
             </select>
             <select id="bookedSort" class="toolbar-select">
-              <option value="newest">Newest First</option>
-              <option value="oldest">Oldest First</option>
+              <option value="soonest" selected>Soonest First</option>
+              <option value="latest">Latest First</option>
             </select>
+            <div class="view-toggle">
+              <button class="view-toggle-btn active" data-view="cards" id="bookedCardsViewBtn" title="Card view">
+                <span class="material-symbols-outlined">grid_view</span>
+              </button>
+              <button class="view-toggle-btn" data-view="table" id="bookedTableViewBtn" title="Table view">
+                <span class="material-symbols-outlined">table_rows</span>
+              </button>
+            </div>
           </div>
         </div>
         <div class="flights-grid" id="bookedFlightsGrid">
           <!-- Booked flight cards will be rendered here -->
+        </div>
+        <div class="flights-table-container" id="bookedFlightsTable" style="display: none;">
+          <!-- Booked flights table will be rendered here -->
         </div>
         <div class="empty-state" id="bookedEmptyState" style="display: none;">
           <span class="material-symbols-outlined">flight_takeoff</span>

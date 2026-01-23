@@ -22,6 +22,8 @@
   let newPassengerRewards = []; // For add passenger modal
   let editPassengerRewards = []; // For edit passenger modal
   let bookingSelectedPassengers = []; // For create booking modal
+  let pendingViewType = 'cards'; // 'cards' or 'table'
+  let bookedViewType = 'cards'; // 'cards' or 'table'
 
   // Debounce utility for search
   function debounce(func, wait) {
@@ -38,11 +40,18 @@
 
   // DOM Elements
   const elements = {
-    // Grids
+    // Grids and Tables
     pendingRequestsGrid: document.getElementById('pendingRequestsGrid'),
+    pendingRequestsTable: document.getElementById('pendingRequestsTable'),
     bookedFlightsGrid: document.getElementById('bookedFlightsGrid'),
+    bookedFlightsTable: document.getElementById('bookedFlightsTable'),
     pendingEmptyState: document.getElementById('pendingEmptyState'),
     bookedEmptyState: document.getElementById('bookedEmptyState'),
+    // View Toggle Buttons
+    pendingCardsViewBtn: document.getElementById('pendingCardsViewBtn'),
+    pendingTableViewBtn: document.getElementById('pendingTableViewBtn'),
+    bookedCardsViewBtn: document.getElementById('bookedCardsViewBtn'),
+    bookedTableViewBtn: document.getElementById('bookedTableViewBtn'),
     pendingCount: document.getElementById('pendingCount'),
     bookedCount: document.getElementById('bookedCount'),
     
@@ -313,10 +322,18 @@
     elements.pendingFilter?.addEventListener('change', () => renderPendingRequests());
     elements.pendingSort?.addEventListener('change', () => renderPendingRequests());
     
+    // View Toggle for Pending
+    elements.pendingCardsViewBtn?.addEventListener('click', () => switchPendingView('cards'));
+    elements.pendingTableViewBtn?.addEventListener('click', () => switchPendingView('table'));
+    
     // Search, Filter, Sort for Booked
     elements.bookedSearch?.addEventListener('input', debounce(() => renderBookedFlights(), 300));
     elements.bookedFilter?.addEventListener('change', () => renderBookedFlights());
     elements.bookedSort?.addEventListener('change', () => renderBookedFlights());
+    
+    // View Toggle for Booked
+    elements.bookedCardsViewBtn?.addEventListener('click', () => switchBookedView('cards'));
+    elements.bookedTableViewBtn?.addEventListener('click', () => switchBookedView('table'));
 
     // Create Request Modal
     elements.createRequestBtn?.addEventListener('click', openCreateModal);
@@ -485,8 +502,8 @@
     
     // Get filter values
     const searchTerm = (elements.pendingSearch?.value || '').toLowerCase().trim();
-    const filterValue = elements.pendingFilter?.value || 'all';
-    const sortValue = elements.pendingSort?.value || 'newest';
+    const filterValue = elements.pendingFilter?.value || 'upcoming';
+    const sortValue = elements.pendingSort?.value || 'soonest';
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
@@ -519,24 +536,50 @@
       return true;
     });
     
-    // Sort flights
+    // Sort flights by depart date
     filteredRequests.sort((a, b) => {
-      const dateA = new Date(a.departDate + 'T12:00:00');
-      const dateB = new Date(b.departDate + 'T12:00:00');
-      return sortValue === 'oldest' ? dateA - dateB : dateB - dateA;
+      // Handle different date formats
+      let dateA, dateB;
+      
+      if (a.departDate instanceof Date) {
+        dateA = a.departDate;
+      } else if (typeof a.departDate === 'string') {
+        dateA = new Date(a.departDate);
+      } else {
+        dateA = new Date();
+      }
+      
+      if (b.departDate instanceof Date) {
+        dateB = b.departDate;
+      } else if (typeof b.departDate === 'string') {
+        dateB = new Date(b.departDate);
+      } else {
+        dateB = new Date();
+      }
+      
+      // 'soonest' = earliest dates first (ascending), 'latest' = furthest dates first (descending)
+      return sortValue === 'latest' ? dateB - dateA : dateA - dateB;
     });
     
     if (filteredRequests.length === 0) {
       elements.pendingRequestsGrid.style.display = 'none';
+      elements.pendingRequestsTable.style.display = 'none';
       elements.pendingEmptyState.style.display = 'block';
     } else {
-      elements.pendingRequestsGrid.style.display = 'grid';
       elements.pendingEmptyState.style.display = 'none';
-
-      filteredRequests.forEach(request => {
-        const card = createPendingRequestCard(request);
-        elements.pendingRequestsGrid.appendChild(card);
-      });
+      
+      if (pendingViewType === 'table') {
+        elements.pendingRequestsGrid.style.display = 'none';
+        elements.pendingRequestsTable.style.display = 'block';
+        renderPendingTable(filteredRequests);
+      } else {
+        elements.pendingRequestsGrid.style.display = 'grid';
+        elements.pendingRequestsTable.style.display = 'none';
+        filteredRequests.forEach(request => {
+          const card = createPendingRequestCard(request);
+          elements.pendingRequestsGrid.appendChild(card);
+        });
+      }
     }
 
     // Show filtered count vs total
@@ -556,8 +599,8 @@
     
     // Get filter values
     const searchTerm = (elements.bookedSearch?.value || '').toLowerCase().trim();
-    const filterValue = elements.bookedFilter?.value || 'all';
-    const sortValue = elements.bookedSort?.value || 'newest';
+    const filterValue = elements.bookedFilter?.value || 'upcoming';
+    const sortValue = elements.bookedSort?.value || 'soonest';
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
@@ -603,15 +646,34 @@
       return true;
     });
     
-    // Sort flights
+    // Sort flights by depart date
     filteredFlights.sort((a, b) => {
-      const dateA = new Date(a.departDate + 'T12:00:00');
-      const dateB = new Date(b.departDate + 'T12:00:00');
-      return sortValue === 'oldest' ? dateA - dateB : dateB - dateA;
+      // Handle different date formats
+      let dateA, dateB;
+      
+      if (a.departDate instanceof Date) {
+        dateA = a.departDate;
+      } else if (typeof a.departDate === 'string') {
+        dateA = new Date(a.departDate);
+      } else {
+        dateA = new Date();
+      }
+      
+      if (b.departDate instanceof Date) {
+        dateB = b.departDate;
+      } else if (typeof b.departDate === 'string') {
+        dateB = new Date(b.departDate);
+      } else {
+        dateB = new Date();
+      }
+      
+      // 'soonest' = earliest dates first (ascending), 'latest' = furthest dates first (descending)
+      return sortValue === 'latest' ? dateB - dateA : dateA - dateB;
     });
     
     if (filteredFlights.length === 0) {
       elements.bookedFlightsGrid.style.display = 'none';
+      elements.bookedFlightsTable.style.display = 'none';
       elements.bookedEmptyState.style.display = 'block';
       const countText = searchTerm || filterValue !== 'all' 
         ? `0 of ${bookedFlights.length} Flight${bookedFlights.length !== 1 ? 's' : ''}`
@@ -620,36 +682,257 @@
       return;
     }
     
-    elements.bookedFlightsGrid.style.display = 'grid';
     elements.bookedEmptyState.style.display = 'none';
-
-    // Create separate cards for outbound and return flights
-    let totalFlightCards = 0;
     
-    filteredFlights.forEach(flight => {
-      // Always create outbound card
-      const outboundCard = createBookedFlightCard(flight, false);
-      elements.bookedFlightsGrid.appendChild(outboundCard);
-      totalFlightCards++;
+    if (bookedViewType === 'table') {
+      elements.bookedFlightsGrid.style.display = 'none';
+      elements.bookedFlightsTable.style.display = 'block';
+      renderBookedTable(filteredFlights);
+    } else {
+      elements.bookedFlightsGrid.style.display = 'grid';
+      elements.bookedFlightsTable.style.display = 'none';
       
-      // Create return card for roundtrip flights
-      if (flight.tripType === 'roundtrip' && flight.returnDate) {
-        const returnCard = createBookedFlightCard(flight, true);
-        elements.bookedFlightsGrid.appendChild(returnCard);
-        totalFlightCards++;
-      }
-    });
+      // Create separate cards for outbound and return flights
+      filteredFlights.forEach(flight => {
+        // Always create outbound card
+        const outboundCard = createBookedFlightCard(flight, false);
+        elements.bookedFlightsGrid.appendChild(outboundCard);
+        
+        // Create return card for roundtrip flights
+        if (flight.tripType === 'roundtrip' && flight.returnDate) {
+          const returnCard = createBookedFlightCard(flight, true);
+          elements.bookedFlightsGrid.appendChild(returnCard);
+        }
+      });
+    }
     
     // Show filtered count vs total
     const totalBookedCards = bookedFlights.reduce((acc, f) => {
       return acc + 1 + (f.tripType === 'roundtrip' && f.returnDate ? 1 : 0);
     }, 0);
+    const totalFilteredCards = filteredFlights.reduce((acc, f) => {
+      return acc + 1 + (f.tripType === 'roundtrip' && f.returnDate ? 1 : 0);
+    }, 0);
     
     const countText = searchTerm || filterValue !== 'all' 
-      ? `${totalFlightCards} of ${totalBookedCards} Flight${totalBookedCards !== 1 ? 's' : ''}`
-      : `${totalFlightCards} Flight${totalFlightCards !== 1 ? 's' : ''}`;
+      ? `${totalFilteredCards} of ${totalBookedCards} Flight${totalBookedCards !== 1 ? 's' : ''}`
+      : `${totalFilteredCards} Flight${totalFilteredCards !== 1 ? 's' : ''}`;
     elements.bookedCount.textContent = countText;
   }
+
+  /**
+   * Switch pending view between cards and table
+   */
+  function switchPendingView(viewType) {
+    pendingViewType = viewType;
+    elements.pendingCardsViewBtn?.classList.toggle('active', viewType === 'cards');
+    elements.pendingTableViewBtn?.classList.toggle('active', viewType === 'table');
+    renderPendingRequests();
+  }
+
+  /**
+   * Switch booked view between cards and table
+   */
+  function switchBookedView(viewType) {
+    bookedViewType = viewType;
+    elements.bookedCardsViewBtn?.classList.toggle('active', viewType === 'cards');
+    elements.bookedTableViewBtn?.classList.toggle('active', viewType === 'table');
+    renderBookedFlights();
+  }
+
+  /**
+   * Render pending requests as table
+   */
+  function renderPendingTable(requests) {
+    if (!elements.pendingRequestsTable) return;
+    
+    const tableHTML = `
+      <table class="flights-table">
+        <thead>
+          <tr>
+            <th>Passengers</th>
+            <th>Depart Date</th>
+            <th>Depart Time Pref</th>
+            <th>Return Date</th>
+            <th>Return Time Pref</th>
+            <th>From</th>
+            <th>To</th>
+            <th>Event</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${requests.map(request => {
+            const departDate = new Date(request.departDate);
+            const returnDate = request.returnDate ? new Date(request.returnDate) : null;
+            const departTimePref = formatTimePreference(request.departTimePreference);
+            const returnTimePref = formatTimePreference(request.returnTimePreference);
+            
+            return `
+              <tr data-request-id="${request._id}" onclick="window.openViewModal(event, '${request._id}')">
+                <td>
+                  <div class="table-passengers">
+                    ${(request.passengers || []).map(p => 
+                      `<span class="table-passenger-chip">${p.name || 'Unknown'}</span>`
+                    ).join('')}
+                  </div>
+                </td>
+                <td class="table-date">${departDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                <td class="table-time">${departTimePref}</td>
+                <td class="table-date">${returnDate ? returnDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
+                <td class="table-time">${request.returnDate ? returnTimePref : '—'}</td>
+                <td>
+                  <div class="table-airport">
+                    <div class="table-airport-code">${request.from?.code || '—'}</div>
+                    <div class="table-airport-city">${request.from?.city ? `${request.from.city}${request.from.state ? ', ' + request.from.state : ''}` : ''}</div>
+                  </div>
+                </td>
+                <td>
+                  <div class="table-airport">
+                    <div class="table-airport-code">${request.to?.code || '—'}</div>
+                    <div class="table-airport-city">${request.to?.city ? `${request.to.city}${request.to.state ? ', ' + request.to.state : ''}` : ''}</div>
+                  </div>
+                </td>
+                <td class="table-event">${request.eventName || 'Flight'}</td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    `;
+    
+    elements.pendingRequestsTable.innerHTML = tableHTML;
+  }
+
+  /**
+   * Render booked flights as table (with round trips split into two rows)
+   */
+  function renderBookedTable(flights) {
+    if (!elements.bookedFlightsTable) return;
+    
+    const rows = [];
+    
+    flights.forEach(flight => {
+      // Outbound row
+      const departDate = new Date(flight.departDate);
+      const departTime = formatTimeDisplay(flight.bookedDetails?.departTime) || '—';
+      const arriveTime = formatTimeDisplay(flight.bookedDetails?.arriveTime) || '—';
+      const confirmationCode = flight.bookedDetails?.confirmationCode || 'N/A';
+      
+      rows.push(`
+        <tr data-flight-id="${flight._id}" data-is-return="false" onclick="window.openEditBookedFlightFromTable(event, '${flight._id}')">
+          <td>
+            <div class="table-passengers">
+              ${(flight.passengers || []).map(p => 
+                `<span class="table-passenger-chip">${p.name || 'Unknown'}</span>`
+              ).join('')}
+            </div>
+          </td>
+          <td class="table-date">
+            ${departDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            ${flight.tripType === 'roundtrip' ? '<span class="table-direction-badge outbound">Outbound</span>' : ''}
+          </td>
+          <td class="table-time">${departTime}</td>
+          <td class="table-time">${arriveTime}</td>
+          <td>
+            <div class="table-airport">
+              <div class="table-airport-code">${flight.from?.code || '—'}</div>
+              <div class="table-airport-city">${flight.from?.city ? `${flight.from.city}${flight.from.state ? ', ' + flight.from.state : ''}` : ''}</div>
+            </div>
+          </td>
+          <td>
+            <div class="table-airport">
+              <div class="table-airport-code">${flight.to?.code || '—'}</div>
+              <div class="table-airport-city">${flight.to?.city ? `${flight.to.city}${flight.to.state ? ', ' + flight.to.state : ''}` : ''}</div>
+            </div>
+          </td>
+          <td class="table-confirmation">
+            <div class="table-confirmation-wrapper">
+              <span>${confirmationCode}</span>
+              ${confirmationCode !== 'N/A' ? `<button class="table-copy-btn" data-confirmation="${confirmationCode}" onclick="event.stopPropagation(); navigator.clipboard.writeText('${confirmationCode}');" title="Copy confirmation code"><span class="material-symbols-outlined">content_copy</span></button>` : ''}
+            </div>
+          </td>
+          <td class="table-event">${flight.eventName || 'Flight'}</td>
+        </tr>
+      `);
+      
+      // Return row for round trips
+      if (flight.tripType === 'roundtrip' && flight.returnDate) {
+        const returnDate = new Date(flight.returnDate);
+        const returnDepartTime = formatTimeDisplay(flight.returnBookedDetails?.departTime) || '—';
+        const returnArriveTime = formatTimeDisplay(flight.returnBookedDetails?.arriveTime) || '—';
+        
+        rows.push(`
+          <tr data-flight-id="${flight._id}" data-is-return="true" onclick="window.openEditBookedFlightFromTable(event, '${flight._id}')">
+            <td>
+              <div class="table-passengers">
+                ${(flight.passengers || []).map(p => 
+                  `<span class="table-passenger-chip">${p.name || 'Unknown'}</span>`
+                ).join('')}
+              </div>
+            </td>
+            <td class="table-date">
+              ${returnDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              <span class="table-direction-badge return">Return</span>
+            </td>
+            <td class="table-time">${returnDepartTime}</td>
+            <td class="table-time">${returnArriveTime}</td>
+            <td>
+              <div class="table-airport">
+                <div class="table-airport-code">${flight.to?.code || '—'}</div>
+                <div class="table-airport-city">${flight.to?.city ? `${flight.to.city}${flight.to.state ? ', ' + flight.to.state : ''}` : ''}</div>
+              </div>
+            </td>
+            <td>
+              <div class="table-airport">
+                <div class="table-airport-code">${flight.from?.code || '—'}</div>
+                <div class="table-airport-city">${flight.from?.city ? `${flight.from.city}${flight.from.state ? ', ' + flight.from.state : ''}` : ''}</div>
+              </div>
+            </td>
+            <td class="table-confirmation">
+              <div class="table-confirmation-wrapper">
+                <span>${confirmationCode}</span>
+                ${confirmationCode !== 'N/A' ? `<button class="table-copy-btn" data-confirmation="${confirmationCode}" onclick="event.stopPropagation(); navigator.clipboard.writeText('${confirmationCode}');" title="Copy confirmation code"><span class="material-symbols-outlined">content_copy</span></button>` : ''}
+              </div>
+            </td>
+            <td class="table-event">${flight.eventName || 'Flight'}</td>
+          </tr>
+        `);
+      }
+    });
+    
+    const tableHTML = `
+      <table class="flights-table">
+        <thead>
+          <tr>
+            <th>Passengers</th>
+            <th>Depart Date</th>
+            <th>Depart Time</th>
+            <th>Arrive Time</th>
+            <th>From</th>
+            <th>To</th>
+            <th>Confirmation#</th>
+            <th>Event</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.join('')}
+        </tbody>
+      </table>
+    `;
+    
+    elements.bookedFlightsTable.innerHTML = tableHTML;
+  }
+
+  // Make functions globally accessible for onclick handlers
+  window.openViewModal = function(event, requestId) {
+    const request = flightRequests.find(r => r._id === requestId);
+    if (request) openViewModal(request);
+  };
+
+  window.openEditBookedFlightFromTable = function(event, flightId) {
+    const flight = bookedFlights.find(f => f._id === flightId);
+    if (flight) openEditBookedFlightModal(flight);
+  };
 
   /**
    * Format date for display
@@ -730,6 +1013,20 @@
   }
 
   /**
+   * Format time preference for display
+   */
+  function formatTimePreference(pref) {
+    if (!pref || pref === 'any') return 'Any';
+    const preferences = {
+      'morning': 'Morning',
+      'afternoon': 'Afternoon',
+      'evening': 'Evening',
+      'redeye': 'Red-eye'
+    };
+    return preferences[pref] || pref;
+  }
+
+  /**
    * Create pending request card HTML
    */
   function createPendingRequestCard(request) {
@@ -765,14 +1062,14 @@
           <div class="flight-route">
             <div class="flight-airport">
               <span class="airport-code">${request.from?.code || 'TBD'}</span>
-              <span class="airport-city">${request.from?.city || ''}</span>
+              <span class="airport-city">${request.from?.city ? `${request.from.city}${request.from.state ? ', ' + request.from.state : ''}` : ''}</span>
             </div>
             <div class="flight-route-icon">
               <span class="material-symbols-outlined">flight_takeoff</span>
             </div>
             <div class="flight-airport">
               <span class="airport-code">${request.to?.code || 'TBD'}</span>
-              <span class="airport-city">${request.to?.city || ''}</span>
+              <span class="airport-city">${request.to?.city ? `${request.to.city}${request.to.state ? ', ' + request.to.state : ''}` : ''}</span>
             </div>
           </div>
         </div>
@@ -868,7 +1165,6 @@
         </div>
         <div class="booked-header-right">
           <div class="confirmation-code">
-            <span>Confirmation #</span>
             <strong>${confirmationCode || 'N/A'}</strong>
             ${confirmationCode ? `
               <button class="copy-btn" title="Copy confirmation code">
@@ -1002,9 +1298,9 @@
     elements.createRequestForm?.reset();
     // Set default trip type
     document.querySelector('input[name="tripType"][value="roundtrip"]').checked = true;
-    elements.returnDateGroup.style.display = 'block';
+    elements.returnDateGroup?.classList.remove('hidden');
     if (elements.returnTimePreferenceGroup) {
-      elements.returnTimePreferenceGroup.style.display = 'block';
+      elements.returnTimePreferenceGroup.classList.remove('hidden');
     }
   }
 
@@ -1044,9 +1340,9 @@
    */
   function handleTripTypeChange(e) {
     const isRoundtrip = e.target.value === 'roundtrip';
-    elements.returnDateGroup.style.display = isRoundtrip ? 'block' : 'none';
+    elements.returnDateGroup?.classList.toggle('hidden', !isRoundtrip);
     if (elements.returnTimePreferenceGroup) {
-      elements.returnTimePreferenceGroup.style.display = isRoundtrip ? 'block' : 'none';
+      elements.returnTimePreferenceGroup.classList.toggle('hidden', !isRoundtrip);
     }
   }
 
@@ -1656,7 +1952,7 @@
     document.querySelectorAll('.trip-type-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.type === request.tripType);
     });
-    elements.viewReturnDateGroup.style.display = request.tripType === 'roundtrip' ? 'block' : 'none';
+    elements.viewReturnDateGroup?.classList.toggle('hidden', request.tripType !== 'roundtrip');
 
     // Render passengers accordion
     renderPassengersAccordion(request.passengers || []);
@@ -1687,7 +1983,7 @@
     document.querySelectorAll('.trip-type-btn').forEach(btn => {
       btn.classList.toggle('active', btn.dataset.type === type);
     });
-    elements.viewReturnDateGroup.style.display = type === 'roundtrip' ? 'block' : 'none';
+    elements.viewReturnDateGroup?.classList.toggle('hidden', type !== 'roundtrip');
   }
 
   /**

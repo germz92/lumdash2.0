@@ -216,6 +216,43 @@
 .flights-dark .toolbar-filters {
   display: flex;
   gap: 12px;
+  align-items: center;
+}
+
+.flights-dark .view-toggle {
+  display: flex;
+  gap: 4px;
+  background: var(--surface-secondary);
+  border-radius: var(--radius-md);
+  padding: 4px;
+  border: 1px solid var(--border-default);
+}
+
+.flights-dark .view-toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  transition: var(--transition-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.flights-dark .view-toggle-btn:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.flights-dark .view-toggle-btn.active {
+  background: var(--brand-red);
+  color: white;
+}
+
+.flights-dark .view-toggle-btn .material-symbols-outlined {
+  font-size: 20px;
 }
 
 .flights-dark .toolbar-select {
@@ -950,6 +987,10 @@
   display: flex !important;
   flex-direction: column !important;
   width: 100% !important;
+}
+
+.flights-dark .dark-modal .form-group.hidden {
+  display: none !important;
 }
 
 .flights-dark .form-group label {
@@ -2524,5 +2565,176 @@
 
   .flights-dark .view-route-display .route-arrow-icon {
     justify-self: center;
+  }
+}
+
+/* ========================================
+   TABLE VIEW STYLES
+   ======================================== */
+
+.flights-dark .flights-table-container {
+  background: var(--surface-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.flights-dark .flights-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.flights-dark .flights-table thead {
+  background: var(--surface-tertiary);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.flights-dark .flights-table th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.flights-dark .flights-table tbody tr {
+  border-bottom: 1px solid var(--border-subtle);
+  transition: var(--transition-base);
+  cursor: pointer;
+}
+
+.flights-dark .flights-table tbody tr:hover {
+  background: var(--surface-hover);
+}
+
+.flights-dark .flights-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+.flights-dark .flights-table td {
+  padding: 14px 16px;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  vertical-align: middle;
+}
+
+.flights-dark .table-passengers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.flights-dark .table-passenger-chip {
+  background: var(--surface-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 4px 8px;
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.flights-dark .table-date {
+  white-space: nowrap;
+}
+
+.flights-dark .table-time {
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  white-space: nowrap;
+}
+
+.flights-dark .table-airport {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.flights-dark .table-airport-code {
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+}
+
+.flights-dark .table-airport-city {
+  font-size: var(--font-size-xs);
+  color: var(--text-tertiary);
+}
+
+.flights-dark .table-confirmation {
+  font-family: monospace;
+  font-weight: var(--font-weight-semibold);
+  color: var(--brand-red);
+}
+
+.flights-dark .table-confirmation-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.flights-dark .table-copy-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  transition: var(--transition-base);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+}
+
+.flights-dark .table-copy-btn .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.flights-dark .table-copy-btn:hover {
+  background: var(--surface-hover);
+  color: var(--brand-red);
+}
+
+.flights-dark .flights-table tbody tr:hover .table-copy-btn {
+  opacity: 1;
+}
+
+.flights-dark .table-event {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flights-dark .table-direction-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  margin-left: 8px;
+}
+
+.flights-dark .table-direction-badge.outbound {
+  background: rgba(59, 130, 246, 0.15);
+  color: #60a5fa;
+}
+
+.flights-dark .table-direction-badge.return {
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+}
+
+/* Responsive Table */
+@media (max-width: 1400px) {
+  .flights-dark .flights-table {
+    font-size: var(--font-size-xs);
+  }
+
+  .flights-dark .flights-table th,
+  .flights-dark .flights-table td {
+    padding: 10px 12px;
   }
 }

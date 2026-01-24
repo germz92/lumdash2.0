@@ -1,21 +1,26 @@
-<!-- AI Chat Widget -->
-<div id="chatButton" class="chat-button">
+<!-- Luma AI Chat Widget -->
+<div id="chatButton" class="chat-button" title="Ask Luma">
   <span class="material-symbols-outlined">lightbulb_2</span>
 </div>
 
 <div id="chatPanel" class="chat-panel">
   <div class="chat-header">
-    <strong>Luma</strong>
-    <span class="chat-subtitle">Event Assistant</span>
-    <button id="closeChatBtn" class="close-chat-btn">
+    <div class="chat-header-icon">
+      <span class="material-symbols-outlined">lightbulb_2</span>
+    </div>
+    <div class="chat-header-info">
+      <div class="chat-header-title">Luma</div>
+      <div class="chat-subtitle" id="chatSubtitle">AI Assistant</div>
+    </div>
+    <button id="closeChatBtn" class="close-chat-btn" title="Close">
       <span class="material-symbols-outlined">close</span>
     </button>
   </div>
   <div id="chatMessages" class="chat-messages"></div>
   <div class="chat-input-container">
-    <input id="chatInput" type="text" placeholder="Ask Luma about this event..." class="chat-input">
-    <button id="sendBtn" class="send-btn">
-      <span class="material-symbols-outlined">send</span>
+    <input id="chatInput" type="text" placeholder="Ask Luma anything..." class="chat-input" autocomplete="off">
+    <button id="sendBtn" class="send-btn" title="Send">
+      <span class="material-symbols-outlined">arrow_upward</span>
     </button>
   </div>
-</div> 
+</div>

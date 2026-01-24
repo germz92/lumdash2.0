@@ -686,4 +686,24 @@ window.openEvent = openEvent;
 window.toggleEventMenu = toggleEventMenu;
 window.archiveEvent = archiveEvent;
 window.addToCalendar = addToCalendar;
+
+// Initialize Luma AI chat for dashboard
+// Run immediately since this script runs after page injection in SPA
+setTimeout(() => {
+  if (typeof window.initGlobalChat === 'function') {
+    window.initGlobalChat();
+  } else if (typeof window.ensureChatInitialized === 'function') {
+    window.ensureChatInitialized();
+  }
+}, 300);
+
+// Also handle AI Assistant button in the search bar
+const aiAssistantBtn = document.getElementById('aiAssistantBtn');
+if (aiAssistantBtn) {
+  aiAssistantBtn.addEventListener('click', function() {
+    if (typeof window.toggleChat === 'function') {
+      window.toggleChat();
+    }
+  });
+}
 </script>

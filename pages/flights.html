@@ -12,6 +12,7 @@
     <link rel="stylesheet" href="../css/general.css">
     <link rel="stylesheet" href="../css/theme-dark.css">
     <link rel="stylesheet" href="../css/flights.css">
+    <link rel="stylesheet" href="../css/chat.css">
     <script src="../js/config.js"></script>
     <script src="../js/api.js"></script>
     <script src="../js/sidebar-dashboard.js"></script>
@@ -1003,9 +1004,14 @@
     </div>
 
     <script src="../js/flights.js"></script>
+    <script src="../js/chat.js"></script>
     <script>
       // Initialize sidebar functionality
       document.addEventListener('DOMContentLoaded', async function() {
+        // Initialize Luma AI chat
+        if (typeof window.initGlobalChat === 'function') {
+          setTimeout(() => window.initGlobalChat(), 500);
+        }
         // Check planner/admin access first - redirect unauthorized users
         const token = localStorage.getItem('token');
         if (!token) {

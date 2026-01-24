@@ -246,9 +246,9 @@ function navigate(page, id) {
   
   if (!hashAlreadyCorrect) {
     console.log(`[NAVIGATE] Updating hash to "${newHash}"`);
-    // Use replaceState to avoid creating extra history entries and prevent duplicate IDs
-    if (history.replaceState) {
-      history.replaceState(null, '', newHash);
+    // Use pushState to create browser history entries so back button works correctly
+    if (history.pushState) {
+      history.pushState({ page, id: finalId }, '', newHash);
     } else {
       location.hash = newHash;
     }
@@ -335,13 +335,21 @@ function injectPageContent(html, page, id) {
     console.log('Bottom navigation element (bottomNav) not found.');
   }
 
-  // Initialize AI Chat Widget for pages with event ID
-  if (id && typeof window.initChat === 'function') {
-    console.log(`Initializing AI chat for page: ${page} with id: ${id}`);
-    window.initChat(id);
-  } else if (id) {
-    console.warn('Chat widget not available - window.initChat not found');
-  }
+  // Initialize AI Chat Widget
+  // For event pages (with ID): use event-specific chat
+  // For dashboard pages (no ID): use global chat
+  setTimeout(() => {
+    if (id && typeof window.initChat === 'function') {
+      console.log(`Initializing AI chat for page: ${page} with id: ${id}`);
+      window.initChat(id);
+    } else if (typeof window.initGlobalChat === 'function') {
+      console.log(`Initializing global AI chat for dashboard page: ${page}`);
+      window.initGlobalChat();
+    } else if (typeof window.ensureChatInitialized === 'function') {
+      console.log(`Ensuring AI chat is initialized for page: ${page}`);
+      window.ensureChatInitialized();
+    }
+  }, 200); // Small delay to ensure chat.js is loaded
 
   // Lucide icons init should be called AFTER setupBottomNavigation has potentially changed data-lucide attributes
   // Note: updateActiveNavigation, called by setupBottomNavigation, already calls lucide.createIcons().
@@ -677,6 +685,39 @@ window.addEventListener('hashchange', () => {
     navigate(page, eventId);
   } else {
     console.log(`[HASHCHANGE] Page ${page} doesn't need event ID`);
+    navigate(page);
+  }
+});
+
+// Handle popstate events (browser back/forward buttons with pushState)
+window.addEventListener('popstate', (event) => {
+  // Prevent handling if navigation is already in progress
+  if (navigationInProgress) {
+    console.log(`[POPSTATE] Navigation in progress, skipping popstate handler`);
+    return;
+  }
+  
+  console.log(`[POPSTATE] Browser back/forward detected, state:`, event.state);
+  
+  // Parse page and ID from hash (supports #page?id=xxx format)
+  const { page, id: hashId } = parseHash();
+  
+  if (!page) {
+    console.log(`[POPSTATE] No page in hash, defaulting to events`);
+    navigate('events');
+    return;
+  }
+  
+  // For popstate navigation, use state if available, otherwise parse from hash
+  const stateId = event.state?.id;
+  const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management', 'my-tasks', 'call-times'].includes(page);
+  
+  if (needsId) {
+    const eventId = stateId || hashId || localStorage.getItem('eventId');
+    console.log(`[POPSTATE] Page ${page} needs event ID, using: ${eventId}`);
+    navigate(page, eventId);
+  } else {
+    console.log(`[POPSTATE] Page ${page} doesn't need event ID`);
     navigate(page);
   }
 });

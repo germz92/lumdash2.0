@@ -352,11 +352,11 @@ body:has(.bottom-nav-material) #page-container {
   display: none !important;
 }
 
-/* Also hide floating Luma button on events page */
-.events-page .chat-button-nav,
-.events-page #chatButton {
+/* Hide the chat button in navbar on events page (we use floating button instead) */
+.events-page .chat-button-nav {
   display: none !important;
 }
+/* NOTE: #chatButton (floating Luma button) should remain visible on all pages */
 
 /* Remove bottom padding on events page since navbar is hidden */
 .events-page #page-container {

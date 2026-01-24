@@ -3693,36 +3693,23 @@ function processImportedData(data) {
 
 // Function to create and show the import modal
 function showImportModal(newPrograms) {
-  // Create modal container
+  // Create modal container using dark theme classes
   const modalContainer = document.createElement('div');
-  modalContainer.className = 'import-modal-container';
-  modalContainer.style.position = 'fixed';
-  modalContainer.style.top = '0';
-  modalContainer.style.left = '0';
-  modalContainer.style.width = '100%';
-  modalContainer.style.height = '100%';
-  modalContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-  modalContainer.style.display = 'flex';
-  modalContainer.style.justifyContent = 'center';
-  modalContainer.style.alignItems = 'center';
-  modalContainer.style.zIndex = '9999';
+  modalContainer.className = 'dark-modal show';
+  modalContainer.id = 'importScheduleModal';
   
   // Create modal content
   const modalContent = document.createElement('div');
-  modalContent.className = 'import-modal-content';
-  modalContent.style.backgroundColor = 'white';
-  modalContent.style.padding = '20px';
-  modalContent.style.borderRadius = '8px';
-  modalContent.style.maxWidth = '500px';
-  modalContent.style.width = '90%';
-  modalContent.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
+  modalContent.className = 'dark-modal-content';
   
   // Create modal header
   const modalHeader = document.createElement('div');
-  modalHeader.innerHTML = `<h3 style="margin-top: 0; color: #333;">Import Schedule</h3>`;
+  modalHeader.className = 'modal-header-dark';
+  modalHeader.innerHTML = `<h3>Import Schedule</h3>`;
   
   // Create modal body
   const modalBody = document.createElement('div');
+  modalBody.className = 'modal-body-dark';
   modalBody.innerHTML = `
     <p>Found ${newPrograms.length} valid program entries.</p>
     <p>How would you like to import these entries?</p>
@@ -3730,39 +3717,25 @@ function showImportModal(newPrograms) {
   
   // Create modal footer with buttons
   const modalFooter = document.createElement('div');
-  modalFooter.style.display = 'flex';
-  modalFooter.style.justifyContent = 'flex-end';
-  modalFooter.style.marginTop = '20px';
-  modalFooter.style.gap = '10px';
+  modalFooter.className = 'modal-footer-dark';
 
   // Create cancel button
   const cancelButton = document.createElement('button');
+  cancelButton.className = 'btn-secondary';
   cancelButton.textContent = 'Cancel';
-  cancelButton.style.padding = '8px 16px';
-  cancelButton.style.border = '1px solid #ddd';
-  cancelButton.style.borderRadius = '4px';
-  cancelButton.style.backgroundColor = '#f5f5f5';
-  cancelButton.style.cursor = 'pointer';
   
   // Create merge button
   const mergeButton = document.createElement('button');
+  mergeButton.className = 'btn-primary';
+  mergeButton.style.background = 'var(--bg-tertiary)';
+  mergeButton.style.border = '1px solid var(--border-default)';
   mergeButton.textContent = 'Merge with Current';
-  mergeButton.style.padding = '8px 16px';
-  mergeButton.style.border = 'none';
-  mergeButton.style.borderRadius = '4px';
-  mergeButton.style.backgroundColor = '#4a5568';
-  mergeButton.style.color = 'white';
-  mergeButton.style.cursor = 'pointer';
   
   // Create replace button
   const replaceButton = document.createElement('button');
+  replaceButton.className = 'btn-primary';
+  replaceButton.style.background = 'var(--brand-red)';
   replaceButton.textContent = 'Replace Current';
-  replaceButton.style.padding = '8px 16px';
-  replaceButton.style.border = 'none';
-  replaceButton.style.borderRadius = '4px';
-  replaceButton.style.backgroundColor = '#CC0007';
-  replaceButton.style.color = 'white';
-  replaceButton.style.cursor = 'pointer';
   
   // Add buttons to footer
   modalFooter.appendChild(cancelButton);
@@ -3780,10 +3753,25 @@ function showImportModal(newPrograms) {
   // Add modal to body
   document.body.appendChild(modalContainer);
   
-  // Add event listeners to buttons
-  cancelButton.addEventListener('click', () => {
-    document.body.removeChild(modalContainer);
+  // Helper function to close the modal
+  const closeModal = () => {
+    modalContainer.classList.remove('show');
+    setTimeout(() => {
+      if (modalContainer.parentNode) {
+        modalContainer.parentNode.removeChild(modalContainer);
+      }
+    }, 200);
+  };
+
+  // Close modal when clicking backdrop
+  modalContainer.addEventListener('click', (e) => {
+    if (e.target === modalContainer) {
+      closeModal();
+    }
   });
+
+  // Add event listeners to buttons
+  cancelButton.addEventListener('click', closeModal);
   
   mergeButton.addEventListener('click', async () => {
     // Show loading state
@@ -3799,7 +3787,7 @@ function showImportModal(newPrograms) {
       await saveImportedPrograms(newPrograms, 'merge');
       
       renderProgramSections();
-      document.body.removeChild(modalContainer);
+      closeModal();
       alert(`Successfully imported ${newPrograms.length} program entries.`);
     } catch (error) {
       console.error('Import failed:', error);
@@ -3825,7 +3813,7 @@ function showImportModal(newPrograms) {
       await saveImportedPrograms(newPrograms, 'replace');
       
       renderProgramSections();
-      document.body.removeChild(modalContainer);
+      closeModal();
       alert(`Successfully replaced schedule with ${newPrograms.length} program entries.`);
     } catch (error) {
       console.error('Replace failed:', error);

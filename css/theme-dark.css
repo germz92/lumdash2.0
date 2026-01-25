@@ -16084,7 +16084,7 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   margin-left: var(--sidebar-width);
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
   overflow: hidden;
 }
 
@@ -17033,6 +17033,161 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   margin: 0;
 }
 
+/* ========================================
+   TASK SECTIONS (Event + General)
+   ======================================== */
+
+/* Container for both sections */
+.my-tasks-page .tasks-sections-container {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* Event Tasks Section - takes up available space with scroll */
+.my-tasks-page .event-tasks-section {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 200px;
+  max-height: 60vh;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.my-tasks-page .event-tasks-section .my-tasks-list-container.scrollable-container {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+/* General Tasks Section - fixed at bottom, grows as needed */
+.my-tasks-page .general-tasks-section {
+  flex-shrink: 0;
+  max-height: 40vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.my-tasks-page .general-tasks-section .my-tasks-list-container {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.my-tasks-page .tasks-section {
+  margin-bottom: 0;
+}
+
+.my-tasks-page .section-header {
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+.my-tasks-page .section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 32px 16px;
+}
+
+.my-tasks-page .section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.my-tasks-page .section-title .material-symbols-outlined {
+  font-size: 20px;
+  color: var(--brand-red);
+}
+
+.my-tasks-page .general-tasks-section .section-title .material-symbols-outlined {
+  color: #60a5fa;
+}
+
+.my-tasks-page .btn-add-task {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.my-tasks-page .btn-add-task:hover {
+  background: var(--bg-hover);
+  border-color: var(--brand-red);
+  color: var(--brand-red);
+}
+
+.my-tasks-page .btn-add-task .material-symbols-outlined {
+  font-size: 18px;
+}
+
+/* Event tasks section filter bar adjustment */
+.my-tasks-page .event-tasks-section .my-tasks-filter-bar {
+  border-bottom: none;
+  padding-top: 0;
+}
+
+/* General tasks table - fewer columns */
+.my-tasks-page .general-tasks-table .col-task {
+  width: 35%;
+}
+
+.my-tasks-page .general-tasks-table .col-status {
+  width: 15%;
+}
+
+.my-tasks-page .general-tasks-table .col-due {
+  width: 15%;
+}
+
+.my-tasks-page .general-tasks-table .col-notes {
+  width: 30%;
+}
+
+.my-tasks-page .general-tasks-table .col-actions {
+  width: 5%;
+}
+
+/* General Task Modal */
+#generalTaskModal,
+#deleteGeneralTaskModal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  opacity: 0;
+}
+
+#generalTaskModal.show,
+#deleteGeneralTaskModal.show {
+  display: flex !important;
+  opacity: 1 !important;
+  z-index: 99999 !important;
+}
+
 /* Mobile responsive */
 @media (max-width: 768px) {
   .my-tasks-page .dashboard-sidebar {
@@ -17110,6 +17265,36 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   
   .my-tasks-page .sidebar-overlay.show {
     display: block;
+  }
+  
+  /* Section styles on mobile */
+  .my-tasks-page .section-title-row {
+    padding: 16px 20px 12px;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  
+  .my-tasks-page .section-title {
+    font-size: 14px;
+  }
+  
+  .my-tasks-page .btn-add-task {
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+  
+  /* Hide notes in general tasks on mobile too */
+  .my-tasks-page .general-tasks-table .col-notes {
+    display: none;
+  }
+  
+  /* Adjust section heights on mobile */
+  .my-tasks-page .event-tasks-section {
+    max-height: 50vh;
+  }
+  
+  .my-tasks-page .general-tasks-section {
+    max-height: 50vh;
   }
 }
 

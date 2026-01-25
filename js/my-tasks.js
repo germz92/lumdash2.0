@@ -1,16 +1,20 @@
-// My Tasks Page JavaScript - All tasks across all events
+// My Tasks Page JavaScript - All tasks across all events + General Tasks
 (function() {
   'use strict';
 
   let tasks = [];
+  let generalTasks = [];
   let users = [];
   let currentUser = null;
   let isAdmin = false;
   let editingTaskId = null;
   let editingEventId = null;
+  let editingGeneralTaskId = null;
   let myTasksOnly = localStorage.getItem('myTasksFilter') === 'true';
   let statusFilter = localStorage.getItem('myTasksStatusFilter') || 'all'; // 'all', 'pending', 'completed'
+  let generalStatusFilter = localStorage.getItem('generalTasksStatusFilter') || 'all'; // 'all', 'pending', 'completed'
   let dueDateSort = localStorage.getItem('myTasksDueDateSort') || 'none'; // 'none', 'asc', 'desc'
+  let generalDueDateSort = localStorage.getItem('generalTasksDueDateSort') || 'none'; // 'none', 'asc', 'desc'
 
   // Initialize the page
   window.initPage = async function() {
@@ -21,9 +25,10 @@
     
     await getCurrentUser();
     await loadUsers();
-    await loadTasks();
+    await Promise.all([loadTasks(), loadGeneralTasks()]);
     setupEventListeners();
     setupFilterDropdown();
+    setupGeneralTaskListeners();
   };
 
   // Initialize dashboard sidebar
@@ -134,6 +139,535 @@
       }
     } finally {
       if (loadingEl) loadingEl.style.display = 'none';
+    }
+  }
+
+  // Load general tasks
+  async function loadGeneralTasks(showLoading = true) {
+    const loadingEl = document.getElementById('generalTasksLoading');
+    const emptyEl = document.getElementById('generalTasksEmpty');
+    const tbody = document.getElementById('generalTasksTableBody');
+    
+    if (showLoading && loadingEl) {
+      loadingEl.style.display = 'flex';
+    }
+    if (emptyEl) emptyEl.style.display = 'none';
+    
+    try {
+      const response = await fetch(`${API_BASE}/api/personal-tasks`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to load general tasks');
+      }
+      
+      const data = await response.json();
+      generalTasks = data.tasks || [];
+      
+      renderGeneralTasks();
+      updateProgress();
+      
+    } catch (e) {
+      console.error('Error loading general tasks:', e);
+      if (tbody) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="5" style="text-align: center; padding: 40px; color: var(--text-muted);">
+              <span class="material-symbols-outlined" style="font-size: 48px; display: block; margin-bottom: 12px;">error</span>
+              Failed to load general tasks. Please try again.
+            </td>
+          </tr>
+        `;
+      }
+    } finally {
+      if (loadingEl) loadingEl.style.display = 'none';
+    }
+  }
+
+  // Render general tasks in the table
+  function renderGeneralTasks() {
+    const tbody = document.getElementById('generalTasksTableBody');
+    const emptyEl = document.getElementById('generalTasksEmpty');
+    
+    if (!tbody) return;
+    
+    // Apply search filter
+    const searchValue = (document.getElementById('generalTaskSearch')?.value || '').toLowerCase();
+    let filteredTasks = [...generalTasks];
+    
+    // Apply status filter
+    if (generalStatusFilter === 'pending') {
+      filteredTasks = filteredTasks.filter(task => task.status === 'todo' || task.status === 'in-progress');
+    } else if (generalStatusFilter === 'completed') {
+      filteredTasks = filteredTasks.filter(task => task.status === 'done');
+    }
+    
+    // Apply search filter
+    if (searchValue) {
+      filteredTasks = filteredTasks.filter(task => 
+        (task.task || '').toLowerCase().includes(searchValue) ||
+        (task.notes || '').toLowerCase().includes(searchValue)
+      );
+    }
+    
+    // Apply due date sorting
+    if (generalDueDateSort !== 'none') {
+      filteredTasks.sort((a, b) => {
+        const dateA = a.dueDate ? new Date(a.dueDate) : null;
+        const dateB = b.dueDate ? new Date(b.dueDate) : null;
+        
+        if (!dateA && !dateB) return 0;
+        if (!dateA) return 1;
+        if (!dateB) return -1;
+        
+        const diff = dateA - dateB;
+        return generalDueDateSort === 'asc' ? diff : -diff;
+      });
+    }
+    
+    if (filteredTasks.length === 0) {
+      tbody.innerHTML = '';
+      if (emptyEl) {
+        emptyEl.style.display = 'flex';
+        let emptyMessage = 'No general tasks';
+        if (searchValue) {
+          emptyMessage = 'No tasks match your search';
+        } else if (generalStatusFilter === 'pending') {
+          emptyMessage = 'No pending tasks';
+        } else if (generalStatusFilter === 'completed') {
+          emptyMessage = 'No completed tasks';
+        }
+        const emptyTitle = emptyEl.querySelector('h3');
+        if (emptyTitle) emptyTitle.textContent = emptyMessage;
+      }
+      return;
+    }
+    
+    if (emptyEl) emptyEl.style.display = 'none';
+    
+    tbody.innerHTML = filteredTasks.map(task => createGeneralTaskRow(task)).join('');
+    
+    // Setup inline dropdowns for status
+    filteredTasks.forEach(task => {
+      setupGeneralTaskStatusDropdown(task);
+    });
+  }
+
+  // Create a general task row
+  function createGeneralTaskRow(task) {
+    const dueInfo = formatDueDate(task.dueDate);
+    const statusLabel = getStatusLabel(task.status);
+    const isOverdue = dueInfo.className === 'overdue' && task.status !== 'done';
+    
+    return `
+      <tr data-general-task-id="${task._id}" class="${isOverdue ? 'overdue-row' : ''}">
+        <td class="col-task">
+          <span class="task-name">${escapeHtml(task.task || '')}</span>
+        </td>
+        <td class="col-status">
+          <button type="button" class="inline-dropdown-trigger status-${task.status}" id="generalStatusTrigger-${task._id}">
+            <span class="status-dot"></span>
+            <span class="status-text">${statusLabel}</span>
+            <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+          </button>
+        </td>
+        <td class="col-due">
+          <span class="due-date ${isOverdue ? 'overdue' : (dueInfo.className === 'overdue' ? '' : dueInfo.className)}">${dueInfo.text}</span>
+        </td>
+        <td class="col-notes">
+          <span class="notes-preview">${escapeHtml(task.notes || '—')}</span>
+        </td>
+        <td class="col-actions">
+          <div class="actions-dropdown">
+            <button type="button" class="actions-btn" onclick="window.toggleActionsMenu(this)">
+              <span class="material-symbols-outlined">more_vert</span>
+            </button>
+            <div class="actions-menu">
+              <button class="action-item" onclick="window.openEditGeneralTaskModal('${task._id}')">
+                <span class="material-symbols-outlined">edit</span> Edit
+              </button>
+              <button class="action-item delete" onclick="window.openDeleteGeneralTaskModal('${task._id}')">
+                <span class="material-symbols-outlined">delete</span> Delete
+              </button>
+            </div>
+          </div>
+        </td>
+      </tr>
+    `;
+  }
+
+  // Setup inline status dropdown for general tasks
+  function setupGeneralTaskStatusDropdown(task) {
+    const trigger = document.getElementById(`generalStatusTrigger-${task._id}`);
+    if (!trigger) return;
+    
+    // Remove existing menu if any
+    let menu = document.getElementById(`generalStatusMenu-${task._id}`);
+    if (menu) menu.remove();
+    
+    // Create menu
+    menu = document.createElement('div');
+    menu.id = `generalStatusMenu-${task._id}`;
+    menu.className = 'inline-status-menu';
+    menu.style.cssText = 'display: none; position: fixed; z-index: 999999; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.6); overflow: hidden;';
+    
+    const statusOptions = [
+      { value: 'todo', label: 'To Do' },
+      { value: 'in-progress', label: 'In Progress' },
+      { value: 'done', label: 'Done' }
+    ];
+    
+    statusOptions.forEach(opt => {
+      const option = document.createElement('button');
+      option.type = 'button';
+      option.className = 'inline-dropdown-option';
+      option.dataset.value = opt.value;
+      option.style.cssText = 'display: flex; align-items: center; gap: 8px; width: 100%; padding: 10px 14px; background: transparent; border: none; color: #e0e0e0; font-size: 13px; cursor: pointer; text-align: left;';
+      option.innerHTML = `<span class="status-dot status-${opt.value}"></span> ${opt.label}`;
+      option.onmouseover = () => option.style.background = '#2a2a2a';
+      option.onmouseout = () => option.style.background = 'transparent';
+      option.onclick = async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        menu.style.display = 'none';
+        
+        await updateGeneralTaskStatus(task._id, opt.value);
+      };
+      menu.appendChild(option);
+    });
+    
+    document.body.appendChild(menu);
+    
+    trigger.onclick = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      closeAllDropdowns();
+      
+      const isOpen = menu.style.display === 'block';
+      if (isOpen) {
+        menu.style.display = 'none';
+      } else {
+        const rect = trigger.getBoundingClientRect();
+        menu.style.display = 'block';
+        menu.style.top = `${rect.bottom + 4}px`;
+        menu.style.left = `${rect.left}px`;
+        menu.style.minWidth = `${Math.max(rect.width, 140)}px`;
+      }
+    };
+  }
+
+  // Update general task status
+  async function updateGeneralTaskStatus(taskId, newStatus) {
+    try {
+      const response = await fetch(`${API_BASE}/api/personal-tasks/${taskId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ status: newStatus })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to update status');
+      }
+      
+      // Update local data
+      const taskIndex = generalTasks.findIndex(t => t._id === taskId);
+      if (taskIndex !== -1) {
+        generalTasks[taskIndex].status = newStatus;
+      }
+      
+      renderGeneralTasks();
+      updateProgress();
+      
+      showToast('Status updated', 'success');
+    } catch (e) {
+      console.error('Error updating status:', e);
+      showToast('Failed to update status', 'error');
+    }
+  }
+
+  // Setup general task listeners
+  function setupGeneralTaskListeners() {
+    // Add task button
+    const addBtn = document.getElementById('addGeneralTaskBtn');
+    if (addBtn) {
+      addBtn.onclick = () => window.openAddGeneralTaskModal();
+    }
+    
+    // Search input for general tasks
+    const generalSearchInput = document.getElementById('generalTaskSearch');
+    if (generalSearchInput) {
+      let debounceTimer;
+      generalSearchInput.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => renderGeneralTasks(), 300);
+      });
+    }
+    
+    // Status filter tabs for general tasks
+    setupGeneralStatusFilterTabs();
+    
+    // Update general sort icon
+    updateGeneralSortIcon();
+    
+    // Setup general task modal dropdowns
+    setupGeneralTaskModalDropdowns();
+  }
+
+  // Setup general tasks status filter tabs
+  function setupGeneralStatusFilterTabs() {
+    const tabs = document.querySelectorAll('.status-tab[data-section="general"]');
+    
+    // Set initial active state
+    tabs.forEach(tab => {
+      if (tab.dataset.status === generalStatusFilter) {
+        tab.classList.add('active');
+      } else {
+        tab.classList.remove('active');
+      }
+      
+      tab.addEventListener('click', () => {
+        // Update active state
+        tabs.forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        
+        // Update filter
+        generalStatusFilter = tab.dataset.status;
+        localStorage.setItem('generalTasksStatusFilter', generalStatusFilter);
+        
+        // Re-render
+        renderGeneralTasks();
+      });
+    });
+  }
+
+  // Toggle general due date sort
+  window.toggleGeneralDueDateSort = function() {
+    if (generalDueDateSort === 'none') {
+      generalDueDateSort = 'asc';
+    } else if (generalDueDateSort === 'asc') {
+      generalDueDateSort = 'desc';
+    } else {
+      generalDueDateSort = 'none';
+    }
+    
+    localStorage.setItem('generalTasksDueDateSort', generalDueDateSort);
+    updateGeneralSortIcon();
+    renderGeneralTasks();
+  };
+
+  // Update general sort icon
+  function updateGeneralSortIcon() {
+    const icon = document.getElementById('generalDueDateSortIcon');
+    const header = document.getElementById('generalDueDateHeader');
+    
+    if (!icon || !header) return;
+    
+    if (generalDueDateSort === 'asc') {
+      icon.textContent = 'arrow_upward';
+      header.classList.add('sorted');
+    } else if (generalDueDateSort === 'desc') {
+      icon.textContent = 'arrow_downward';
+      header.classList.add('sorted');
+    } else {
+      icon.textContent = 'unfold_more';
+      header.classList.remove('sorted');
+    }
+  }
+
+  // Open add general task modal
+  window.openAddGeneralTaskModal = function() {
+    editingGeneralTaskId = null;
+    
+    const modal = document.getElementById('generalTaskModal');
+    const title = document.getElementById('generalTaskModalTitle');
+    
+    if (title) title.textContent = 'Add General Task';
+    
+    // Reset form
+    document.getElementById('generalTaskId').value = '';
+    document.getElementById('generalTaskName').value = '';
+    document.getElementById('generalTaskStatus').value = 'todo';
+    document.getElementById('generalTaskDueDate').value = '';
+    document.getElementById('generalTaskNotes').value = '';
+    
+    // Reset status dropdown display
+    const statusTrigger = document.getElementById('generalStatusTrigger');
+    if (statusTrigger) {
+      statusTrigger.innerHTML = `
+        <span class="status-dot todo"></span>
+        <span class="dropdown-value">To Do</span>
+        <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+      `;
+    }
+    
+    if (modal) modal.classList.add('show');
+  };
+
+  // Open edit general task modal
+  window.openEditGeneralTaskModal = function(taskId) {
+    closeAllDropdowns();
+    
+    const task = generalTasks.find(t => t._id === taskId);
+    if (!task) return;
+    
+    editingGeneralTaskId = taskId;
+    
+    const modal = document.getElementById('generalTaskModal');
+    const title = document.getElementById('generalTaskModalTitle');
+    
+    if (title) title.textContent = 'Edit General Task';
+    
+    // Populate form
+    document.getElementById('generalTaskId').value = taskId;
+    document.getElementById('generalTaskName').value = task.task || '';
+    document.getElementById('generalTaskStatus').value = task.status || 'todo';
+    document.getElementById('generalTaskDueDate').value = task.dueDate ? task.dueDate.split('T')[0] : '';
+    document.getElementById('generalTaskNotes').value = task.notes || '';
+    
+    // Update status dropdown display
+    const statusTrigger = document.getElementById('generalStatusTrigger');
+    if (statusTrigger) {
+      const statusLabel = getStatusLabel(task.status || 'todo');
+      statusTrigger.innerHTML = `
+        <span class="status-dot ${task.status || 'todo'}"></span>
+        <span class="dropdown-value">${statusLabel}</span>
+        <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+      `;
+    }
+    
+    if (modal) modal.classList.add('show');
+  };
+
+  // Close general task modal
+  window.closeGeneralTaskModal = function() {
+    document.getElementById('generalTaskModal')?.classList.remove('show');
+    editingGeneralTaskId = null;
+  };
+
+  // Save general task
+  window.saveGeneralTask = async function() {
+    const taskId = document.getElementById('generalTaskId').value;
+    const task = document.getElementById('generalTaskName').value.trim();
+    const status = document.getElementById('generalTaskStatus').value;
+    const dueDate = document.getElementById('generalTaskDueDate').value;
+    const notes = document.getElementById('generalTaskNotes').value.trim();
+    
+    if (!task) {
+      showToast('Please enter a task description', 'error');
+      return;
+    }
+    
+    try {
+      const isEditing = !!taskId;
+      const url = isEditing 
+        ? `${API_BASE}/api/personal-tasks/${taskId}` 
+        : `${API_BASE}/api/personal-tasks`;
+      const method = isEditing ? 'PUT' : 'POST';
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ task, status, dueDate: dueDate || null, notes })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to save task');
+      }
+      
+      window.closeGeneralTaskModal();
+      await loadGeneralTasks(false);
+      showToast(isEditing ? 'Task updated' : 'Task added', 'success');
+    } catch (e) {
+      console.error('Error saving general task:', e);
+      showToast('Failed to save task', 'error');
+    }
+  };
+
+  // Open delete general task modal
+  window.openDeleteGeneralTaskModal = function(taskId) {
+    closeAllDropdowns();
+    document.getElementById('deleteGeneralTaskId').value = taskId;
+    document.getElementById('deleteGeneralTaskModal')?.classList.add('show');
+  };
+
+  // Close delete general task modal
+  window.closeDeleteGeneralTaskModal = function() {
+    document.getElementById('deleteGeneralTaskModal')?.classList.remove('show');
+  };
+
+  // Confirm delete general task
+  window.confirmDeleteGeneralTask = async function() {
+    const taskId = document.getElementById('deleteGeneralTaskId').value;
+    
+    try {
+      const response = await fetch(`${API_BASE}/api/personal-tasks/${taskId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to delete task');
+      }
+      
+      window.closeDeleteGeneralTaskModal();
+      await loadGeneralTasks(false);
+      showToast('Task deleted', 'success');
+    } catch (e) {
+      console.error('Error deleting general task:', e);
+      showToast('Failed to delete task', 'error');
+    }
+  };
+
+  // Setup general task modal dropdowns
+  function setupGeneralTaskModalDropdowns() {
+    const statusTrigger = document.getElementById('generalStatusTrigger');
+    const statusMenu = document.getElementById('generalStatusMenu');
+    
+    if (statusTrigger && statusMenu) {
+      statusTrigger.onclick = (e) => {
+        e.stopPropagation();
+        
+        const isOpen = statusMenu.style.display === 'block';
+        
+        if (isOpen) {
+          statusMenu.style.display = 'none';
+        } else {
+          const rect = statusTrigger.getBoundingClientRect();
+          statusMenu.style.display = 'block';
+          statusMenu.style.position = 'fixed';
+          statusMenu.style.top = `${rect.bottom + 4}px`;
+          statusMenu.style.left = `${rect.left}px`;
+          statusMenu.style.minWidth = `${rect.width}px`;
+        }
+      };
+      
+      statusMenu.querySelectorAll('.custom-dropdown-option').forEach(option => {
+        option.onclick = (e) => {
+          e.stopPropagation();
+          
+          const value = option.dataset.value;
+          document.getElementById('generalTaskStatus').value = value;
+          
+          const label = getStatusLabel(value);
+          statusTrigger.innerHTML = `
+            <span class="status-dot ${value}"></span>
+            <span class="dropdown-value">${label}</span>
+            <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+          `;
+          
+          statusMenu.style.display = 'none';
+        };
+      });
     }
   }
 
@@ -365,15 +899,17 @@
     }
   }
 
-  // Update progress bar
+  // Update progress bar (includes both event and general tasks)
   function updateProgress() {
     const progressText = document.getElementById('progressText');
     const progressFill = document.getElementById('progressFill');
     
     if (!progressText || !progressFill) return;
     
-    const total = tasks.length;
-    const completed = tasks.filter(t => t.status === 'done').length;
+    // Combine both task types for overall progress
+    const allTasks = [...tasks, ...generalTasks];
+    const total = allTasks.length;
+    const completed = allTasks.filter(t => t.status === 'done').length;
     const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
     
     progressText.textContent = `${completed} / ${total} completed`;
@@ -409,9 +945,9 @@
     });
   }
 
-  // Setup status filter tabs
+  // Setup status filter tabs (Event Tasks only)
   function setupStatusFilterTabs() {
-    const tabs = document.querySelectorAll('.status-tab');
+    const tabs = document.querySelectorAll('.status-tab[data-section="event"]');
     
     // Set initial active state
     tabs.forEach(tab => {
@@ -422,7 +958,7 @@
       }
       
       tab.addEventListener('click', () => {
-        // Update active state
+        // Update active state for event tabs only
         tabs.forEach(t => t.classList.remove('active'));
         tab.classList.add('active');
         
@@ -430,7 +966,7 @@
         statusFilter = tab.dataset.status;
         localStorage.setItem('myTasksStatusFilter', statusFilter);
         
-        // Re-render
+        // Re-render event tasks only
         renderTasks();
       });
     });

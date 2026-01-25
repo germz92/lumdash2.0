@@ -1171,12 +1171,11 @@ async function loadTables(forceRefresh = false) {
     }
   });
   
-  // Calculate share count for each table (owners + leads + sharedWith)
+  // Calculate share count for each table (leads + sharedWith, excluding owners)
   tables.forEach(table => {
-    const ownersCount = Array.isArray(table.owners) ? table.owners.length : 0;
     const leadsCount = Array.isArray(table.leads) ? table.leads.length : 0;
     const sharedWithCount = Array.isArray(table.sharedWith) ? table.sharedWith.length : 0;
-    table.shareCount = ownersCount + leadsCount + sharedWithCount;
+    table.shareCount = leadsCount + sharedWithCount;
   });
   
   // Hide loading

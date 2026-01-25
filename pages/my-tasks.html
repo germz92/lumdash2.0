@@ -29,70 +29,155 @@
           </div>
         </div>
       </header>
-      
-      <!-- Filter Bar -->
-      <div class="my-tasks-filter-bar">
-        <div class="filter-left">
-          <div class="search-box">
-            <span class="material-symbols-outlined">search</span>
-            <input type="text" id="taskSearch" placeholder="Search tasks...">
-          </div>
-          <!-- Status Filter Tabs -->
-          <div class="status-filter-tabs">
-            <button class="status-tab active" data-status="all">All</button>
-            <button class="status-tab" data-status="pending">Pending</button>
-            <button class="status-tab" data-status="completed">Completed</button>
-          </div>
-        </div>
-        <div class="filter-right">
-          <button class="filter-btn" id="myTasksFilterBtn">
-            <span class="material-symbols-outlined">person</span>
-            <span id="myTasksFilterLabel">All Tasks</span>
-            <span class="material-symbols-outlined">expand_more</span>
-          </button>
-          <div class="filter-dropdown" id="myTasksDropdown">
-            <button class="filter-option" data-value="all">All Tasks</button>
-            <button class="filter-option" data-value="mine">My Tasks Only</button>
-          </div>
-        </div>
-      </div>
-      
-      <!-- Tasks List -->
-      <div class="my-tasks-list-container">
-        <div class="my-tasks-table-wrapper">
-          <table class="my-tasks-table">
-            <thead>
-              <tr>
-                <th class="col-task">Task</th>
-                <th class="col-event">Event</th>
-                <th class="col-status">Status</th>
-                <th class="col-due sortable" id="dueDateHeader" onclick="window.toggleDueDateSort && window.toggleDueDateSort()">
-                  Due Date
-                  <span class="material-symbols-outlined sort-icon" id="dueDateSortIcon">unfold_more</span>
-                </th>
-                <th class="col-owner">Owner</th>
-                <th class="col-notes">Notes</th>
-                <th class="col-actions"></th>
-              </tr>
-            </thead>
-            <tbody id="tasksTableBody">
-              <!-- Tasks will be populated here -->
-            </tbody>
-          </table>
-        </div>
+
+      <!-- Tasks Sections Container -->
+      <div class="tasks-sections-container">
         
-        <!-- Loading State -->
-        <div class="tasks-loading" id="tasksLoading">
-          <span class="material-symbols-outlined spinning">sync</span>
-          <span>Loading tasks...</span>
-        </div>
+        <!-- ========== EVENT TASKS SECTION (scrollable) ========== -->
+        <section class="tasks-section event-tasks-section">
+          <div class="section-header">
+            <div class="section-title-row">
+              <h2 class="section-title">
+                <span class="material-symbols-outlined">event</span>
+                Event Tasks
+              </h2>
+            </div>
+            
+            <!-- Filter Bar -->
+            <div class="my-tasks-filter-bar">
+              <div class="filter-left">
+                <div class="search-box">
+                  <span class="material-symbols-outlined">search</span>
+                  <input type="text" id="taskSearch" placeholder="Search tasks...">
+                </div>
+              <!-- Status Filter Tabs -->
+              <div class="status-filter-tabs">
+                <button class="status-tab active" data-status="all" data-section="event">All</button>
+                <button class="status-tab" data-status="pending" data-section="event">Pending</button>
+                <button class="status-tab" data-status="completed" data-section="event">Completed</button>
+              </div>
+            </div>
+            <div class="filter-right">
+              <button class="filter-btn" id="myTasksFilterBtn">
+                  <span class="material-symbols-outlined">person</span>
+                  <span id="myTasksFilterLabel">All Tasks</span>
+                  <span class="material-symbols-outlined">expand_more</span>
+                </button>
+                <div class="filter-dropdown" id="myTasksDropdown">
+                  <button class="filter-option" data-value="all">All Tasks</button>
+                  <button class="filter-option" data-value="mine">My Tasks Only</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Event Tasks Table (scrollable) -->
+          <div class="my-tasks-list-container scrollable-container">
+            <div class="my-tasks-table-wrapper">
+              <table class="my-tasks-table">
+                <thead>
+                  <tr>
+                    <th class="col-task">Task</th>
+                    <th class="col-event">Event</th>
+                    <th class="col-status">Status</th>
+                    <th class="col-due sortable" id="dueDateHeader" onclick="window.toggleDueDateSort && window.toggleDueDateSort()">
+                      Due Date
+                      <span class="material-symbols-outlined sort-icon" id="dueDateSortIcon">unfold_more</span>
+                    </th>
+                    <th class="col-owner">Owner</th>
+                    <th class="col-notes">Notes</th>
+                    <th class="col-actions"></th>
+                  </tr>
+                </thead>
+                <tbody id="tasksTableBody">
+                  <!-- Tasks will be populated here -->
+                </tbody>
+              </table>
+            </div>
+            
+            <!-- Loading State -->
+            <div class="tasks-loading" id="tasksLoading">
+              <span class="material-symbols-outlined spinning">sync</span>
+              <span>Loading tasks...</span>
+            </div>
+            
+            <!-- Empty State -->
+            <div class="tasks-empty" id="tasksEmpty" style="display: none;">
+              <span class="material-symbols-outlined">task_alt</span>
+              <h3>No tasks found</h3>
+              <p>Tasks assigned to you will appear here</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== GENERAL TASKS SECTION ========== -->
+        <section class="tasks-section general-tasks-section">
+          <div class="section-header">
+            <div class="section-title-row">
+              <h2 class="section-title">
+                <span class="material-symbols-outlined">person</span>
+                General Tasks
+              </h2>
+              <button class="btn-add-task" id="addGeneralTaskBtn" title="Add general task">
+                <span class="material-symbols-outlined">add</span>
+                Add Task
+              </button>
+            </div>
+            
+            <!-- Filter Bar -->
+            <div class="my-tasks-filter-bar general-filter-bar">
+              <div class="filter-left">
+                <div class="search-box">
+                  <span class="material-symbols-outlined">search</span>
+                  <input type="text" id="generalTaskSearch" placeholder="Search general tasks...">
+                </div>
+                <!-- Status Filter Tabs -->
+                <div class="status-filter-tabs">
+                  <button class="status-tab active" data-status="all" data-section="general">All</button>
+                  <button class="status-tab" data-status="pending" data-section="general">Pending</button>
+                  <button class="status-tab" data-status="completed" data-section="general">Completed</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- General Tasks Table -->
+          <div class="my-tasks-list-container">
+            <div class="my-tasks-table-wrapper">
+              <table class="my-tasks-table general-tasks-table">
+                <thead>
+                  <tr>
+                    <th class="col-task">Task</th>
+                    <th class="col-status">Status</th>
+                    <th class="col-due sortable" id="generalDueDateHeader" onclick="window.toggleGeneralDueDateSort && window.toggleGeneralDueDateSort()">
+                      Due Date
+                      <span class="material-symbols-outlined sort-icon" id="generalDueDateSortIcon">unfold_more</span>
+                    </th>
+                    <th class="col-notes">Notes</th>
+                    <th class="col-actions"></th>
+                  </tr>
+                </thead>
+                <tbody id="generalTasksTableBody">
+                  <!-- General tasks will be populated here -->
+                </tbody>
+              </table>
+            </div>
+            
+            <!-- Loading State -->
+            <div class="tasks-loading" id="generalTasksLoading">
+              <span class="material-symbols-outlined spinning">sync</span>
+              <span>Loading tasks...</span>
+            </div>
+            
+            <!-- Empty State -->
+            <div class="tasks-empty" id="generalTasksEmpty" style="display: none;">
+              <span class="material-symbols-outlined">check_circle</span>
+              <h3>No general tasks</h3>
+              <p>Add personal tasks that aren't tied to any event</p>
+            </div>
+          </div>
+        </section>
         
-        <!-- Empty State -->
-        <div class="tasks-empty" id="tasksEmpty" style="display: none;">
-          <span class="material-symbols-outlined">task_alt</span>
-          <h3>No tasks found</h3>
-          <p>Tasks assigned to you will appear here</p>
-        </div>
       </div>
       
     </main>
@@ -171,7 +256,7 @@
   </div>
 </div>
 
-<!-- Delete Confirmation Modal -->
+<!-- Delete Confirmation Modal (Event Tasks) -->
 <div class="dark-modal" id="myTasksDeleteModal">
   <div class="dark-modal-content confirm-modal-content">
     <div class="dark-modal-header">
@@ -188,6 +273,87 @@
     <div class="modal-footer-dark">
       <button class="btn-secondary" onclick="window.closeDeleteTaskModal && window.closeDeleteTaskModal()">Cancel</button>
       <button class="btn-danger" onclick="window.confirmDeleteTask && window.confirmDeleteTask()">
+        <span class="material-symbols-outlined">delete</span> Delete
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Add/Edit General Task Modal -->
+<div class="dark-modal" id="generalTaskModal">
+  <div class="dark-modal-content">
+    <div class="dark-modal-header">
+      <h3><span class="material-symbols-outlined">add_task</span> <span id="generalTaskModalTitle">Add General Task</span></h3>
+      <button class="modal-close" onclick="window.closeGeneralTaskModal && window.closeGeneralTaskModal()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark">
+      <input type="hidden" id="generalTaskId">
+      
+      <div class="form-group-dark">
+        <label for="generalTaskName">Task *</label>
+        <input type="text" id="generalTaskName" placeholder="What needs to be done?">
+      </div>
+      
+      <div class="form-group-dark">
+        <label>Status</label>
+        <div class="custom-dropdown" id="generalStatusDropdown">
+          <button type="button" class="custom-dropdown-trigger" id="generalStatusTrigger">
+            <span class="status-dot todo"></span>
+            <span class="dropdown-value">To Do</span>
+            <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+          </button>
+          <div class="custom-dropdown-menu" id="generalStatusMenu">
+            <button type="button" class="custom-dropdown-option" data-value="todo">
+              <span class="status-dot todo"></span> To Do
+            </button>
+            <button type="button" class="custom-dropdown-option" data-value="in-progress">
+              <span class="status-dot in-progress"></span> In Progress
+            </button>
+            <button type="button" class="custom-dropdown-option" data-value="done">
+              <span class="status-dot done"></span> Done
+            </button>
+          </div>
+        </div>
+        <input type="hidden" id="generalTaskStatus" value="todo">
+      </div>
+      
+      <div class="form-group-dark">
+        <label for="generalTaskDueDate">Due Date</label>
+        <input type="date" id="generalTaskDueDate">
+      </div>
+      
+      <div class="form-group-dark">
+        <label for="generalTaskNotes">Notes</label>
+        <textarea id="generalTaskNotes" rows="3" placeholder="Additional notes..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer-dark">
+      <button class="btn-secondary" onclick="window.closeGeneralTaskModal && window.closeGeneralTaskModal()">Cancel</button>
+      <button class="btn-primary" onclick="window.saveGeneralTask && window.saveGeneralTask()">
+        <span class="material-symbols-outlined">save</span> Save
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete General Task Confirmation Modal -->
+<div class="dark-modal" id="deleteGeneralTaskModal">
+  <div class="dark-modal-content confirm-modal-content">
+    <div class="dark-modal-header">
+      <h3><span class="material-symbols-outlined" style="color: var(--brand-red);">warning</span> Delete Task</h3>
+      <button class="modal-close" onclick="window.closeDeleteGeneralTaskModal && window.closeDeleteGeneralTaskModal()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark">
+      <p>Are you sure you want to delete this task? This action cannot be undone.</p>
+      <input type="hidden" id="deleteGeneralTaskId">
+    </div>
+    <div class="modal-footer-dark">
+      <button class="btn-secondary" onclick="window.closeDeleteGeneralTaskModal && window.closeDeleteGeneralTaskModal()">Cancel</button>
+      <button class="btn-danger" onclick="window.confirmDeleteGeneralTask && window.confirmDeleteGeneralTask()">
         <span class="material-symbols-outlined">delete</span> Delete
       </button>
     </div>

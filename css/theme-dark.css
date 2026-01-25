@@ -18080,19 +18080,23 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   flex: 1;
   padding: 24px 32px;
   overflow: auto;
+  overflow-x: auto;
   min-height: 0; /* Critical for flex child scrolling */
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
 }
 
 .call-times-table-wrapper {
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: 12px;
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Call Times Table */
 .call-times-table {
   width: 100%;
+  min-width: 900px;
   border-collapse: collapse;
 }
 
@@ -18540,10 +18544,11 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   
   .call-times-table-wrapper {
     overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
   
   .call-times-table {
-    min-width: 800px;
+    min-width: 900px;
   }
   
   .call-times-table .col-notes,

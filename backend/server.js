@@ -2291,6 +2291,98 @@ app.get('/api/tasks/all', authenticate, async (req, res) => {
 });
 
 // ===========================================
+// PERSONAL TASKS - User-specific general tasks (not tied to events)
+// ===========================================
+const PersonalTask = require('./models/PersonalTask');
+
+// Get all personal tasks for the current user
+app.get('/api/personal-tasks', authenticate, async (req, res) => {
+  try {
+    const tasks = await PersonalTask.find({ user: req.user.id })
+      .sort({ createdAt: -1 });
+    
+    res.json({ tasks });
+  } catch (err) {
+    console.error('Error fetching personal tasks:', err);
+    res.status(500).json({ error: 'Failed to fetch personal tasks' });
+  }
+});
+
+// Create a new personal task
+app.post('/api/personal-tasks', authenticate, async (req, res) => {
+  try {
+    const { task, status, dueDate, notes } = req.body;
+    
+    if (!task || !task.trim()) {
+      return res.status(400).json({ error: 'Task description is required' });
+    }
+    
+    const newTask = new PersonalTask({
+      user: req.user.id,
+      task: task.trim(),
+      status: status || 'todo',
+      dueDate: dueDate || null,
+      notes: notes || ''
+    });
+    
+    await newTask.save();
+    
+    res.status(201).json({ task: newTask });
+  } catch (err) {
+    console.error('Error creating personal task:', err);
+    res.status(500).json({ error: 'Failed to create personal task' });
+  }
+});
+
+// Update a personal task
+app.put('/api/personal-tasks/:id', authenticate, async (req, res) => {
+  try {
+    const { task, status, dueDate, notes } = req.body;
+    
+    const existingTask = await PersonalTask.findOne({ 
+      _id: req.params.id, 
+      user: req.user.id 
+    });
+    
+    if (!existingTask) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    // Update fields if provided
+    if (task !== undefined) existingTask.task = task.trim();
+    if (status !== undefined) existingTask.status = status;
+    if (dueDate !== undefined) existingTask.dueDate = dueDate || null;
+    if (notes !== undefined) existingTask.notes = notes;
+    
+    await existingTask.save();
+    
+    res.json({ task: existingTask });
+  } catch (err) {
+    console.error('Error updating personal task:', err);
+    res.status(500).json({ error: 'Failed to update personal task' });
+  }
+});
+
+// Delete a personal task
+app.delete('/api/personal-tasks/:id', authenticate, async (req, res) => {
+  try {
+    const result = await PersonalTask.findOneAndDelete({ 
+      _id: req.params.id, 
+      user: req.user.id 
+    });
+    
+    if (!result) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    res.json({ success: true, message: 'Task deleted' });
+  } catch (err) {
+    console.error('Error deleting personal task:', err);
+    res.status(500).json({ error: 'Failed to delete personal task' });
+  }
+});
+
+// ===========================================
 // CALL TIMES - Get all crew call times across all events
 // ===========================================
 app.get('/api/calltimes/all', authenticate, async (req, res) => {

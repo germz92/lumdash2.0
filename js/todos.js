@@ -10,6 +10,22 @@
   let editingTodoId = null;
   let statusFilter = 'all'; // 'all', 'pending', 'completed'
   let dueDateSort = 'none'; // 'none', 'asc', 'desc'
+  let selectedTodoIds = new Set(); // Multi-select state
+  let isMultiSelectMode = false;
+
+  // Task suggestions for autofill
+  const taskSuggestions = [
+    'Create Live Gallery',
+    'Design Live Gallery',
+    'Deliver Event Photos',
+    'Create Schedule',
+    'Assign Crew',
+    'Send COI',
+    'Book Flights',
+    'Request Accommodations',
+    'Send Live Gallery Link',
+    'Setup Meeting'
+  ];
 
   // Initialize the page
   window.initPage = async function(eventId) {
@@ -908,7 +924,27 @@
     // Check if overdue (not completed and past due)
     const dueInfo = formatDueDate(todo.dueDate);
     const isOverdue = dueInfo.className === 'overdue' && todo.status !== 'done';
-    row.className = `todo-row${isOverdue ? ' overdue-row' : ''}`;
+    const isSelected = selectedTodoIds.has(todo._id);
+    row.className = `todo-row${isOverdue ? ' overdue-row' : ''}${isSelected ? ' selected' : ''}`;
+    
+    // Checkbox column (for multi-select)
+    if (isOwnerOrAdmin) {
+      const checkboxCell = document.createElement('td');
+      checkboxCell.className = 'col-checkbox';
+      checkboxCell.style.display = isMultiSelectMode ? '' : 'none';
+      checkboxCell.innerHTML = `
+        <label class="row-checkbox-label">
+          <input type="checkbox" class="todo-checkbox" data-todo-id="${todo._id}" ${isSelected ? 'checked' : ''}>
+          <span class="checkbox-custom"></span>
+        </label>
+      `;
+      const checkbox = checkboxCell.querySelector('.todo-checkbox');
+      checkbox.addEventListener('change', (e) => {
+        e.stopPropagation();
+        toggleTodoSelection(todo._id, e.target.checked);
+      });
+      row.appendChild(checkboxCell);
+    }
     
     // Task column
     const taskCell = document.createElement('td');
@@ -931,12 +967,59 @@
     }
     row.appendChild(statusCell);
     
-    // Due Date column
+    // Due Date column (clickable to edit)
     const dueDateCell = document.createElement('td');
     dueDateCell.className = 'col-due';
-    // Don't show overdue styling for completed tasks
-    const dueDateClass = isOverdue ? 'overdue' : (dueInfo.className === 'overdue' ? '' : dueInfo.className);
-    dueDateCell.innerHTML = `<span class="due-date ${dueDateClass}">${dueInfo.text}</span>`;
+    
+    if (canEdit) {
+      // Create clickable due date with inline date picker
+      const dueDateWrapper = document.createElement('div');
+      dueDateWrapper.className = 'due-date-editable';
+      
+      // Display span (what user sees)
+      const displaySpan = document.createElement('span');
+      const dueDateClass = isOverdue ? 'overdue' : (dueInfo.className === 'overdue' ? '' : dueInfo.className);
+      displaySpan.className = `due-date clickable ${dueDateClass}`;
+      displaySpan.innerHTML = `${dueInfo.text} <span class="material-symbols-outlined edit-hint">edit_calendar</span>`;
+      displaySpan.title = 'Click to edit due date';
+      
+      // Hidden date input
+      const dateInput = document.createElement('input');
+      dateInput.type = 'date';
+      dateInput.className = 'due-date-input';
+      dateInput.value = todo.dueDate ? todo.dueDate.split('T')[0] : '';
+      
+      // Click to show date picker
+      displaySpan.addEventListener('click', (e) => {
+        e.stopPropagation();
+        displaySpan.style.display = 'none';
+        dateInput.style.display = 'block';
+        dateInput.focus();
+        dateInput.showPicker && dateInput.showPicker();
+      });
+      
+      // Save on change
+      dateInput.addEventListener('change', async (e) => {
+        const newDate = e.target.value || null;
+        await updateTodoDueDate(todo._id, newDate);
+        dateInput.style.display = 'none';
+        displaySpan.style.display = 'inline-flex';
+      });
+      
+      // Hide on blur
+      dateInput.addEventListener('blur', () => {
+        dateInput.style.display = 'none';
+        displaySpan.style.display = 'inline-flex';
+      });
+      
+      dueDateWrapper.appendChild(displaySpan);
+      dueDateWrapper.appendChild(dateInput);
+      dueDateCell.appendChild(dueDateWrapper);
+    } else {
+      // Non-editable display
+      const dueDateClass = isOverdue ? 'overdue' : (dueInfo.className === 'overdue' ? '' : dueInfo.className);
+      dueDateCell.innerHTML = `<span class="due-date ${dueDateClass}">${dueInfo.text}</span>`;
+    }
     row.appendChild(dueDateCell);
     
     // Owner column
@@ -1318,6 +1401,33 @@
     }
   }
 
+  // Update todo due date
+  async function updateTodoDueDate(todoId, dueDate) {
+    try {
+      const response = await fetch(`${API_BASE}/api/tables/${currentEventId}/todos/${todoId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ dueDate })
+      });
+      
+      if (response.ok) {
+        // Update local state
+        const todo = todos.find(t => t._id === todoId);
+        if (todo) todo.dueDate = dueDate;
+        
+        // Re-render to update display
+        renderTodos();
+        showToast('Due date updated', 'success');
+      }
+    } catch (e) {
+      console.error('Error updating due date:', e);
+      showToast('Failed to update due date', 'error');
+    }
+  }
+
   // Show add task row
   function showAddTaskRow() {
     const addTaskRow = document.getElementById('addTaskRow');
@@ -1414,6 +1524,459 @@
     }
   }
 
+  // Setup task suggestions autofill
+  function setupTaskSuggestions(inputEl) {
+    const suggestionsEl = document.getElementById('taskSuggestions');
+    if (!suggestionsEl) return;
+    
+    let selectedIndex = -1;
+    
+    // Show suggestions on focus
+    inputEl.addEventListener('focus', () => {
+      showSuggestions(inputEl.value);
+    });
+    
+    // Filter suggestions on input
+    inputEl.addEventListener('input', () => {
+      selectedIndex = -1;
+      showSuggestions(inputEl.value);
+    });
+    
+    // Keyboard navigation
+    inputEl.addEventListener('keydown', (e) => {
+      const items = suggestionsEl.querySelectorAll('.suggestion-item');
+      
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
+        updateSelectedSuggestion(items, selectedIndex);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedIndex = Math.max(selectedIndex - 1, -1);
+        updateSelectedSuggestion(items, selectedIndex);
+      } else if (e.key === 'Tab' && selectedIndex >= 0 && items[selectedIndex]) {
+        e.preventDefault();
+        selectSuggestion(items[selectedIndex].textContent);
+      } else if (e.key === 'Escape') {
+        hideSuggestions();
+      }
+    });
+    
+    // Hide on blur (with delay for click)
+    inputEl.addEventListener('blur', () => {
+      setTimeout(hideSuggestions, 150);
+    });
+    
+    function showSuggestions(query) {
+      const filtered = taskSuggestions.filter(s => 
+        s.toLowerCase().includes(query.toLowerCase())
+      );
+      
+      if (filtered.length === 0 || (query && filtered.length === 1 && filtered[0].toLowerCase() === query.toLowerCase())) {
+        hideSuggestions();
+        return;
+      }
+      
+      suggestionsEl.innerHTML = filtered.map(s => `
+        <div class="suggestion-item" onclick="window.selectTaskSuggestion && window.selectTaskSuggestion('${s.replace(/'/g, "\\'")}')">
+          <span class="material-symbols-outlined">task_alt</span>
+          <span>${highlightMatch(s, query)}</span>
+        </div>
+      `).join('');
+      
+      suggestionsEl.style.display = 'block';
+    }
+    
+    function highlightMatch(text, query) {
+      if (!query) return text;
+      const regex = new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+      return text.replace(regex, '<strong>$1</strong>');
+    }
+    
+    function updateSelectedSuggestion(items, index) {
+      items.forEach((item, i) => {
+        item.classList.toggle('selected', i === index);
+      });
+    }
+    
+    function selectSuggestion(value) {
+      inputEl.value = value;
+      hideSuggestions();
+      inputEl.focus();
+    }
+    
+    // Expose for onclick
+    window.selectTaskSuggestion = selectSuggestion;
+  }
+  
+  function hideSuggestions() {
+    const suggestionsEl = document.getElementById('taskSuggestions');
+    if (suggestionsEl) {
+      suggestionsEl.style.display = 'none';
+    }
+  }
+
+  // ========== PRESET TASKS MODAL ==========
+  
+  function openPresetModal() {
+    const modal = document.getElementById('presetTasksModal');
+    const listEl = document.getElementById('presetTasksList');
+    const selectAllCheckbox = document.getElementById('selectAllPresets');
+    
+    if (!modal || !listEl) return;
+    
+    // Populate preset tasks list
+    listEl.innerHTML = taskSuggestions.map((task, index) => `
+      <label class="preset-checkbox-label">
+        <input type="checkbox" class="preset-checkbox" data-task="${task.replace(/"/g, '&quot;')}" id="preset-${index}">
+        <span class="checkbox-custom"></span>
+        <span class="preset-task-text">${task}</span>
+      </label>
+    `).join('');
+    
+    // Reset select all
+    if (selectAllCheckbox) selectAllCheckbox.checked = false;
+    
+    // Setup checkbox listeners
+    listEl.querySelectorAll('.preset-checkbox').forEach(cb => {
+      cb.addEventListener('change', updatePresetCount);
+    });
+    
+    // Setup select all listener
+    if (selectAllCheckbox) {
+      selectAllCheckbox.onchange = () => {
+        const checked = selectAllCheckbox.checked;
+        listEl.querySelectorAll('.preset-checkbox').forEach(cb => {
+          cb.checked = checked;
+        });
+        updatePresetCount();
+      };
+    }
+    
+    updatePresetCount();
+    modal.classList.add('show');
+  }
+  
+  function closePresetModal() {
+    const modal = document.getElementById('presetTasksModal');
+    if (modal) modal.classList.remove('show');
+  }
+  
+  function updatePresetCount() {
+    const countEl = document.getElementById('selectedPresetCount');
+    const checkboxes = document.querySelectorAll('#presetTasksList .preset-checkbox:checked');
+    const count = checkboxes.length;
+    
+    if (countEl) {
+      countEl.textContent = `${count} task${count !== 1 ? 's' : ''} selected`;
+    }
+    
+    // Update select all checkbox state
+    const allCheckboxes = document.querySelectorAll('#presetTasksList .preset-checkbox');
+    const selectAllCheckbox = document.getElementById('selectAllPresets');
+    if (selectAllCheckbox && allCheckboxes.length > 0) {
+      selectAllCheckbox.checked = checkboxes.length === allCheckboxes.length;
+      selectAllCheckbox.indeterminate = checkboxes.length > 0 && checkboxes.length < allCheckboxes.length;
+    }
+  }
+  
+  async function addPresetTasks() {
+    const checkboxes = document.querySelectorAll('#presetTasksList .preset-checkbox:checked');
+    
+    if (checkboxes.length === 0) {
+      alert('Please select at least one task');
+      return;
+    }
+    
+    const tasksToAdd = Array.from(checkboxes).map(cb => cb.dataset.task);
+    
+    // Disable button during operation
+    const addBtn = document.getElementById('addPresetsBtn');
+    if (addBtn) {
+      addBtn.disabled = true;
+      addBtn.innerHTML = '<span class="material-symbols-outlined spinning">sync</span> Adding...';
+    }
+    
+    let successCount = 0;
+    let errorCount = 0;
+    
+    for (const taskName of tasksToAdd) {
+      try {
+        const response = await fetch(`${API_BASE}/api/tables/${currentEventId}/todos`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({
+            task: taskName,
+            status: 'todo',
+            dueDate: null,
+            owner: currentUser?.id || null,
+            notes: ''
+          })
+        });
+        
+        if (response.ok) {
+          successCount++;
+        } else {
+          errorCount++;
+        }
+      } catch (e) {
+        console.error('Error adding preset task:', taskName, e);
+        errorCount++;
+      }
+    }
+    
+    // Reset button
+    if (addBtn) {
+      addBtn.disabled = false;
+      addBtn.innerHTML = '<span class="material-symbols-outlined">add</span> Add Selected Tasks';
+    }
+    
+    closePresetModal();
+    await loadTodos(false);
+    
+    // Show result message
+    if (errorCount === 0) {
+      showToast(`Added ${successCount} task${successCount !== 1 ? 's' : ''} successfully`, 'success');
+    } else {
+      showToast(`Added ${successCount} task${successCount !== 1 ? 's' : ''}, ${errorCount} failed`, 'warning');
+    }
+  }
+  
+  function showToast(message, type = 'info') {
+    if (typeof window.showToast === 'function') {
+      window.showToast(message, type);
+    } else {
+      console.log(`[${type}] ${message}`);
+    }
+  }
+
+  // ========== MULTI-SELECT FUNCTIONALITY ==========
+  
+  function enterMultiSelectMode() {
+    isMultiSelectMode = true;
+    selectedTodoIds.clear();
+    
+    // Show bulk actions bar
+    const bulkBar = document.getElementById('bulkActionsBar');
+    if (bulkBar) bulkBar.style.display = 'flex';
+    
+    // Show checkbox column header
+    const checkboxHeader = document.getElementById('checkboxHeader');
+    if (checkboxHeader) checkboxHeader.style.display = '';
+    
+    // Show all row checkboxes
+    document.querySelectorAll('.col-checkbox').forEach(cell => {
+      cell.style.display = '';
+    });
+    
+    updateBulkSelectionCount();
+  }
+  
+  function exitMultiSelectMode() {
+    isMultiSelectMode = false;
+    selectedTodoIds.clear();
+    
+    // Hide bulk actions bar
+    const bulkBar = document.getElementById('bulkActionsBar');
+    if (bulkBar) bulkBar.style.display = 'none';
+    
+    // Hide checkbox column header
+    const checkboxHeader = document.getElementById('checkboxHeader');
+    if (checkboxHeader) checkboxHeader.style.display = 'none';
+    
+    // Hide all row checkboxes
+    document.querySelectorAll('.col-checkbox').forEach(cell => {
+      cell.style.display = 'none';
+    });
+    
+    // Remove selected class from rows
+    document.querySelectorAll('.todo-row.selected').forEach(row => {
+      row.classList.remove('selected');
+    });
+    
+    // Uncheck all
+    document.querySelectorAll('.todo-checkbox').forEach(cb => {
+      cb.checked = false;
+    });
+  }
+  
+  function toggleTodoSelection(todoId, isSelected) {
+    if (isSelected) {
+      selectedTodoIds.add(todoId);
+    } else {
+      selectedTodoIds.delete(todoId);
+    }
+    
+    // Update row visual
+    const row = document.querySelector(`tr[data-id="${todoId}"]`);
+    if (row) {
+      row.classList.toggle('selected', isSelected);
+    }
+    
+    updateBulkSelectionCount();
+  }
+  
+  function toggleSelectAll(selectAll) {
+    const checkboxes = document.querySelectorAll('.todo-checkbox');
+    checkboxes.forEach(cb => {
+      cb.checked = selectAll;
+      const todoId = cb.dataset.todoId;
+      if (selectAll) {
+        selectedTodoIds.add(todoId);
+      } else {
+        selectedTodoIds.delete(todoId);
+      }
+      
+      const row = document.querySelector(`tr[data-id="${todoId}"]`);
+      if (row) row.classList.toggle('selected', selectAll);
+    });
+    
+    updateBulkSelectionCount();
+  }
+  
+  function updateBulkSelectionCount() {
+    const count = selectedTodoIds.size;
+    
+    // Update count displays
+    document.getElementById('bulkSelectedCount').textContent = `${count} selected`;
+    document.getElementById('bulkStatusCount').textContent = count;
+    document.getElementById('bulkDueDateCount').textContent = count;
+    document.getElementById('bulkDeleteCount').textContent = count;
+    
+    // Update select all checkboxes
+    const allCheckboxes = document.querySelectorAll('.todo-checkbox');
+    const selectAllCheckbox = document.getElementById('selectAllCheckbox');
+    const headerSelectAll = document.getElementById('headerSelectAll');
+    
+    if (selectAllCheckbox) {
+      selectAllCheckbox.checked = count > 0 && count === allCheckboxes.length;
+      selectAllCheckbox.indeterminate = count > 0 && count < allCheckboxes.length;
+    }
+    if (headerSelectAll) {
+      headerSelectAll.checked = count > 0 && count === allCheckboxes.length;
+      headerSelectAll.indeterminate = count > 0 && count < allCheckboxes.length;
+    }
+  }
+  
+  // Bulk Status Modal
+  function openBulkStatusModal() {
+    if (selectedTodoIds.size === 0) {
+      showToast('No tasks selected', 'warning');
+      return;
+    }
+    document.getElementById('bulkStatusModal').classList.add('show');
+  }
+  
+  function closeBulkStatusModal() {
+    document.getElementById('bulkStatusModal').classList.remove('show');
+  }
+  
+  async function applyBulkStatus(status) {
+    const ids = Array.from(selectedTodoIds);
+    let successCount = 0;
+    
+    for (const todoId of ids) {
+      try {
+        const response = await fetch(`${API_BASE}/api/tables/${currentEventId}/todos/${todoId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({ status })
+        });
+        if (response.ok) successCount++;
+      } catch (e) {
+        console.error('Error updating status:', e);
+      }
+    }
+    
+    closeBulkStatusModal();
+    exitMultiSelectMode();
+    await loadTodos(false);
+    showToast(`Updated ${successCount} task${successCount !== 1 ? 's' : ''}`, 'success');
+  }
+  
+  // Bulk Due Date Modal
+  function openBulkDueDateModal() {
+    if (selectedTodoIds.size === 0) {
+      showToast('No tasks selected', 'warning');
+      return;
+    }
+    document.getElementById('bulkDueDateInput').value = '';
+    document.getElementById('bulkDueDateModal').classList.add('show');
+  }
+  
+  function closeBulkDueDateModal() {
+    document.getElementById('bulkDueDateModal').classList.remove('show');
+  }
+  
+  async function applyBulkDueDate(dueDate) {
+    const ids = Array.from(selectedTodoIds);
+    let successCount = 0;
+    
+    for (const todoId of ids) {
+      try {
+        const response = await fetch(`${API_BASE}/api/tables/${currentEventId}/todos/${todoId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({ dueDate })
+        });
+        if (response.ok) successCount++;
+      } catch (e) {
+        console.error('Error updating due date:', e);
+      }
+    }
+    
+    closeBulkDueDateModal();
+    exitMultiSelectMode();
+    await loadTodos(false);
+    showToast(`Updated ${successCount} task${successCount !== 1 ? 's' : ''}`, 'success');
+  }
+  
+  // Bulk Delete Modal
+  function openBulkDeleteModal() {
+    if (selectedTodoIds.size === 0) {
+      showToast('No tasks selected', 'warning');
+      return;
+    }
+    document.getElementById('bulkDeleteModal').classList.add('show');
+  }
+  
+  function closeBulkDeleteModal() {
+    document.getElementById('bulkDeleteModal').classList.remove('show');
+  }
+  
+  async function confirmBulkDelete() {
+    const ids = Array.from(selectedTodoIds);
+    let successCount = 0;
+    
+    for (const todoId of ids) {
+      try {
+        const response = await fetch(`${API_BASE}/api/tables/${currentEventId}/todos/${todoId}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        if (response.ok) successCount++;
+      } catch (e) {
+        console.error('Error deleting task:', e);
+      }
+    }
+    
+    closeBulkDeleteModal();
+    exitMultiSelectMode();
+    await loadTodos(false);
+    showToast(`Deleted ${successCount} task${successCount !== 1 ? 's' : ''}`, 'success');
+  }
+
   // Setup event listeners
   function setupEventListeners() {
     // Add task button
@@ -1437,8 +2000,14 @@
     const newTaskInput = document.getElementById('newTaskInput');
     if (newTaskInput) {
       newTaskInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') saveNewTask();
+        if (e.key === 'Enter') {
+          hideSuggestions();
+          saveNewTask();
+        }
       });
+      
+      // Setup task suggestions
+      setupTaskSuggestions(newTaskInput);
     }
     
     // Search
@@ -1469,6 +2038,103 @@
     document.getElementById('confirmDeleteBtn')?.addEventListener('click', confirmDelete);
     document.getElementById('deleteTaskModal')?.addEventListener('click', (e) => {
       if (e.target.id === 'deleteTaskModal') closeDeleteModal();
+    });
+    
+    // Preset tasks modal buttons
+    document.getElementById('addPresetBtn')?.addEventListener('click', openPresetModal);
+    document.getElementById('closePresetModal')?.addEventListener('click', closePresetModal);
+    document.getElementById('cancelPresetBtn')?.addEventListener('click', closePresetModal);
+    document.getElementById('addPresetsBtn')?.addEventListener('click', addPresetTasks);
+    document.getElementById('presetTasksModal')?.addEventListener('click', (e) => {
+      if (e.target.id === 'presetTasksModal') closePresetModal();
+    });
+    
+    // Multi-select functionality
+    setupMultiSelectListeners();
+  }
+  
+  function setupMultiSelectListeners() {
+    // Long press or right-click to enter multi-select mode
+    const tbody = document.getElementById('todosTableBody');
+    if (tbody && isOwnerOrAdmin) {
+      let longPressTimer = null;
+      
+      tbody.addEventListener('mousedown', (e) => {
+        const row = e.target.closest('.todo-row');
+        if (!row || isMultiSelectMode) return;
+        
+        longPressTimer = setTimeout(() => {
+          enterMultiSelectMode();
+          const todoId = row.dataset.id;
+          if (todoId) {
+            toggleTodoSelection(todoId, true);
+            const checkbox = row.querySelector('.todo-checkbox');
+            if (checkbox) checkbox.checked = true;
+          }
+        }, 500);
+      });
+      
+      tbody.addEventListener('mouseup', () => {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      });
+      
+      tbody.addEventListener('mouseleave', () => {
+        if (longPressTimer) {
+          clearTimeout(longPressTimer);
+          longPressTimer = null;
+        }
+      });
+    }
+    
+    // Bulk actions bar buttons
+    document.getElementById('selectAllCheckbox')?.addEventListener('change', (e) => {
+      toggleSelectAll(e.target.checked);
+    });
+    
+    document.getElementById('headerSelectAll')?.addEventListener('change', (e) => {
+      toggleSelectAll(e.target.checked);
+    });
+    
+    document.getElementById('bulkStatusBtn')?.addEventListener('click', openBulkStatusModal);
+    document.getElementById('bulkDueDateBtn')?.addEventListener('click', openBulkDueDateModal);
+    document.getElementById('bulkDeleteBtn')?.addEventListener('click', openBulkDeleteModal);
+    document.getElementById('bulkCancelBtn')?.addEventListener('click', exitMultiSelectMode);
+    
+    // Bulk Status Modal
+    document.getElementById('closeBulkStatusModal')?.addEventListener('click', closeBulkStatusModal);
+    document.getElementById('cancelBulkStatusBtn')?.addEventListener('click', closeBulkStatusModal);
+    document.querySelectorAll('.bulk-status-option').forEach(btn => {
+      btn.addEventListener('click', () => {
+        applyBulkStatus(btn.dataset.status);
+      });
+    });
+    document.getElementById('bulkStatusModal')?.addEventListener('click', (e) => {
+      if (e.target.id === 'bulkStatusModal') closeBulkStatusModal();
+    });
+    
+    // Bulk Due Date Modal
+    document.getElementById('closeBulkDueDateModal')?.addEventListener('click', closeBulkDueDateModal);
+    document.getElementById('cancelBulkDueDateBtn')?.addEventListener('click', closeBulkDueDateModal);
+    document.getElementById('applyBulkDueDateBtn')?.addEventListener('click', () => {
+      const dueDate = document.getElementById('bulkDueDateInput').value || null;
+      applyBulkDueDate(dueDate);
+    });
+    document.getElementById('clearBulkDueDate')?.addEventListener('click', () => {
+      applyBulkDueDate(null);
+    });
+    document.getElementById('bulkDueDateModal')?.addEventListener('click', (e) => {
+      if (e.target.id === 'bulkDueDateModal') closeBulkDueDateModal();
+    });
+    
+    // Bulk Delete Modal
+    document.getElementById('closeBulkDeleteModal')?.addEventListener('click', closeBulkDeleteModal);
+    document.getElementById('cancelBulkDeleteBtn')?.addEventListener('click', closeBulkDeleteModal);
+    document.getElementById('confirmBulkDeleteBtn')?.addEventListener('click', confirmBulkDelete);
+    document.getElementById('bulkDeleteModal')?.addEventListener('click', (e) => {
+      if (e.target.id === 'bulkDeleteModal') closeBulkDeleteModal();
     });
   }
 

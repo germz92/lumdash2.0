@@ -10307,6 +10307,324 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   font-weight: var(--font-weight-medium);
 }
 
+/* Clickable Due Date Editing */
+.todos-page.dark-theme .due-date-editable {
+  position: relative;
+}
+
+.todos-page.dark-theme .due-date.clickable {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.todos-page.dark-theme .due-date.clickable:hover {
+  background: var(--bg-hover);
+}
+
+.todos-page.dark-theme .due-date.clickable .edit-hint {
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  color: var(--text-muted);
+}
+
+.todos-page.dark-theme .due-date.clickable:hover .edit-hint {
+  opacity: 1;
+}
+
+.todos-page.dark-theme .due-date-input {
+  display: none;
+  padding: 6px 10px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--brand-red);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-family: var(--font-family);
+  outline: none;
+  min-width: 130px;
+}
+
+.todos-page.dark-theme .due-date-input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  cursor: pointer;
+}
+
+/* ========================================
+   MULTI-SELECT & BULK ACTIONS
+   ======================================== */
+
+/* Bulk Actions Bar */
+.todos-page.dark-theme .bulk-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 24px;
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border-subtle);
+  gap: 16px;
+}
+
+.todos-page.dark-theme .bulk-actions-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.todos-page.dark-theme .bulk-selected-count {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.todos-page.dark-theme .bulk-actions-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.todos-page.dark-theme .bulk-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.todos-page.dark-theme .bulk-action-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--brand-red);
+}
+
+.todos-page.dark-theme .bulk-action-btn .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.todos-page.dark-theme .bulk-action-btn.danger {
+  color: var(--status-error);
+}
+
+.todos-page.dark-theme .bulk-action-btn.danger:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: var(--status-error);
+}
+
+.todos-page.dark-theme .bulk-action-btn.cancel {
+  padding: 8px;
+  border: none;
+  background: transparent;
+}
+
+.todos-page.dark-theme .bulk-action-btn.cancel:hover {
+  background: var(--bg-hover);
+}
+
+/* Checkbox Column */
+.todos-page.dark-theme .col-checkbox {
+  width: 40px;
+  text-align: center;
+}
+
+/* Row Checkbox Styling */
+.todos-page.dark-theme .row-checkbox-label,
+.todos-page.dark-theme .bulk-checkbox-label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.todos-page.dark-theme .row-checkbox-label input,
+.todos-page.dark-theme .bulk-checkbox-label input {
+  display: none;
+}
+
+.todos-page.dark-theme .row-checkbox-label .checkbox-custom,
+.todos-page.dark-theme .bulk-checkbox-label .checkbox-custom {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border-default);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.todos-page.dark-theme .row-checkbox-label .checkbox-custom::after,
+.todos-page.dark-theme .bulk-checkbox-label .checkbox-custom::after {
+  content: 'check';
+  font-family: 'Material Symbols Outlined';
+  font-size: 14px;
+  color: white;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.todos-page.dark-theme .row-checkbox-label input:checked + .checkbox-custom,
+.todos-page.dark-theme .bulk-checkbox-label input:checked + .checkbox-custom {
+  background: var(--brand-red);
+  border-color: var(--brand-red);
+}
+
+.todos-page.dark-theme .row-checkbox-label input:checked + .checkbox-custom::after,
+.todos-page.dark-theme .bulk-checkbox-label input:checked + .checkbox-custom::after {
+  opacity: 1;
+}
+
+.todos-page.dark-theme .row-checkbox-label input:indeterminate + .checkbox-custom,
+.todos-page.dark-theme .bulk-checkbox-label input:indeterminate + .checkbox-custom {
+  background: var(--brand-red);
+  border-color: var(--brand-red);
+}
+
+.todos-page.dark-theme .row-checkbox-label input:indeterminate + .checkbox-custom::after,
+.todos-page.dark-theme .bulk-checkbox-label input:indeterminate + .checkbox-custom::after {
+  content: 'remove';
+  opacity: 1;
+}
+
+/* Selected Row Styling */
+.todos-page.dark-theme .todo-row.selected {
+  background: rgba(204, 0, 7, 0.08) !important;
+}
+
+.todos-page.dark-theme .todo-row.selected:hover {
+  background: rgba(204, 0, 7, 0.12) !important;
+}
+
+/* Bulk Status Options */
+.todos-page.dark-theme .bulk-status-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.todos-page.dark-theme .bulk-status-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.todos-page.dark-theme .bulk-status-option:hover {
+  background: var(--bg-hover);
+  border-color: var(--brand-red);
+}
+
+/* Bulk Date Input */
+.todos-page.dark-theme .bulk-date-input {
+  width: 100%;
+  padding: 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
+}
+
+.todos-page.dark-theme .bulk-date-input:focus {
+  outline: none;
+  border-color: var(--brand-red);
+}
+
+.todos-page.dark-theme .btn-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.todos-page.dark-theme .btn-text:hover {
+  color: var(--brand-red);
+}
+
+.todos-page.dark-theme .btn-text .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.todos-page.dark-theme .warning-text {
+  color: var(--status-error);
+  font-size: var(--font-size-sm);
+}
+
+/* Bulk modals */
+#bulkStatusModal,
+#bulkDueDateModal,
+#bulkDeleteModal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+#bulkStatusModal.show,
+#bulkDueDateModal.show,
+#bulkDeleteModal.show {
+  display: flex;
+}
+
+#bulkStatusModal .modal-header-dark h3,
+#bulkDueDateModal .modal-header-dark h3,
+#bulkDeleteModal .modal-header-dark h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#bulkStatusModal .modal-header-dark h3 .material-symbols-outlined,
+#bulkDueDateModal .modal-header-dark h3 .material-symbols-outlined {
+  color: var(--brand-red);
+}
+
+/* Mobile responsive for bulk actions */
+@media (max-width: 768px) {
+  .todos-page.dark-theme .bulk-actions-bar {
+    flex-wrap: wrap;
+    padding: 12px 16px;
+  }
+  
+  .todos-page.dark-theme .bulk-action-btn span:not(.material-symbols-outlined) {
+    display: none;
+  }
+  
+  .todos-page.dark-theme .bulk-action-btn {
+    padding: 8px;
+  }
+}
+
 /* Sortable column header */
 .todos-page.dark-theme .todos-table th.sortable {
   cursor: pointer;
@@ -10575,6 +10893,186 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   font-size: 16px;
 }
 
+/* Add Task Buttons Container */
+.todos-page.dark-theme .add-task-buttons {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* Add Preset Button */
+.todos-page.dark-theme .btn-add-preset {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+  font-family: var(--font-family);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.todos-page.dark-theme .btn-add-preset:hover {
+  background: var(--bg-hover);
+  border-color: var(--brand-red);
+  color: var(--brand-red);
+}
+
+.todos-page.dark-theme .btn-add-preset .material-symbols-outlined {
+  font-size: 16px;
+}
+
+/* Preset Tasks Modal */
+#presetTasksModal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+#presetTasksModal.show {
+  display: flex;
+}
+
+.preset-modal-content {
+  width: 90%;
+  max-width: 500px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.preset-modal-content .modal-header-dark h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.preset-modal-content .modal-header-dark h3 .material-symbols-outlined {
+  font-size: 22px;
+  color: var(--brand-red);
+}
+
+.preset-description {
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  margin: 0 0 16px 0;
+}
+
+.preset-select-all {
+  padding-bottom: 12px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.preset-select-all .select-all-text {
+  font-weight: var(--font-weight-semibold);
+}
+
+.preset-tasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.preset-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.preset-checkbox-label:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-default);
+}
+
+.preset-checkbox-label input[type="checkbox"] {
+  display: none;
+}
+
+.preset-checkbox-label .checkbox-custom {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-default);
+  border-radius: 4px;
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.preset-checkbox-label .checkbox-custom::after {
+  content: 'check';
+  font-family: 'Material Symbols Outlined';
+  font-size: 14px;
+  color: white;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.preset-checkbox-label input[type="checkbox"]:checked + .checkbox-custom {
+  background: var(--brand-red);
+  border-color: var(--brand-red);
+}
+
+.preset-checkbox-label input[type="checkbox"]:checked + .checkbox-custom::after {
+  opacity: 1;
+}
+
+.preset-checkbox-label input[type="checkbox"]:indeterminate + .checkbox-custom {
+  background: var(--brand-red);
+  border-color: var(--brand-red);
+}
+
+.preset-checkbox-label input[type="checkbox"]:indeterminate + .checkbox-custom::after {
+  content: 'remove';
+  opacity: 1;
+}
+
+.preset-task-text {
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.preset-modal-content .modal-footer-dark {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.selected-count {
+  color: var(--text-muted);
+  font-size: var(--font-size-sm);
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+}
+
 /* Add Task Row */
 .todos-page.dark-theme .add-task-row {
   display: none;
@@ -10619,6 +11117,60 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 
 .todos-page.dark-theme .task-input::placeholder {
   color: var(--text-muted);
+}
+
+/* Task input wrapper for suggestions */
+.todos-page.dark-theme .task-input-wrapper {
+  position: relative;
+  flex: 2;
+  min-width: 200px;
+}
+
+.todos-page.dark-theme .task-input-wrapper .task-input {
+  width: 100%;
+}
+
+/* Task suggestions dropdown */
+.todos-page.dark-theme .task-suggestions {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  box-shadow: var(--shadow-lg);
+  z-index: 1000;
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.todos-page.dark-theme .suggestion-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.todos-page.dark-theme .suggestion-item:hover,
+.todos-page.dark-theme .suggestion-item.selected {
+  background: var(--bg-hover);
+}
+
+.todos-page.dark-theme .suggestion-item .material-symbols-outlined {
+  font-size: 18px;
+  color: var(--text-muted);
+}
+
+.todos-page.dark-theme .suggestion-item strong {
+  color: var(--brand-red);
+  font-weight: var(--font-weight-semibold);
 }
 
 .todos-page.dark-theme .task-select {

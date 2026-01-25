@@ -125,12 +125,46 @@
         </div>
       </div>
 
+      <!-- Bulk Actions Bar (hidden by default) -->
+      <div class="bulk-actions-bar" id="bulkActionsBar" style="display: none;">
+        <div class="bulk-actions-left">
+          <label class="bulk-checkbox-label">
+            <input type="checkbox" id="selectAllCheckbox">
+            <span class="checkbox-custom"></span>
+          </label>
+          <span class="bulk-selected-count" id="bulkSelectedCount">0 selected</span>
+        </div>
+        <div class="bulk-actions-right">
+          <button class="bulk-action-btn" id="bulkStatusBtn" title="Change Status">
+            <span class="material-symbols-outlined">swap_horiz</span>
+            <span>Status</span>
+          </button>
+          <button class="bulk-action-btn" id="bulkDueDateBtn" title="Change Due Date">
+            <span class="material-symbols-outlined">event</span>
+            <span>Due Date</span>
+          </button>
+          <button class="bulk-action-btn danger" id="bulkDeleteBtn" title="Delete Selected">
+            <span class="material-symbols-outlined">delete</span>
+            <span>Delete</span>
+          </button>
+          <button class="bulk-action-btn cancel" id="bulkCancelBtn" title="Cancel Selection">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+      </div>
+
       <!-- Todos Content Container -->
       <div class="todos-content">
         <div class="todos-list-container">
           <table class="todos-table">
             <thead>
               <tr>
+                <th class="col-checkbox" id="checkboxHeader" style="display: none;">
+                  <label class="row-checkbox-label">
+                    <input type="checkbox" id="headerSelectAll">
+                    <span class="checkbox-custom"></span>
+                  </label>
+                </th>
                 <th class="col-task">Task</th>
                 <th class="col-status">Status</th>
                 <th class="col-due sortable" id="dueDateHeader" onclick="window.toggleDueDateSort && window.toggleDueDateSort()">
@@ -162,7 +196,10 @@
           <!-- Add Task Section -->
           <div class="add-task-section" id="addTaskSection" style="display: none;">
             <div class="add-task-row" id="addTaskRow">
-              <input type="text" id="newTaskInput" placeholder="Enter task description..." class="task-input">
+              <div class="task-input-wrapper">
+                <input type="text" id="newTaskInput" placeholder="Enter task description..." class="task-input" autocomplete="off">
+                <div class="task-suggestions" id="taskSuggestions"></div>
+              </div>
               
               <!-- Status Custom Dropdown -->
               <div class="inline-custom-dropdown" id="newStatusDropdown">
@@ -197,14 +234,58 @@
               </div>
             </div>
             
-          <button class="btn-add-task" id="addTaskBtn">
-            <span class="material-symbols-outlined">add</span>
-            ADD TASK
-          </button>
+          <div class="add-task-buttons">
+            <button class="btn-add-task" id="addTaskBtn">
+              <span class="material-symbols-outlined">add</span>
+              ADD TASK
+            </button>
+            <button class="btn-add-preset" id="addPresetBtn">
+              <span class="material-symbols-outlined">playlist_add</span>
+              ADD PRESET TASKS
+            </button>
+          </div>
           </div>
         </div>
       </div>
     </main>
+  </div>
+</div>
+
+<!-- Preset Tasks Modal -->
+<div id="presetTasksModal" class="dark-modal">
+  <div class="dark-modal-content preset-modal-content">
+    <div class="modal-header-dark">
+      <h3>
+        <span class="material-symbols-outlined">playlist_add</span>
+        Add Preset Tasks
+      </h3>
+      <button class="modal-close-btn" id="closePresetModal">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark">
+      <p class="preset-description">Select the tasks you want to add to this event:</p>
+      <div class="preset-select-all">
+        <label class="preset-checkbox-label">
+          <input type="checkbox" id="selectAllPresets">
+          <span class="checkbox-custom"></span>
+          <span class="select-all-text">Select All</span>
+        </label>
+      </div>
+      <div class="preset-tasks-list" id="presetTasksList">
+        <!-- Preset tasks will be populated by JS -->
+      </div>
+    </div>
+    <div class="modal-footer-dark">
+      <span class="selected-count" id="selectedPresetCount">0 tasks selected</span>
+      <div class="modal-actions">
+        <button class="btn-secondary" id="cancelPresetBtn">Cancel</button>
+        <button class="btn-primary" id="addPresetsBtn">
+          <span class="material-symbols-outlined">add</span>
+          Add Selected Tasks
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -293,6 +374,93 @@
     <div class="modal-footer-dark">
       <button class="btn-secondary" id="cancelDeleteBtn">Cancel</button>
       <button class="btn-danger" id="confirmDeleteBtn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Status Change Modal -->
+<div id="bulkStatusModal" class="dark-modal">
+  <div class="dark-modal-content small">
+    <div class="modal-header-dark">
+      <h3>
+        <span class="material-symbols-outlined">swap_horiz</span>
+        Change Status
+      </h3>
+      <button class="modal-close-btn" id="closeBulkStatusModal">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark">
+      <p>Change status for <strong id="bulkStatusCount">0</strong> selected tasks:</p>
+      <div class="bulk-status-options">
+        <button class="bulk-status-option" data-status="todo">
+          <span class="status-dot status-todo"></span>
+          To Do
+        </button>
+        <button class="bulk-status-option" data-status="in-progress">
+          <span class="status-dot status-in-progress"></span>
+          In Progress
+        </button>
+        <button class="bulk-status-option" data-status="done">
+          <span class="status-dot status-done"></span>
+          Done
+        </button>
+      </div>
+    </div>
+    <div class="modal-footer-dark">
+      <button class="btn-secondary" id="cancelBulkStatusBtn">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Due Date Modal -->
+<div id="bulkDueDateModal" class="dark-modal">
+  <div class="dark-modal-content small">
+    <div class="modal-header-dark">
+      <h3>
+        <span class="material-symbols-outlined">event</span>
+        Set Due Date
+      </h3>
+      <button class="modal-close-btn" id="closeBulkDueDateModal">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark">
+      <p>Set due date for <strong id="bulkDueDateCount">0</strong> selected tasks:</p>
+      <div class="form-group-dark">
+        <input type="date" id="bulkDueDateInput" class="bulk-date-input">
+      </div>
+      <button class="btn-text" id="clearBulkDueDate">
+        <span class="material-symbols-outlined">event_busy</span>
+        Clear due dates
+      </button>
+    </div>
+    <div class="modal-footer-dark">
+      <button class="btn-secondary" id="cancelBulkDueDateBtn">Cancel</button>
+      <button class="btn-primary" id="applyBulkDueDateBtn">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bulk Delete Confirmation Modal -->
+<div id="bulkDeleteModal" class="dark-modal">
+  <div class="dark-modal-content small">
+    <div class="modal-header-dark">
+      <h3>
+        <span class="material-symbols-outlined" style="color: var(--status-error);">warning</span>
+        Delete Tasks
+      </h3>
+      <button class="modal-close-btn" id="closeBulkDeleteModal">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark">
+      <p>Are you sure you want to delete <strong id="bulkDeleteCount">0</strong> selected tasks?</p>
+      <p class="warning-text">This action cannot be undone.</p>
+    </div>
+    <div class="modal-footer-dark">
+      <button class="btn-secondary" id="cancelBulkDeleteBtn">Cancel</button>
+      <button class="btn-danger" id="confirmBulkDeleteBtn">Delete All</button>
     </div>
   </div>
 </div>

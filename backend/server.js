@@ -8156,6 +8156,282 @@ app.delete('/api/flights/:id', authenticate, async (req, res) => {
 
 // ========= END FLIGHT MANAGEMENT API =========
 
+// ========= TIMESHEETS API =========
+
+// Debug endpoint to see raw timesheets data structure
+app.get('/api/timesheets/debug', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    const timesheetsCollection = mongoose.connection.collection('timesheets');
+    const sample = await timesheetsCollection.find({}).limit(5).toArray();
+    const count = await timesheetsCollection.countDocuments();
+    
+    console.log('[TIMESHEETS DEBUG] Collection count:', count);
+    console.log('[TIMESHEETS DEBUG] Sample documents:', JSON.stringify(sample, null, 2));
+    
+    res.json({ 
+      count, 
+      sample,
+      fields: sample.length > 0 ? Object.keys(sample[0]) : []
+    });
+  } catch (error) {
+    console.error('Timesheets debug error:', error);
+    res.status(500).json({ error: 'Debug failed', message: error.message });
+  }
+});
+
+// Get all timesheets (admin only)
+app.get('/api/timesheets', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    // Get timesheets collection directly from MongoDB
+    const timesheetsCollection = mongoose.connection.collection('timesheets');
+    const timesheets = await timesheetsCollection.find({}).toArray();
+    
+    console.log('[TIMESHEETS] Found', timesheets.length, 'total entries');
+    
+    res.json(timesheets);
+  } catch (error) {
+    console.error('Get timesheets error:', error);
+    res.status(500).json({ error: 'Failed to fetch timesheets' });
+  }
+});
+
+// Get timesheets for a specific user (admin only)
+app.get('/api/timesheets/user/:userId', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    const timesheetsCollection = mongoose.connection.collection('timesheets');
+    
+    // Try multiple possible field names for userId
+    const timesheets = await timesheetsCollection.find({ 
+      $or: [
+        { userId: req.params.userId },
+        { user_id: req.params.userId },
+        { user: req.params.userId },
+        { userId: new mongoose.Types.ObjectId(req.params.userId) }
+      ]
+    }).sort({ date: -1, timestamp: -1, createdAt: -1 }).toArray();
+    
+    res.json(timesheets);
+  } catch (error) {
+    console.error('Get user timesheets error:', error);
+    res.status(500).json({ error: 'Failed to fetch user timesheets' });
+  }
+});
+
+// Get timesheet summary by user (aggregated hours)
+app.get('/api/timesheets/summary', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    const { startDate, endDate } = req.query;
+    
+    const timesheetsCollection = mongoose.connection.collection('timesheets');
+    
+    // Get all timesheet documents (each document = one user with their entries array)
+    const allDocs = await timesheetsCollection.find({}).toArray();
+    console.log('[TIMESHEETS SUMMARY] Total user documents in collection:', allDocs.length);
+    
+    if (allDocs.length === 0) {
+      return res.json([]);
+    }
+    
+    // Parse date filters
+    const filterStartDate = startDate ? new Date(startDate) : null;
+    const filterEndDate = endDate ? new Date(endDate) : null;
+    
+    // Process each user's timesheet document
+    const summaries = await Promise.all(allDocs.map(async (doc) => {
+      let userName = 'Unknown User';
+      let userEmail = '';
+      
+      // Get user info
+      try {
+        let userDoc = null;
+        if (doc.userId && mongoose.Types.ObjectId.isValid(doc.userId)) {
+          userDoc = await User.findById(doc.userId);
+        }
+        if (!userDoc && doc.userId) {
+          userDoc = await User.findOne({ _id: doc.userId });
+        }
+        
+        if (userDoc) {
+          userName = userDoc.fullName || userDoc.name || userDoc.email;
+          userEmail = userDoc.email;
+        }
+      } catch (e) {
+        console.log('Could not find user:', doc.userId, e.message);
+      }
+      
+      // Get entries array and filter by date if needed
+      let entries = doc.entries || [];
+      
+      if (filterStartDate && filterEndDate) {
+        entries = entries.filter(entry => {
+          const entryDate = new Date(entry.date);
+          return entryDate >= filterStartDate && entryDate <= filterEndDate;
+        });
+      }
+      
+      console.log('[TIMESHEETS SUMMARY] User', userName, 'has', entries.length, 'entries in date range');
+      
+      return {
+        userId: doc.userId,
+        userName,
+        userEmail,
+        totalEntries: entries.length,
+        entries: entries
+      };
+    }));
+    
+    // Filter out users with no entries in the date range
+    const filteredSummaries = summaries.filter(s => s.totalEntries > 0);
+    
+    console.log('[TIMESHEETS SUMMARY] Returning', filteredSummaries.length, 'user summaries');
+    res.json(filteredSummaries);
+  } catch (error) {
+    console.error('Get timesheet summary error:', error);
+    res.status(500).json({ error: 'Failed to fetch timesheet summary' });
+  }
+});
+
+// Update a timesheet entry
+app.put('/api/timesheets/entry', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { userId, entryId, type, date, time, hours, notes } = req.body;
+    
+    if (!userId || !entryId) {
+      return res.status(400).json({ error: 'userId and entryId are required' });
+    }
+
+    console.log('[TIMESHEETS] Updating entry:', { userId, entryId, type, date, time, hours, notes });
+
+    const timesheetsCollection = mongoose.connection.collection('timesheets');
+    
+    // Find the user's timesheet document
+    const timesheetDoc = await timesheetsCollection.findOne({ userId: userId });
+    if (!timesheetDoc) {
+      return res.status(404).json({ error: 'Timesheet not found for user' });
+    }
+
+    // Find and update the entry in the entries array
+    const entryIndex = timesheetDoc.entries.findIndex(e => 
+      e._id && e._id.toString() === entryId
+    );
+
+    if (entryIndex === -1) {
+      return res.status(404).json({ error: 'Entry not found' });
+    }
+
+    // Build the update object
+    const updatedEntry = {
+      ...timesheetDoc.entries[entryIndex],
+      type: type,
+      date: new Date(date),
+      notes: notes || ''
+    };
+
+    // Set time or hours based on type
+    if (type === 'travel') {
+      updatedEntry.time = null;
+      updatedEntry.hours = hours || 4;
+    } else {
+      updatedEntry.time = time;
+      updatedEntry.hours = null;
+    }
+
+    // Update the entry in the array
+    const updateResult = await timesheetsCollection.updateOne(
+      { userId: userId },
+      { $set: { [`entries.${entryIndex}`]: updatedEntry } }
+    );
+
+    console.log('[TIMESHEETS] Entry updated:', updateResult.modifiedCount);
+    res.json({ success: true, message: 'Entry updated' });
+  } catch (error) {
+    console.error('Update timesheet entry error:', error);
+    res.status(500).json({ error: 'Failed to update entry' });
+  }
+});
+
+// Delete a timesheet entry
+app.delete('/api/timesheets/entry', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { userId, entryId } = req.body;
+    
+    if (!userId || !entryId) {
+      return res.status(400).json({ error: 'userId and entryId are required' });
+    }
+
+    console.log('[TIMESHEETS] Deleting entry:', { userId, entryId });
+
+    const timesheetsCollection = mongoose.connection.collection('timesheets');
+    
+    // Remove the entry from the entries array using $pull
+    const updateResult = await timesheetsCollection.updateOne(
+      { userId: userId },
+      { $pull: { entries: { _id: new mongoose.Types.ObjectId(entryId) } } }
+    );
+
+    if (updateResult.modifiedCount === 0) {
+      // Try with string comparison if ObjectId didn't work
+      const timesheetDoc = await timesheetsCollection.findOne({ userId: userId });
+      if (timesheetDoc && timesheetDoc.entries) {
+        const filteredEntries = timesheetDoc.entries.filter(e => 
+          !(e._id && e._id.toString() === entryId)
+        );
+        
+        if (filteredEntries.length < timesheetDoc.entries.length) {
+          await timesheetsCollection.updateOne(
+            { userId: userId },
+            { $set: { entries: filteredEntries } }
+          );
+          console.log('[TIMESHEETS] Entry deleted via filter');
+          return res.json({ success: true, message: 'Entry deleted' });
+        }
+      }
+      return res.status(404).json({ error: 'Entry not found' });
+    }
+
+    console.log('[TIMESHEETS] Entry deleted:', updateResult.modifiedCount);
+    res.json({ success: true, message: 'Entry deleted' });
+  } catch (error) {
+    console.error('Delete timesheet entry error:', error);
+    res.status(500).json({ error: 'Failed to delete entry' });
+  }
+});
+
+// ========= END TIMESHEETS API =========
+
 // SERVER
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => console.log(`Server started on port ${PORT}`));

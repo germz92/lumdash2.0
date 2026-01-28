@@ -10,7 +10,7 @@
   let editingTaskId = null;
   let editingEventId = null;
   let editingGeneralTaskId = null;
-  let myTasksOnly = localStorage.getItem('myTasksFilter') === 'true';
+  let myTasksOnly = localStorage.getItem('myTasksFilter') !== 'false'; // Default to true (my tasks only)
   let statusFilter = localStorage.getItem('myTasksStatusFilter') || 'all'; // 'all', 'pending', 'completed'
   let generalStatusFilter = localStorage.getItem('generalTasksStatusFilter') || 'all'; // 'all', 'pending', 'completed'
   let dueDateSort = localStorage.getItem('myTasksDueDateSort') || 'none'; // 'none', 'asc', 'desc'

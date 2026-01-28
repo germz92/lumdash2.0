@@ -2676,6 +2676,13 @@
         function updateUIBasedOnPermissions() {
             console.log('Updating UI based on permissions:', userPermissions);
             
+            // Add/remove .owner class on body to control delete button visibility via CSS
+            if (userPermissions.canReserve) {
+                document.body.classList.add('owner');
+            } else {
+                document.body.classList.remove('owner');
+            }
+            
             // Show/hide Add Items button
             const addItemsBtn = document.getElementById('addItemsBtn');
             if (addItemsBtn) {

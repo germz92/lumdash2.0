@@ -31,6 +31,7 @@
     if (path.includes('crew-planner')) return 'crew-planner';
     if (path.includes('crew-calendar')) return 'crew-calendar';
     if (path.includes('flights')) return 'flights';
+    if (path.includes('admin-timesheets')) return 'admin-timesheets';
     
     return 'events';
   }
@@ -461,6 +462,12 @@
     const adminOnlyNavItems = document.querySelectorAll('.admin-only-nav');
     adminOnlyNavItems.forEach(item => {
       item.style.display = canAccessAdminPages ? 'flex' : 'none';
+    });
+    
+    // Show/hide admin section label
+    const adminSectionLabels = document.querySelectorAll('.admin-only-section');
+    adminSectionLabels.forEach(label => {
+      label.style.display = canAccessAdminPages ? 'block' : 'none';
     });
     
     // Show/hide planner nav items (visible to planners AND admins, NOT owners)

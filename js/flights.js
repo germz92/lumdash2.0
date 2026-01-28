@@ -348,6 +348,10 @@
       radio.addEventListener('change', handleTripTypeChange);
     });
 
+    // Date validation - ensure return date is not before depart date
+    elements.departDate?.addEventListener('change', handleDepartDateChange);
+    elements.returnDate?.addEventListener('change', handleReturnDateChange);
+
     // Airport search inputs
     elements.fromAirport?.addEventListener('input', (e) => handleAirportSearch(e, 'from'));
     elements.toAirport?.addEventListener('input', (e) => handleAirportSearch(e, 'to'));
@@ -377,6 +381,13 @@
     document.getElementById('closeBookingSection')?.addEventListener('click', hideBookingSection);
     document.getElementById('cancelBookingBtn')?.addEventListener('click', hideBookingSection);
     document.getElementById('confirmBookingBtn')?.addEventListener('click', handleConfirmBooking);
+
+    // Booking Confirmed Modal
+    document.getElementById('closeBookingConfirmedModal')?.addEventListener('click', closeBookingConfirmedModal);
+    document.getElementById('closeBookingConfirmedBtn')?.addEventListener('click', closeBookingConfirmedModal);
+    document.getElementById('bookingConfirmedModal')?.addEventListener('click', (e) => {
+      if (e.target.id === 'bookingConfirmedModal') closeBookingConfirmedModal();
+    });
 
     // Delete Request button
     document.getElementById('deleteRequestBtn')?.addEventListener('click', handleDeleteRequest);
@@ -1296,6 +1307,10 @@
     renderSelectedPassengers();
     // Reset form
     elements.createRequestForm?.reset();
+    // Clear return date min constraint
+    if (elements.returnDate) {
+      elements.returnDate.min = '';
+    }
     // Set default trip type
     document.querySelector('input[name="tripType"][value="roundtrip"]').checked = true;
     elements.returnDateGroup?.classList.remove('hidden');
@@ -1343,6 +1358,35 @@
     elements.returnDateGroup?.classList.toggle('hidden', !isRoundtrip);
     if (elements.returnTimePreferenceGroup) {
       elements.returnTimePreferenceGroup.classList.toggle('hidden', !isRoundtrip);
+    }
+  }
+
+  /**
+   * Handle depart date change - update return date min constraint
+   */
+  function handleDepartDateChange() {
+    const departDateValue = elements.departDate?.value;
+    if (departDateValue && elements.returnDate) {
+      // Set minimum return date to depart date
+      elements.returnDate.min = departDateValue;
+      
+      // If current return date is before new depart date, clear it
+      if (elements.returnDate.value && elements.returnDate.value < departDateValue) {
+        elements.returnDate.value = '';
+      }
+    }
+  }
+
+  /**
+   * Handle return date change - validate it's not before depart date
+   */
+  function handleReturnDateChange() {
+    const departDateValue = elements.departDate?.value;
+    const returnDateValue = elements.returnDate?.value;
+    
+    if (departDateValue && returnDateValue && returnDateValue < departDateValue) {
+      alert('Return date cannot be before depart date.');
+      elements.returnDate.value = '';
     }
   }
 
@@ -2349,7 +2393,7 @@
   function showBookingSection() {
     const bookingSection = document.getElementById('bookingSection');
     const footerActions = document.querySelector('.modal-footer-actions');
-    const returnSection = document.getElementById('bookingReturnSection');
+    const returnSection = document.getElementById('viewBookingReturnSection');
     
     if (bookingSection) {
       bookingSection.style.display = 'block';
@@ -2357,12 +2401,12 @@
       // Clear previous values
       document.getElementById('bookingConfirmation').value = '';
       document.getElementById('bookingAirline').value = '';
-      document.getElementById('bookingDepartTime').value = '';
-      document.getElementById('bookingArriveTime').value = '';
-      document.getElementById('bookingFlightNumber').value = '';
-      document.getElementById('bookingReturnDepartTime').value = '';
-      document.getElementById('bookingReturnArriveTime').value = '';
-      document.getElementById('bookingReturnFlightNumber').value = '';
+      document.getElementById('viewBookingDepartTime').value = '';
+      document.getElementById('viewBookingArriveTime').value = '';
+      document.getElementById('viewBookingFlightNumber').value = '';
+      document.getElementById('viewBookingReturnDepartTime').value = '';
+      document.getElementById('viewBookingReturnArriveTime').value = '';
+      document.getElementById('viewBookingReturnFlightNumber').value = '';
       
       // Show/hide return section based on trip type
       const tripType = document.querySelector('.trip-type-btn.active')?.dataset.type || 'roundtrip';
@@ -2412,21 +2456,24 @@
     const bookedDetails = {
       confirmationCode: confirmationCode,
       airline: document.getElementById('bookingAirline').value.trim(),
-      departTime: document.getElementById('bookingDepartTime').value,
-      arriveTime: document.getElementById('bookingArriveTime').value,
-      flightNumber: document.getElementById('bookingFlightNumber').value.trim()
+      departTime: document.getElementById('viewBookingDepartTime').value,
+      arriveTime: document.getElementById('viewBookingArriveTime').value,
+      flightNumber: document.getElementById('viewBookingFlightNumber').value.trim()
     };
 
     let returnBookedDetails = null;
     if (tripType === 'roundtrip') {
       returnBookedDetails = {
-        departTime: document.getElementById('bookingReturnDepartTime').value,
-        arriveTime: document.getElementById('bookingReturnArriveTime').value,
-        flightNumber: document.getElementById('bookingReturnFlightNumber').value.trim()
+        departTime: document.getElementById('viewBookingReturnDepartTime').value,
+        arriveTime: document.getElementById('viewBookingReturnArriveTime').value,
+        flightNumber: document.getElementById('viewBookingReturnFlightNumber').value.trim()
       };
     }
 
     try {
+      // Save passenger info before the request is modified
+      const requestPassengers = currentEditingRequest.passengers || [];
+      
       const bookedFlight = await apiRequest(`/api/flights/${currentEditingRequest._id}/book`, {
         method: 'PATCH',
         body: JSON.stringify({ bookedDetails, returnBookedDetails })
@@ -2440,8 +2487,11 @@
       renderPendingRequests();
       renderBookedFlights();
 
-      // Close modal
+      // Close view modal
       closeViewModal();
+
+      // Show booking confirmed modal with passenger emails
+      showBookingConfirmedModal(requestPassengers);
 
       console.log('✅ Flight booked:', bookedFlight._id);
     } catch (error) {
@@ -2449,6 +2499,81 @@
       alert('Failed to book flight. Please try again.');
     }
   }
+
+  /**
+   * Show booking confirmed modal with passenger emails
+   */
+  function showBookingConfirmedModal(requestPassengers) {
+    const modal = document.getElementById('bookingConfirmedModal');
+    const emailsList = document.getElementById('passengerEmailsList');
+    const noEmailsMessage = document.getElementById('noEmailsMessage');
+    
+    if (!modal || !emailsList) return;
+    
+    // Collect unique emails from passengers
+    const emails = [];
+    requestPassengers.forEach(p => {
+      const fullPassenger = passengers.find(fp => fp._id === p.passengerId) || {};
+      const email = fullPassenger.email || 
+        (fullPassenger.userId && typeof fullPassenger.userId === 'object' ? fullPassenger.userId.email : null) ||
+        (fullPassenger.userId && users.find(u => u._id === fullPassenger.userId)?.email);
+      
+      if (email && !emails.some(e => e.email === email)) {
+        emails.push({
+          name: p.name || fullPassenger.fullName || `${fullPassenger.firstName} ${fullPassenger.lastName}`.trim(),
+          email: email
+        });
+      }
+    });
+    
+    // Populate emails list
+    if (emails.length > 0) {
+      emailsList.innerHTML = emails.map(e => `
+        <div class="email-row">
+          <div class="email-info">
+            <span class="passenger-name">${e.name}</span>
+            <span class="passenger-email">${e.email}</span>
+          </div>
+          <button class="btn-copy-email" onclick="copyToClipboard('${e.email}', this)" title="Copy email">
+            <span class="material-symbols-outlined">content_copy</span>
+          </button>
+        </div>
+      `).join('');
+      emailsList.style.display = 'block';
+      if (noEmailsMessage) noEmailsMessage.style.display = 'none';
+    } else {
+      emailsList.style.display = 'none';
+      if (noEmailsMessage) noEmailsMessage.style.display = 'flex';
+    }
+    
+    modal.classList.add('show');
+  }
+  
+  /**
+   * Close booking confirmed modal
+   */
+  function closeBookingConfirmedModal() {
+    const modal = document.getElementById('bookingConfirmedModal');
+    if (modal) modal.classList.remove('show');
+  }
+  
+  /**
+   * Copy to clipboard helper
+   */
+  window.copyToClipboard = function(text, button) {
+    navigator.clipboard.writeText(text).then(() => {
+      // Visual feedback
+      const icon = button.querySelector('.material-symbols-outlined');
+      if (icon) {
+        icon.textContent = 'check';
+        setTimeout(() => {
+          icon.textContent = 'content_copy';
+        }, 1500);
+      }
+    }).catch(err => {
+      console.error('Failed to copy:', err);
+    });
+  };
 
   /**
    * Handle delete request
@@ -2855,7 +2980,14 @@
     }
 
     elements.passengersTableBody.innerHTML = passengersToRender.map(passenger => {
-      const linkedUser = passenger.userId ? users.find(u => u._id === passenger.userId) : null;
+      // Handle userId - it may be populated (object) or just an ID string
+      const userIdStr = passenger.userId 
+        ? (typeof passenger.userId === 'object' ? passenger.userId._id : passenger.userId)
+        : null;
+      // If populated, we can use the data directly; otherwise look up in users array
+      const linkedUser = passenger.userId 
+        ? (typeof passenger.userId === 'object' ? passenger.userId : users.find(u => u._id === userIdStr))
+        : null;
       const fullName = passenger.fullName || `${passenger.firstName} ${passenger.middleName || ''} ${passenger.lastName}`.replace(/\s+/g, ' ').trim();
       
       // Display rewards numbers
@@ -2890,7 +3022,7 @@
             ${linkedUser ? `
               <span class="linked-user-badge">
                 <span class="material-symbols-outlined">person</span>
-                ${linkedUser.name || linkedUser.email}
+                ${linkedUser.fullName || linkedUser.name || linkedUser.email}
               </span>
             ` : '<span class="no-linked-user">Not linked</span>'}
           </td>
@@ -2951,7 +3083,13 @@
     document.getElementById('editPassengerFirst').value = passenger.firstName || '';
     document.getElementById('editPassengerMiddle').value = passenger.middleName || '';
     document.getElementById('editPassengerLast').value = passenger.lastName || '';
-    document.getElementById('editPassengerUserId').value = passenger.userId || '';
+    
+    // Handle userId - it may be populated (object) or just an ID string
+    const userIdValue = passenger.userId 
+      ? (typeof passenger.userId === 'object' ? passenger.userId._id : passenger.userId)
+      : '';
+    document.getElementById('editPassengerUserId').value = userIdValue;
+    
     document.getElementById('editPassengerDob').value = passenger.dateOfBirth ? formatDateForInput(passenger.dateOfBirth) : '';
     document.getElementById('editPassengerGender').value = passenger.gender || '';
     document.getElementById('editPassengerKtn').value = passenger.knownTravelerNumber || '';

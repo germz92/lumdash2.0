@@ -547,35 +547,35 @@
                   <div class="form-row">
                     <div class="form-group">
                       <label>Depart Time</label>
-                      <input type="time" id="bookingDepartTime">
+                      <input type="time" id="viewBookingDepartTime">
                     </div>
                     <div class="form-group">
                       <label>Arrive Time</label>
-                      <input type="time" id="bookingArriveTime">
+                      <input type="time" id="viewBookingArriveTime">
                     </div>
                   </div>
                   <div class="form-group">
                     <label>Flight Number</label>
-                    <input type="text" id="bookingFlightNumber" placeholder="e.g., DL1234">
+                    <input type="text" id="viewBookingFlightNumber" placeholder="e.g., DL1234">
                   </div>
                 </div>
 
                 <!-- Return Flight (shown for roundtrip) -->
-                <div class="booking-flight-section" id="bookingReturnSection">
+                <div class="booking-flight-section" id="viewBookingReturnSection">
                   <h4>Return Flight</h4>
                   <div class="form-row">
                     <div class="form-group">
                       <label>Depart Time</label>
-                      <input type="time" id="bookingReturnDepartTime">
+                      <input type="time" id="viewBookingReturnDepartTime">
                     </div>
                     <div class="form-group">
                       <label>Arrive Time</label>
-                      <input type="time" id="bookingReturnArriveTime">
+                      <input type="time" id="viewBookingReturnArriveTime">
                     </div>
                   </div>
                   <div class="form-group">
                     <label>Flight Number</label>
-                    <input type="text" id="bookingReturnFlightNumber" placeholder="e.g., DL5678">
+                    <input type="text" id="viewBookingReturnFlightNumber" placeholder="e.g., DL5678">
                   </div>
                 </div>
 
@@ -999,6 +999,34 @@
               </div>
             </div>
           </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Booking Confirmed Modal -->
+    <div class="dark-modal" id="bookingConfirmedModal">
+      <div class="dark-modal-content booking-confirmed-modal">
+        <div class="modal-header success-header">
+          <div class="success-icon">
+            <span class="material-symbols-outlined">check_circle</span>
+          </div>
+          <h2>Booking Confirmed</h2>
+          <button class="modal-close-btn" id="closeBookingConfirmedModal">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="reminder-text">Please remember to send itineraries to:</p>
+          <div class="passenger-emails-list" id="passengerEmailsList">
+            <!-- Email rows will be populated here -->
+          </div>
+          <div class="no-emails-message" id="noEmailsMessage" style="display: none;">
+            <span class="material-symbols-outlined">info</span>
+            <p>No email addresses found for passengers. Please update passenger records with email addresses.</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-primary" id="closeBookingConfirmedBtn">Done</button>
         </div>
       </div>
     </div>

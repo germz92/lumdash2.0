@@ -815,6 +815,12 @@ function renderEventRowDark(table, index, userId) {
               <span class="flight-count">${table.flightCount}</span>
             </span>
           ` : ''}
+          ${table.hotelCount > 0 ? `
+            <span class="hotel-badge" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" title="${table.hotelCount} hotel booking${table.hotelCount !== 1 ? 's' : ''}">
+              <span class="material-symbols-outlined">hotel</span>
+              <span class="hotel-count">${table.hotelCount}</span>
+            </span>
+          ` : ''}
           ${table.shareCount > 0 ? `
             <span class="share-badge" onclick="event.stopPropagation(); openShareModal('${table._id}');" title="Shared with ${table.shareCount} ${table.shareCount === 1 ? 'person' : 'people'}">
               <span class="material-symbols-outlined">send</span>
@@ -1176,6 +1182,12 @@ async function loadTables(forceRefresh = false) {
     const leadsCount = Array.isArray(table.leads) ? table.leads.length : 0;
     const sharedWithCount = Array.isArray(table.sharedWith) ? table.sharedWith.length : 0;
     table.shareCount = leadsCount + sharedWithCount;
+  });
+  
+  // Calculate hotel count for each table (accommodation entries with hotel info)
+  tables.forEach(table => {
+    const accommodations = Array.isArray(table.accommodation) ? table.accommodation : [];
+    table.hotelCount = accommodations.filter(a => a.hotel && a.hotel.trim()).length;
   });
   
   // Hide loading

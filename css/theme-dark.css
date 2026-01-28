@@ -1448,6 +1448,35 @@ body:has(.events-page) {
   line-height: 1;
 }
 
+.event-name .hotel-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
+  margin-left: 4px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-decoration: none;
+}
+
+.event-name .hotel-badge:hover {
+  color: #8b5cf6;
+  transform: scale(1.05);
+}
+
+.event-name .hotel-badge .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.event-name .hotel-badge .hotel-count {
+  line-height: 1;
+}
+
 .event-name .schedule-badge {
   display: inline-flex;
   align-items: center;

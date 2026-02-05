@@ -559,6 +559,26 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
         border-color: rgba(204, 0, 7, 0.2) !important;
     }
 
+    /* Mobile folder input styles */
+    .schedule-page .program-entry .folder-input {
+        width: 55px !important;
+        min-width: 55px !important;
+        max-width: 55px !important;
+        font-size: 11px !important;
+        padding: 6px 2px !important;
+        border: 1px solid #4a90e2 !important;
+        border-radius: 4px !important;
+        background: #e8f4fd !important;
+        color: #2563eb !important;
+        text-align: center !important;
+    }
+
+    .schedule-page .program-entry .folder-input:focus {
+        border-color: #2563eb !important;
+        background-color: #dbeafe !important;
+        box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15) !important;
+    }
+
     /* Make checkboxes smaller on mobile since they don't need much room */
     .schedule-page .done-checkbox {
         width: 18px !important;
@@ -613,6 +633,18 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
     .schedule-page .delete-date-btn {
         width: auto !important;
         min-width: 0 !important;
+    }
+
+    /* Folder input should not be 100% width */
+    .schedule-page .program-entry .folder-input {
+        width: 55px !important;
+        min-width: 55px !important;
+        max-width: 55px !important;
+    }
+
+    /* Folder container styling */
+    .schedule-page .program-entry .folder-field-container {
+        flex-shrink: 0 !important;
     }
 
     .schedule-page .program-entry input.program-name {
@@ -767,6 +799,48 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
 .schedule-page .program-entry input[type="time"]:hover {
     background-color: rgba(204, 0, 7, 0.02);
     border-color: rgba(204, 0, 7, 0.2);
+}
+
+/* Base styles for folder input - blue theme */
+.schedule-page .program-entry .folder-input {
+    border: 1px solid #4a90e2 !important;
+    border-radius: 4px !important;
+    background: #e8f4fd !important;
+    color: #2563eb !important;
+    text-align: center !important;
+    font-weight: 500 !important;
+    transition: all 0.2s ease !important;
+}
+
+.schedule-page .program-entry .folder-input:hover {
+    background: #dbeafe !important;
+    border-color: #2563eb !important;
+}
+
+.schedule-page .program-entry .folder-input:focus {
+    border-color: #2563eb !important;
+    background-color: #dbeafe !important;
+    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15) !important;
+    outline: none !important;
+}
+
+/* Folder icon styling */
+.schedule-page .program-entry .folder-icon {
+    color: #2563eb;
+}
+
+/* Folder field container */
+.schedule-page .program-entry .folder-field-container {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex-shrink: 0;
+}
+
+/* Table view folder cell styling */
+.schedule-table-section .folder-cell {
+    color: #2563eb;
+    font-weight: 500;
 }
 
 .schedule-page .program-entry textarea[placeholder="Location"],
@@ -1520,19 +1594,21 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
 /* Column widths - Desktop only */
 @media (min-width: 769px) {
   .schedule-table-section th:nth-child(1),
-  .schedule-table-section td:nth-child(1) { width: 10%; } /* Start Time */
+  .schedule-table-section td:nth-child(1) { width: 9%; } /* Start Time */
   .schedule-table-section th:nth-child(2),
-  .schedule-table-section td:nth-child(2) { width: 10%; } /* End Time */
+  .schedule-table-section td:nth-child(2) { width: 9%; } /* End Time */
   .schedule-table-section th:nth-child(3),
-  .schedule-table-section td:nth-child(3) { width: 20%; } /* Name */
+  .schedule-table-section td:nth-child(3) { width: 18%; } /* Name */
   .schedule-table-section th:nth-child(4),
-  .schedule-table-section td:nth-child(4) { width: 18%; } /* Location */
+  .schedule-table-section td:nth-child(4) { width: 16%; } /* Location */
   .schedule-table-section th:nth-child(5),
-  .schedule-table-section td:nth-child(5) { width: 15%; } /* Photographer */
+  .schedule-table-section td:nth-child(5) { width: 14%; } /* Photographer */
   .schedule-table-section th:nth-child(6),
-  .schedule-table-section td:nth-child(6) { width: 22%; } /* Notes */
+  .schedule-table-section td:nth-child(6) { width: 20%; } /* Notes */
   .schedule-table-section th:nth-child(7),
-  .schedule-table-section td:nth-child(7) { width: 5%; } /* Done */
+  .schedule-table-section td:nth-child(7) { width: 8%; } /* Folder */
+  .schedule-table-section th:nth-child(8),
+  .schedule-table-section td:nth-child(8) { width: 6%; } /* Done */
 }
 
 /* Inline editing styles for schedule table */

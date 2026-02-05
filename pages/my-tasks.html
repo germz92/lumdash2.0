@@ -19,6 +19,20 @@
             <span class="material-symbols-outlined">task_alt</span>
             My Tasks
           </h1>
+          
+          <!-- Task Type Tabs -->
+          <div class="task-type-tabs" id="taskTypeTabs">
+            <button class="task-type-tab active" data-tab="event">
+              <span class="material-symbols-outlined">event</span>
+              Event Tasks
+              <span class="tab-count" id="eventTaskCount">0</span>
+            </button>
+            <button class="task-type-tab" data-tab="general">
+              <span class="material-symbols-outlined">person</span>
+              General Tasks
+              <span class="tab-count" id="generalTaskCount">0</span>
+            </button>
+          </div>
         </div>
         <div class="my-tasks-header-right">
           <div class="progress-section">
@@ -27,29 +41,25 @@
               <div class="progress-fill" id="progressFill" style="width: 0%"></div>
             </div>
           </div>
+          <button class="btn-add-task" id="addGeneralTaskBtn" title="Add general task" style="display: none;">
+            <span class="material-symbols-outlined">add</span>
+            Add Task
+          </button>
         </div>
       </header>
 
-      <!-- Tasks Sections Container -->
-      <div class="tasks-sections-container">
+      <!-- Tasks Full Page Container -->
+      <div class="tasks-fullpage-container">
         
-        <!-- ========== EVENT TASKS SECTION (scrollable) ========== -->
-        <section class="tasks-section event-tasks-section">
-          <div class="section-header">
-            <div class="section-title-row">
-              <h2 class="section-title">
-                <span class="material-symbols-outlined">event</span>
-                Event Tasks
-              </h2>
-            </div>
-            
-            <!-- Filter Bar -->
-            <div class="my-tasks-filter-bar">
-              <div class="filter-left">
-                <div class="search-box">
-                  <span class="material-symbols-outlined">search</span>
-                  <input type="text" id="taskSearch" placeholder="Search tasks...">
-                </div>
+        <!-- ========== EVENT TASKS TAB CONTENT ========== -->
+        <section class="tasks-tab-content active" id="eventTasksContent">
+          <!-- Filter Bar -->
+          <div class="my-tasks-filter-bar">
+            <div class="filter-left">
+              <div class="search-box">
+                <span class="material-symbols-outlined">search</span>
+                <input type="text" id="taskSearch" placeholder="Search tasks...">
+              </div>
               <!-- Status Filter Tabs -->
               <div class="status-filter-tabs">
                 <button class="status-tab active" data-status="all" data-section="event">All</button>
@@ -59,20 +69,19 @@
             </div>
             <div class="filter-right">
               <button class="filter-btn" id="myTasksFilterBtn">
-                  <span class="material-symbols-outlined">person</span>
-                  <span id="myTasksFilterLabel">All Tasks</span>
-                  <span class="material-symbols-outlined">expand_more</span>
-                </button>
-                <div class="filter-dropdown" id="myTasksDropdown">
-                  <button class="filter-option" data-value="all">All Tasks</button>
-                  <button class="filter-option" data-value="mine">My Tasks Only</button>
-                </div>
+                <span class="material-symbols-outlined">person</span>
+                <span id="myTasksFilterLabel">All Tasks</span>
+                <span class="material-symbols-outlined">expand_more</span>
+              </button>
+              <div class="filter-dropdown" id="myTasksDropdown">
+                <button class="filter-option" data-value="all">All Tasks</button>
+                <button class="filter-option" data-value="mine">My Tasks Only</button>
               </div>
             </div>
           </div>
           
-          <!-- Event Tasks Table (scrollable) -->
-          <div class="my-tasks-list-container scrollable-container">
+          <!-- Event Tasks Table (full page scroll) -->
+          <div class="my-tasks-list-container fullpage-scroll">
             <div class="my-tasks-table-wrapper">
               <table class="my-tasks-table">
                 <thead>
@@ -110,39 +119,26 @@
           </div>
         </section>
 
-        <!-- ========== GENERAL TASKS SECTION ========== -->
-        <section class="tasks-section general-tasks-section">
-          <div class="section-header">
-            <div class="section-title-row">
-              <h2 class="section-title">
-                <span class="material-symbols-outlined">person</span>
-                General Tasks
-              </h2>
-              <button class="btn-add-task" id="addGeneralTaskBtn" title="Add general task">
-                <span class="material-symbols-outlined">add</span>
-                Add Task
-              </button>
-            </div>
-            
-            <!-- Filter Bar -->
-            <div class="my-tasks-filter-bar general-filter-bar">
-              <div class="filter-left">
-                <div class="search-box">
-                  <span class="material-symbols-outlined">search</span>
-                  <input type="text" id="generalTaskSearch" placeholder="Search general tasks...">
-                </div>
-                <!-- Status Filter Tabs -->
-                <div class="status-filter-tabs">
-                  <button class="status-tab active" data-status="all" data-section="general">All</button>
-                  <button class="status-tab" data-status="pending" data-section="general">Pending</button>
-                  <button class="status-tab" data-status="completed" data-section="general">Completed</button>
-                </div>
+        <!-- ========== GENERAL TASKS TAB CONTENT ========== -->
+        <section class="tasks-tab-content" id="generalTasksContent">
+          <!-- Filter Bar -->
+          <div class="my-tasks-filter-bar general-filter-bar">
+            <div class="filter-left">
+              <div class="search-box">
+                <span class="material-symbols-outlined">search</span>
+                <input type="text" id="generalTaskSearch" placeholder="Search general tasks...">
+              </div>
+              <!-- Status Filter Tabs -->
+              <div class="status-filter-tabs">
+                <button class="status-tab active" data-status="all" data-section="general">All</button>
+                <button class="status-tab" data-status="pending" data-section="general">Pending</button>
+                <button class="status-tab" data-status="completed" data-section="general">Completed</button>
               </div>
             </div>
           </div>
           
-          <!-- General Tasks Table -->
-          <div class="my-tasks-list-container">
+          <!-- General Tasks Table (full page scroll) -->
+          <div class="my-tasks-list-container fullpage-scroll">
             <div class="my-tasks-table-wrapper">
               <table class="my-tasks-table general-tasks-table">
                 <thead>
@@ -362,4 +358,3 @@
 
   </div>
 </div>
-

@@ -15,6 +15,7 @@
   let generalStatusFilter = localStorage.getItem('generalTasksStatusFilter') || 'all'; // 'all', 'pending', 'completed'
   let dueDateSort = localStorage.getItem('myTasksDueDateSort') || 'none'; // 'none', 'asc', 'desc'
   let generalDueDateSort = localStorage.getItem('generalTasksDueDateSort') || 'none'; // 'none', 'asc', 'desc'
+  let activeTab = localStorage.getItem('myTasksActiveTab') || 'event'; // 'event' or 'general'
 
   // Initialize the page
   window.initPage = async function() {
@@ -29,6 +30,10 @@
     setupEventListeners();
     setupFilterDropdown();
     setupGeneralTaskListeners();
+    setupTabSwitching();
+    
+    // Restore active tab
+    switchTab(activeTab);
   };
 
   // Initialize dashboard sidebar
@@ -350,10 +355,22 @@
         menu.style.display = 'none';
       } else {
         const rect = trigger.getBoundingClientRect();
+        const menuHeight = 120; // Approximate height of 3 options
+        const viewportHeight = window.innerHeight;
+        const spaceBelow = viewportHeight - rect.bottom;
+        
         menu.style.display = 'block';
-        menu.style.top = `${rect.bottom + 4}px`;
         menu.style.left = `${rect.left}px`;
         menu.style.minWidth = `${Math.max(rect.width, 140)}px`;
+        
+        // Flip dropdown upward if not enough space below
+        if (spaceBelow < menuHeight + 20) {
+          menu.style.top = 'auto';
+          menu.style.bottom = `${viewportHeight - rect.top + 4}px`;
+        } else {
+          menu.style.top = `${rect.bottom + 4}px`;
+          menu.style.bottom = 'auto';
+        }
       }
     };
   }
@@ -858,10 +875,22 @@
         menu.style.display = 'none';
       } else {
         const rect = trigger.getBoundingClientRect();
+        const menuHeight = 120; // Approximate height of 3 options
+        const viewportHeight = window.innerHeight;
+        const spaceBelow = viewportHeight - rect.bottom;
+        
         menu.style.display = 'block';
-        menu.style.top = `${rect.bottom + 4}px`;
         menu.style.left = `${rect.left}px`;
         menu.style.minWidth = `${Math.max(rect.width, 140)}px`;
+        
+        // Flip dropdown upward if not enough space below
+        if (spaceBelow < menuHeight + 20) {
+          menu.style.top = 'auto';
+          menu.style.bottom = `${viewportHeight - rect.top + 4}px`;
+        } else {
+          menu.style.top = `${rect.bottom + 4}px`;
+          menu.style.bottom = 'auto';
+        }
       }
     };
   }
@@ -899,21 +928,24 @@
     }
   }
 
-  // Update progress bar (includes both event and general tasks)
+  // Update progress bar (shows progress for active tab)
   function updateProgress() {
     const progressText = document.getElementById('progressText');
     const progressFill = document.getElementById('progressFill');
     
     if (!progressText || !progressFill) return;
     
-    // Combine both task types for overall progress
-    const allTasks = [...tasks, ...generalTasks];
-    const total = allTasks.length;
-    const completed = allTasks.filter(t => t.status === 'done').length;
+    // Show progress for the active tab
+    const activeTasks = activeTab === 'event' ? tasks : generalTasks;
+    const total = activeTasks.length;
+    const completed = activeTasks.filter(t => t.status === 'done').length;
     const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
     
     progressText.textContent = `${completed} / ${total} completed`;
     progressFill.style.width = `${percentage}%`;
+    
+    // Also update tab counts
+    updateTabCounts();
   }
 
   // Setup event listeners
@@ -1439,6 +1471,74 @@
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+
+  // Setup tab switching
+  function setupTabSwitching() {
+    const tabs = document.querySelectorAll('.task-type-tab');
+    
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        const tabName = tab.dataset.tab;
+        switchTab(tabName);
+      });
+    });
+    
+    // Update tab counts initially
+    updateTabCounts();
+  }
+  
+  // Switch between tabs
+  function switchTab(tabName) {
+    activeTab = tabName;
+    localStorage.setItem('myTasksActiveTab', tabName);
+    
+    // Update tab buttons
+    const tabs = document.querySelectorAll('.task-type-tab');
+    tabs.forEach(tab => {
+      if (tab.dataset.tab === tabName) {
+        tab.classList.add('active');
+      } else {
+        tab.classList.remove('active');
+      }
+    });
+    
+    // Update tab content panels
+    const eventContent = document.getElementById('eventTasksContent');
+    const generalContent = document.getElementById('generalTasksContent');
+    
+    if (tabName === 'event') {
+      eventContent?.classList.add('active');
+      generalContent?.classList.remove('active');
+    } else {
+      eventContent?.classList.remove('active');
+      generalContent?.classList.add('active');
+    }
+    
+    // Show/hide Add Task button (only on General Tasks tab)
+    const addTaskBtn = document.getElementById('addGeneralTaskBtn');
+    if (addTaskBtn) {
+      addTaskBtn.style.display = tabName === 'general' ? 'flex' : 'none';
+    }
+    
+    // Update progress bar for the active tab
+    updateProgress();
+  }
+  
+  // Update tab counts
+  function updateTabCounts() {
+    const eventCount = document.getElementById('eventTaskCount');
+    const generalCount = document.getElementById('generalTaskCount');
+    
+    if (eventCount) {
+      const pendingEventTasks = tasks.filter(t => t.status !== 'done').length;
+      eventCount.textContent = pendingEventTasks;
+    }
+    
+    if (generalCount) {
+      const pendingGeneralTasks = generalTasks.filter(t => t.status !== 'done').length;
+      generalCount.textContent = pendingGeneralTasks;
+    }
   }
 
   // Show toast notification

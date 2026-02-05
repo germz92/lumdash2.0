@@ -1002,6 +1002,19 @@ function renderProgramSections(hasScheduleAccess) {
               ${!hasScheduleAccess ? 'readonly' : ''}
               onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
               onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'endTime')` : ''}">
+            ${program.folder ? `<div style="display: flex; align-items: center; gap: 2px;" class="folder-field-container">
+              <span class="material-symbols-outlined folder-icon" style="font-size: 14px; color: #2563eb;">folder</span>
+              <input type="text"
+                data-field="folder"
+                class="folder-input"
+                placeholder="Folder"
+                maxlength="7"
+                ${!hasScheduleAccess ? 'readonly' : ''}
+                style="width: 70px; min-width: 70px; padding: 4px 8px; font-size: 12px;"
+                value="${program.folder || ''}"
+                onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
+                onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'folder')` : ''}">
+            </div>` : ''}
           </div>
           <div class="right-actions" style="flex-shrink: 0; margin-left: auto;">
             <label style="display: flex; align-items: center; margin-bottom: 0;">
@@ -1258,8 +1271,18 @@ function matchesSearch(program) {
     (program.endTime || '').toLowerCase().includes(lower) ||
     (program.location || '').toLowerCase().includes(lower) ||
     (program.photographer || '').toLowerCase().includes(lower) ||
+    (program.folder || '').toLowerCase().includes(lower) ||
     (program.notes || '').toLowerCase().includes(lower)
   );
+}
+
+// Update folder field data attribute based on input value (for styling)
+function toggleFolderVisibility(input) {
+  const container = input.closest('.folder-field-container');
+  if (!container) return;
+  
+  const hasValue = input.value.trim().length > 0;
+  container.setAttribute('data-has-value', hasValue ? 'true' : 'false');
 }
 
 // --- Editing guard for partial updates and optimistic UI ---
@@ -2943,6 +2966,7 @@ function safeAddProgram(date) {
     endTime: '', 
     location: '', 
     photographer: '', 
+    folder: '',
     notes: '',
     done: false,
     // Add a temporary ID for UI consistency (will be replaced by MongoDB _id after save)
@@ -3193,6 +3217,7 @@ window.autoSave = autoSave;
 window.toggleNotes = toggleNotes;
 window.toggleAllNotes = toggleAllNotes;
 window.autoResizeTextarea = autoResizeTextarea;
+window.toggleFolderVisibility = toggleFolderVisibility;
 
 // DEPRECATED: Use safe functions instead
 window.captureCurrentPrograms = captureCurrentPrograms;
@@ -3530,6 +3555,7 @@ async function exportScheduleToExcel() {
       'Location',
       'Photographer',
       'Notes',
+      'Folder',
       'Done'
     ]);
     
@@ -3548,6 +3574,7 @@ async function exportScheduleToExcel() {
         program.location || '',
         program.photographer || '',
         program.notes || '',
+        program.folder || '',
         program.done ? 'Yes' : 'No'
       ]);
     });
@@ -3564,6 +3591,7 @@ async function exportScheduleToExcel() {
       { width: 25 },  // Location
       { width: 20 },  // Photographer
       { width: 40 },  // Notes
+      { width: 10 },  // Folder
       { width: 8 }    // Done
     ];
     
@@ -3613,6 +3641,7 @@ function processImportedData(data) {
     location: headers.indexOf('location'),
     photographer: headers.indexOf('photographer'),
     notes: headers.indexOf('notes'),
+    folder: headers.indexOf('folder'),
     done: headers.indexOf('done') !== -1 ? headers.indexOf('done') : headers.indexOf('completed')
   };
   
@@ -3676,6 +3705,7 @@ function processImportedData(data) {
       location: columnMap.location !== -1 ? (row[columnMap.location] || '') : '',
       photographer: columnMap.photographer !== -1 ? (row[columnMap.photographer] || '') : '',
       notes: columnMap.notes !== -1 ? (row[columnMap.notes] || '') : '',
+      folder: columnMap.folder !== -1 ? (row[columnMap.folder] || '') : '',
       done: isDone,
       // Add automatic temporary ID for collaborative system compatibility
       _tempId: generateTempId(`import_${i}`)
@@ -3914,13 +3944,13 @@ function downloadImportTemplate() {
     return;
   }
   
-  const headers = ['Date', 'Name', 'StartTime', 'EndTime', 'Location', 'Photographer', 'Notes', 'Done'];
+  const headers = ['Date', 'Name', 'StartTime', 'EndTime', 'Location', 'Photographer', 'Notes', 'Folder', 'Done'];
   const csvContent = headers.join(',') + '\n' +
-    '2023-06-01,Main Event,09:00,12:00,Grand Hall,John Smith,VIP guests expected,FALSE\n' +
-    '2023-06-01,Lunch Break,12:00,13:00,Dining Room,N/A,Catering by LocalFood,FALSE\n' +
-    '2023-06-01,Panel Discussion,13:30,15:00,Conference Room B,Jane Doe,Q&A session at the end,TRUE\n' +
-    '2023-06-02,Workshop,10:00,12:30,Training Room,Michael Johnson,Bring extra equipment,FALSE\n' +
-    '2023-06-02,Closing Event,16:00,18:00,Main Stage,Full Team,Group photo at 17:30,FALSE';
+    '2023-06-01,Main Event,09:00,12:00,Grand Hall,John Smith,VIP guests expected,DAY1,FALSE\n' +
+    '2023-06-01,Lunch Break,12:00,13:00,Dining Room,N/A,Catering by LocalFood,DAY1,FALSE\n' +
+    '2023-06-01,Panel Discussion,13:30,15:00,Conference Room B,Jane Doe,Q&A session at the end,DAY1,TRUE\n' +
+    '2023-06-02,Workshop,10:00,12:30,Training Room,Michael Johnson,Bring extra equipment,DAY2,FALSE\n' +
+    '2023-06-02,Closing Event,16:00,18:00,Main Stage,Full Team,Group photo at 17:30,DAY2,FALSE';
   
   // Create a Blob with the CSV content
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -4502,6 +4532,26 @@ function updateProgramFields(entry, program, preservationData, hasScheduleAccess
     }
   }
   
+  // Update folder input
+  const folderInput = entry.querySelector('input[data-field="folder"]');
+  if (folderInput && !isFieldCurrentlyFocused(folderInput, preservationData)) {
+    if (folderInput.value !== (program.folder || '')) {
+      console.log(`[UPDATE] Updating folder: '${folderInput.value}' -> '${program.folder || ''}'`);
+      
+      // CRITICAL: Mark as programmatic update to prevent feedback loops
+      folderInput.dataset.collaborativeUpdate = 'true';
+      
+      folderInput.value = program.folder || '';
+      
+      // Update data attribute for styling purposes
+      const container = folderInput.closest('.folder-field-container');
+      if (container) {
+        const hasValue = (program.folder || '').trim().length > 0;
+        container.setAttribute('data-has-value', hasValue ? 'true' : 'false');
+      }
+    }
+  }
+  
   // Restore focus if it was preserved
   if (preservationData.focusedElement && preservationData.shouldRestoreFocus) {
     setTimeout(() => {
@@ -4541,6 +4591,8 @@ function preserveProgramInputStates(entry) {
     // Determine which field is focused
     if (activeElement.classList.contains('program-name')) {
       preservationData.focusedField = 'name';
+    } else if (activeElement.dataset.field === 'folder') {
+      preservationData.focusedField = 'folder';
     } else if (activeElement.type === 'time') {
       if (activeElement === entry.querySelector('input[type="time"]:first-of-type')) {
         preservationData.focusedField = 'startTime';
@@ -4895,6 +4947,7 @@ function renderScheduleTable() {
         <th>Location</th>
         <th>Photographer</th>
         <th>Notes</th>
+        <th>Folder</th>
         <th>Done</th>
         ${isOwner ? '<th></th>' : ''}
       </tr>
@@ -4931,6 +4984,9 @@ function renderScheduleTable() {
         </td>
         <td class="editable-cell ${isOwner ? 'owner-editable' : ''}" data-field="notes">
           <span class="cell-display">${program.notes || ''}</span>
+        </td>
+        <td class="editable-cell ${isOwner ? 'owner-editable' : ''}" data-field="folder">
+          <span class="cell-display folder-cell">${program.folder || ''}</span>
         </td>
         <td class="done-checkbox-cell">
           <input type="checkbox" class="done-checkbox"
@@ -5006,6 +5062,11 @@ function makeTableCellEditable(cell, program) {
     inputElement = document.createElement('textarea');
     inputElement.value = currentValue;
     inputElement.rows = 2;
+  } else if (field === 'folder') {
+    inputElement = document.createElement('input');
+    inputElement.type = 'text';
+    inputElement.value = currentValue;
+    inputElement.maxLength = 7; // Set max length to 7 characters for folder
   } else {
     inputElement = document.createElement('input');
     inputElement.type = 'text';
@@ -5650,6 +5711,19 @@ function renderDarkThemeCardView(hasScheduleAccess) {
               ${!hasScheduleAccess ? 'readonly' : ''}
               onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
               onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'endTime')` : ''}">
+            ${program.folder ? `<div style="display: flex; align-items: center; gap: 2px;" class="folder-field-container">
+              <span class="material-symbols-outlined folder-icon" style="font-size: 14px; color: #2563eb;">folder</span>
+              <input type="text"
+                data-field="folder"
+                class="folder-input"
+                placeholder="Folder"
+                maxlength="7"
+                ${!hasScheduleAccess ? 'readonly' : ''}
+                style="width: 70px; min-width: 70px; padding: 4px 8px; font-size: 12px;"
+                value="${program.folder || ''}"
+                onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
+                onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'folder')` : ''}">
+            </div>` : ''}
           </div>
           <label style="display: flex; align-items: center; cursor: pointer;">
             <input type="checkbox" class="done-checkbox"

@@ -273,7 +273,9 @@ function navigate(page, id) {
 }
 
 function loadPage(page, id) {
-  fetch(`pages/${page}.html`)
+  // Add cache buster to ensure fresh HTML is loaded
+  const cacheBuster = Date.now();
+  fetch(`pages/${page}.html?v=${cacheBuster}`)
     .then(res => res.text())
     .then(html => {
       // Wait for DOM to be ready if it isn't already

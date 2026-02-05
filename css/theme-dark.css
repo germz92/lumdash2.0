@@ -8096,6 +8096,37 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   min-width: 100px;
 }
 
+/* Folder input styling for dark theme */
+.schedule-page.dark-theme .program-entry .folder-input {
+  width: 70px !important;
+  min-width: 70px !important;
+  max-width: 70px !important;
+  border: 1px solid #4a90e2 !important;
+  border-radius: 4px !important;
+  background: rgba(37, 99, 235, 0.1) !important;
+  color: #60a5fa !important;
+  text-align: center !important;
+  font-weight: 500 !important;
+  font-size: 12px !important;
+}
+
+.schedule-page.dark-theme .program-entry .folder-input:focus {
+  border-color: #60a5fa !important;
+  background: rgba(37, 99, 235, 0.2) !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.2) !important;
+}
+
+.schedule-page.dark-theme .program-entry .folder-field-container {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.schedule-page.dark-theme .program-entry .folder-icon {
+  color: #60a5fa !important;
+}
+
 .schedule-page.dark-theme .program-entry input[type="checkbox"] {
   width: 18px;
   height: 18px;
@@ -16652,21 +16683,33 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 }
 
 .my-tasks-page .dashboard-sidebar {
-  position: fixed;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: var(--sidebar-width);
-  z-index: 100;
+  position: fixed !important;
+  left: 0 !important;
+  top: 0 !important;
+  bottom: 0 !important;
+  width: var(--sidebar-width) !important;
+  z-index: 100 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  background: var(--bg-secondary) !important;
+  border-right: 1px solid var(--border-subtle) !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  transform: none !important;
 }
 
 .my-tasks-main {
   flex: 1;
-  margin-left: var(--sidebar-width);
+  margin-left: var(--sidebar-width) !important;
   display: flex;
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
+}
+
+/* Ensure the my-tasks page removes page-container padding for full-width layout */
+#page-container:has(.my-tasks-page) {
+  padding: 0 !important;
 }
 
 /* Mobile menu button */
@@ -16703,6 +16746,8 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   display: flex;
   align-items: center;
   gap: 12px;
+  flex: 1;
+  min-width: 0;
 }
 
 .my-tasks-title {
@@ -17618,8 +17663,73 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
    TASK SECTIONS (Event + General)
    ======================================== */
 
-/* Container for both sections */
-.my-tasks-page .tasks-sections-container {
+/* ========================================
+   TASK TYPE TABS (Switchable Full Page)
+   ======================================== */
+
+/* Task Type Tabs in Header */
+.my-tasks-page .task-type-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 24px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  padding: 4px;
+}
+
+.my-tasks-page .task-type-tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.my-tasks-page .task-type-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.my-tasks-page .task-type-tab.active {
+  background: var(--brand-red);
+  color: white;
+  box-shadow: 0 2px 8px rgba(204, 0, 7, 0.3);
+}
+
+.my-tasks-page .task-type-tab .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.my-tasks-page .task-type-tab .tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: var(--font-weight-semibold);
+}
+
+.my-tasks-page .task-type-tab:not(.active) .tab-count {
+  background: var(--bg-tertiary);
+  color: var(--text-tertiary);
+}
+
+/* Full Page Container */
+.my-tasks-page .tasks-fullpage-container {
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -17627,42 +17737,54 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   min-height: 0;
 }
 
-/* Event Tasks Section - takes up available space with scroll */
-.my-tasks-page .event-tasks-section {
-  display: flex;
+/* Tab Content Panels */
+.my-tasks-page .tasks-tab-content {
+  display: none;
   flex-direction: column;
   flex: 1;
-  min-height: 200px;
-  max-height: 60vh;
   overflow: hidden;
-  border-bottom: 1px solid var(--border-subtle);
+  min-height: 0;
 }
 
-.my-tasks-page .event-tasks-section .my-tasks-list-container.scrollable-container {
+.my-tasks-page .tasks-tab-content.active {
+  display: flex;
+}
+
+/* Full Page Scroll Container */
+.my-tasks-page .my-tasks-list-container.fullpage-scroll {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
+  padding: 0 32px 32px 32px;
 }
 
-/* General Tasks Section - fixed at bottom, grows as needed */
-.my-tasks-page .general-tasks-section {
-  flex-shrink: 0;
-  max-height: 40vh;
-  overflow: hidden;
+/* Add Task Button (shown only on General Tasks tab) */
+.my-tasks-page .btn-add-task {
   display: flex;
-  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--brand-red);
+  border: none;
+  border-radius: 8px;
+  color: white;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
 }
 
-.my-tasks-page .general-tasks-section .my-tasks-list-container {
-  flex: 1;
-  overflow-y: auto;
-  min-height: 0;
+.my-tasks-page .btn-add-task:hover {
+  background: var(--brand-red-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(204, 0, 7, 0.3);
 }
 
-.my-tasks-page .tasks-section {
-  margin-bottom: 0;
+.my-tasks-page .btn-add-task .material-symbols-outlined {
+  font-size: 18px;
 }
 
+/* Legacy section styles (keep for backward compatibility) */
 .my-tasks-page .section-header {
   margin-bottom: 0;
   flex-shrink: 0;
@@ -17688,35 +17810,6 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 .my-tasks-page .section-title .material-symbols-outlined {
   font-size: 20px;
   color: var(--brand-red);
-}
-
-.my-tasks-page .general-tasks-section .section-title .material-symbols-outlined {
-  color: #60a5fa;
-}
-
-.my-tasks-page .btn-add-task {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-default);
-  border-radius: 8px;
-  color: var(--text-primary);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.my-tasks-page .btn-add-task:hover {
-  background: var(--bg-hover);
-  border-color: var(--brand-red);
-  color: var(--brand-red);
-}
-
-.my-tasks-page .btn-add-task .material-symbols-outlined {
-  font-size: 18px;
 }
 
 /* Event tasks section filter bar adjustment */
@@ -17772,16 +17865,16 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 /* Mobile responsive */
 @media (max-width: 768px) {
   .my-tasks-page .dashboard-sidebar {
-    transform: translateX(-100%);
-    transition: transform 0.3s ease;
+    transform: translateX(-100%) !important;
+    transition: transform 0.3s ease !important;
   }
   
   .my-tasks-page .dashboard-sidebar.show {
-    transform: translateX(0);
+    transform: translateX(0) !important;
   }
   
   .my-tasks-main {
-    margin-left: 0;
+    margin-left: 0 !important;
   }
   
   .my-tasks-header-dark .mobile-menu-btn {
@@ -17792,6 +17885,18 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
     padding: 16px 20px;
     flex-wrap: wrap;
     gap: 12px;
+  }
+  
+  .my-tasks-header-left {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    width: 100%;
+  }
+  
+  .my-tasks-header-right {
+    width: 100%;
+    justify-content: space-between;
   }
   
   .my-tasks-filter-bar {
@@ -17869,13 +17974,34 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
     display: none;
   }
   
-  /* Adjust section heights on mobile */
-  .my-tasks-page .event-tasks-section {
-    max-height: 50vh;
+  /* Task Type Tabs mobile adjustments */
+  .my-tasks-page .task-type-tabs {
+    margin-left: 0;
+    margin-top: 12px;
+    width: 100%;
+    justify-content: center;
   }
   
-  .my-tasks-page .general-tasks-section {
-    max-height: 50vh;
+  .my-tasks-page .task-type-tab {
+    flex: 1;
+    justify-content: center;
+    padding: 10px 12px;
+    font-size: 13px;
+  }
+  
+  .my-tasks-page .task-type-tab .material-symbols-outlined {
+    font-size: 16px;
+  }
+  
+  .my-tasks-page .task-type-tab .tab-count {
+    min-width: 18px;
+    height: 18px;
+    font-size: 10px;
+  }
+  
+  /* Full page scroll on mobile */
+  .my-tasks-page .my-tasks-list-container.fullpage-scroll {
+    padding: 0 16px 100px 16px;
   }
 }
 

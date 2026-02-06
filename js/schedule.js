@@ -943,7 +943,16 @@ function renderProgramSections(hasScheduleAccess) {
         
         // If both have times, sort by time
         if (aHasTime && bHasTime) {
-          return a.startTime.localeCompare(b.startTime);
+          const startCmp = a.startTime.localeCompare(b.startTime);
+          if (startCmp !== 0) return startCmp;
+          
+          // Same start time: sort by end time (shorter duration first)
+          const aHasEnd = a.endTime && a.endTime.trim() !== '';
+          const bHasEnd = b.endTime && b.endTime.trim() !== '';
+          if (aHasEnd && bHasEnd) return a.endTime.localeCompare(b.endTime);
+          if (aHasEnd && !bHasEnd) return -1; // a has end time, show first
+          if (!aHasEnd && bHasEnd) return 1;
+          return a.__index - b.__index;
         }
         
         // If only a has time, a comes first
@@ -4903,7 +4912,16 @@ function renderScheduleTable() {
         const bHasTime = b.startTime && b.startTime.trim() !== '';
         
         if (aHasTime && bHasTime) {
-          return a.startTime.localeCompare(b.startTime);
+          const startCmp = a.startTime.localeCompare(b.startTime);
+          if (startCmp !== 0) return startCmp;
+          
+          // Same start time: sort by end time (shorter duration first)
+          const aHasEnd = a.endTime && a.endTime.trim() !== '';
+          const bHasEnd = b.endTime && b.endTime.trim() !== '';
+          if (aHasEnd && bHasEnd) return a.endTime.localeCompare(b.endTime);
+          if (aHasEnd && !bHasEnd) return -1;
+          if (!aHasEnd && bHasEnd) return 1;
+          return a.__index - b.__index;
         }
         if (aHasTime && !bHasTime) return -1;
         if (!aHasTime && bHasTime) return 1;

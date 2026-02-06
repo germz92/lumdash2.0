@@ -194,6 +194,22 @@
   async function init() {
     console.log('🛫 Initializing Flight Management...');
     
+    // Re-initialize DOM element references (in case they weren't available when script first loaded)
+    elements.pendingSearch = document.getElementById('pendingSearch');
+    elements.pendingFilter = document.getElementById('pendingFilter');
+    elements.pendingSort = document.getElementById('pendingSort');
+    elements.bookedSearch = document.getElementById('bookedSearch');
+    elements.bookedFilter = document.getElementById('bookedFilter');
+    elements.bookedSort = document.getElementById('bookedSort');
+    elements.pendingRequestsGrid = document.getElementById('pendingRequestsGrid');
+    elements.pendingRequestsTable = document.getElementById('pendingRequestsTable');
+    elements.bookedFlightsGrid = document.getElementById('bookedFlightsGrid');
+    elements.bookedFlightsTable = document.getElementById('bookedFlightsTable');
+    elements.pendingEmptyState = document.getElementById('pendingEmptyState');
+    elements.bookedEmptyState = document.getElementById('bookedEmptyState');
+    elements.pendingCount = document.getElementById('pendingCount');
+    elements.bookedCount = document.getElementById('bookedCount');
+    
     // Show loading states
     showLoadingState();
 
@@ -504,6 +520,32 @@
   }
 
   /**
+   * Parse a flight date value into a valid Date object.
+   * Handles Date objects, ISO strings ("2026-02-10T00:00:00.000Z"), and plain date strings ("2026-02-10").
+   * Returns null if the value is falsy or results in an invalid date.
+   */
+  function parseFlightDate(value) {
+    if (!value) return null;
+    
+    let date;
+    if (value instanceof Date) {
+      date = new Date(value);
+    } else if (typeof value === 'string') {
+      // If it's already an ISO string (contains 'T'), parse directly
+      // If it's a plain date like "2026-02-10", add T12:00:00 to avoid timezone shift
+      if (value.includes('T')) {
+        date = new Date(value);
+      } else {
+        date = new Date(value + 'T12:00:00');
+      }
+    } else {
+      return null;
+    }
+    
+    return isNaN(date.getTime()) ? null : date;
+  }
+
+  /**
    * Render pending requests
    */
   function renderPendingRequests() {
@@ -511,10 +553,15 @@
 
     elements.pendingRequestsGrid.innerHTML = '';
     
-    // Get filter values
-    const searchTerm = (elements.pendingSearch?.value || '').toLowerCase().trim();
-    const filterValue = elements.pendingFilter?.value || 'upcoming';
-    const sortValue = elements.pendingSort?.value || 'soonest';
+    // Get filter values - use direct DOM lookup as fallback
+    const pendingFilterEl = elements.pendingFilter || document.getElementById('pendingFilter');
+    const pendingSortEl = elements.pendingSort || document.getElementById('pendingSort');
+    const pendingSearchEl = elements.pendingSearch || document.getElementById('pendingSearch');
+    
+    const searchTerm = (pendingSearchEl?.value || '').toLowerCase().trim();
+    const filterValue = pendingFilterEl?.value || 'upcoming';
+    const sortValue = pendingSortEl?.value || 'soonest';
+    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
@@ -537,7 +584,9 @@
       
       // Date filter
       if (filterValue !== 'all') {
-        const departDate = new Date(request.departDate + 'T12:00:00');
+        let departDate = parseFlightDate(request.departDate);
+        if (!departDate) return true; // No valid date - include in results
+        
         departDate.setHours(0, 0, 0, 0);
         
         if (filterValue === 'upcoming' && departDate < today) return false;
@@ -608,10 +657,15 @@
 
     elements.bookedFlightsGrid.innerHTML = '';
     
-    // Get filter values
-    const searchTerm = (elements.bookedSearch?.value || '').toLowerCase().trim();
-    const filterValue = elements.bookedFilter?.value || 'upcoming';
-    const sortValue = elements.bookedSort?.value || 'soonest';
+    // Get filter values - use direct DOM lookup as fallback
+    const bookedFilterEl = elements.bookedFilter || document.getElementById('bookedFilter');
+    const bookedSortEl = elements.bookedSort || document.getElementById('bookedSort');
+    const bookedSearchEl = elements.bookedSearch || document.getElementById('bookedSearch');
+    
+    const searchTerm = (bookedSearchEl?.value || '').toLowerCase().trim();
+    const filterValue = bookedFilterEl?.value || 'upcoming';
+    const sortValue = bookedSortEl?.value || 'soonest';
+    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
@@ -635,23 +689,21 @@
         if (!searchFields.includes(searchTerm)) return false;
       }
       
-      // Date filter - use the earliest date (depart or return)
+      // Date filter - use the latest date (depart or return)
       if (filterValue !== 'all') {
-        const departDate = new Date(flight.departDate + 'T12:00:00');
+        let departDate = parseFlightDate(flight.departDate);
+        if (!departDate) return true; // No valid date - include in results
         departDate.setHours(0, 0, 0, 0);
-        const returnDate = flight.returnDate ? new Date(flight.returnDate + 'T12:00:00') : null;
+        
+        let returnDate = parseFlightDate(flight.returnDate);
         if (returnDate) returnDate.setHours(0, 0, 0, 0);
         
         // For upcoming: at least one date is in the future
         // For past: all dates are in the past
-        if (filterValue === 'upcoming') {
-          const latestDate = returnDate && returnDate > departDate ? returnDate : departDate;
-          if (latestDate < today) return false;
-        }
-        if (filterValue === 'past') {
-          const latestDate = returnDate && returnDate > departDate ? returnDate : departDate;
-          if (latestDate >= today) return false;
-        }
+        const latestDate = returnDate && returnDate > departDate ? returnDate : departDate;
+        
+        if (filterValue === 'upcoming' && latestDate < today) return false;
+        if (filterValue === 'past' && latestDate >= today) return false;
       }
       
       return true;

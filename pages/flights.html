@@ -1031,6 +1031,215 @@
       </div>
     </div>
 
+    <!-- Request Flight Change Modal -->
+    <div class="dark-modal" id="requestChangeModal">
+      <div class="dark-modal-content request-change-modal">
+        <div class="modal-header">
+          <h2>
+            <span class="material-symbols-outlined">edit_calendar</span>
+            Request Flight Change
+          </h2>
+          <button class="modal-close-btn" id="closeRequestChangeModal">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <!-- Current Booking Summary (read-only) -->
+          <div class="change-current-booking">
+            <div class="change-section-label">
+              <span class="material-symbols-outlined">info</span>
+              Current Booking
+            </div>
+            <div class="change-booking-summary" id="changeCurrentSummary">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <div class="change-divider">
+            <span class="material-symbols-outlined">arrow_downward</span>
+            <span>Requested Changes</span>
+          </div>
+
+          <form id="requestChangeForm">
+            <!-- What to change -->
+            <div class="form-group">
+              <label>What needs to change?</label>
+              <div class="change-checkboxes" id="changeCheckboxes">
+                <label class="change-checkbox-option">
+                  <input type="checkbox" name="changeField" value="departDate">
+                  <span class="change-checkbox-label">Outbound Date</span>
+                </label>
+                <label class="change-checkbox-option">
+                  <input type="checkbox" name="changeField" value="returnDate" id="changeReturnDateCheckbox">
+                  <span class="change-checkbox-label">Return Date</span>
+                </label>
+                <label class="change-checkbox-option">
+                  <input type="checkbox" name="changeField" value="departTime">
+                  <span class="change-checkbox-label">Outbound Time Preference</span>
+                </label>
+                <label class="change-checkbox-option">
+                  <input type="checkbox" name="changeField" value="returnTime" id="changeReturnTimeCheckbox">
+                  <span class="change-checkbox-label">Return Time Preference</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- Outbound Date Change -->
+            <div class="change-field-group" id="changeDepartDateGroup" style="display: none;">
+              <label>New Outbound Date</label>
+              <input type="date" id="changeDepartDate">
+            </div>
+
+            <!-- Return Date Change -->
+            <div class="change-field-group" id="changeReturnDateGroup" style="display: none;">
+              <label>New Return Date</label>
+              <input type="date" id="changeReturnDate">
+            </div>
+
+            <!-- Outbound Time Preference Change -->
+            <div class="change-field-group" id="changeDepartTimeGroup" style="display: none;">
+              <label>New Outbound Time Preference</label>
+              <div class="select-wrapper">
+                <select id="changeDepartTimePreference">
+                  <option value="any">Any</option>
+                  <option value="morning">Morning (5am-12pm)</option>
+                  <option value="afternoon">Afternoon (12pm-5pm)</option>
+                  <option value="evening">Evening (5pm-10pm)</option>
+                  <option value="redeye">Red-eye (10pm-5am)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Return Time Preference Change -->
+            <div class="change-field-group" id="changeReturnTimeGroup" style="display: none;">
+              <label>New Return Time Preference</label>
+              <div class="select-wrapper">
+                <select id="changeReturnTimePreference">
+                  <option value="any">Any</option>
+                  <option value="morning">Morning (5am-12pm)</option>
+                  <option value="afternoon">Afternoon (12pm-5pm)</option>
+                  <option value="evening">Evening (5pm-10pm)</option>
+                  <option value="redeye">Red-eye (10pm-5am)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Reason for change -->
+            <div class="form-group">
+              <label>Reason for Change</label>
+              <textarea id="changeReason" rows="2" placeholder="Why is this change needed?"></textarea>
+            </div>
+
+            <div class="modal-actions">
+              <button type="button" class="btn-cancel" id="cancelRequestChangeBtn">Cancel</button>
+              <button type="submit" class="btn-submit btn-change-request">
+                <span class="material-symbols-outlined">send</span>
+                Submit Change Request
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Approve Change Request Modal -->
+    <div class="dark-modal" id="approveChangeModal">
+      <div class="dark-modal-content approve-change-modal">
+        <div class="modal-header">
+          <h2>
+            <span class="material-symbols-outlined">check_circle</span>
+            Approve Flight Change
+          </h2>
+          <button class="modal-close-btn" id="closeApproveChangeModal">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <!-- What was requested -->
+          <div class="approve-change-summary" id="approveChangeSummary">
+            <!-- Populated by JS -->
+          </div>
+
+          <form id="approveChangeForm">
+            <!-- New Booking Details Header -->
+            <div class="form-section-header approve-section-header">
+              <span class="material-symbols-outlined">confirmation_number</span>
+              <h3>Updated Booking Details</h3>
+            </div>
+            <p class="approve-hint">Enter the new flight details after rebooking with the airline. Leave fields blank to keep existing values.</p>
+
+            <!-- Confirmation & Airline -->
+            <div class="form-row">
+              <div class="form-group">
+                <label>Confirmation Number</label>
+                <input type="text" id="approveConfirmationNumber" placeholder="e.g., ABC123">
+              </div>
+              <div class="form-group">
+                <label>Airline</label>
+                <input type="text" id="approveAirline" placeholder="e.g., Delta, United">
+              </div>
+            </div>
+
+            <!-- Outbound Flight -->
+            <div class="booking-flight-section">
+              <div class="section-title">
+                <span class="material-symbols-outlined">flight_takeoff</span>
+                <h3>Outbound Flight</h3>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Flight Number</label>
+                  <input type="text" id="approveOutboundFlightNumber" placeholder="e.g., DL1234">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Depart Time</label>
+                  <input type="time" id="approveOutboundDepartTime">
+                </div>
+                <div class="form-group">
+                  <label>Arrive Time</label>
+                  <input type="time" id="approveOutboundArriveTime">
+                </div>
+              </div>
+            </div>
+
+            <!-- Return Flight -->
+            <div class="booking-flight-section" id="approveReturnFlightSection" style="display: none;">
+              <div class="section-title">
+                <span class="material-symbols-outlined">flight_land</span>
+                <h3>Return Flight</h3>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Flight Number</label>
+                  <input type="text" id="approveReturnFlightNumber" placeholder="e.g., DL5678">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Depart Time</label>
+                  <input type="time" id="approveReturnDepartTime">
+                </div>
+                <div class="form-group">
+                  <label>Arrive Time</label>
+                  <input type="time" id="approveReturnArriveTime">
+                </div>
+              </div>
+            </div>
+
+            <div class="modal-actions">
+              <button type="button" class="btn-cancel" id="cancelApproveChangeBtn">Cancel</button>
+              <button type="submit" class="btn-submit btn-approve-submit">
+                <span class="material-symbols-outlined">check_circle</span>
+                Approve & Update Booking
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
     <script src="../js/flights.js"></script>
     <script src="../js/chat.js"></script>
     <script>

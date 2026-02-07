@@ -22,6 +22,8 @@
   let newPassengerRewards = []; // For add passenger modal
   let editPassengerRewards = []; // For edit passenger modal
   let bookingSelectedPassengers = []; // For create booking modal
+  let currentChangeRequestFlight = null; // For request change modal
+  let currentApprovingChangeRequestId = null; // For approve change modal
   let pendingViewType = 'cards'; // 'cards' or 'table'
   let bookedViewType = 'cards'; // 'cards' or 'table'
 
@@ -136,6 +138,26 @@
     closeEditPassengerModal: document.getElementById('closeEditPassengerModal'),
     editPassengerForm: document.getElementById('editPassengerForm'),
     cancelEditPassengerBtn: document.getElementById('cancelEditPassengerBtn'),
+
+    // Request Change Modal
+    requestChangeModal: document.getElementById('requestChangeModal'),
+    closeRequestChangeModal: document.getElementById('closeRequestChangeModal'),
+    cancelRequestChangeBtn: document.getElementById('cancelRequestChangeBtn'),
+    requestChangeForm: document.getElementById('requestChangeForm'),
+    changeCurrentSummary: document.getElementById('changeCurrentSummary'),
+    changeDepartDate: document.getElementById('changeDepartDate'),
+    changeReturnDate: document.getElementById('changeReturnDate'),
+    changeDepartTimePreference: document.getElementById('changeDepartTimePreference'),
+    changeReturnTimePreference: document.getElementById('changeReturnTimePreference'),
+    changeReason: document.getElementById('changeReason'),
+
+    // Approve Change Modal
+    approveChangeModal: document.getElementById('approveChangeModal'),
+    closeApproveChangeModal: document.getElementById('closeApproveChangeModal'),
+    cancelApproveChangeBtn: document.getElementById('cancelApproveChangeBtn'),
+    approveChangeForm: document.getElementById('approveChangeForm'),
+    approveChangeSummary: document.getElementById('approveChangeSummary'),
+    approveReturnFlightSection: document.getElementById('approveReturnFlightSection'),
 
     // Create Booking Modal
     createBookingBtn: document.getElementById('createBookingBtn'),
@@ -484,6 +506,27 @@
     elements.bookingPassengerSelect?.addEventListener('change', handleBookingPassengerSelect);
     elements.bookingAddPassengerBtn?.addEventListener('click', openAddPassengerModal);
 
+    // Request Change Modal
+    elements.closeRequestChangeModal?.addEventListener('click', closeRequestChangeModal);
+    elements.cancelRequestChangeBtn?.addEventListener('click', closeRequestChangeModal);
+    elements.requestChangeModal?.addEventListener('click', (e) => {
+      if (e.target === elements.requestChangeModal) closeRequestChangeModal();
+    });
+    elements.requestChangeForm?.addEventListener('submit', handleSubmitChangeRequest);
+
+    // Change field checkboxes - toggle visibility of corresponding input fields
+    document.querySelectorAll('input[name="changeField"]').forEach(cb => {
+      cb.addEventListener('change', handleChangeFieldToggle);
+    });
+
+    // Approve Change Modal
+    elements.closeApproveChangeModal?.addEventListener('click', closeApproveChangeModal);
+    elements.cancelApproveChangeBtn?.addEventListener('click', closeApproveChangeModal);
+    elements.approveChangeModal?.addEventListener('click', (e) => {
+      if (e.target === elements.approveChangeModal) closeApproveChangeModal();
+    });
+    elements.approveChangeForm?.addEventListener('submit', handleConfirmApproveChange);
+
     // Close suggestions on click outside
     document.addEventListener('click', (e) => {
       if (!e.target.closest('.form-group')) {
@@ -813,6 +856,7 @@
       <table class="flights-table">
         <thead>
           <tr>
+            <th>Type</th>
             <th>Passengers</th>
             <th>Depart Date</th>
             <th>Depart Time Pref</th>
@@ -825,13 +869,19 @@
         </thead>
         <tbody>
           ${requests.map(request => {
+            const isChangeRequest = request.status === 'change_requested';
             const departDate = new Date(request.departDate);
             const returnDate = request.returnDate ? new Date(request.returnDate) : null;
             const departTimePref = formatTimePreference(request.departTimePreference);
             const returnTimePref = formatTimePreference(request.returnTimePreference);
             
             return `
-              <tr data-request-id="${request._id}" onclick="window.openViewModal(event, '${request._id}')">
+              <tr data-request-id="${request._id}" class="${isChangeRequest ? 'change-request-row' : ''}" onclick="window.openViewModal(event, '${request._id}')">
+                <td>
+                  ${isChangeRequest 
+                    ? '<span class="table-change-badge">Change</span>' 
+                    : '<span class="table-pending-badge">New</span>'}
+                </td>
                 <td>
                   <div class="table-passengers">
                     ${(request.passengers || []).map(p => 
@@ -1094,17 +1144,49 @@
    */
   function createPendingRequestCard(request) {
     const card = document.createElement('div');
-    card.className = 'flight-card';
+    const isChangeRequest = request.status === 'change_requested';
+    card.className = `flight-card${isChangeRequest ? ' change-request-card' : ''}`;
     
     const departDisplay = formatDateDisplay(request.departDate);
     const returnDisplay = request.returnDate ? formatDateDisplay(request.returnDate) : null;
+
+    // For change requests, show what changed
+    let changeInfoHTML = '';
+    if (isChangeRequest && request.changeDetails) {
+      const changes = request.changeDetails.requestedChanges || {};
+      const changedItems = [];
+      if (changes.departDate) changedItems.push('Outbound Date');
+      if (changes.returnDate) changedItems.push('Return Date');
+      if (changes.departTimePreference) changedItems.push('Outbound Time');
+      if (changes.returnTimePreference) changedItems.push('Return Time');
+
+      changeInfoHTML = `
+        <div class="change-request-info">
+          <span class="material-symbols-outlined">edit_calendar</span>
+          <div class="change-request-details">
+            <span class="change-request-label">Changes Requested:</span>
+            <span class="change-request-fields">${changedItems.join(', ') || 'See details'}</span>
+          </div>
+        </div>
+        ${request.changeDetails.changeReason ? `
+          <div class="change-request-reason">
+            <span class="material-symbols-outlined">comment</span>
+            <span>${request.changeDetails.changeReason}</span>
+          </div>
+        ` : ''}
+      `;
+    }
     
     card.innerHTML = `
       <div class="flight-card-header">
         <h3 class="flight-event-name">${request.eventName || 'Flight Request'}</h3>
-        <span class="flight-type-badge">${request.tripType === 'roundtrip' ? 'Roundtrip' : 'One-way'}</span>
+        <div class="flight-card-badges">
+          ${isChangeRequest ? '<span class="flight-change-badge">Change Request</span>' : ''}
+          <span class="flight-type-badge">${request.tripType === 'roundtrip' ? 'Roundtrip' : 'One-way'}</span>
+        </div>
       </div>
       <div class="flight-card-body">
+        ${changeInfoHTML}
         
         <div class="flight-info-row">
           <div class="flight-dates">
@@ -1157,21 +1239,41 @@
         ${request.createdBy ? `
         <div class="request-created-by">
           <span class="material-symbols-outlined">person_edit</span>
-          <span>Created by ${request.createdBy.fullName || request.createdBy.email || 'Unknown'}</span>
+          <span>${isChangeRequest ? 'Requested' : 'Created'} by ${request.createdBy.fullName || request.createdBy.email || 'Unknown'}</span>
         </div>
         ` : ''}
       </div>
       <div class="flight-card-footer">
-        <button class="btn-view-request" data-request-id="${request._id}">
-          <span>View Request</span>
-          <span class="material-symbols-outlined">chevron_right</span>
-        </button>
+        ${isChangeRequest ? `
+          <div class="change-request-actions">
+            <button class="btn-approve-change" data-request-id="${request._id}">
+              <span class="material-symbols-outlined">check_circle</span>
+              <span>Approve</span>
+            </button>
+            <button class="btn-reject-change" data-request-id="${request._id}">
+              <span class="material-symbols-outlined">cancel</span>
+              <span>Reject</span>
+            </button>
+          </div>
+        ` : `
+          <button class="btn-view-request" data-request-id="${request._id}">
+            <span>View Request</span>
+            <span class="material-symbols-outlined">chevron_right</span>
+          </button>
+        `}
       </div>
     `;
 
-    // Add click handler for view button
-    const viewBtn = card.querySelector('.btn-view-request');
-    viewBtn.addEventListener('click', () => openViewModal(request));
+    // Add click handlers
+    if (isChangeRequest) {
+      const approveBtn = card.querySelector('.btn-approve-change');
+      const rejectBtn = card.querySelector('.btn-reject-change');
+      approveBtn?.addEventListener('click', () => handleApproveChangeRequest(request._id));
+      rejectBtn?.addEventListener('click', () => handleRejectChangeRequest(request._id));
+    } else {
+      const viewBtn = card.querySelector('.btn-view-request');
+      viewBtn?.addEventListener('click', () => openViewModal(request));
+    }
 
     return card;
   }
@@ -1240,6 +1342,10 @@
               <span class="material-symbols-outlined">more_vert</span>
             </button>
             <div class="booked-menu-dropdown">
+              <button class="booked-menu-item" data-action="request-change">
+                <span class="material-symbols-outlined">edit_calendar</span>
+                <span>Request Change</span>
+              </button>
               <button class="booked-menu-item" data-action="edit">
                 <span class="material-symbols-outlined">edit</span>
                 <span>Edit</span>
@@ -1333,7 +1439,9 @@
           const action = item.dataset.action;
           menuDropdown.classList.remove('show');
           
-          if (action === 'edit') {
+          if (action === 'request-change') {
+            openRequestChangeModal(flight);
+          } else if (action === 'edit') {
             openEditBookedFlightModal(flight);
           } else if (action === 'delete') {
             handleDeleteBookedFlight(flight);
@@ -2053,11 +2161,61 @@
     // Render passengers accordion
     renderPassengersAccordion(request.passengers || []);
 
-    // Show book flight button for pending requests
+    // Handle change request vs regular pending request in modal
+    const isChangeRequest = request.status === 'change_requested';
     const bookFlightBtn = document.getElementById('bookFlightBtn');
     const deleteBtn = document.getElementById('deleteRequestBtn');
-    if (bookFlightBtn) bookFlightBtn.style.display = 'flex';
-    if (deleteBtn) deleteBtn.style.display = 'flex';
+    const modalFooterActions = elements.viewRequestModal?.querySelector('.modal-footer-actions');
+
+    if (isChangeRequest) {
+      // Update title for change requests
+      if (modalTitle) {
+        modalTitle.textContent = 'View Change Request';
+      }
+
+      // Show approve/reject instead of book/delete
+      if (bookFlightBtn) bookFlightBtn.style.display = 'none';
+      if (deleteBtn) deleteBtn.style.display = 'none';
+
+      // Add change request info and approve/reject buttons if not already present
+      let changeActionsEl = modalFooterActions?.querySelector('.change-request-modal-actions');
+      if (!changeActionsEl && modalFooterActions) {
+        changeActionsEl = document.createElement('div');
+        changeActionsEl.className = 'change-request-modal-actions';
+        changeActionsEl.innerHTML = `
+          <button type="button" class="btn-approve-change" id="viewApproveChangeBtn">
+            <span class="material-symbols-outlined">check_circle</span>
+            Approve Change
+          </button>
+          <button type="button" class="btn-reject-change" id="viewRejectChangeBtn">
+            <span class="material-symbols-outlined">cancel</span>
+            Reject
+          </button>
+        `;
+        modalFooterActions.appendChild(changeActionsEl);
+      }
+      if (changeActionsEl) changeActionsEl.style.display = 'flex';
+
+      // Bind approve/reject handlers
+      document.getElementById('viewApproveChangeBtn')?.addEventListener('click', () => handleApproveChangeRequest(request._id));
+      document.getElementById('viewRejectChangeBtn')?.addEventListener('click', () => handleRejectChangeRequest(request._id));
+
+      // Show change reason if present
+      if (request.changeDetails?.changeReason) {
+        const notesEl = document.getElementById('viewNotes');
+        if (notesEl) {
+          const reason = request.changeDetails.changeReason;
+          notesEl.value = `[Change Reason] ${reason}${request.notes ? '\n\n' + request.notes : ''}`;
+        }
+      }
+    } else {
+      // Regular pending request
+      if (bookFlightBtn) bookFlightBtn.style.display = 'flex';
+      if (deleteBtn) deleteBtn.style.display = 'flex';
+      // Hide change request actions if they exist from a previous view
+      const changeActionsEl = modalFooterActions?.querySelector('.change-request-modal-actions');
+      if (changeActionsEl) changeActionsEl.style.display = 'none';
+    }
 
     // Hide booking section if visible
     hideBookingSection();
@@ -3242,6 +3400,314 @@
     } catch (error) {
       console.error('Failed to delete passenger:', error);
       alert('Failed to delete passenger. Please try again.');
+    }
+  }
+
+  // ========================================
+  // FLIGHT CHANGE REQUEST FUNCTIONS
+  // ========================================
+
+  /**
+   * Open the Request Change modal for a booked flight
+   */
+  function openRequestChangeModal(flight) {
+    currentChangeRequestFlight = flight;
+    const modal = elements.requestChangeModal;
+    if (!modal) return;
+
+    modal.classList.add('show');
+
+    // Populate current booking summary
+    const bookedDetails = flight.bookedDetails || {};
+    const returnBookedDetails = flight.returnBookedDetails || {};
+    const departDate = formatDateDisplay(flight.departDate);
+    const returnDate = flight.returnDate ? formatDateDisplay(flight.returnDate) : null;
+    const isRoundtrip = flight.tripType === 'roundtrip';
+
+    const summaryEl = elements.changeCurrentSummary;
+    if (summaryEl) {
+      summaryEl.innerHTML = `
+        <div class="change-summary-row">
+          <div class="change-summary-route">
+            <span class="change-summary-code">${flight.from?.code || 'TBD'}</span>
+            <span class="material-symbols-outlined">arrow_forward</span>
+            <span class="change-summary-code">${flight.to?.code || 'TBD'}</span>
+          </div>
+          ${flight.eventName ? `<span class="change-summary-event">${flight.eventName}</span>` : ''}
+        </div>
+        <div class="change-summary-details">
+          <div class="change-summary-item">
+            <span class="change-summary-label">Outbound</span>
+            <span class="change-summary-value">${departDate}${bookedDetails.departTime ? ' at ' + formatTimeDisplay(bookedDetails.departTime) : ''}</span>
+          </div>
+          ${isRoundtrip && returnDate ? `
+            <div class="change-summary-item">
+              <span class="change-summary-label">Return</span>
+              <span class="change-summary-value">${returnDate}${returnBookedDetails.departTime ? ' at ' + formatTimeDisplay(returnBookedDetails.departTime) : ''}</span>
+            </div>
+          ` : ''}
+          <div class="change-summary-item">
+            <span class="change-summary-label">Confirmation</span>
+            <span class="change-summary-value">${bookedDetails.confirmationCode || 'N/A'}</span>
+          </div>
+          <div class="change-summary-item">
+            <span class="change-summary-label">Passengers</span>
+            <span class="change-summary-value">${(flight.passengers || []).map(p => p.name).join(', ') || 'None'}</span>
+          </div>
+        </div>
+      `;
+    }
+
+    // Show/hide return-related checkboxes based on trip type
+    const returnDateCb = document.getElementById('changeReturnDateCheckbox');
+    const returnTimeCb = document.getElementById('changeReturnTimeCheckbox');
+    if (returnDateCb) returnDateCb.closest('.change-checkbox-option').style.display = isRoundtrip ? 'flex' : 'none';
+    if (returnTimeCb) returnTimeCb.closest('.change-checkbox-option').style.display = isRoundtrip ? 'flex' : 'none';
+
+    // Reset form
+    elements.requestChangeForm?.reset();
+    document.querySelectorAll('.change-field-group').forEach(g => g.style.display = 'none');
+
+    // Pre-fill dates with current values
+    if (elements.changeDepartDate) elements.changeDepartDate.value = formatDateForInput(flight.departDate);
+    if (elements.changeReturnDate && flight.returnDate) elements.changeReturnDate.value = formatDateForInput(flight.returnDate);
+    if (elements.changeDepartTimePreference) elements.changeDepartTimePreference.value = flight.departTimePreference || 'any';
+    if (elements.changeReturnTimePreference) elements.changeReturnTimePreference.value = flight.returnTimePreference || 'any';
+  }
+
+  /**
+   * Close the Request Change modal
+   */
+  function closeRequestChangeModal() {
+    currentChangeRequestFlight = null;
+    elements.requestChangeModal?.classList.remove('show');
+  }
+
+  /**
+   * Toggle visibility of change field inputs when checkboxes are checked
+   */
+  function handleChangeFieldToggle(e) {
+    const field = e.target.value;
+    const groupMap = {
+      'departDate': 'changeDepartDateGroup',
+      'returnDate': 'changeReturnDateGroup',
+      'departTime': 'changeDepartTimeGroup',
+      'returnTime': 'changeReturnTimeGroup'
+    };
+    const groupId = groupMap[field];
+    if (groupId) {
+      document.getElementById(groupId).style.display = e.target.checked ? 'block' : 'none';
+    }
+  }
+
+  /**
+   * Submit a change request
+   */
+  async function handleSubmitChangeRequest(e) {
+    e.preventDefault();
+    if (!currentChangeRequestFlight) return;
+
+    // Collect which fields are being changed
+    const checkedFields = Array.from(document.querySelectorAll('input[name="changeField"]:checked')).map(cb => cb.value);
+    if (checkedFields.length === 0) {
+      alert('Please select at least one field to change.');
+      return;
+    }
+
+    const requestedChanges = {};
+    if (checkedFields.includes('departDate')) {
+      requestedChanges.departDate = elements.changeDepartDate?.value || null;
+    }
+    if (checkedFields.includes('returnDate')) {
+      requestedChanges.returnDate = elements.changeReturnDate?.value || null;
+    }
+    if (checkedFields.includes('departTime')) {
+      requestedChanges.departTimePreference = elements.changeDepartTimePreference?.value || null;
+    }
+    if (checkedFields.includes('returnTime')) {
+      requestedChanges.returnTimePreference = elements.changeReturnTimePreference?.value || null;
+    }
+
+    const changeReason = elements.changeReason?.value?.trim() || '';
+
+    try {
+      const result = await apiRequest(`/api/flights/${currentChangeRequestFlight._id}/request-change`, {
+        method: 'POST',
+        body: JSON.stringify({ requestedChanges, changeReason })
+      });
+
+      // Add to local pending requests state
+      flightRequests.push(result);
+      renderPendingRequests();
+
+      closeRequestChangeModal();
+      console.log('✅ Change request submitted:', result._id);
+    } catch (error) {
+      console.error('Failed to submit change request:', error);
+      alert('Failed to submit change request. Please try again.');
+    }
+  }
+
+  /**
+   * Approve a change request - opens modal to enter new booking details
+   */
+  function handleApproveChangeRequest(requestId) {
+    const changeRequest = flightRequests.find(f => f._id === requestId);
+    if (!changeRequest) return;
+
+    currentApprovingChangeRequestId = requestId;
+
+    // Find the original booked flight to show existing details
+    const originalFlightId = changeRequest.changeDetails?.originalFlightId;
+    const originalFlight = originalFlightId 
+      ? bookedFlights.find(f => f._id === (originalFlightId._id || originalFlightId))
+      : null;
+
+    const existingBooked = originalFlight?.bookedDetails || {};
+    const existingReturn = originalFlight?.returnBookedDetails || {};
+    const isRoundtrip = changeRequest.tripType === 'roundtrip';
+
+    // Build summary of what's changing
+    const changes = changeRequest.changeDetails?.requestedChanges || {};
+    const changedItems = [];
+    if (changes.departDate) changedItems.push(`Outbound Date → ${formatDateDisplay(changeRequest.departDate)}`);
+    if (changes.returnDate) changedItems.push(`Return Date → ${formatDateDisplay(changeRequest.returnDate)}`);
+    if (changes.departTimePreference) changedItems.push(`Outbound Time Pref → ${formatTimePreference(changes.departTimePreference)}`);
+    if (changes.returnTimePreference) changedItems.push(`Return Time Pref → ${formatTimePreference(changes.returnTimePreference)}`);
+
+    const summaryEl = elements.approveChangeSummary;
+    if (summaryEl) {
+      summaryEl.innerHTML = `
+        <div class="approve-change-header">
+          <div class="approve-route">
+            <span class="approve-route-code">${changeRequest.from?.code || 'TBD'}</span>
+            <span class="material-symbols-outlined">arrow_forward</span>
+            <span class="approve-route-code">${changeRequest.to?.code || 'TBD'}</span>
+          </div>
+          <span class="approve-event">${changeRequest.eventName || 'Flight'}</span>
+        </div>
+        <div class="approve-changes-list">
+          <div class="approve-changes-label">
+            <span class="material-symbols-outlined">edit_calendar</span>
+            Changes being applied:
+          </div>
+          ${changedItems.map(item => `
+            <div class="approve-change-item">
+              <span class="material-symbols-outlined">arrow_right</span>
+              <span>${item}</span>
+            </div>
+          `).join('')}
+          ${changeRequest.changeDetails?.changeReason ? `
+            <div class="approve-change-reason">
+              <span class="material-symbols-outlined">comment</span>
+              <span>${changeRequest.changeDetails.changeReason}</span>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    // Pre-fill with existing booking details
+    document.getElementById('approveConfirmationNumber').value = existingBooked.confirmationCode || '';
+    document.getElementById('approveAirline').value = existingBooked.airline || '';
+    document.getElementById('approveOutboundFlightNumber').value = existingBooked.flightNumber || '';
+    document.getElementById('approveOutboundDepartTime').value = existingBooked.departTime || '';
+    document.getElementById('approveOutboundArriveTime').value = existingBooked.arriveTime || '';
+
+    // Show/hide return section
+    if (elements.approveReturnFlightSection) {
+      elements.approveReturnFlightSection.style.display = isRoundtrip ? 'block' : 'none';
+    }
+    if (isRoundtrip) {
+      document.getElementById('approveReturnFlightNumber').value = existingReturn.flightNumber || '';
+      document.getElementById('approveReturnDepartTime').value = existingReturn.departTime || '';
+      document.getElementById('approveReturnArriveTime').value = existingReturn.arriveTime || '';
+    }
+
+    // Close the view modal if open, then open approve modal
+    closeViewModal();
+    elements.approveChangeModal?.classList.add('show');
+  }
+
+  /**
+   * Close approve change modal
+   */
+  function closeApproveChangeModal() {
+    currentApprovingChangeRequestId = null;
+    elements.approveChangeModal?.classList.remove('show');
+  }
+
+  /**
+   * Confirm the approval with new booking details
+   */
+  async function handleConfirmApproveChange(e) {
+    e.preventDefault();
+    if (!currentApprovingChangeRequestId) return;
+
+    // Collect new booking details
+    const updatedBookedDetails = {
+      confirmationCode: document.getElementById('approveConfirmationNumber').value.trim(),
+      airline: document.getElementById('approveAirline').value.trim(),
+      flightNumber: document.getElementById('approveOutboundFlightNumber').value.trim(),
+      departTime: document.getElementById('approveOutboundDepartTime').value,
+      arriveTime: document.getElementById('approveOutboundArriveTime').value
+    };
+
+    const updatedReturnBookedDetails = {
+      flightNumber: document.getElementById('approveReturnFlightNumber')?.value?.trim() || '',
+      departTime: document.getElementById('approveReturnDepartTime')?.value || '',
+      arriveTime: document.getElementById('approveReturnArriveTime')?.value || ''
+    };
+
+    try {
+      const updatedFlight = await apiRequest(`/api/flights/${currentApprovingChangeRequestId}/approve-change`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          updatedBookedDetails,
+          updatedReturnBookedDetails
+        })
+      });
+
+      // Remove from pending
+      flightRequests = flightRequests.filter(f => f._id !== currentApprovingChangeRequestId);
+
+      // Update in booked
+      const bookedIndex = bookedFlights.findIndex(f => f._id === updatedFlight._id);
+      if (bookedIndex !== -1) {
+        bookedFlights[bookedIndex] = updatedFlight;
+      }
+
+      renderPendingRequests();
+      renderBookedFlights();
+      closeApproveChangeModal();
+
+      console.log('✅ Change request approved with new details:', currentApprovingChangeRequestId);
+    } catch (error) {
+      console.error('Failed to approve change request:', error);
+      alert('Failed to approve change request. Please try again.');
+    }
+  }
+
+  /**
+   * Reject a change request
+   */
+  async function handleRejectChangeRequest(requestId) {
+    if (!confirm('Reject this change request? It will be removed.')) return;
+
+    try {
+      await apiRequest(`/api/flights/${requestId}/reject-change`, {
+        method: 'PATCH'
+      });
+
+      // Remove from pending
+      flightRequests = flightRequests.filter(f => f._id !== requestId);
+      renderPendingRequests();
+      closeViewModal();
+
+      console.log('✅ Change request rejected:', requestId);
+    } catch (error) {
+      console.error('Failed to reject change request:', error);
+      alert('Failed to reject change request. Please try again.');
     }
   }
 

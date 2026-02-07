@@ -2935,3 +2935,524 @@
 .flights-dark .booking-confirmed-modal .modal-footer .btn-primary {
   min-width: 120px;
 }
+
+/* ===========================================
+   FLIGHT CHANGE REQUEST STYLES
+   =========================================== */
+
+/* --- Change Request Badge on Pending Cards --- */
+.flights-dark .flight-card-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.flights-dark .flight-change-badge {
+  font-size: var(--font-size-xs);
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* --- Change Request Card Styling --- */
+.flights-dark .change-request-card {
+  border-left: 3px solid #f59e0b;
+}
+
+.flights-dark .change-request-info {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(245, 158, 11, 0.08);
+  border-radius: var(--radius-sm);
+  margin-bottom: 12px;
+}
+
+.flights-dark .change-request-info > .material-symbols-outlined {
+  font-size: 20px;
+  color: #f59e0b;
+  margin-top: 1px;
+  flex-shrink: 0;
+}
+
+.flights-dark .change-request-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.flights-dark .change-request-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.flights-dark .change-request-fields {
+  font-size: var(--font-size-sm);
+  color: #f59e0b;
+  font-weight: var(--font-weight-medium);
+}
+
+.flights-dark .change-request-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+  padding-left: 4px;
+}
+
+.flights-dark .change-request-reason .material-symbols-outlined {
+  font-size: 16px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+/* --- Approve / Reject Buttons on Cards --- */
+.flights-dark .change-request-actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.flights-dark .btn-approve-change,
+.flights-dark .btn-reject-change {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  cursor: pointer;
+  transition: var(--transition-base);
+}
+
+.flights-dark .btn-approve-change {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+  border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.flights-dark .btn-approve-change:hover {
+  background: rgba(34, 197, 94, 0.25);
+}
+
+.flights-dark .btn-approve-change .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.flights-dark .btn-reject-change {
+  background: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.flights-dark .btn-reject-change:hover {
+  background: rgba(239, 68, 68, 0.22);
+}
+
+.flights-dark .btn-reject-change .material-symbols-outlined {
+  font-size: 18px;
+}
+
+/* --- Table View Badges --- */
+.flights-dark .table-change-badge {
+  display: inline-block;
+  font-size: 11px;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-weight: var(--font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.flights-dark .table-pending-badge {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: var(--bg-tertiary);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-weight: var(--font-weight-medium);
+}
+
+.flights-dark .change-request-row {
+  border-left: 3px solid #f59e0b;
+}
+
+/* --- Request Change Modal --- */
+.flights-dark .request-change-modal {
+  max-width: 600px;
+}
+
+.flights-dark .request-change-modal .modal-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.flights-dark .request-change-modal .modal-header h2 .material-symbols-outlined {
+  font-size: 24px;
+  color: #f59e0b;
+}
+
+/* Current booking summary */
+.flights-dark .change-current-booking {
+  margin-bottom: 16px;
+}
+
+.flights-dark .change-section-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+.flights-dark .change-section-label .material-symbols-outlined {
+  font-size: 18px;
+  color: var(--text-tertiary);
+}
+
+.flights-dark .change-booking-summary {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+}
+
+.flights-dark .change-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.flights-dark .change-summary-route {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.flights-dark .change-summary-code {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+}
+
+.flights-dark .change-summary-route .material-symbols-outlined {
+  font-size: 18px;
+  color: var(--text-tertiary);
+}
+
+.flights-dark .change-summary-event {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  background: var(--surface-hover);
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+}
+
+.flights-dark .change-summary-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+}
+
+.flights-dark .change-summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.flights-dark .change-summary-label {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.flights-dark .change-summary-value {
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+}
+
+/* Divider between current and requested */
+.flights-dark .change-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 0;
+  color: #f59e0b;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+}
+
+.flights-dark .change-divider .material-symbols-outlined {
+  font-size: 20px;
+}
+
+/* Checkboxes for what to change */
+.flights-dark .change-checkboxes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.flights-dark .change-checkbox-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: var(--transition-base);
+}
+
+.flights-dark .change-checkbox-option:hover {
+  border-color: var(--border-strong);
+}
+
+.flights-dark .change-checkbox-option input[type="checkbox"] {
+  accent-color: #f59e0b;
+  width: 16px;
+  height: 16px;
+}
+
+.flights-dark .change-checkbox-option input[type="checkbox"]:checked + .change-checkbox-label {
+  color: #f59e0b;
+}
+
+.flights-dark .change-checkbox-label {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+/* Change field groups (shown when checkbox is checked) */
+.flights-dark .change-field-group {
+  margin-top: 12px;
+  padding: 12px 14px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  border-left: 3px solid #f59e0b;
+}
+
+.flights-dark .change-field-group label {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+  font-weight: var(--font-weight-medium);
+}
+
+.flights-dark .change-field-group input[type="date"],
+.flights-dark .change-field-group select {
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.flights-dark .change-field-group input[type="date"]:focus,
+.flights-dark .change-field-group select:focus {
+  outline: none;
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
+}
+
+/* Submit button styling */
+.flights-dark .btn-change-request {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f59e0b !important;
+  color: #000 !important;
+  font-weight: var(--font-weight-semibold) !important;
+}
+
+.flights-dark .btn-change-request:hover {
+  background: #d97706 !important;
+}
+
+.flights-dark .btn-change-request .material-symbols-outlined {
+  font-size: 18px;
+}
+
+/* Change request actions in view modal */
+.flights-dark .change-request-modal-actions {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+/* ===========================================
+   APPROVE CHANGE REQUEST MODAL
+   =========================================== */
+
+.flights-dark .approve-change-modal {
+  max-width: 680px;
+}
+
+.flights-dark .approve-change-modal .modal-header h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.flights-dark .approve-change-modal .modal-header h2 .material-symbols-outlined {
+  font-size: 24px;
+  color: #22c55e;
+}
+
+/* Summary of what's changing */
+.flights-dark .approve-change-summary {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.flights-dark .approve-change-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.flights-dark .approve-route {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.flights-dark .approve-route-code {
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-bold);
+  color: var(--text-primary);
+}
+
+.flights-dark .approve-route .material-symbols-outlined {
+  font-size: 18px;
+  color: var(--text-tertiary);
+}
+
+.flights-dark .approve-event {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  background: var(--surface-hover);
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+}
+
+.flights-dark .approve-changes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.flights-dark .approve-changes-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-semibold);
+  color: #f59e0b;
+  margin-bottom: 4px;
+}
+
+.flights-dark .approve-changes-label .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.flights-dark .approve-change-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  padding-left: 4px;
+}
+
+.flights-dark .approve-change-item .material-symbols-outlined {
+  font-size: 18px;
+  color: #22c55e;
+}
+
+.flights-dark .approve-change-reason {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-top: 6px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-default);
+}
+
+.flights-dark .approve-change-reason .material-symbols-outlined {
+  font-size: 16px;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+/* Section header */
+.flights-dark .approve-section-header {
+  margin-bottom: 4px;
+}
+
+.flights-dark .approve-hint {
+  font-size: var(--font-size-sm);
+  color: var(--text-tertiary);
+  margin: 0 0 16px 0;
+  font-style: italic;
+}
+
+/* Submit button */
+.flights-dark .btn-approve-submit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #22c55e !important;
+  color: #fff !important;
+  font-weight: var(--font-weight-semibold) !important;
+}
+
+.flights-dark .btn-approve-submit:hover {
+  background: #16a34a !important;
+}
+
+.flights-dark .btn-approve-submit .material-symbols-outlined {
+  font-size: 18px;
+}

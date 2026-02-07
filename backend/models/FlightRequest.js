@@ -95,7 +95,7 @@ const flightRequestSchema = new mongoose.Schema({
   // Status
   status: {
     type: String,
-    enum: ['pending', 'booked', 'cancelled'],
+    enum: ['pending', 'booked', 'cancelled', 'change_requested'],
     default: 'pending'
   },
   
@@ -105,6 +105,21 @@ const flightRequestSchema = new mongoose.Schema({
   // Return flight booked details (for roundtrip)
   returnBookedDetails: bookedFlightDetailsSchema,
   
+  // Change request details (filled when status = 'change_requested')
+  changeDetails: {
+    originalFlightId: { type: mongoose.Schema.Types.ObjectId, ref: 'FlightRequest' },
+    changeReason: { type: String, default: '' },
+    requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    requestedAt: { type: Date },
+    requestedChanges: {
+      departDate: { type: Date, default: null },
+      returnDate: { type: Date, default: null },
+      departTimePreference: { type: String, default: null },
+      returnTimePreference: { type: String, default: null },
+      notes: { type: String, default: null }
+    }
+  },
+
   // Notes
   notes: {
     type: String,

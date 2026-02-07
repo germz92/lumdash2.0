@@ -30,6 +30,7 @@ const programSchema = new mongoose.Schema({
   endTime: String,
   location: String,
   photographer: String,
+  folder: String,
   notes: String,
   done: { type: Boolean, default: false }
 }, { _id: true });

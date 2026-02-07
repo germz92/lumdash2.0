@@ -6533,6 +6533,211 @@ app.post('/api/carts/:eventId/items', authenticate, async (req, res) => {
   }
 });
 
+// Batch add items to cart (optimized for package loading)
+app.post('/api/carts/:eventId/items/batch', authenticate, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const userId = req.user.id;
+    const { items } = req.body; // Array of { inventoryId, quantity, specificSerial }
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Items array is required' });
+    }
+
+    // 1. Get or create cart (ONE query)
+    let cart = await Cart.findOne({ userId, eventId });
+    if (!cart) {
+      const event = await Table.findById(eventId);
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+      if (!event.gear?.checkOutDate || !event.gear?.checkInDate) {
+        return res.status(400).json({ 
+          error: 'Event must have checkout and checkin dates set before items can be added to cart.' 
+        });
+      }
+      cart = new Cart({
+        userId,
+        eventId,
+        checkOutDate: event.gear.checkOutDate,
+        checkInDate: event.gear.checkInDate,
+        items: []
+      });
+    }
+
+    // 2. Collect all unique inventory IDs from request
+    const requestedInventoryIds = [...new Set(items.map(i => i.inventoryId))];
+
+    // 3. Fetch ALL needed inventory items in ONE query
+    const allInventoryItems = await GearInventory.find({
+      _id: { $in: requestedInventoryIds }
+    });
+    const inventoryMap = new Map(allInventoryItems.map(item => [item._id.toString(), item]));
+
+    // 4. Build a set of all brand/model combos to look up similar items
+    const brandModelPairs = new Set();
+    for (const invItem of allInventoryItems) {
+      const parts = invItem.label.split(' ');
+      const brand = parts[0] || '';
+      const model = parts.slice(1).join(' ') || '';
+      brandModelPairs.add(`${brand}|||${model}`);
+    }
+
+    // 5. Find ALL similar inventory items (same brand/model) in ONE query using $or
+    const orConditions = [];
+    for (const pair of brandModelPairs) {
+      const [brand, model] = pair.split('|||');
+      orConditions.push({ label: { $regex: `^${brand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} ${model.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, $options: 'i' } });
+    }
+    const allSimilarItems = orConditions.length > 0 
+      ? await GearInventory.find({ $or: orConditions })
+      : [];
+    
+    // Group similar items by brand/model key
+    const similarItemsByKey = new Map();
+    for (const item of allSimilarItems) {
+      const parts = item.label.split(' ');
+      const key = `${parts[0] || ''}|||${parts.slice(1).join(' ') || ''}`;
+      if (!similarItemsByKey.has(key)) similarItemsByKey.set(key, []);
+      similarItemsByKey.get(key).push(item);
+    }
+
+    // 6. Get ALL overlapping reservations and manual reservations in TWO queries
+    const allSimilarIds = allSimilarItems.map(item => item._id);
+    const now = new Date();
+    now.setUTCHours(0, 0, 0, 0);
+    const checkOutDate = cart.checkOutDate;
+    const checkInDate = cart.checkInDate;
+
+    const [overlappingReservations, manualReservations] = await Promise.all([
+      ReservedGearItem.find({
+        inventoryId: { $in: allSimilarIds },
+        $and: [
+          { checkOutDate: { $lte: checkInDate } },
+          { checkInDate: { $gte: checkOutDate } },
+          { checkInDate: { $gte: now } }
+        ]
+      }),
+      ManualReservation.find({
+        inventoryId: { $in: allSimilarIds },
+        $and: [
+          { startDate: { $lte: checkInDate } },
+          { endDate: { $gte: checkOutDate } },
+          { endDate: { $gte: now } }
+        ]
+      })
+    ]);
+
+    // 7. Build availability map: inventoryId -> reservedQuantity
+    const reservedByInventoryId = new Map();
+    for (const res of overlappingReservations) {
+      const id = res.inventoryId.toString();
+      reservedByInventoryId.set(id, (reservedByInventoryId.get(id) || 0) + res.quantity);
+    }
+    for (const res of manualReservations) {
+      const id = res.inventoryId.toString();
+      reservedByInventoryId.set(id, (reservedByInventoryId.get(id) || 0) + res.quantity);
+    }
+
+    // Helper: get available quantity from pre-fetched data
+    function getAvailableQty(inventoryItem) {
+      const reserved = reservedByInventoryId.get(inventoryItem._id.toString()) || 0;
+      return Math.max(0, inventoryItem.quantity - reserved);
+    }
+
+    // Helper: get total available for a brand/model
+    function getTotalAvailableForBrandModel(invItem) {
+      const parts = invItem.label.split(' ');
+      const key = `${parts[0] || ''}|||${parts.slice(1).join(' ') || ''}`;
+      const similarItems = similarItemsByKey.get(key) || [invItem];
+      return similarItems.reduce((sum, item) => sum + getAvailableQty(item), 0);
+    }
+
+    // 8. Process each item — check availability and add to cart
+    const results = [];
+    // Track quantities being added in this batch to prevent over-allocation
+    const batchAddedByBrandModel = new Map();
+
+    for (const reqItem of items) {
+      const { inventoryId, quantity = 1, specificSerial = null } = reqItem;
+      const inventoryItem = inventoryMap.get(inventoryId);
+
+      if (!inventoryItem) {
+        results.push({ inventoryId, success: false, error: 'Inventory item not found' });
+        continue;
+      }
+
+      const parts = inventoryItem.label.split(' ');
+      const bmKey = `${parts[0] || ''}|||${parts.slice(1).join(' ') || ''}`;
+
+      if (specificSerial) {
+        // For specific serial: check individual item availability
+        const itemAvailable = getAvailableQty(inventoryItem);
+        const existingSerialInCart = cart.items
+          .filter(ci => ci.inventoryId.toString() === inventoryId && ci.specificSerial === specificSerial)
+          .reduce((sum, ci) => sum + ci.quantity, 0);
+        
+        if (existingSerialInCart + quantity > itemAvailable) {
+          results.push({ inventoryId, success: false, error: 'Serial not available' });
+          continue;
+        }
+      } else {
+        // For no-preference: check brand/model total availability
+        const totalAvailable = getTotalAvailableForBrandModel(inventoryItem);
+
+        // How many of this brand/model already in cart (before this batch)
+        const similarItems = similarItemsByKey.get(bmKey) || [inventoryItem];
+        const similarIds = new Set(similarItems.map(si => si._id.toString()));
+        const existingCartQty = cart.items
+          .filter(ci => similarIds.has(ci.inventoryId.toString()) && !ci.specificSerial)
+          .reduce((sum, ci) => sum + ci.quantity, 0);
+
+        // How many already added in this batch for the same brand/model
+        const batchAdded = batchAddedByBrandModel.get(bmKey) || 0;
+        const totalRequested = existingCartQty + batchAdded + quantity;
+
+        if (totalRequested > totalAvailable) {
+          const remaining = Math.max(0, totalAvailable - existingCartQty - batchAdded);
+          results.push({ 
+            inventoryId, 
+            success: false, 
+            error: `Only ${remaining} more units available`,
+            availableQuantity: remaining
+          });
+          continue;
+        }
+      }
+
+      // Add to cart
+      cart.addItem(inventoryItem, quantity, specificSerial);
+      if (!specificSerial) {
+        const batchAdded = batchAddedByBrandModel.get(bmKey) || 0;
+        batchAddedByBrandModel.set(bmKey, batchAdded + quantity);
+      }
+      results.push({ inventoryId, success: true, quantity });
+    }
+
+    // 9. Save cart ONCE
+    await cart.save();
+
+    // 10. Return results (skip expensive per-item availability recalculation)
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+
+    res.json({
+      message: `Added ${successCount} item(s) to cart${failCount > 0 ? `, ${failCount} failed` : ''}`,
+      results,
+      successCount,
+      failCount,
+      totalCartItems: cart.items.length
+    });
+
+  } catch (err) {
+    console.error('Error batch adding items to cart:', err);
+    res.status(500).json({ error: 'Failed to batch add items to cart' });
+  }
+});
+
 // Update item quantity in cart
 app.put('/api/carts/:eventId/items/:itemId', authenticate, async (req, res) => {
   try {

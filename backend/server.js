@@ -7858,18 +7858,20 @@ app.get('/api/flights', authenticate, async (req, res) => {
   }
 });
 
-// Get pending requests
+// Get pending requests (includes both pending and change_requested)
 app.get('/api/flights/pending', authenticate, async (req, res) => {
   try {
     if (!hasPlannerAccess(req.user)) {
       return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
     }
 
-    const flights = await FlightRequest.find({ status: 'pending' })
+    const flights = await FlightRequest.find({ status: { $in: ['pending', 'change_requested'] } })
       .populate('createdBy', 'fullName email')
       .populate('eventId', 'title')
       .populate('bookedDetails.bookedBy', 'fullName email')
       .populate('returnBookedDetails.bookedBy', 'fullName email')
+      .populate('changeDetails.requestedBy', 'fullName email')
+      .populate('changeDetails.originalFlightId')
       .sort({ departDate: 1 });
     
     res.json(flights);
@@ -8151,6 +8153,198 @@ app.delete('/api/flights/:id', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Delete flight error:', error);
     res.status(500).json({ error: 'Failed to delete flight request' });
+  }
+});
+
+// Request a change to a booked flight (creates a change_requested entry in pending)
+app.post('/api/flights/:id/request-change', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const originalFlight = await FlightRequest.findById(req.params.id);
+    if (!originalFlight) {
+      return res.status(404).json({ error: 'Flight not found' });
+    }
+    if (originalFlight.status !== 'booked') {
+      return res.status(400).json({ error: 'Can only request changes for booked flights' });
+    }
+
+    const { requestedChanges, changeReason } = req.body;
+
+    // Create a new pending request that represents the change request
+    const changeRequest = new FlightRequest({
+      eventId: originalFlight.eventId,
+      eventName: originalFlight.eventName,
+      createdBy: req.user.id,
+      tripType: originalFlight.tripType,
+      from: originalFlight.from,
+      to: originalFlight.to,
+      // Use requested dates if provided, otherwise keep originals
+      departDate: requestedChanges?.departDate || originalFlight.departDate,
+      returnDate: requestedChanges?.returnDate !== undefined ? requestedChanges.returnDate : originalFlight.returnDate,
+      departTimePreference: requestedChanges?.departTimePreference || originalFlight.departTimePreference,
+      returnTimePreference: requestedChanges?.returnTimePreference || originalFlight.returnTimePreference,
+      passengers: originalFlight.passengers,
+      status: 'change_requested',
+      notes: requestedChanges?.notes || originalFlight.notes,
+      changeDetails: {
+        originalFlightId: originalFlight._id,
+        changeReason: changeReason || '',
+        requestedBy: req.user.id,
+        requestedAt: new Date(),
+        requestedChanges: {
+          departDate: requestedChanges?.departDate || null,
+          returnDate: requestedChanges?.returnDate || null,
+          departTimePreference: requestedChanges?.departTimePreference || null,
+          returnTimePreference: requestedChanges?.returnTimePreference || null,
+          notes: requestedChanges?.notes || null
+        }
+      }
+    });
+
+    await changeRequest.save();
+
+    const populated = await FlightRequest.findById(changeRequest._id)
+      .populate('createdBy', 'fullName email')
+      .populate('eventId', 'title')
+      .populate('changeDetails.requestedBy', 'fullName email')
+      .populate('changeDetails.originalFlightId');
+
+    console.log('✅ Flight change requested:', changeRequest._id, 'for original:', originalFlight._id);
+
+    // Notify connected clients
+    notifyDataChange('flightChangeRequested', { flightId: changeRequest._id, originalFlightId: originalFlight._id });
+
+    res.status(201).json(populated);
+  } catch (error) {
+    console.error('Request flight change error:', error);
+    res.status(500).json({ error: 'Failed to create change request' });
+  }
+});
+
+// Approve a change request (apply changes to original flight and delete the change request)
+app.patch('/api/flights/:id/approve-change', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const changeRequest = await FlightRequest.findById(req.params.id);
+    if (!changeRequest) {
+      return res.status(404).json({ error: 'Change request not found' });
+    }
+    if (changeRequest.status !== 'change_requested') {
+      return res.status(400).json({ error: 'This is not a change request' });
+    }
+
+    const originalFlightId = changeRequest.changeDetails?.originalFlightId;
+    if (!originalFlightId) {
+      return res.status(400).json({ error: 'No original flight linked to this change request' });
+    }
+
+    const { updatedBookedDetails, updatedReturnBookedDetails } = req.body;
+
+    // Build update object from the change request's top-level fields (which already have the new values)
+    const updateData = {
+      departDate: changeRequest.departDate,
+      returnDate: changeRequest.returnDate,
+      departTimePreference: changeRequest.departTimePreference,
+      returnTimePreference: changeRequest.returnTimePreference,
+      notes: changeRequest.notes
+    };
+
+    // If new booking details were provided, merge them into the existing booked details
+    if (updatedBookedDetails) {
+      // Get the original flight to preserve existing fields not being overwritten
+      const origFlight = await FlightRequest.findById(originalFlightId);
+      const existingBooked = origFlight?.bookedDetails?.toObject?.() || origFlight?.bookedDetails || {};
+      
+      updateData.bookedDetails = {
+        ...existingBooked,
+        // Only overwrite fields that have non-empty values
+        ...(updatedBookedDetails.confirmationCode ? { confirmationCode: updatedBookedDetails.confirmationCode } : {}),
+        ...(updatedBookedDetails.airline ? { airline: updatedBookedDetails.airline } : {}),
+        ...(updatedBookedDetails.flightNumber ? { flightNumber: updatedBookedDetails.flightNumber } : {}),
+        ...(updatedBookedDetails.departTime ? { departTime: updatedBookedDetails.departTime } : {}),
+        ...(updatedBookedDetails.arriveTime ? { arriveTime: updatedBookedDetails.arriveTime } : {}),
+        bookedAt: new Date(),
+        bookedBy: req.user.id
+      };
+
+      // Handle return flight details for roundtrip
+      if (updatedReturnBookedDetails && changeRequest.tripType === 'roundtrip') {
+        const existingReturn = origFlight?.returnBookedDetails?.toObject?.() || origFlight?.returnBookedDetails || {};
+        updateData.returnBookedDetails = {
+          ...existingReturn,
+          ...(updatedReturnBookedDetails.flightNumber ? { flightNumber: updatedReturnBookedDetails.flightNumber } : {}),
+          ...(updatedReturnBookedDetails.departTime ? { departTime: updatedReturnBookedDetails.departTime } : {}),
+          ...(updatedReturnBookedDetails.arriveTime ? { arriveTime: updatedReturnBookedDetails.arriveTime } : {}),
+          // Carry forward confirmation code and airline from outbound
+          ...(updatedBookedDetails.confirmationCode ? { confirmationCode: updatedBookedDetails.confirmationCode } : {}),
+          ...(updatedBookedDetails.airline ? { airline: updatedBookedDetails.airline } : {}),
+          bookedAt: new Date(),
+          bookedBy: req.user.id
+        };
+      }
+    }
+
+    // Apply changes to the original booked flight
+    const updatedFlight = await FlightRequest.findByIdAndUpdate(
+      originalFlightId,
+      updateData,
+      { new: true, runValidators: true }
+    ).populate('createdBy', 'fullName email')
+     .populate('bookedDetails.bookedBy', 'fullName email')
+     .populate('returnBookedDetails.bookedBy', 'fullName email')
+     .populate('eventId', 'title');
+
+    if (!updatedFlight) {
+      return res.status(404).json({ error: 'Original booked flight not found' });
+    }
+
+    // Delete the change request
+    await FlightRequest.findByIdAndDelete(req.params.id);
+
+    console.log('✅ Flight change approved:', req.params.id, '→ updated original:', originalFlightId);
+
+    // Notify connected clients
+    notifyDataChange('flightChangeApproved', { flightId: originalFlightId, changeRequestId: req.params.id });
+
+    res.json(updatedFlight);
+  } catch (error) {
+    console.error('Approve flight change error:', error);
+    res.status(500).json({ error: 'Failed to approve change request' });
+  }
+});
+
+// Reject a change request (just delete it)
+app.patch('/api/flights/:id/reject-change', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const changeRequest = await FlightRequest.findById(req.params.id);
+    if (!changeRequest) {
+      return res.status(404).json({ error: 'Change request not found' });
+    }
+    if (changeRequest.status !== 'change_requested') {
+      return res.status(400).json({ error: 'This is not a change request' });
+    }
+
+    await FlightRequest.findByIdAndDelete(req.params.id);
+
+    console.log('✅ Flight change rejected and deleted:', req.params.id);
+
+    // Notify connected clients
+    notifyDataChange('flightChangeRejected', { changeRequestId: req.params.id });
+
+    res.json({ message: 'Change request rejected and removed' });
+  } catch (error) {
+    console.error('Reject flight change error:', error);
+    res.status(500).json({ error: 'Failed to reject change request' });
   }
 });
 

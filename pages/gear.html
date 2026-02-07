@@ -244,6 +244,11 @@
         100% { transform: rotate(360deg); }
     }
 
+    @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+    }
+
     /* Modal Styles - Dark Theme */
     .gear-page.dark-theme .modal {
         display: none;
@@ -471,6 +476,512 @@
             gap: 8px;
         }
     }
+
+    /* Package Table Styles */
+    .pkg-table {
+        border-collapse: collapse;
+    }
+    .pkg-table th {
+        font-size: 13px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .pkg-table td {
+        font-size: 14px;
+    }
+    .pkg-table tr:hover {
+        background-color: rgba(0,0,0,0.02);
+    }
+
+    /* Serial checkbox styles */
+    .serial-checkbox {
+        accent-color: #cc0007;
+    }
+    .serial-checkbox:checked {
+        accent-color: #cc0007;
+    }
+
+    /* Add Items / Add Available button styles in table */
+    .pkg-table .package-btn {
+        white-space: nowrap;
+        text-transform: none;
+        font-weight: 500;
+        border-radius: 6px;
+        min-width: unset;
+        height: auto;
+        box-shadow: none;
+    }
+    .pkg-table .package-btn.primary {
+        background: #cc0007;
+        color: white;
+        border: none;
+    }
+    .pkg-table .package-btn.primary:hover {
+        background: #a30006;
+    }
+
+    /* Dark theme overrides for package modals */
+    .gear-page.dark-theme .pkg-table th {
+        color: #aaa;
+    }
+    .gear-page.dark-theme .pkg-table td {
+        color: #ddd;
+    }
+    .gear-page.dark-theme .pkg-table tr {
+        border-bottom-color: #333 !important;
+    }
+    .gear-page.dark-theme .pkg-table tr:hover {
+        background-color: rgba(255,255,255,0.03);
+    }
+    .gear-page.dark-theme .pkg-table thead tr {
+        border-bottom-color: #444 !important;
+    }
+
+    /* ============================================
+       GEAR MODALS - Dark Theme (flights-style)
+       Modals live outside .gear-page so we target by ID.
+       Uses CSS variables from theme-dark.css.
+       ============================================ */
+
+    /* --- Backdrop --- */
+    #newPackageModal,
+    #packageContentsModal,
+    #packageSerialModal,
+    #templatesModal,
+    #templateDetailsModal,
+    #createTemplateModal {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        background: var(--surface-overlay);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        opacity: 1 !important;
+        transition: none !important;
+    }
+    /* When JS sets display:block, force flex for centering */
+    #newPackageModal[style*="display: block"],
+    #packageContentsModal[style*="display: block"],
+    #packageSerialModal[style*="display: block"],
+    #templatesModal[style*="display: block"],
+    #templateDetailsModal[style*="display: block"],
+    #createTemplateModal[style*="display: block"] {
+        display: flex !important;
+    }
+
+    /* --- Modal Content Card --- */
+    #newPackageModal .modal-content,
+    #packageContentsModal .modal-content,
+    #packageSerialModal .modal-content,
+    #templatesModal .modal-content,
+    #templateDetailsModal .modal-content,
+    #createTemplateModal .modal-content {
+        background: var(--surface-modal);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-xl);
+        color: var(--text-primary);
+        width: 100%;
+        max-height: 90vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        animation: modalSlideUp 0.2s ease-out;
+        box-shadow: var(--shadow-xl);
+        transform: none !important;
+        margin: 0;
+        padding: 0;
+    }
+    #newPackageModal .modal-content { max-width: 500px; }
+    #packageContentsModal .modal-content { max-width: 900px; }
+    #packageSerialModal .modal-content { max-width: 650px; }
+    #templatesModal .modal-content { max-width: 700px; }
+    #templateDetailsModal .modal-content { max-width: 600px; }
+    #createTemplateModal .modal-content { max-width: 560px; }
+
+    /* --- Header --- */
+    #newPackageModal .modal-header,
+    #packageContentsModal .modal-header,
+    #packageSerialModal .modal-header,
+    #templatesModal .modal-header,
+    #templateDetailsModal .modal-header,
+    #createTemplateModal .modal-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 20px 24px;
+        border-bottom: 1px solid var(--border-subtle);
+        background: transparent;
+        flex-shrink: 0;
+    }
+    #newPackageModal .modal-header h3,
+    #packageContentsModal .modal-header h3,
+    #packageSerialModal .modal-header h3,
+    #templatesModal .modal-header h3,
+    #templateDetailsModal .modal-header h3,
+    #createTemplateModal .modal-header h3 {
+        font-size: var(--font-size-lg);
+        font-weight: var(--font-weight-semibold);
+        color: var(--text-primary);
+        margin: 0;
+    }
+
+    /* --- Close button (material icon style) --- */
+    #newPackageModal .modal-close-btn,
+    #packageContentsModal .modal-close-btn,
+    #packageSerialModal .modal-close-btn,
+    #templatesModal .modal-close-btn,
+    #templateDetailsModal .modal-close-btn,
+    #createTemplateModal .modal-close-btn {
+        background: none;
+        border: none;
+        padding: 8px;
+        cursor: pointer;
+        color: var(--text-tertiary);
+        border-radius: var(--radius-md);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: var(--transition-base);
+        width: 36px;
+        height: 36px;
+    }
+    #newPackageModal .modal-close-btn:hover,
+    #packageContentsModal .modal-close-btn:hover,
+    #packageSerialModal .modal-close-btn:hover,
+    #templatesModal .modal-close-btn:hover,
+    #templateDetailsModal .modal-close-btn:hover,
+    #createTemplateModal .modal-close-btn:hover {
+        background: var(--bg-hover);
+        color: var(--text-primary);
+    }
+
+    /* --- Body --- */
+    #newPackageModal .modal-body,
+    #packageContentsModal .modal-body,
+    #packageSerialModal .modal-body,
+    #templatesModal .modal-body,
+    #templateDetailsModal .modal-body,
+    #createTemplateModal .modal-body {
+        padding: 24px;
+        overflow-y: auto;
+        flex: 1;
+        min-height: 0;
+        color: var(--text-secondary);
+    }
+
+    /* --- Footer --- */
+    #newPackageModal .modal-footer,
+    #packageContentsModal .modal-footer,
+    #packageSerialModal .modal-footer,
+    #templatesModal .modal-footer,
+    #templateDetailsModal .modal-footer,
+    #createTemplateModal .modal-footer {
+        padding: 16px 24px;
+        border-top: 1px solid var(--border-subtle);
+        background: var(--bg-secondary);
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 12px;
+        flex-shrink: 0;
+        border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+    }
+
+    /* --- Buttons inside modals (package-btn) --- */
+    #newPackageModal .package-btn,
+    #packageContentsModal .package-btn,
+    #packageSerialModal .package-btn,
+    #templatesModal .package-btn,
+    #templateDetailsModal .package-btn,
+    #createTemplateModal .package-btn {
+        padding: 10px 20px;
+        border: 1px solid var(--border-default);
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+        border-radius: var(--radius-md);
+        cursor: pointer;
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-medium);
+        transition: all var(--transition-fast);
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        white-space: nowrap;
+        text-transform: none;
+        box-shadow: none;
+        min-width: unset;
+        height: auto;
+    }
+    #newPackageModal .package-btn:hover,
+    #packageContentsModal .package-btn:hover,
+    #packageSerialModal .package-btn:hover,
+    #templatesModal .package-btn:hover,
+    #templateDetailsModal .package-btn:hover,
+    #createTemplateModal .package-btn:hover {
+        background: var(--bg-hover);
+        border-color: var(--border-strong);
+    }
+    #newPackageModal .package-btn.primary,
+    #packageContentsModal .package-btn.primary,
+    #packageSerialModal .package-btn.primary,
+    #templatesModal .package-btn.primary,
+    #templateDetailsModal .package-btn.primary,
+    #createTemplateModal .package-btn.primary {
+        background: var(--brand-red);
+        color: #fff;
+        border-color: var(--brand-red);
+    }
+    #newPackageModal .package-btn.primary:hover,
+    #packageContentsModal .package-btn.primary:hover,
+    #packageSerialModal .package-btn.primary:hover,
+    #templatesModal .package-btn.primary:hover,
+    #templateDetailsModal .package-btn.primary:hover,
+    #createTemplateModal .package-btn.primary:hover {
+        background: var(--brand-red-hover);
+        border-color: var(--brand-red-hover);
+    }
+    /* Danger button */
+    .package-btn.danger {
+        background: transparent !important;
+        color: #ef4444 !important;
+        border-color: #ef4444 !important;
+    }
+    .package-btn.danger:hover {
+        background: rgba(239, 68, 68, 0.12) !important;
+    }
+
+    /* --- Form inputs in modals --- */
+    #newPackageModal input[type="text"],
+    #newPackageModal textarea,
+    #createTemplateModal input[type="text"],
+    #createTemplateModal textarea {
+        width: 100%;
+        padding: 12px 16px;
+        background: var(--surface-input);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        color: var(--text-primary);
+        font-size: var(--font-size-base);
+        font-family: var(--font-family);
+        box-sizing: border-box;
+        transition: border-color var(--transition-fast);
+    }
+    #newPackageModal input[type="text"]::placeholder,
+    #newPackageModal textarea::placeholder,
+    #createTemplateModal input[type="text"]::placeholder,
+    #createTemplateModal textarea::placeholder {
+        color: var(--text-muted);
+    }
+    #newPackageModal input[type="text"]:focus,
+    #newPackageModal textarea:focus,
+    #createTemplateModal input[type="text"]:focus,
+    #createTemplateModal textarea:focus {
+        border-color: var(--brand-red);
+        outline: none;
+        box-shadow: 0 0 0 3px var(--brand-red-muted);
+    }
+    #newPackageModal .form-group label,
+    #createTemplateModal .form-group label {
+        display: block;
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-medium);
+        color: var(--text-secondary);
+        margin-bottom: 8px;
+    }
+
+    /* --- Items preview section in create template --- */
+    .items-preview-box {
+        padding: 16px;
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border-subtle);
+    }
+    .items-preview-box h4 {
+        margin: 0 0 12px 0;
+        color: var(--text-primary);
+        font-size: var(--font-size-base);
+        font-weight: var(--font-weight-semibold);
+    }
+    #createTemplateModal #templateItemsPreview {
+        color: var(--text-secondary);
+    }
+    #createTemplateModal #templateItemsPreview strong {
+        color: var(--text-primary);
+    }
+
+    /* --- Template list items --- */
+    #templatesContainer .template-item {
+        background: var(--bg-tertiary) !important;
+        border: 1px solid var(--border-subtle) !important;
+        border-radius: var(--radius-lg) !important;
+        padding: 16px !important;
+        margin-bottom: 12px;
+        transition: border-color var(--transition-fast);
+    }
+    #templatesContainer .template-item:hover {
+        border-color: var(--border-strong) !important;
+    }
+    #templatesContainer .template-item h4 {
+        color: var(--text-primary) !important;
+        font-weight: var(--font-weight-semibold) !important;
+        margin: 0 0 4px 0 !important;
+    }
+    #templatesContainer .template-item p {
+        color: var(--text-tertiary) !important;
+        margin: 0 0 12px 0 !important;
+        font-size: var(--font-size-sm) !important;
+    }
+
+    /* --- Package / details tables --- */
+    #packageContentsModal .pkg-table,
+    #packageSerialModal .pkg-table,
+    #templateDetailsModal .pkg-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+    #packageContentsModal .pkg-table th,
+    #packageSerialModal .pkg-table th,
+    #templateDetailsModal .pkg-table th {
+        text-align: left;
+        padding: 10px 12px;
+        border-bottom: 1px solid var(--border-default) !important;
+        color: var(--text-tertiary);
+        font-size: var(--font-size-sm);
+        font-weight: var(--font-weight-semibold);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    #packageContentsModal .pkg-table td,
+    #packageSerialModal .pkg-table td,
+    #templateDetailsModal .pkg-table td {
+        padding: 12px;
+        color: var(--text-secondary);
+        border-bottom: 1px solid var(--border-subtle) !important;
+    }
+    #packageContentsModal .pkg-table tr:last-child td,
+    #packageSerialModal .pkg-table tr:last-child td,
+    #templateDetailsModal .pkg-table tr:last-child td {
+        border-bottom: none !important;
+    }
+    #packageContentsModal .pkg-table tbody tr:hover,
+    #templateDetailsModal .pkg-table tbody tr:hover {
+        background: var(--bg-hover);
+    }
+
+    /* --- Serial selection --- */
+    #packageSerialModal input[type="number"] {
+        background: var(--surface-input);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        color: var(--text-primary);
+        padding: 8px 12px;
+        font-size: var(--font-size-base);
+    }
+    #packageSerialModal input[type="number"]:focus {
+        border-color: var(--brand-red);
+        outline: none;
+        box-shadow: 0 0 0 3px var(--brand-red-muted);
+    }
+    #packageSerialModal input[type="checkbox"] {
+        accent-color: var(--brand-red);
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+    }
+    #packageSerialModal tr[style*="background: var(--bg-tertiary)"],
+    #packageSerialModal tr[style*="background: #f8f9fa"],
+    #packageSerialModal tr[style*="background:#f8f9fa"] {
+        background: var(--bg-tertiary) !important;
+    }
+
+    /* --- Status badges (pill style) --- */
+    .status-available {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: #10b981;
+        background: rgba(16, 185, 129, 0.12);
+        border: 1px solid rgba(16, 185, 129, 0.25);
+        padding: 4px 12px;
+        border-radius: var(--radius-full, 9999px);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+    }
+    .status-partial {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: #f59e0b;
+        background: rgba(245, 158, 11, 0.12);
+        border: 1px solid rgba(245, 158, 11, 0.25);
+        padding: 4px 12px;
+        border-radius: var(--radius-full, 9999px);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+    }
+    .status-unavailable {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: var(--text-muted, #6b7280);
+        background: rgba(107, 114, 128, 0.12);
+        border: 1px solid rgba(107, 114, 128, 0.2);
+        padding: 4px 12px;
+        border-radius: var(--radius-full, 9999px);
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+        white-space: nowrap;
+    }
+
+    /* --- Quantity pill --- */
+    .qty-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 28px;
+        padding: 4px 10px;
+        background: var(--bg-tertiary, rgba(255,255,255,0.06));
+        border: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
+        border-radius: var(--radius-md, 8px);
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-primary, #e5e7eb);
+    }
+
+    /* --- Description text in detail modals --- */
+    .modal-description {
+        color: var(--text-tertiary);
+        font-size: var(--font-size-sm);
+        margin-bottom: 16px;
+    }
+
+    /* --- Cart badge --- */
+    .cart-badge {
+        position: absolute;
+        top: -6px;
+        right: -6px;
+        min-width: 20px;
+        height: 20px;
+        padding: 0 6px;
+        background: var(--brand-red, #e53e3e);
+        color: #fff;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 20px;
+        text-align: center;
+        border-radius: 10px;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+        pointer-events: none;
+    }
 </style>
 
 
@@ -635,9 +1146,10 @@
       <!-- Action Buttons - Floating FAB style -->
       <div class="action-buttons" id="actionButtons">
             <div class="action-buttons-content">
-          <button class="btn btn-secondary" onclick="viewCart()" id="viewCartBtn" title="View Cart">
+          <button class="btn btn-secondary" onclick="viewCart()" id="viewCartBtn" title="View Cart" style="position: relative;">
                     <span class="material-symbols-outlined">shopping_cart</span>
             <span>Cart</span>
+            <span class="cart-badge" id="cartBadge" style="display: none;">0</span>
                 </button>
           <button class="btn btn-primary" onclick="addItems()" id="addItemsBtn" title="Add Items">
             <span class="material-symbols-outlined">add</span>
@@ -654,14 +1166,17 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Create New Package</h3>
+                <button class="modal-close-btn" onclick="closeNewPackageModal()">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label for="packageName">Package Name:</label>
+                    <label for="packageName">Package Name</label>
                     <input type="text" id="packageName" placeholder="Enter package name...">
                 </div>
                 <div class="form-group">
-                    <label for="packageDescription">Description (optional):</label>
+                    <label for="packageDescription">Description (optional)</label>
                     <input type="text" id="packageDescription" placeholder="Enter description...">
                 </div>
             </div>
@@ -672,52 +1187,71 @@
         </div>
     </div>
 
-    <!-- Package Contents Modal -->
+    <!-- Package Contents Modal (Load Gear Package) -->
     <div id="packageContentsModal" class="modal">
-        <div class="modal-content" style="max-width: 800px;">
+        <div class="modal-content">
             <div class="modal-header">
-                <h3 id="packageModalTitle">Package Contents</h3>
+                <h3 id="packageModalTitle">Load Gear Package</h3>
+                <button class="modal-close-btn" onclick="closePackageModal()">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
             </div>
             <div class="modal-body">
+                <div style="margin-bottom: 16px; display: flex; justify-content: flex-end;">
+                    <button class="package-btn primary" onclick="addAllAvailableToCart()" id="addAllBtn" style="font-size: 13px;">
+                        <span class="material-symbols-outlined" style="font-size: 18px;">playlist_add</span>
+                        Add All Available to Cart
+                    </button>
+                </div>
                 <div id="packageItemsContainer">
-                    <!-- Package items will be loaded here -->
+                    <!-- Package items table will be loaded here -->
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="package-btn" onclick="closePackageModal()">Cancel</button>
-                <button class="package-btn" onclick="viewCart()" id="viewCartFromPackageBtn">View Cart</button>
-                <button class="package-btn primary" onclick="addAllAvailableToCart()" id="addAllBtn">Add All Available to Cart</button>
+                <button class="package-btn" onclick="closePackageModal()">Close</button>
+                <button class="package-btn" onclick="viewCart()" id="viewCartFromPackageBtn">
+                    <span class="material-symbols-outlined">shopping_cart</span>
+                    View Cart
+                </button>
             </div>
         </div>
     </div>
 
-    <!-- Serial Selection Modal (for package items) -->
+    <!-- Add Items Modal (serial selection with checkboxes) -->
     <div id="packageSerialModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 id="packageSerialModalTitle">Select Serial</h3>
+                <h3 id="packageSerialModalTitle">Add Items</h3>
+                <button class="modal-close-btn" onclick="closePackageSerialModal()">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
             </div>
             <div class="modal-body" id="packageSerialModalBody">
-                <!-- Serial options will be loaded here -->
+                <!-- Serial checkbox options will be loaded here -->
             </div>
             <div class="modal-footer">
                 <button class="package-btn" onclick="closePackageSerialModal()">Cancel</button>
-                <button class="package-btn primary" onclick="addSelectedPackageItemToCart()">Add to Cart</button>
+                <button class="package-btn primary" onclick="addSelectedPackageItemToCart()">
+                    <span class="material-symbols-outlined">add_shopping_cart</span>
+                    Add Selected
+                </button>
             </div>
         </div>
     </div>
 
     <!-- Templates Modal -->
     <div id="templatesModal" class="modal">
-        <div class="modal-content" style="max-width: 800px;">
+        <div class="modal-content">
             <div class="modal-header">
                 <h3>Package Templates</h3>
-                <button class="close-btn" onclick="closeTemplatesModal()">&times;</button>
+                <button class="modal-close-btn" onclick="closeTemplatesModal()">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
             </div>
             <div class="modal-body">
                 <div style="margin-bottom: 20px;">
                     <button class="package-btn primary" onclick="openCreateTemplateModal()" style="width: 100%;">
-                        <span class="material-symbols-outlined">add</span>
+                        <span class="material-symbols-outlined" style="font-size: 18px;">add</span>
                         Create New Template
                     </button>
                 </div>
@@ -731,24 +1265,59 @@
         </div>
     </div>
 
+    <!-- Template Details Modal (simple preview) -->
+    <div id="templateDetailsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="templateDetailsTitle">Package Details</h3>
+                <button class="modal-close-btn" onclick="closeTemplateDetailsModal()">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="templateDetailsDescription" class="modal-description"></div>
+                <table class="pkg-table">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th style="text-align: center;">Qty</th>
+                        </tr>
+                    </thead>
+                    <tbody id="templateDetailsBody">
+                        <!-- Template items will be listed here -->
+                    </tbody>
+                </table>
+            </div>
+            <div class="modal-footer">
+                <button class="package-btn danger" onclick="deleteTemplateFromDetails()" id="deleteTemplateFromDetailsBtn">
+                    <span class="material-symbols-outlined" style="font-size: 18px;">delete</span>
+                    Delete
+                </button>
+                <button class="package-btn" onclick="closeTemplateDetailsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Create Template Modal -->
     <div id="createTemplateModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Create New Template</h3>
-                <button class="close-btn" onclick="closeCreateTemplateModal()">&times;</button>
+                <h3>Save as Template</h3>
+                <button class="modal-close-btn" onclick="closeCreateTemplateModal()">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
             </div>
             <div class="modal-body">
-                <div style="margin-bottom: 16px;">
-                    <label for="templateNameInput" style="display: block; margin-bottom: 8px; font-weight: 500;">Template Name:</label>
-                    <input type="text" id="templateNameInput" placeholder="Enter template name..." style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;">
+                <div class="form-group">
+                    <label for="templateNameInput">Template Name</label>
+                    <input type="text" id="templateNameInput" placeholder="Enter template name...">
                 </div>
-                <div style="margin-bottom: 16px;">
-                    <label for="templateDescInput" style="display: block; margin-bottom: 8px; font-weight: 500;">Description (optional):</label>
-                    <textarea id="templateDescInput" placeholder="Enter description..." style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px; min-height: 80px; resize: vertical;"></textarea>
+                <div class="form-group">
+                    <label for="templateDescInput">Description (optional)</label>
+                    <textarea id="templateDescInput" placeholder="Enter description..." style="min-height: 80px; resize: vertical;"></textarea>
                 </div>
-                <div style="padding: 16px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e0e0e0;">
-                    <h4 style="margin: 0 0 12px 0; color: #333;">Items to include:</h4>
+                <div class="items-preview-box">
+                    <h4>Items to include:</h4>
                     <div id="templateItemsPreview">
                         <!-- Current gear items will be shown here -->
                     </div>
@@ -930,6 +1499,7 @@
                 await loadGearLists(); // Wait for gear lists to load before loading gear
                 console.log('[gear.html] Loading gear...');
                 loadGear();
+                updateCartBadge();
                 
                 // Initialize chat widget after everything else is set up
                 setTimeout(initializeChatWidget, 100);
@@ -1800,30 +2370,32 @@
             
             if (templates.length === 0) {
                 container.innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: #666;">
-                        <div style="font-size: 48px; color: #ccc; margin-bottom: 16px;">📦</div>
-                        <h3>No Templates Yet</h3>
-                        <p>Create your first template to get started!</p>
+                    <div style="text-align: center; padding: 40px; color: var(--text-tertiary);">
+                        <span class="material-symbols-outlined" style="font-size: 48px; color: var(--text-muted); margin-bottom: 12px; display: block;">inventory_2</span>
+                        <h3 style="color: var(--text-primary); margin: 0 0 8px 0;">No Templates Yet</h3>
+                        <p style="margin: 0; font-size: 14px;">Save your current gear list to create a reusable template.</p>
                     </div>
                 `;
                 return;
             }
 
             container.innerHTML = templates.map(template => `
-                <div class="template-item" style="display: flex; align-items: center; justify-content: space-between; padding: 16px; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 12px; background: white;">
-                    <div style="flex: 1;">
-                        <h4 style="margin: 0 0 4px 0; color: #333;">${template.name}</h4>
-                        ${template.description ? `<p style="margin: 0 0 8px 0; color: #666; font-size: 14px;">${template.description}</p>` : ''}
-                        <div style="font-size: 12px; color: #888;">
-                            ${template.items.length} items • Created ${formatDate(template.createdAt)}
+                <div class="template-item" style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="flex: 1; min-width: 0;">
+                        <h4>${template.name}</h4>
+                        ${template.description ? `<p>${template.description}</p>` : ''}
+                        <div style="font-size: 12px; color: var(--text-muted);">
+                            ${template.items.length} item${template.items.length !== 1 ? 's' : ''} • Created ${formatDate(template.createdAt)}
                         </div>
                     </div>
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                        <button class="package-btn" onclick="loadTemplate('${template._id}')" style="padding: 8px 16px;">
+                    <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0; margin-left: 16px;">
+                        <button class="package-btn primary" onclick="loadTemplate('${template._id}')">
+                            <span class="material-symbols-outlined" style="font-size: 16px;">download</span>
                             Load
                         </button>
-                        <button class="delete-btn" onclick="deleteTemplateFromModal('${template._id}')" style="padding: 8px; background: #ff4444; color: white; border: none; border-radius: 4px; cursor: pointer;" title="Delete template">
-                            <span class="material-symbols-outlined" style="font-size: 16px;">delete</span>
+                        <button class="package-btn" onclick="showTemplateDetails('${template._id}')">
+                            <span class="material-symbols-outlined" style="font-size: 16px;">info</span>
+                            Details
                         </button>
                     </div>
                 </div>
@@ -1840,6 +2412,72 @@
 
             closeTemplatesModal();
             await showTemplateContentsModal(template);
+        }
+
+        // Show template details (simple preview - no availability check)
+        function showTemplateDetails(templateId) {
+            const template = packageTemplates.find(t => t._id === templateId);
+            if (!template) {
+                alert('Template not found');
+                return;
+            }
+
+            // Store for delete functionality
+            currentTemplateId = templateId;
+
+            document.getElementById('templateDetailsTitle').textContent = template.name;
+            
+            const descEl = document.getElementById('templateDetailsDescription');
+            descEl.textContent = template.description || '';
+            descEl.style.display = template.description ? 'block' : 'none';
+
+            const tbody = document.getElementById('templateDetailsBody');
+            tbody.innerHTML = template.items.map(item => `
+                <tr>
+                    <td style="font-weight: 500;">${item.brand} ${item.model}</td>
+                    <td style="text-align: center;"><span class="qty-badge">${item.quantity}</span></td>
+                </tr>
+            `).join('');
+
+            document.getElementById('templateDetailsModal').style.display = 'block';
+        }
+
+        // Close template details modal
+        function closeTemplateDetailsModal() {
+            document.getElementById('templateDetailsModal').style.display = 'none';
+        }
+
+        // Delete template from details modal
+        async function deleteTemplateFromDetails() {
+            const templateId = currentTemplateId;
+            const template = packageTemplates.find(t => t._id === templateId);
+            if (!template) return;
+
+            if (!confirm(`Are you sure you want to delete the template "${template.name}"?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/package-templates/${templateId}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+
+                if (response.ok) {
+                    closeTemplateDetailsModal();
+                    packageTemplates = await loadPackageTemplates();
+                    renderTemplatesModal(packageTemplates);
+                    showToast(`Template "${template.name}" deleted`, 'success');
+                } else {
+                    const error = await response.json();
+                    alert(error.error || 'Failed to delete template');
+                }
+            } catch (error) {
+                console.error('Error deleting template:', error);
+                alert('Failed to delete template');
+            }
         }
 
         // Delete template from modal
@@ -1878,25 +2516,35 @@
         }
 
         async function saveAsTemplate() {
-            if (currentGear.length === 0) {
-                alert('No gear to save as template');
+            if (!currentGear || currentGear.length === 0) {
+                alert('No gear items on the current list to save as a template. Add items first.');
                 return;
             }
 
-            // Show current gear items in preview
+            // Filter out items with null inventoryId
+            const validGear = currentGear.filter(item => item.inventoryId || item.brand);
+
+            if (validGear.length === 0) {
+                alert('No valid gear items found to save as a template.');
+                return;
+            }
+
+            // Show current gear items in preview using direct brand/model fields (more reliable)
             const previewContainer = document.getElementById('templateItemsPreview');
-            previewContainer.innerHTML = currentGear.map(item => {
-                const labelParts = item.inventoryId.label.split(' ');
-                const brand = labelParts[0] || 'Unknown';
-                const model = labelParts.slice(1).join(' ') || 'Unknown';
+            previewContainer.innerHTML = validGear.map(item => {
+                // Use direct brand/model fields from ReservedGearItem (guaranteed to exist)
+                // Fall back to parsing inventoryId.label if direct fields aren't available
+                const brand = item.brand || (item.inventoryId?.label?.split(' ')[0]) || 'Unknown';
+                const model = item.model || (item.inventoryId?.label?.split(' ').slice(1).join(' ')) || 'Unknown';
+                const category = item.category || item.inventoryId?.category || 'Accessories';
                 
                 return `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-subtle);">
                         <div>
-                            <strong>${brand} ${model}</strong>
-                            <div style="font-size: 12px; color: #666;">${item.inventoryId.category || 'Accessories'}</div>
+                            <strong style="color: var(--text-primary);">${brand} ${model}</strong>
+                            <div style="font-size: 12px; color: var(--text-tertiary); margin-top: 2px;">${category}</div>
                         </div>
-                        <div style="font-weight: 500; color: #333;">Qty: ${item.quantity}</div>
+                        <span class="qty-badge">×${item.quantity || 1}</span>
                     </div>
                 `;
             }).join('');
@@ -1930,13 +2578,20 @@
                 return;
             }
 
-            // Convert current gear to template items
-            const items = currentGear.map(item => ({
-                brand: item.inventoryId.label.split(' ')[0] || 'Unknown',
-                model: item.inventoryId.label.split(' ').slice(1).join(' ') || 'Unknown',
-                category: item.inventoryId.category || 'Accessories',
-                quantity: item.quantity
+            // Filter out invalid items and convert to template items
+            // Use direct brand/model fields from ReservedGearItem (more reliable than parsing label)
+            const validGear = currentGear.filter(item => item.inventoryId || item.brand);
+            const items = validGear.map(item => ({
+                brand: item.brand || (item.inventoryId?.label?.split(' ')[0]) || 'Unknown',
+                model: item.model || (item.inventoryId?.label?.split(' ').slice(1).join(' ')) || 'Unknown',
+                category: item.category || item.inventoryId?.category || 'Accessories',
+                quantity: item.quantity || 1
             }));
+
+            if (items.length === 0) {
+                alert('No valid items to save in template');
+                return;
+            }
 
             try {
                 const response = await fetch(`${API_BASE}/api/package-templates`, {
@@ -1955,14 +2610,14 @@
                 if (response.ok) {
                     closeCreateTemplateModal();
                     packageTemplates = await loadPackageTemplates(); // Reload templates
-                    showToast(`Template "${templateName}" created!`, 'success');
+                    showToast(`Template "${templateName}" created with ${items.length} items!`, 'success');
                 } else {
                     const error = await response.json();
                     alert(error.error || 'Failed to create template');
                 }
             } catch (error) {
                 console.error('Error creating template:', error);
-                alert('Failed to create template');
+                alert('Failed to create template. Please try again.');
             }
         }
 
@@ -2016,9 +2671,10 @@
         let currentPackageItems = [];
         let selectedPackageInventoryId = null;
         let selectedPackageSerial = null;
+        let selectedPackageSerials = []; // Multi-select: [{serial, inventoryId}]
         let selectedPackageQuantity = 1;
 
-        // Show template contents modal with availability
+        // Show template contents modal with availability (table layout)
         async function showTemplateContentsModal(selectedTemplate) {
             try {
                 // Store the current template for use in other functions
@@ -2026,50 +2682,71 @@
                 // Get inventory items for this template
                 const inventoryItems = await getTemplateInventoryItems(selectedTemplate.items);
                 
-                document.getElementById('packageModalTitle').textContent = `${selectedTemplate.name} - Template Contents`;
+                document.getElementById('packageModalTitle').textContent = `Load Gear Package — ${selectedTemplate.name}`;
                 
                 const container = document.getElementById('packageItemsContainer');
                 
                 if (inventoryItems.length === 0) {
                     container.innerHTML = `
-                        <div style="text-align: center; padding: 40px; color: #666;">
-                            <div style="font-size: 48px; color: #ccc; margin-bottom: 16px;">📋</div>
-                            <h3>No items in this template</h3>
-                            <p>This template appears to be empty.</p>
+                        <div style="text-align: center; padding: 40px; color: var(--text-tertiary);">
+                            <span class="material-symbols-outlined" style="font-size: 48px; color: var(--text-muted); margin-bottom: 12px; display: block;">playlist_remove</span>
+                            <h3 style="color: var(--text-primary); margin: 0 0 8px 0;">No items in this template</h3>
+                            <p style="margin: 0; font-size: 14px;">This template appears to be empty.</p>
                         </div>
                     `;
                 } else {
-                    container.innerHTML = inventoryItems.map(item => {
-                        const isAvailable = item.availableQuantity > 0;
-                        const statusClass = isAvailable ? 'available' : 'unavailable';
-                        const statusText = isAvailable ? `${item.availableQuantity} Available` : 'Not Available';
+                    // Build table layout: Item | Qty | Available | Status | Action
+                    let tableHTML = `
+                        <table class="pkg-table">
+                            <thead>
+                                <tr>
+                                    <th>Item</th>
+                                    <th style="text-align: center;">Qty</th>
+                                    <th style="text-align: center;">Available</th>
+                                    <th>Status</th>
+                                    <th style="text-align: right;"></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+
+                    inventoryItems.forEach(item => {
+                        const templateQty = item.templateQuantity || 1;
+                        const availableQty = item.availableQuantity || 0;
                         
-                        return `
-                            <div class="package-item ${statusClass}">
-                                <div class="package-item-info">
-                                    <div class="package-item-name">${item.brand} ${item.model}</div>
-                                    <div class="package-item-details">
-                                        <span>Category: ${item.category}</span>
-                                        <span>Template Qty: ${item.templateQuantity}</span>
-                                        <span class="status-text ${statusClass}">${statusText}</span>
-                                    </div>
-                                </div>
-                                <div class="package-item-controls">
-                                    ${isAvailable ? `
-                                        <button class="package-btn primary" onclick="addTemplateItemToCart('${item._id}', '${item.brand} ${item.model}', ${item.templateQuantity})">
-                                            <span class="material-symbols-outlined">add_shopping_cart</span>
-                                            Add to Cart
-                                        </button>
-                                    ` : `
-                                        <button class="package-btn" disabled>
-                                            <span class="material-symbols-outlined">block</span>
-                                            Unavailable
-                                        </button>
-                                    `}
-                                </div>
-                            </div>
+                        // Determine status
+                        let statusClass, statusText, actionHTML;
+                        if (availableQty >= templateQty) {
+                            statusText = 'Available';
+                            statusClass = 'status-available';
+                            actionHTML = `<button class="package-btn primary" onclick="openAddItemsModal('${item._id}', ${templateQty})" style="padding: 6px 14px; font-size: 13px;">
+                                <span class="material-symbols-outlined" style="font-size: 16px;">add</span> Add Items
+                            </button>`;
+                        } else if (availableQty > 0) {
+                            statusText = 'Partial';
+                            statusClass = 'status-partial';
+                            actionHTML = `<button class="package-btn" onclick="openAddItemsModal('${item._id}', ${availableQty})" style="padding: 6px 14px; font-size: 13px; border-color: #f59e0b; color: #f59e0b;">
+                                <span class="material-symbols-outlined" style="font-size: 16px;">add</span> Add Available
+                            </button>`;
+                        } else {
+                            statusText = 'Out of Stock';
+                            statusClass = 'status-unavailable';
+                            actionHTML = '';
+                        }
+
+                        tableHTML += `
+                            <tr>
+                                <td style="font-weight: 500;">${item.brand} ${item.model}</td>
+                                <td style="text-align: center;"><span class="qty-badge">${templateQty}</span></td>
+                                <td style="text-align: center;"><span class="qty-badge">${availableQty}</span></td>
+                                <td><span class="${statusClass}">${statusText}</span></td>
+                                <td style="text-align: right;">${actionHTML}</td>
+                            </tr>
                         `;
-                    }).join('');
+                    });
+
+                    tableHTML += `</tbody></table>`;
+                    container.innerHTML = tableHTML;
                 }
                 
                 currentPackageItems = inventoryItems;
@@ -2153,50 +2830,26 @@
             }
         }
 
-        // Add template item to cart
-        async function addTemplateItemToCart(inventoryId, itemLabel, quantity) {
+        // Open Add Items modal for a specific template item (used by both "Add Items" and "Add Available")
+        function openAddItemsModal(inventoryId, maxQuantity) {
             const templateItem = currentPackageItems.find(item => item._id === inventoryId);
             if (!templateItem) {
                 alert('Item not found');
                 return;
             }
 
-            await addTemplateItemToCartWithQuantity(templateItem, quantity);
-        }
-
-        // Add template item to cart with proper quantity handling
-        async function addTemplateItemToCartWithQuantity(templateItem, requestedQuantity) {
-            const availableQty = templateItem.availableQuantity;
-            const qtyToAdd = Math.min(requestedQuantity, availableQty);
-            
-            if (qtyToAdd <= 0) {
-                alert(`${templateItem.brand} ${templateItem.model} is not available`);
+            if (!templateItem.matchingItems || templateItem.matchingItems.length === 0) {
+                alert(`${templateItem.brand} ${templateItem.model} has no matching inventory items`);
                 return;
             }
 
-            // If there are multiple matching items (different serials), show serial selection
-            if (templateItem.matchingItems && templateItem.matchingItems.length > 1) {
-                showTemplateSerialSelectionModal(templateItem, qtyToAdd);
-            } else if (templateItem.matchingItems && templateItem.matchingItems.length === 1) {
-                // Single item available - add directly using the actual inventory ID
-                const actualInventoryId = templateItem.matchingItems[0]._id;
-                await addPackageItemToCartDirect(actualInventoryId, qtyToAdd, null);
-                
-                if (qtyToAdd < requestedQuantity) {
-                    showToast(`Added ${qtyToAdd}/${requestedQuantity} ${templateItem.brand} ${templateItem.model} (limited by availability)`, 'warning');
-                }
-            } else {
-                alert(`${templateItem.brand} ${templateItem.model} has no matching inventory items`);
-            }
-        }
-
-        // Show serial selection modal for template items
-        function showTemplateSerialSelectionModal(templateItem, quantity) {
+            // Store context
             selectedPackageInventoryId = templateItem._id;
             selectedPackageSerial = null;
-            selectedPackageQuantity = quantity;
+            selectedPackageQuantity = maxQuantity;
+            selectedPackageSerials = []; // Reset multi-select
 
-            document.getElementById('packageSerialModalTitle').textContent = `Select Serial - ${templateItem.brand} ${templateItem.model}`;
+            document.getElementById('packageSerialModalTitle').textContent = `Add Items — ${templateItem.brand} ${templateItem.model}`;
             
             const modalBody = document.getElementById('packageSerialModalBody');
             
@@ -2208,114 +2861,88 @@
             // Check if all items have N/A serials (no real serial numbers)
             const hasRealSerials = templateItem.matchingItems.some(item => item.serial && item.serial !== 'N/A');
             
-            // Update description based on whether there are real serials
             const description = hasRealSerials 
-                ? 'Choose a specific serial number or select "No Preference" to reserve any available unit.'
-                : 'This item has no serial numbers. You can reserve any available unit.';
+                ? 'Select items to add. Use "No Preference" for sequential assignment, or check specific serial numbers.'
+                : 'This item has no serial numbers. Items will be assigned automatically.';
             
-            modalBody.innerHTML = `
-                <p style="margin-bottom: 16px; color: #666;">
-                    ${description}
-                </p>
-                
-                ${hasRealSerials ? `
-                    <div class="serial-option" onclick="selectPackageSerial(null)">
-                        <div class="serial-info">
-                            <div><strong>No Preference</strong></div>
-                            <div style="font-size: 13px; color: #666;">Reserve any available unit</div>
-                        </div>
-                        <div style="color: #28a745; font-weight: 600;">
-                            ${totalAvailable} available
-                        </div>
-                    </div>
-                ` : ''}
+            let html = `
+                <p class="modal-description">${description}</p>
+                <div style="font-weight: var(--font-weight-semibold); margin-bottom: 12px; color: var(--text-primary); font-size: var(--font-size-sm); text-transform: uppercase; letter-spacing: 0.5px;">Select Items</div>
+                <table class="pkg-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 40px;"></th>
+                            <th>Item</th>
+                            <th>Serial</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
 
-                ${templateItem.matchingItems.map(item => {
-                    const available = item.availableQuantity ?? 0;
-                    const displayText = item.serial === 'N/A' ? 'No Serial Number' : `Serial: ${item.serial}`;
-                    const subText = item.serial === 'N/A' ? 'Item without serial number' : 'Specific unit';
-                    
-                    return `
-                        <div class="serial-option" onclick="selectPackageSerial('${item.serial}', '${item._id}')">
-                            <div class="serial-info">
-                                <div><strong>${displayText}</strong></div>
-                                <div style="font-size: 13px; color: #666;">${subText}</div>
-                            </div>
-                            <div style="color: ${available > 0 ? '#28a745' : '#dc3545'}; font-weight: 600;">
-                                ${available} available
-                            </div>
-                        </div>
-                    `;
-                }).join('')}
+            // "No Preference" row
+            html += `
+                <tr style="background: var(--bg-tertiary);">
+                    <td style="text-align: center;">
+                        <input type="checkbox" id="serial_no_pref" class="serial-checkbox" data-serial="__no_preference__" data-inventory-id="" onchange="handleSerialCheckbox(this)">
+                    </td>
+                    <td style="font-weight: 500; color: var(--text-primary);">${templateItem.brand} ${templateItem.model}</td>
+                    <td style="color: var(--text-tertiary); font-style: italic;">No Preference</td>
+                </tr>
+            `;
+
+            // Individual serial rows
+            templateItem.matchingItems.forEach(item => {
+                const available = item.availableQuantity ?? 0;
+                const serialDisplay = (item.serial && item.serial !== 'N/A') ? item.serial : 'N/A';
+                const isDisabled = available <= 0;
                 
-                <div style="margin-top: 20px;">
-                    <label for="packageQuantityInput" style="display: block; margin-bottom: 8px; font-weight: 500;">Quantity:</label>
-                    <input type="number" id="packageQuantityInput" value="${quantity}" min="1" max="${totalAvailable}" onchange="updatePackageQuantity(this.value)" style="width: 100%; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px;">
+                html += `
+                    <tr style="${isDisabled ? 'opacity: 0.4;' : ''}">
+                        <td style="text-align: center;">
+                            <input type="checkbox" class="serial-checkbox" data-serial="${item.serial}" data-inventory-id="${item._id}" 
+                                onchange="handleSerialCheckbox(this)" ${isDisabled ? 'disabled' : ''}>
+                        </td>
+                        <td style="font-weight: 500; color: var(--text-primary);">${templateItem.brand} ${templateItem.model}</td>
+                        <td style="color: ${isDisabled ? 'var(--text-muted)' : 'var(--text-secondary)'};">${serialDisplay}</td>
+                    </tr>
+                `;
+            });
+
+            html += `</tbody></table>`;
+
+            // Quantity selector at bottom
+            html += `
+                <div style="margin-top: 20px; display: flex; align-items: center; justify-content: flex-end; gap: 12px;">
+                    <label for="packageQuantityInput" style="font-weight: var(--font-weight-medium); color: var(--text-secondary); font-size: var(--font-size-sm);">Quantity</label>
+                    <input type="number" id="packageQuantityInput" value="${maxQuantity}" min="1" max="${totalAvailable}" 
+                        onchange="updatePackageQuantity(this.value)" 
+                        style="width: 70px; text-align: center;">
                 </div>
             `;
 
+            modalBody.innerHTML = html;
             document.getElementById('packageSerialModal').style.display = 'block';
         }
 
-        // Show package contents modal with availability (LEGACY - kept for compatibility)
+        // Legacy wrapper - kept for compatibility
+        async function addTemplateItemToCart(inventoryId, itemLabel, quantity) {
+            openAddItemsModal(inventoryId, quantity);
+        }
+
+        // Legacy wrapper
+        async function addTemplateItemToCartWithQuantity(templateItem, requestedQuantity) {
+            openAddItemsModal(templateItem._id, Math.min(requestedQuantity, templateItem.availableQuantity));
+        }
+
+        // Legacy wrapper
+        function showTemplateSerialSelectionModal(templateItem, quantity) {
+            openAddItemsModal(templateItem._id, quantity);
+        }
+
+        // Show package contents modal with availability (LEGACY - redirects to template contents modal)
         async function showPackageContentsModal(selectedPackage) {
-            try {
-                // Get inventory items for this package
-                const inventoryItems = await getPackageInventoryItems(selectedPackage.items);
-                
-                document.getElementById('packageModalTitle').textContent = `${selectedPackage.name} - Package Contents`;
-                
-                const container = document.getElementById('packageItemsContainer');
-                
-                if (inventoryItems.length === 0) {
-                    container.innerHTML = `
-                        <div style="text-align: center; padding: 40px; color: #666;">
-                            <div style="font-size: 48px; color: #ccc; margin-bottom: 16px;">📦</div>
-                            <h3>No items in this package</h3>
-                            <p>This package appears to be empty.</p>
-                        </div>
-                    `;
-                } else {
-                    container.innerHTML = inventoryItems.map(item => {
-                        const isAvailable = item.availableQuantity > 0;
-                        const statusClass = isAvailable ? 'available' : 'unavailable';
-                        const statusText = isAvailable ? `${item.availableQuantity} Available` : 'Not Available';
-                        
-                        return `
-                            <div class="package-item ${statusClass}">
-                                <div class="package-item-info">
-                                    <div class="package-item-name">${item.label}</div>
-                                    <div class="package-item-details">
-                                        <span>Category: ${item.category}</span>
-                                        <span>Total Units: ${item.quantity}</span>
-                                        <span class="status-text ${statusClass}">${statusText}</span>
-                                    </div>
-                                </div>
-                                <div class="package-item-controls">
-                                    ${isAvailable ? `
-                                        <button class="package-btn primary" onclick="addPackageItemToCart('${item._id}', '${item.label}')">
-                                            <span class="material-symbols-outlined">add_shopping_cart</span>
-                                            Add to Cart
-                                        </button>
-                                    ` : `
-                                        <button class="package-btn" disabled>
-                                            <span class="material-symbols-outlined">block</span>
-                                            Unavailable
-                                        </button>
-                                    `}
-                                </div>
-                            </div>
-                        `;
-                    }).join('');
-                }
-                
-                currentPackageItems = inventoryItems;
-                document.getElementById('packageContentsModal').style.display = 'block';
-                
-            } catch (error) {
-                console.error('Error loading package contents:', error);
-                alert('Failed to load package contents');
-            }
+            // Redirect to the new template contents modal
+            await showTemplateContentsModal(selectedPackage);
         }
 
         // Get inventory items for package with availability
@@ -2403,87 +3030,62 @@
             }
         }
 
-        // Show serial selection modal for package items
+        // Show serial selection modal for package items (legacy - redirects to new checkbox modal)
         function showPackageSerialSelectionModal(packageItem) {
-            selectedPackageInventoryId = packageItem._id;
-            selectedPackageSerial = null;
-            selectedPackageQuantity = 1;
-
-            const labelParts = packageItem.label.split(' ');
-            const brand = labelParts[0] || 'Unknown';
-            const model = labelParts.slice(1).join(' ') || 'Unknown';
-
-            document.getElementById('packageSerialModalTitle').textContent = `Select Serial - ${brand} ${model}`;
-            
-            const modalBody = document.getElementById('packageSerialModalBody');
-            
-            let totalAvailable = 0;
-            packageItem.matchingItems.forEach(item => {
-                totalAvailable += (item.availableQuantity ?? 0);
-            });
-            
-            // Check if all items have N/A serials (no real serial numbers)
-            const hasRealSerials = packageItem.matchingItems.some(item => item.serial && item.serial !== 'N/A');
-            
-            // Update description based on whether there are real serials
-            const description = hasRealSerials 
-                ? 'Choose a specific serial number or select "No Preference" to reserve any available unit.'
-                : 'This item has no serial numbers. You can reserve any available unit.';
-            
-            modalBody.innerHTML = `
-                <p style="margin-bottom: 16px; color: #666;">
-                    ${description}
-                </p>
-                
-                ${hasRealSerials ? `
-                    <div class="serial-option" onclick="selectPackageSerial(null)">
-                        <div class="serial-info">
-                            <div><strong>No Preference</strong></div>
-                            <div style="font-size: 13px; color: #666;">Reserve any available unit</div>
-                        </div>
-                        <div style="color: #28a745; font-weight: 600;">
-                            ${totalAvailable} available
-                        </div>
-                    </div>
-                ` : ''}
-
-                ${packageItem.matchingItems.map(item => {
-                    const available = item.availableQuantity ?? 0;
-                    const displayText = item.serial === 'N/A' ? 'No Serial Number' : `Serial: ${item.serial}`;
-                    const subText = item.serial === 'N/A' ? 'Item without serial number' : 'Specific unit';
-                    
-                    return `
-                        <div class="serial-option" onclick="selectPackageSerial('${item.serial}', '${item._id}')">
-                            <div class="serial-info">
-                                <div><strong>${displayText}</strong></div>
-                                <div style="font-size: 13px; color: #666;">${subText}</div>
-                            </div>
-                            <div style="color: ${available > 0 ? '#28a745' : '#dc3545'}; font-weight: 600;">
-                                ${available} available
-                            </div>
-                        </div>
-                    `;
-                }).join('')}
-                
-                <div style="margin-top: 20px;">
-                    <label for="packageQuantityInput" style="display: block; margin-bottom: 8px; font-weight: 500;">Quantity:</label>
-                    <input type="number" id="packageQuantityInput" value="1" min="1" max="${totalAvailable}" onchange="updatePackageQuantity(this.value)" style="width: 100%; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px;">
-                </div>
-            `;
-
-            document.getElementById('packageSerialModal').style.display = 'block';
+            // Find this item in currentPackageItems and use the new modal
+            const templateItem = currentPackageItems.find(item => item._id === packageItem._id);
+            if (templateItem) {
+                const maxQty = Math.min(templateItem.templateQuantity || 1, templateItem.availableQuantity || 1);
+                openAddItemsModal(templateItem._id, maxQty);
+            } else {
+                // Fallback: add the packageItem to currentPackageItems temporarily  
+                currentPackageItems.push({
+                    ...packageItem,
+                    brand: packageItem.label?.split(' ')[0] || 'Unknown',
+                    model: packageItem.label?.split(' ').slice(1).join(' ') || 'Unknown',
+                    templateQuantity: 1,
+                    availableQuantity: packageItem.availableQuantity ?? 1
+                });
+                openAddItemsModal(packageItem._id, packageItem.availableQuantity ?? 1);
+            }
         }
 
-        // Select serial for package item
-        function selectPackageSerial(serial, inventoryId = null) {
-            // Remove previous selection
-            document.querySelectorAll('.serial-option').forEach(option => {
-                option.classList.remove('selected');
-            });
+        // Handle serial checkbox toggle (multi-select)
+        function handleSerialCheckbox(checkbox) {
+            const serial = checkbox.dataset.serial;
+            const inventoryId = checkbox.dataset.inventoryId;
 
-            // Add selection to clicked option
-            event.currentTarget.classList.add('selected');
-            
+            if (serial === '__no_preference__') {
+                // "No Preference" unchecks all specific serials
+                if (checkbox.checked) {
+                    document.querySelectorAll('.serial-checkbox').forEach(cb => {
+                        if (cb !== checkbox) cb.checked = false;
+                    });
+                    selectedPackageSerials = [];
+                    selectedPackageSerial = null; // Flag for no preference
+                } 
+            } else {
+                // Specific serial - uncheck "No Preference" if checked
+                if (checkbox.checked) {
+                    const noPrefCb = document.getElementById('serial_no_pref');
+                    if (noPrefCb) noPrefCb.checked = false;
+                }
+            }
+
+            // Rebuild selected serials list from checked checkboxes
+            selectedPackageSerials = [];
+            document.querySelectorAll('.serial-checkbox:checked').forEach(cb => {
+                if (cb.dataset.serial !== '__no_preference__') {
+                    selectedPackageSerials.push({
+                        serial: cb.dataset.serial,
+                        inventoryId: cb.dataset.inventoryId
+                    });
+                }
+            });
+        }
+
+        // Legacy - kept for compatibility
+        function selectPackageSerial(serial, inventoryId = null) {
             selectedPackageSerial = serial;
             selectedPackageInventoryId = inventoryId || selectedPackageInventoryId;
         }
@@ -2493,22 +3095,71 @@
             selectedPackageQuantity = parseInt(value) || 1;
         }
 
-        // Add selected package item to cart
+        // Add selected package items to cart (multi-select aware)
         async function addSelectedPackageItemToCart() {
-            if (!selectedPackageInventoryId) {
-                alert('Please select a serial number option');
+            const noPrefChecked = document.getElementById('serial_no_pref')?.checked;
+            const quantity = selectedPackageQuantity;
+
+            if (noPrefChecked) {
+                // No Preference: distribute quantity across available items sequentially
+                // Close modals first so the toast is readable
+                closePackageSerialModal();
+                closePackageModal();
+                await addQuantityWithNoPreference(selectedPackageInventoryId, quantity);
+                // Refresh gear list and cart badge
+                await loadGear();
+                updateCartBadge();
                 return;
             }
 
-            // If no specific serial selected, distribute quantity across available items
-            if (!selectedPackageSerial) {
-                await addQuantityWithNoPreference(selectedPackageInventoryId, selectedPackageQuantity);
-            } else {
-                // Use the specific inventory item ID that was selected
-                await addPackageItemToCartDirect(selectedPackageInventoryId, selectedPackageQuantity, selectedPackageSerial);
+            if (selectedPackageSerials.length > 0) {
+                // Multi-select: batch add all checked serials
+                const batchItems = selectedPackageSerials.map(sel => ({
+                    inventoryId: sel.inventoryId,
+                    quantity: 1,
+                    specificSerial: sel.serial
+                }));
+
+                try {
+                    const response = await fetch(`${API_BASE}/api/carts/${eventId}/items/batch`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('token')}`
+                        },
+                        body: JSON.stringify({ items: batchItems })
+                    });
+
+                    if (!response.ok) {
+                        const result = await response.json();
+                        throw new Error(result.error || 'Failed to add items');
+                    }
+
+                    const result = await response.json();
+                    // Close modals first so the toast is readable
+                    closePackageSerialModal();
+                    closePackageModal();
+                    if (result.successCount > 0) {
+                        showToast(`Added ${result.successCount} item${result.successCount > 1 ? 's' : ''} to cart`, 'success');
+                    }
+                    if (result.failCount > 0) {
+                        showToast(`${result.failCount} item${result.failCount > 1 ? 's' : ''} couldn't be added`, 'warning');
+                    }
+                } catch (error) {
+                    console.error('Batch serial add failed:', error);
+                    closePackageSerialModal();
+                    closePackageModal();
+                    showToast('Failed to add items: ' + error.message, 'error');
+                }
+
+                // Refresh gear list and cart badge
+                await loadGear();
+                updateCartBadge();
+                return;
             }
-            
-            closePackageSerialModal();
+
+            // Nothing selected
+            alert('Please select items to add (check "No Preference" or specific serials)');
         }
 
         // Add quantity with no preference - distribute across available items
@@ -2519,44 +3170,61 @@
                 return;
             }
 
+            // Build batch items — distribute across matching inventory items
+            const batchItems = [];
             let remainingQuantity = requestedQuantity;
-            let addedItems = [];
 
-            // Sort items by availability (highest first) to maximize successful additions
             const sortedItems = templateItem.matchingItems
                 .filter(item => (item.availableQuantity ?? 0) > 0)
                 .sort((a, b) => (b.availableQuantity ?? 0) - (a.availableQuantity ?? 0));
 
             for (const item of sortedItems) {
                 if (remainingQuantity <= 0) break;
-
-                const availableQty = item.availableQuantity ?? 0;
-                const qtyToAdd = Math.min(remainingQuantity, availableQty);
-
+                const qtyToAdd = Math.min(remainingQuantity, item.availableQuantity ?? 0);
                 if (qtyToAdd > 0) {
-                    try {
-                        await addPackageItemToCartDirect(item._id, qtyToAdd, null);
-                        addedItems.push(`${qtyToAdd} units`);
-                        remainingQuantity -= qtyToAdd;
-                    } catch (error) {
-                        console.error(`Failed to add ${item.label}:`, error);
-                    }
+                    batchItems.push({ inventoryId: item._id, quantity: qtyToAdd, specificSerial: null });
+                    remainingQuantity -= qtyToAdd;
                 }
             }
 
-            const totalAdded = requestedQuantity - remainingQuantity;
-            if (totalAdded > 0) {
-                let message = `Added ${totalAdded} units of ${templateItem.brand} ${templateItem.model}`;
-                if (totalAdded < requestedQuantity) {
-                    message += ` (${remainingQuantity} units unavailable)`;
-                }
-                showToast(message, totalAdded === requestedQuantity ? 'success' : 'warning');
-            } else {
+            if (batchItems.length === 0) {
                 alert(`No units of ${templateItem.brand} ${templateItem.model} could be added`);
+                return;
+            }
+
+            // Single batch API call instead of N sequential calls
+            try {
+                const response = await fetch(`${API_BASE}/api/carts/${eventId}/items/batch`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({ items: batchItems })
+                });
+
+                if (!response.ok) {
+                    const result = await response.json();
+                    throw new Error(result.error || 'Failed to add items');
+                }
+
+                const result = await response.json();
+                const totalAdded = result.successCount;
+
+                if (totalAdded > 0) {
+                    let message = `Added ${totalAdded} unit${totalAdded !== 1 ? 's' : ''} of ${templateItem.brand} ${templateItem.model}`;
+                    if (result.failCount > 0) {
+                        message += ` (${result.failCount} unavailable)`;
+                    }
+                    showToast(message, result.failCount > 0 ? 'warning' : 'success');
+                }
+            } catch (error) {
+                console.error(`Failed to add ${templateItem.brand} ${templateItem.model}:`, error);
+                showToast(`Failed to add ${templateItem.brand} ${templateItem.model}: ${error.message}`, 'error');
             }
         }
 
-        // Add package item to cart directly
+        // Add package item to cart directly (calls cart API)
         async function addPackageItemToCartDirect(inventoryId, quantity, specificSerial) {
             try {
                 const response = await fetch(`${API_BASE}/api/carts/${eventId}/items`, {
@@ -2572,26 +3240,19 @@
                     })
                 });
 
-                if (response.ok) {
-                    const item = currentPackageItems.find(i => i._id === inventoryId);
-                    showToast(`Added ${item?.label || 'item'} to cart!`, 'success');
-                    
-                    // Refresh package modal to update availability
-                    const selectedPackage = currentTemplate;
-                    if (selectedPackage) {
-                        await showPackageContentsModal(selectedPackage);
-                    }
-                } else {
+                if (!response.ok) {
                     const result = await response.json();
-                    alert(result.error || 'Failed to add item to cart');
+                    throw new Error(result.error || 'Failed to add item to cart');
                 }
+                
+                return true;
             } catch (error) {
                 console.error('Error adding package item to cart:', error);
-                alert('Failed to add item to cart. Please try again.');
+                throw error;
             }
         }
 
-        // Add all available package items to cart
+        // Add all available package items to cart (batch - single API call)
         async function addAllAvailableToCart() {
             const availableItems = currentPackageItems.filter(item => item.availableQuantity > 0);
             
@@ -2600,44 +3261,88 @@
                 return;
             }
 
-            if (!confirm(`Add all ${availableItems.length} available items to cart?`)) {
+            if (!confirm(`Add all ${availableItems.length} available items to cart with no serial preference?`)) {
                 return;
             }
 
-            let successCount = 0;
-            let partialAdds = [];
-            
+            // Build batch request: collect all individual inventory items to add
+            const batchItems = [];
+            const partialAdds = [];
+
             for (const item of availableItems) {
-                try {
-                    const templateQty = item.templateQuantity || 1;
-                    const availableQty = item.availableQuantity;
-                    const qtyToAdd = Math.min(templateQty, availableQty);
-                    
-                    if (qtyToAdd > 0) {
-                        await addTemplateItemToCartWithQuantity(item, qtyToAdd);
-                        successCount++;
-                        
-                        if (qtyToAdd < templateQty) {
-                            partialAdds.push(`${item.brand} ${item.model}: added ${qtyToAdd}/${templateQty}`);
+                const templateQty = item.templateQuantity || 1;
+                const availableQty = item.availableQuantity;
+                const qtyToAdd = Math.min(templateQty, availableQty);
+
+                if (qtyToAdd > 0 && item.matchingItems) {
+                    // Distribute quantity across matching inventory items (highest availability first)
+                    let remaining = qtyToAdd;
+                    const sorted = item.matchingItems
+                        .filter(mi => (mi.availableQuantity ?? 0) > 0)
+                        .sort((a, b) => (b.availableQuantity ?? 0) - (a.availableQuantity ?? 0));
+
+                    for (const mi of sorted) {
+                        if (remaining <= 0) break;
+                        const qty = Math.min(remaining, mi.availableQuantity ?? 0);
+                        if (qty > 0) {
+                            batchItems.push({ inventoryId: mi._id, quantity: qty, specificSerial: null });
+                            remaining -= qty;
                         }
                     }
-                } catch (error) {
-                    console.error(`Failed to add ${item.label} to cart:`, error);
+
+                    if (qtyToAdd < templateQty) {
+                        partialAdds.push(`${item.brand} ${item.model}: ${qtyToAdd}/${templateQty}`);
+                    }
                 }
             }
 
-            let message = `Added ${successCount} items to cart!`;
-            if (partialAdds.length > 0) {
-                message += `\n\nPartial quantities added:\n${partialAdds.join('\n')}`;
+            if (batchItems.length === 0) {
+                alert('No items could be resolved for adding');
+                return;
             }
-            
-            showToast(message, successCount > 0 ? 'success' : 'warning');
-            
-            // Refresh package modal
-            const selectedPackage = currentTemplate;
-            if (selectedPackage) {
-                await showPackageContentsModal(selectedPackage);
+
+            try {
+                const response = await fetch(`${API_BASE}/api/carts/${eventId}/items/batch`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({ items: batchItems })
+                });
+
+                if (!response.ok) {
+                    const result = await response.json();
+                    throw new Error(result.error || 'Batch add failed');
+                }
+
+                const result = await response.json();
+                // Close modal first so the toast is readable (not blurred by backdrop)
+                closePackageModal();
+
+                if (result.successCount > 0 && result.failCount === 0 && partialAdds.length === 0) {
+                    showToast(`✓ All ${result.successCount} item${result.successCount !== 1 ? 's' : ''} added to cart successfully!`, 'success');
+                } else if (result.successCount > 0) {
+                    let message = `${result.successCount} item${result.successCount !== 1 ? 's' : ''} added to cart`;
+                    if (result.failCount > 0) {
+                        message += `, ${result.failCount} unavailable`;
+                    }
+                    if (partialAdds.length > 0) {
+                        message += ` (partial: ${partialAdds.join(', ')})`;
+                    }
+                    showToast(message, 'warning');
+                } else {
+                    showToast('No items could be added — all unavailable', 'error');
+                }
+            } catch (error) {
+                console.error('Batch add to cart failed:', error);
+                closePackageModal();
+                showToast('Failed to add items to cart: ' + error.message, 'error');
             }
+
+            // Refresh the gear list and cart badge to reflect updated state
+            await loadGear();
+            updateCartBadge();
         }
 
         // Close package modals
@@ -2650,12 +3355,33 @@
             document.getElementById('packageSerialModal').style.display = 'none';
             selectedPackageInventoryId = null;
             selectedPackageSerial = null;
+            selectedPackageSerials = [];
             selectedPackageQuantity = 1;
         }
 
         // View cart function
         function viewCart() {
             window.location.href = `/checkout.html?eventId=${eventId}`;
+        }
+
+        // Fetch cart item count and update badge
+        async function updateCartBadge() {
+            try {
+                const response = await fetch(`${API_BASE}/api/carts/${eventId}`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (response.ok) {
+                    const cart = await response.json();
+                    const count = (cart.items || []).length;
+                    const badge = document.getElementById('cartBadge');
+                    if (badge) {
+                        badge.textContent = count;
+                        badge.style.display = count > 0 ? 'inline-block' : 'none';
+                    }
+                }
+            } catch (e) {
+                // Silently fail — badge just won't update
+            }
         }
 
         // Check user role and show admin buttons
@@ -3141,26 +3867,48 @@
         }
 
         function showToast(message, type) {
+            const colorMap = {
+                success: '#28a745',
+                warning: '#f0ad4e',
+                info: '#17a2b8',
+                error: '#dc3545'
+            };
+            const iconMap = {
+                success: 'check_circle',
+                warning: 'warning',
+                info: 'info',
+                error: 'error'
+            };
+            const bg = colorMap[type] || colorMap.info;
+            const icon = iconMap[type] || iconMap.info;
+
             const toast = document.createElement('div');
             toast.style.cssText = `
                 position: fixed;
                 top: 20px;
                 right: 20px;
-                background: ${type === 'success' ? '#28a745' : '#dc3545'};
+                background: ${bg};
                 color: white;
-                padding: 12px 20px;
-                border-radius: 8px;
+                padding: 14px 22px;
+                border-radius: 10px;
                 font-weight: 500;
                 z-index: 3000;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+                max-width: 420px;
                 animation: slideIn 0.3s ease;
             `;
-            toast.textContent = message;
-            
+            toast.innerHTML = `<span class="material-symbols-outlined" style="font-size:20px;">${icon}</span><span>${message}</span>`;
+
             document.body.appendChild(toast);
-            
+
             setTimeout(() => {
-                toast.remove();
-            }, 3000);
+                toast.style.transition = 'opacity 0.3s ease';
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
         }
 
         // Close modal when clicking outside
@@ -3168,6 +3916,10 @@
             const modal = document.getElementById('newPackageModal');
             if (event.target === modal) {
                 closeNewPackageModal();
+            }
+            const detailsModal = document.getElementById('templateDetailsModal');
+            if (event.target === detailsModal) {
+                closeTemplateDetailsModal();
             }
         }
 
@@ -3216,6 +3968,11 @@
         window.updatePackageQuantity = updatePackageQuantity;
         window.addPackageItemToCart = addPackageItemToCart;
         window.navigateToPage = navigateToPage;
+        window.showTemplateDetails = showTemplateDetails;
+        window.closeTemplateDetailsModal = closeTemplateDetailsModal;
+        window.deleteTemplateFromDetails = deleteTemplateFromDetails;
+        window.openAddItemsModal = openAddItemsModal;
+        window.handleSerialCheckbox = handleSerialCheckbox;
 
         })(); // End of IIFE
     </script>

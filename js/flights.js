@@ -563,29 +563,59 @@
   }
 
   /**
-   * Parse a flight date value into a valid Date object.
-   * Handles Date objects, ISO strings ("2026-02-10T00:00:00.000Z"), and plain date strings ("2026-02-10").
-   * Returns null if the value is falsy or results in an invalid date.
+   * Parse a flight date value into a valid local Date object (date-only, timezone-safe).
+   * 
+   * Flight dates are calendar dates (e.g. "Feb 9") with no specific time or timezone.
+   * They're stored as UTC midnight in MongoDB (e.g. "2026-02-09T00:00:00.000Z"), but
+   * must be treated as LOCAL calendar dates to avoid timezone shifts.
+   *
+   * Without this fix, "2026-02-09T00:00:00.000Z" parsed via new Date() in EST becomes
+   * Feb 8 at 7pm local → after setHours(0,0,0,0) it's Feb 8 — the WRONG day.
+   *
+   * This function always extracts the YYYY-MM-DD portion and creates a local date at noon,
+   * which avoids both UTC-to-local day shifts and DST edge cases.
    */
   function parseFlightDate(value) {
     if (!value) return null;
     
-    let date;
     if (value instanceof Date) {
-      date = new Date(value);
-    } else if (typeof value === 'string') {
-      // If it's already an ISO string (contains 'T'), parse directly
-      // If it's a plain date like "2026-02-10", add T12:00:00 to avoid timezone shift
-      if (value.includes('T')) {
-        date = new Date(value);
-      } else {
-        date = new Date(value + 'T12:00:00');
-      }
-    } else {
-      return null;
+      if (isNaN(value.getTime())) return null;
+      // Extract UTC components to avoid local timezone shifting the day
+      return new Date(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate(), 12, 0, 0, 0);
     }
     
-    return isNaN(date.getTime()) ? null : date;
+    if (typeof value === 'string') {
+      // Extract YYYY-MM-DD from any string format (ISO, plain date, etc.)
+      const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (match) {
+        const [, year, month, day] = match;
+        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 12, 0, 0, 0);
+      }
+      // Fallback for non-standard formats
+      const date = new Date(value);
+      return isNaN(date.getTime()) ? null : date;
+    }
+    
+    return null;
+  }
+
+  /**
+   * Get the "upcoming" cutoff date.
+   * 
+   * Flight dates are calendar dates booked in the departure city's local time.
+   * A user in EST at 1am (Feb 10) should still see a flight booked for Feb 9 in PST
+   * (where it's still 10pm on Feb 9). To handle this, we subtract 1 day from "today"
+   * as a timezone grace period. This means:
+   *   - "Upcoming" includes: yesterday, today, and future flights
+   *   - "Past" includes: 2+ days ago
+   * This generous buffer ensures no flight disappears from "upcoming" prematurely
+   * due to timezone differences across the US (max ~6 hours continental, ~10 hours with Hawaii).
+   */
+  function getUpcomingCutoff() {
+    const now = new Date();
+    const cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    cutoff.setDate(cutoff.getDate() - 1);
+    return cutoff;
   }
 
   /**
@@ -605,8 +635,8 @@
     const filterValue = pendingFilterEl?.value || 'upcoming';
     const sortValue = pendingSortEl?.value || 'soonest';
     
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Use timezone-tolerant cutoff for upcoming/past filtering
+    const cutoff = getUpcomingCutoff();
     
     // Filter flights
     let filteredRequests = flightRequests.filter(request => {
@@ -632,8 +662,8 @@
         
         departDate.setHours(0, 0, 0, 0);
         
-        if (filterValue === 'upcoming' && departDate < today) return false;
-        if (filterValue === 'past' && departDate >= today) return false;
+        if (filterValue === 'upcoming' && departDate < cutoff) return false;
+        if (filterValue === 'past' && departDate >= cutoff) return false;
       }
       
       return true;
@@ -709,8 +739,8 @@
     const filterValue = bookedFilterEl?.value || 'upcoming';
     const sortValue = bookedSortEl?.value || 'soonest';
     
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Use timezone-tolerant cutoff for upcoming/past filtering
+    const cutoff = getUpcomingCutoff();
     
     // Filter flights
     let filteredFlights = bookedFlights.filter(flight => {
@@ -741,12 +771,12 @@
         let returnDate = parseFlightDate(flight.returnDate);
         if (returnDate) returnDate.setHours(0, 0, 0, 0);
         
-        // For upcoming: at least one date is in the future
-        // For past: all dates are in the past
+        // For upcoming: at least one date is in the future (or within timezone grace period)
+        // For past: all dates are before the cutoff
         const latestDate = returnDate && returnDate > departDate ? returnDate : departDate;
         
-        if (filterValue === 'upcoming' && latestDate < today) return false;
-        if (filterValue === 'past' && latestDate >= today) return false;
+        if (filterValue === 'upcoming' && latestDate < cutoff) return false;
+        if (filterValue === 'past' && latestDate >= cutoff) return false;
       }
       
       return true;

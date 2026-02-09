@@ -8945,9 +8945,25 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
    SHOTLIST PAGE - DARK THEME
    ======================================== */
 
+/* Hide bottom nav on shotlist page - it has its own sidebar navigation */
+body:has(.shotlist-page.dark-theme) .bottom-nav-material,
+body:has(.shotlist-page.dark-theme) #bottomNav {
+  display: none !important;
+}
+
+/* Constrain the page-container for shotlist so overflow scrolling works */
+#page-container:has(.shotlist-page.dark-theme) {
+  overflow: hidden !important;
+  padding: 0 !important;
+  height: 100vh !important;
+  max-height: 100vh !important;
+}
+
 .shotlist-page.dark-theme {
   background: var(--bg-primary);
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  padding: 0;
   color: var(--text-primary);
   font-family: var(--font-family);
 }
@@ -8955,7 +8971,8 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 /* Shotlist Layout */
 .shotlist-page.dark-theme .shotlist-layout {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .shotlist-page.dark-theme .shotlist-main {
@@ -8963,7 +8980,8 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   margin-left: 260px;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 /* Shotlist Header */
@@ -9127,6 +9145,8 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   flex: 1;
   padding: 24px 32px;
   overflow-y: auto;
+  min-height: 0;
+  padding-right: 100px;
 }
 
 /* Lists Container */

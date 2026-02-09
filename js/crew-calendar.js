@@ -273,12 +273,22 @@
       const dayColumn = document.createElement('div');
       dayColumn.className = 'day-column';
       
+      // Count unique crew names for this day
+      const uniqueNames = new Set();
+      crewForDay.forEach(eventGroup => {
+        eventGroup.crew.forEach(crew => {
+          uniqueNames.add(crew.name.trim().toLowerCase());
+        });
+      });
+      const uniqueCrewCount = uniqueNames.size;
+
       // Day header
       const dayHeader = document.createElement('div');
       dayHeader.className = `day-header${isToday ? ' today' : ''}`;
       dayHeader.innerHTML = `
         <div class="day-name">${dayName}</div>
         <div class="day-date">${dayNumber}</div>
+        ${uniqueCrewCount > 0 ? `<div class="crew-count-badge"><span class="material-symbols-outlined">group</span> ${uniqueCrewCount}</div>` : ''}
       `;
       dayColumn.appendChild(dayHeader);
       

@@ -297,6 +297,29 @@
         font-weight: var(--font-weight-bold);
       }
 
+      .crew-calendar-dark .crew-count-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 6px;
+        padding: 3px 10px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 999px;
+        font-size: var(--font-size-xs);
+        font-weight: var(--font-weight-semibold);
+        color: var(--text-secondary);
+        line-height: 1;
+      }
+
+      .crew-calendar-dark .crew-count-badge .material-symbols-outlined {
+        font-size: 14px;
+      }
+
+      .crew-calendar-dark .day-header.today .crew-count-badge {
+        background: rgba(255, 255, 255, 0.15);
+        color: var(--text-primary);
+      }
+
       .crew-calendar-dark .day-content {
         padding: 12px;
         min-height: 200px;

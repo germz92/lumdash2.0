@@ -254,6 +254,23 @@
       // Setup event listeners
       setupEventListeners();
 
+      // Deep-link: auto-open a specific flight modal if ?flightId= is in the URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const deepLinkFlightId = urlParams.get('flightId');
+      if (deepLinkFlightId) {
+        const pendingMatch = flightRequests.find(r => r._id === deepLinkFlightId);
+        const bookedMatch = bookedFlights.find(f => f._id === deepLinkFlightId);
+        if (pendingMatch) {
+          openViewModal(pendingMatch);
+        } else if (bookedMatch) {
+          openEditBookedFlightModal(bookedMatch);
+        } else {
+          console.warn('⚠️ Deep-link flight not found:', deepLinkFlightId);
+        }
+        // Clean up the URL so refreshing doesn't re-open the modal
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+
       console.log('✅ Flight Management initialized');
     } catch (error) {
       console.error('❌ Failed to initialize Flight Management:', error);

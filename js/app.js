@@ -337,6 +337,11 @@ function injectPageContent(html, page, id) {
     console.log('Bottom navigation element (bottomNav) not found.');
   }
 
+  // Re-initialize notification system for the new DOM
+  if (window.notificationSystem && typeof window.notificationSystem.init === 'function') {
+    window.notificationSystem.init();
+  }
+
   // Initialize AI Chat Widget
   // For event pages (with ID): use event-specific chat
   // For dashboard pages (no ID): use global chat

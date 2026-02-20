@@ -880,6 +880,23 @@ function renderEventRowDark(table, index, userId) {
             <span class="material-symbols-outlined">${table.userArchived ? 'unarchive' : 'inventory_2'}</span>
             ${table.userArchived ? 'Unarchive' : 'Archive'}
           </button>
+          ${!isOwner ? (() => {
+            try {
+              const tkn = localStorage.getItem('token');
+              const p = JSON.parse(atob(tkn.split('.')[1]));
+              if (['planner', 'admin'].includes(p.role)) {
+                const hasPending = Array.isArray(table.ownerRequests) && 
+                  table.ownerRequests.some(r => r.userId === userId && r.status === 'pending');
+                return `
+                  <button class="action-item request-owner-action" ${hasPending ? 'disabled style="opacity:0.6;cursor:default;"' : ''}>
+                    <span class="material-symbols-outlined">${hasPending ? 'hourglass_top' : 'admin_panel_settings'}</span>
+                    ${hasPending ? 'Request Pending...' : 'Request Owner Access'}
+                  </button>
+                `;
+              }
+            } catch(e) { console.error('Error rendering owner request button:', e); }
+            return '';
+          })() : ''}
           ${isOwner ? `
             <button class="action-item share-action">
               <span class="material-symbols-outlined">person_add</span>
@@ -1032,6 +1049,40 @@ function renderEventRowDark(table, index, userId) {
     }
   });
   
+  const requestOwnerBtn = row.querySelector('.request-owner-action');
+  if (requestOwnerBtn && !requestOwnerBtn.disabled) {
+    requestOwnerBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      menu.classList.remove('show');
+      
+      const confirmed = await showConfirm(
+        'Request Owner Access',
+        `Request owner access to "${table.title}"? The event owner will be notified and can approve your request.`,
+        { confirmText: 'Request', type: 'warning' }
+      );
+      if (!confirmed) return;
+      
+      try {
+        const res = await fetch(`${API_BASE}/api/tables/${table._id}/request-owner`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: token
+          }
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast('Owner access request sent!', 'success');
+        } else {
+          showToast(data.error || 'Failed to send request', 'error');
+        }
+      } catch (err) {
+        console.error('Error requesting owner access:', err);
+        showToast('Failed to send request. Please try again.', 'error');
+      }
+    });
+  }
+
   const shareBtn = row.querySelector('.share-action');
   if (shareBtn) {
     shareBtn.addEventListener('click', (e) => {
@@ -1668,8 +1719,63 @@ function renderEventCard(table, container, userId) {
     }
   };
 
+  // "Request Owner Access" menu item (for planners/admins who are NOT already owners)
+  const requestOwnerMenuItem = document.createElement('button');
+  requestOwnerMenuItem.className = 'menu-item';
+  requestOwnerMenuItem.innerHTML = '<span class="material-symbols-outlined">admin_panel_settings</span> Request Owner Access';
+  requestOwnerMenuItem.onclick = async (e) => {
+    e.stopPropagation();
+    menuDropdown.classList.remove('show');
+    
+    const confirmed = await showConfirm(
+      'Request Owner Access',
+      `Request owner access to "${table.title}"? The event owner will be notified and can approve your request.`,
+      { confirmText: 'Request', type: 'warning' }
+    );
+    if (!confirmed) return;
+    
+    try {
+      const res = await fetch(`${API_BASE}/api/tables/${table._id}/request-owner`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast('Owner access request sent!', 'success');
+      } else {
+        showToast(data.error || 'Failed to send request', 'error');
+      }
+    } catch (err) {
+      console.error('Error requesting owner access:', err);
+      showToast('Failed to send request. Please try again.', 'error');
+    }
+  };
+
   // Add menu items to dropdown
   menuDropdown.appendChild(archiveMenuItem);
+  
+  // Show "Request Owner Access" for planners/admins who are NOT already owners
+  if (!isOwner) {
+    try {
+      const tokenPayload = JSON.parse(atob(token.split('.')[1]));
+      if (['planner', 'admin'].includes(tokenPayload.role)) {
+        // Check if there's already a pending request
+        const hasPendingRequest = Array.isArray(table.ownerRequests) && 
+          table.ownerRequests.some(r => r.userId === getUserIdFromToken() && r.status === 'pending');
+        if (hasPendingRequest) {
+          requestOwnerMenuItem.disabled = true;
+          requestOwnerMenuItem.innerHTML = '<span class="material-symbols-outlined">hourglass_top</span> Request Pending...';
+          requestOwnerMenuItem.style.opacity = '0.6';
+          requestOwnerMenuItem.style.cursor = 'default';
+        }
+        menuDropdown.appendChild(requestOwnerMenuItem);
+      }
+    } catch (e) { console.error('Error rendering owner request button:', e); }
+  }
+
   if (isOwner) {
     menuDropdown.appendChild(shareMenuItem);
     menuDropdown.appendChild(deleteMenuItem);

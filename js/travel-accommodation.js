@@ -660,13 +660,13 @@ window.initPage = undefined;
     }
 
     /**
-     * Fetch booked flights for this event from Flight Management
+     * Fetch booked flights for this event from Flight Management (by eventId)
      */
-    async function loadFlightManagementData(eventName) {
-      if (!eventName) return [];
+    async function loadFlightManagementData(eventId) {
+      if (!eventId) return [];
       
       try {
-        const res = await fetch(`${API_BASE}/api/flights/booked?eventName=${encodeURIComponent(eventName)}`, {
+        const res = await fetch(`${API_BASE}/api/flights/booked?eventId=${encodeURIComponent(eventId)}`, {
           headers: { Authorization: token }
         });
         
@@ -717,10 +717,9 @@ window.initPage = undefined;
       travelData = data.travel || [];
       accommodationData = data.accommodation || [];
       
-      // Also fetch booked flights from Flight Management for this event
-      const eventTitle = document.getElementById('eventTitle')?.textContent || '';
-      if (eventTitle && eventTitle !== 'Loading Event...') {
-        flightManagementData = await loadFlightManagementData(eventTitle);
+      // Also fetch booked flights from Flight Management for this event (by eventId)
+      if (tableId) {
+        flightManagementData = await loadFlightManagementData(tableId);
         console.log('Loaded flight management data:', flightManagementData.length, 'rows');
       }
       

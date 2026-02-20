@@ -91,6 +91,7 @@
     closeViewModal: document.getElementById('closeViewModal'),
     viewRequestForm: document.getElementById('viewRequestForm'),
     viewEventName: document.getElementById('viewEventName'),
+    viewEventSuggestions: document.getElementById('viewEventSuggestions'),
     viewDepartDate: document.getElementById('viewDepartDate'),
     viewReturnDate: document.getElementById('viewReturnDate'),
     viewReturnDateGroup: document.getElementById('viewReturnDateGroup'),
@@ -110,6 +111,8 @@
     closeEditBookedModal: document.getElementById('closeEditBookedModal'),
     editBookedForm: document.getElementById('editBookedForm'),
     cancelEditBookedBtn: document.getElementById('cancelEditBookedBtn'),
+    editBookedEventName: document.getElementById('editBookedEventName'),
+    editBookedEventSuggestions: document.getElementById('editBookedEventSuggestions'),
     editBookedReturnSection: document.getElementById('editBookedReturnSection'),
     editBookedPassengers: document.getElementById('editBookedPassengers'),
     editBookedPassengerSelect: document.getElementById('editBookedPassengerSelect'),
@@ -186,6 +189,14 @@
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${token}`
     };
+  }
+
+  /**
+   * Get the display name for a flight's event.
+   * Prefers populated eventId.title (always up-to-date) over stored eventName.
+   */
+  function getEventDisplayName(flight, fallback = 'Flight') {
+    return flight.eventId?.title || flight.eventName || fallback;
   }
 
   /**
@@ -418,6 +429,9 @@
     elements.passengerSelect?.addEventListener('change', handlePassengerSelect);
     elements.addPassengerBtn?.addEventListener('click', openAddPassengerModal);
 
+    // View Request Modal event name search
+    elements.viewEventName?.addEventListener('input', handleViewEventSearch);
+
     // View Request Modal
     elements.closeViewModal?.addEventListener('click', closeViewModal);
     elements.cancelViewBtn?.addEventListener('click', closeViewModal);
@@ -463,6 +477,9 @@
     });
     elements.editBookedForm?.addEventListener('submit', handleSaveBookedFlight);
     document.getElementById('deleteBookedFlightBtn')?.addEventListener('click', handleDeleteCurrentBookedFlight);
+
+    // Edit booked event name search
+    elements.editBookedEventName?.addEventListener('input', handleEditBookedEventSearch);
 
     // Edit booked airport autocomplete
     elements.editBookedFromCode?.addEventListener('input', (e) => handleEditBookedAirportSearch(e, 'editBookedFrom'));
@@ -660,7 +677,7 @@
       // Search filter
       if (searchTerm) {
         const searchFields = [
-          request.eventName,
+          getEventDisplayName(request, ''),
           request.from?.code,
           request.from?.city,
           request.to?.code,
@@ -764,7 +781,7 @@
       // Search filter
       if (searchTerm) {
         const searchFields = [
-          flight.eventName,
+          getEventDisplayName(flight, ''),
           flight.from?.code,
           flight.from?.city,
           flight.to?.code,
@@ -952,7 +969,7 @@
                     <div class="table-airport-city">${request.to?.city ? `${request.to.city}${request.to.state ? ', ' + request.to.state : ''}` : ''}</div>
                   </div>
                 </td>
-                <td class="table-event">${request.eventName || 'Flight'}</td>
+                <td class="table-event">${getEventDisplayName(request)}</td>
               </tr>
             `;
           }).join('')}
@@ -1011,7 +1028,7 @@
               ${confirmationCode !== 'N/A' ? `<button class="table-copy-btn" data-confirmation="${confirmationCode}" onclick="event.stopPropagation(); navigator.clipboard.writeText('${confirmationCode}');" title="Copy confirmation code"><span class="material-symbols-outlined">content_copy</span></button>` : ''}
             </div>
           </td>
-          <td class="table-event">${flight.eventName || 'Flight'}</td>
+          <td class="table-event">${getEventDisplayName(flight)}</td>
         </tr>
       `);
       
@@ -1054,7 +1071,7 @@
                 ${confirmationCode !== 'N/A' ? `<button class="table-copy-btn" data-confirmation="${confirmationCode}" onclick="event.stopPropagation(); navigator.clipboard.writeText('${confirmationCode}');" title="Copy confirmation code"><span class="material-symbols-outlined">content_copy</span></button>` : ''}
               </div>
             </td>
-            <td class="table-event">${flight.eventName || 'Flight'}</td>
+            <td class="table-event">${getEventDisplayName(flight)}</td>
           </tr>
         `);
       }
@@ -1226,7 +1243,7 @@
     
     card.innerHTML = `
       <div class="flight-card-header">
-        <h3 class="flight-event-name">${request.eventName || 'Flight Request'}</h3>
+        <h3 class="flight-event-name">${getEventDisplayName(request, 'Flight Request')}</h3>
         <div class="flight-card-badges">
           ${isChangeRequest ? '<span class="flight-change-badge">Change Request</span>' : ''}
           <span class="flight-type-badge">${request.tripType === 'roundtrip' ? 'Roundtrip' : 'One-way'}</span>
@@ -1372,7 +1389,7 @@
     card.innerHTML = `
       <div class="booked-flight-header">
         <div class="booked-event-info">
-          <span class="booked-event-name">${flight.eventName || 'Flight'}</span>
+          <span class="booked-event-name">${getEventDisplayName(flight)}</span>
           <span class="flight-direction-badge ${isReturn ? 'return' : 'outbound'}">${directionLabel}</span>
         </div>
         <div class="booked-header-right">
@@ -1662,6 +1679,11 @@
   async function handleBookingEventSearch(e) {
     const value = e.target.value;
 
+    // Clear eventId if user is typing (they haven't selected from autocomplete yet)
+    if (elements.bookingEventName) {
+      delete elements.bookingEventName.dataset.eventId;
+    }
+
     if (value.length < 2) {
       elements.bookingEventSuggestions?.classList.remove('show');
       return;
@@ -1699,6 +1721,108 @@
       elements.bookingEventSuggestions.classList.add('show');
     } catch (error) {
       console.error('Event search error:', error);
+    }
+  }
+
+  /**
+   * Handle event search in view request modal
+   */
+  async function handleViewEventSearch(e) {
+    const value = e.target.value;
+
+    // Clear eventId if user is typing (they haven't selected from autocomplete yet)
+    if (elements.viewEventName) {
+      delete elements.viewEventName.dataset.eventId;
+    }
+
+    if (value.length < 2) {
+      elements.viewEventSuggestions?.classList.remove('show');
+      return;
+    }
+
+    try {
+      const events = await apiRequest(`/api/flights/events/search?q=${encodeURIComponent(value)}`);
+      
+      if (events.length === 0) {
+        elements.viewEventSuggestions?.classList.remove('show');
+        return;
+      }
+
+      elements.viewEventSuggestions.innerHTML = events.map(event => {
+        const startDate = event.general?.startDate ? formatDateDisplay(event.general.startDate) : '';
+        const endDate = event.general?.endDate ? formatDateDisplay(event.general.endDate) : '';
+        const dateRange = startDate && endDate ? `${startDate} - ${endDate}` : startDate || '';
+        
+        return `
+          <div class="suggestion-item" data-event-id="${event._id}" data-event-name="${event.title}">
+            <span class="event-title">${event.title}</span>
+            <span class="event-date">${dateRange}</span>
+          </div>
+        `;
+      }).join('');
+
+      elements.viewEventSuggestions.querySelectorAll('.suggestion-item').forEach(item => {
+        item.addEventListener('click', () => {
+          elements.viewEventName.value = item.dataset.eventName;
+          elements.viewEventName.dataset.eventId = item.dataset.eventId;
+          elements.viewEventSuggestions.classList.remove('show');
+        });
+      });
+
+      elements.viewEventSuggestions.classList.add('show');
+    } catch (error) {
+      console.error('View event search error:', error);
+    }
+  }
+
+  /**
+   * Handle event search in edit booked flight modal
+   */
+  async function handleEditBookedEventSearch(e) {
+    const value = e.target.value;
+
+    // Clear eventId if user is typing
+    if (elements.editBookedEventName) {
+      delete elements.editBookedEventName.dataset.eventId;
+    }
+
+    if (value.length < 2) {
+      elements.editBookedEventSuggestions?.classList.remove('show');
+      return;
+    }
+
+    try {
+      const events = await apiRequest(`/api/flights/events/search?q=${encodeURIComponent(value)}`);
+      
+      if (events.length === 0) {
+        elements.editBookedEventSuggestions?.classList.remove('show');
+        return;
+      }
+
+      elements.editBookedEventSuggestions.innerHTML = events.map(event => {
+        const startDate = event.general?.startDate ? formatDateDisplay(event.general.startDate) : '';
+        const endDate = event.general?.endDate ? formatDateDisplay(event.general.endDate) : '';
+        const dateRange = startDate && endDate ? `${startDate} - ${endDate}` : startDate || '';
+        
+        return `
+          <div class="suggestion-item" data-event-id="${event._id}" data-event-name="${event.title}">
+            <span class="event-title">${event.title}</span>
+            <span class="event-date">${dateRange}</span>
+          </div>
+        `;
+      }).join('');
+
+      elements.editBookedEventSuggestions.querySelectorAll('.suggestion-item').forEach(item => {
+        item.addEventListener('click', () => {
+          elements.editBookedEventName.value = item.dataset.eventName;
+          elements.editBookedEventName.dataset.eventId = item.dataset.eventId;
+          elements.editBookedEventSuggestions.classList.remove('show');
+        });
+      });
+
+      elements.editBookedEventSuggestions.classList.add('show');
+    } catch (error) {
+      console.error('Edit booked event search error:', error);
     }
   }
 
@@ -1970,6 +2094,11 @@
   async function handleEventSearch(e) {
     const value = e.target.value;
 
+    // Clear eventId if user is typing (they haven't selected from autocomplete yet)
+    if (elements.eventName) {
+      delete elements.eventName.dataset.eventId;
+    }
+
     if (value.length < 2) {
       elements.eventSuggestions?.classList.remove('show');
       return;
@@ -2140,8 +2269,15 @@
       modalTitle.textContent = 'View Request';
     }
 
-    // Populate form fields
-    elements.viewEventName.value = request.eventName || '';
+    // Populate form fields — use populated eventId.title if available, fall back to eventName
+    const eventTitle = request.eventId?.title || request.eventName || '';
+    const eventIdValue = request.eventId?._id || request.eventId || '';
+    elements.viewEventName.value = eventTitle;
+    if (eventIdValue) {
+      elements.viewEventName.dataset.eventId = eventIdValue;
+    } else {
+      delete elements.viewEventName.dataset.eventId;
+    }
     elements.viewDepartDate.value = formatDateForInput(request.departDate);
     elements.viewReturnDate.value = request.returnDate ? formatDateForInput(request.returnDate) : '';
     elements.viewDepartTimePreference.value = request.departTimePreference || 'any';
@@ -2274,6 +2410,10 @@
   function closeViewModal() {
     elements.viewRequestModal?.classList.remove('show');
     currentEditingRequest = null;
+    // Clear event name dataset
+    if (elements.viewEventName) {
+      delete elements.viewEventName.dataset.eventId;
+    }
   }
 
   /**
@@ -2413,6 +2553,7 @@
 
     const updateData = {
       eventName: elements.viewEventName.value,
+      eventId: elements.viewEventName.dataset.eventId || currentEditingRequest.eventId?._id || currentEditingRequest.eventId || null,
       tripType: tripType,
       departDate: elements.viewDepartDate.value,
       returnDate: tripType === 'roundtrip' ? elements.viewReturnDate.value : null,
@@ -2838,7 +2979,7 @@
   async function handleDeleteRequest() {
     if (!currentEditingRequest) return;
 
-    const confirmed = confirm(`Are you sure you want to delete this flight request?\n\nEvent: ${currentEditingRequest.eventName || 'Flight Request'}\n\nThis action cannot be undone.`);
+    const confirmed = confirm(`Are you sure you want to delete this flight request?\n\nEvent: ${getEventDisplayName(currentEditingRequest, 'Flight Request')}\n\nThis action cannot be undone.`);
     
     if (!confirmed) return;
 
@@ -2875,8 +3016,15 @@
     const bookedDetails = flight.bookedDetails || {};
     const returnBookedDetails = flight.returnBookedDetails || {};
 
-    // Populate form fields
-    document.getElementById('editBookedEventName').value = flight.eventName || '';
+    // Populate form fields — use populated eventId.title if available, fall back to eventName
+    const editEventTitle = flight.eventId?.title || flight.eventName || '';
+    const editEventIdValue = flight.eventId?._id || flight.eventId || '';
+    document.getElementById('editBookedEventName').value = editEventTitle;
+    if (editEventIdValue && elements.editBookedEventName) {
+      elements.editBookedEventName.dataset.eventId = editEventIdValue;
+    } else if (elements.editBookedEventName) {
+      delete elements.editBookedEventName.dataset.eventId;
+    }
     document.getElementById('editBookedConfirmation').value = bookedDetails.confirmationCode || '';
     document.getElementById('editBookedAirline').value = bookedDetails.airline || '';
     
@@ -2997,6 +3145,10 @@
   function closeEditBookedModal() {
     elements.editBookedModal?.classList.remove('show');
     currentEditingRequest = null;
+    // Clear event name dataset
+    if (elements.editBookedEventName) {
+      delete elements.editBookedEventName.dataset.eventId;
+    }
   }
 
   /**
@@ -3109,6 +3261,7 @@
 
     const updateData = {
       eventName: document.getElementById('editBookedEventName').value,
+      eventId: elements.editBookedEventName?.dataset.eventId || currentEditingRequest.eventId?._id || currentEditingRequest.eventId || null,
       departDate: document.getElementById('editBookedDepartDate').value,
       returnDate: isRoundtrip ? document.getElementById('editBookedReturnDate').value : null,
       from: fromAirport,
@@ -3174,7 +3327,7 @@
    * Handle delete booked flight
    */
   async function handleDeleteBookedFlight(flight) {
-    const confirmed = confirm(`Are you sure you want to delete this booked flight?\n\nEvent: ${flight.eventName || 'Flight'}\nConfirmation: ${flight.bookedDetails?.confirmationCode || 'N/A'}\n\nThis action cannot be undone.`);
+    const confirmed = confirm(`Are you sure you want to delete this booked flight?\n\nEvent: ${getEventDisplayName(flight)}\nConfirmation: ${flight.bookedDetails?.confirmationCode || 'N/A'}\n\nThis action cannot be undone.`);
     
     if (!confirmed) return;
 
@@ -3480,7 +3633,7 @@
             <span class="material-symbols-outlined">arrow_forward</span>
             <span class="change-summary-code">${flight.to?.code || 'TBD'}</span>
           </div>
-          ${flight.eventName ? `<span class="change-summary-event">${flight.eventName}</span>` : ''}
+          ${getEventDisplayName(flight, '') ? `<span class="change-summary-event">${getEventDisplayName(flight, '')}</span>` : ''}
         </div>
         <div class="change-summary-details">
           <div class="change-summary-item">
@@ -3631,7 +3784,7 @@
             <span class="material-symbols-outlined">arrow_forward</span>
             <span class="approve-route-code">${changeRequest.to?.code || 'TBD'}</span>
           </div>
-          <span class="approve-event">${changeRequest.eventName || 'Flight'}</span>
+          <span class="approve-event">${getEventDisplayName(changeRequest)}</span>
         </div>
         <div class="approve-changes-list">
           <div class="approve-changes-label">

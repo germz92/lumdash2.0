@@ -3723,6 +3723,7 @@ app.put('/api/tables/:id/general', authenticate, async (req, res) => {
   
   // Allow owners and admins to update title
   const canEditTitle = req.user.role === 'admin' || table.owners.includes(req.user.id);
+  const oldTitle = table.title;
   if (canEditTitle && title) {
     table.title = title;
   }
@@ -3736,6 +3737,21 @@ app.put('/api/tables/:id/general', authenticate, async (req, res) => {
   }
   
   await table.save();
+
+  // If the title was changed, sync eventName on all linked flights
+  if (canEditTitle && title && title !== oldTitle) {
+    try {
+      const result = await FlightRequest.updateMany(
+        { eventId: table._id },
+        { $set: { eventName: title } }
+      );
+      if (result.modifiedCount > 0) {
+        console.log(`✈️ Synced eventName on ${result.modifiedCount} flight(s) for renamed event "${oldTitle}" → "${title}"`);
+      }
+    } catch (syncErr) {
+      console.error('Failed to sync flight eventNames after event rename:', syncErr);
+    }
+  }
   
   // Notify clients about the general info update
   notifyDataChange('generalChanged', null, req.params.id);
@@ -8451,20 +8467,22 @@ app.get('/api/flights/pending', authenticate, async (req, res) => {
 // Get booked flights
 app.get('/api/flights/booked', authenticate, async (req, res) => {
   try {
-    const { eventName } = req.query;
+    const { eventId, eventName } = req.query;
     
-    // If filtering by eventName, allow any authenticated user
+    // If filtering by eventId or eventName, allow any authenticated user
     // (they can only see flights for events they have access to via travel page)
-    // If no eventName filter, require planner access (for Flight Management page)
-    if (!eventName && !hasPlannerAccess(req.user)) {
+    // If no filter, require planner access (for Flight Management page)
+    if (!eventId && !eventName && !hasPlannerAccess(req.user)) {
       return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
     }
 
     // Build query
     const query = { status: 'booked' };
     
-    // Filter by event name if provided (case-insensitive match)
-    if (eventName) {
+    // Prefer filtering by eventId (source of truth), fall back to eventName for backward compat
+    if (eventId) {
+      query.eventId = eventId;
+    } else if (eventName) {
       query.eventName = { $regex: new RegExp(`^${eventName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') };
     }
 
@@ -8545,6 +8563,18 @@ app.post('/api/flights', authenticate, async (req, res) => {
       status: req.body.status || 'pending'  // Use provided status or default to 'pending'
     };
 
+    // Auto-sync eventName from eventId (eventId is the source of truth)
+    if (flightData.eventId) {
+      try {
+        const linkedEvent = await Table.findById(flightData.eventId).select('title');
+        if (linkedEvent) {
+          flightData.eventName = linkedEvent.title;
+        }
+      } catch (e) {
+        console.warn('Could not resolve eventId to event title:', e.message);
+      }
+    }
+
     // If status is 'booked', add bookedBy and bookedAt to bookedDetails
     if (flightData.status === 'booked' && flightData.bookedDetails) {
       flightData.bookedDetails.bookedBy = req.user.id;
@@ -8614,9 +8644,26 @@ app.put('/api/flights/:id', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
     }
 
+    const updateData = { ...req.body };
+
+    // Auto-sync eventName from eventId (eventId is the source of truth)
+    if (updateData.eventId) {
+      try {
+        const linkedEvent = await Table.findById(updateData.eventId).select('title');
+        if (linkedEvent) {
+          updateData.eventName = linkedEvent.title;
+        }
+      } catch (e) {
+        console.warn('Could not resolve eventId to event title:', e.message);
+      }
+    } else if (updateData.eventId === null) {
+      // Explicitly clearing the event association
+      updateData.eventName = updateData.eventName || '';
+    }
+
     const flight = await FlightRequest.findByIdAndUpdate(
       req.params.id,
-      req.body,
+      updateData,
       { new: true, runValidators: true }
     ).populate('createdBy', 'fullName email')
      .populate('eventId', 'title')

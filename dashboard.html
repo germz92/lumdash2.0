@@ -147,49 +147,40 @@
   <script src="js/config.js"></script>
   
   <script>
-    // Dynamically load Socket.IO only for pages that need real-time updates
-    // Pages that need Socket.IO: events, general, crew, schedule, travel-accommodation, gear, card-log
-    // Pages that DON'T need Socket.IO: documents (maps)
-    
+    // Load Socket.IO globally for real-time updates and notifications
     function loadSocketIO() {
-      // Parse page name from hash (handles #page?id=xxx format)
-      const fullHash = location.hash.replace('#', '') || 'events';
-      const currentPage = fullHash.split('?')[0] || 'events';
-      const pagesNeedingSocketIO = ['events', 'general', 'crew', 'schedule', 'travel-accommodation', 'gear', 'card-log', 'shotlist'];
-      
-      if (pagesNeedingSocketIO.includes(currentPage)) {
-        // Only load Socket.IO if not already loaded
-        if (!window.io) {
-          const socketIoSrc = 'https://cdn.socket.io/4.7.2/socket.io.min.js';
+      // Only load Socket.IO if not already loaded
+      if (!window.io) {
+        const socketIoSrc = 'https://cdn.socket.io/4.7.2/socket.io.min.js';
+        
+        const socketScript = document.createElement('script');
+        socketScript.src = socketIoSrc;
+        
+        socketScript.onload = function() {
+          console.log('Socket.IO client loaded from:', socketIoSrc);
           
-          const socketScript = document.createElement('script');
-          socketScript.src = socketIoSrc;
-          
-          socketScript.onload = function() {
-            console.log('Socket.IO client loaded from:', socketIoSrc);
-            
-            // Now load socket.js after Socket.IO is ready
-            const socketJsScript = document.createElement('script');
-            socketJsScript.src = 'js/socket.js';
-            document.head.appendChild(socketJsScript);
+          // Now load socket.js after Socket.IO is ready
+          const socketJsScript = document.createElement('script');
+          socketJsScript.src = 'js/socket.js';
+          socketJsScript.onload = function() {
+            // Initialize notification system after socket is ready
+            if (window.notificationSystem) {
+              window.notificationSystem.init();
+            }
           };
-          
-          socketScript.onerror = function() {
-            console.error('Failed to load Socket.IO client from:', socketIoSrc);
-          };
-          
-          document.head.appendChild(socketScript);
-        }
-      } else {
-        console.log(`Page ${currentPage} doesn't need Socket.IO, skipping load`);
+          document.head.appendChild(socketJsScript);
+        };
+        
+        socketScript.onerror = function() {
+          console.error('Failed to load Socket.IO client from:', socketIoSrc);
+        };
+        
+        document.head.appendChild(socketScript);
       }
     }
     
     // Load Socket.IO on initial page load
     loadSocketIO();
-    
-    // Also check when hash changes (page navigation)
-    window.addEventListener('hashchange', loadSocketIO);
   </script>
   
   <!-- Load other scripts after config.js -->
@@ -201,6 +192,9 @@
   
   <!-- AI Chat Widget -->
   <script src="js/chat.js"></script>
+  
+  <!-- Notification System -->
+  <script src="js/notifications.js"></script>
   
   <!-- PWA Page Restoration Script -->
   <script>

@@ -175,6 +175,15 @@ io.on('connection', (socket) => {
     }
   });
   
+  // Join user-specific room for targeted notifications
+  socket.on('joinUserRoom', (userId) => {
+    if (userId) {
+      socket.join(`user-${userId}`);
+      socket.userId = userId;
+      console.log(`Socket.IO: Client ${socket.id} joined user room: user-${userId}`);
+    }
+  });
+  
   // Collaborative editing event handlers
   socket.on('joinEventRoom', (data) => {
     const { eventId, userId, userName, userColor } = data;
@@ -714,6 +723,80 @@ function notifyDataChange(eventType, additionalData = null, tableId = null) {
   }
 }
 
+// =============================================================================
+// NOTIFICATION SYSTEM - Create & push notifications
+// =============================================================================
+
+/**
+ * Creates a notification in MongoDB and pushes it via Socket.IO.
+ * This is the SINGLE function to call from any endpoint to send a notification.
+ * Non-blocking: catches errors so the parent operation never fails due to notifications.
+ *
+ * @param {Object} opts
+ * @param {string} opts.recipientId  - User ID to notify
+ * @param {string} opts.type         - Notification type (from the enum)
+ * @param {string} opts.title        - Short title
+ * @param {string} opts.message      - Longer description
+ * @param {Object} opts.link         - { page, eventId, params } for navigation
+ * @param {string} opts.actorId      - User who caused the notification
+ * @param {string} opts.eventId      - Related event ID
+ * @param {Object} opts.metadata     - Extra data specific to this type
+ */
+async function createNotification({ recipientId, type, title, message = '', link = {}, actorId = null, eventId = null, metadata = {} }) {
+  try {
+    // Don't notify yourself
+    if (actorId && recipientId && actorId.toString() === recipientId.toString()) return null;
+
+    const NotificationModel = require('./models/Notification');
+    const notification = await NotificationModel.create({
+      recipient: recipientId,
+      type,
+      title,
+      message,
+      link,
+      actor: actorId,
+      eventId,
+      metadata
+    });
+
+    // Populate actor name for the real-time push
+    await notification.populate('actor', 'fullName');
+
+    // Push via Socket.IO (instant delivery if user is online)
+    io.to(`user-${recipientId}`).emit('new-notification', {
+      _id: notification._id,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      link: notification.link,
+      actor: notification.actor,
+      eventId: notification.eventId,
+      metadata: notification.metadata,
+      read: false,
+      createdAt: notification.createdAt
+    });
+
+    console.log(`🔔 Notification created: [${type}] "${title}" → user ${recipientId}`);
+    return notification;
+  } catch (err) {
+    console.error('🔔 Failed to create notification:', err);
+    return null;
+  }
+}
+
+/**
+ * Send the same notification to multiple users at once.
+ * @param {Array<string>} recipientIds - Array of user IDs
+ * @param {Object} opts - Same options as createNotification (minus recipientId)
+ */
+async function createNotificationBulk(recipientIds, opts) {
+  const uniqueIds = [...new Set(recipientIds.map(String))];
+  const results = await Promise.allSettled(
+    uniqueIds.map(id => createNotification({ ...opts, recipientId: id }))
+  );
+  return results.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
+}
+
 const User = require('./models/User');
 const Table = require('./models/Table');
 const GearInventory = require('./models/GearInventory');
@@ -725,6 +808,7 @@ const FolderLog = require('./models/FolderLog');
 const ManualReservation = require('./models/ManualReservation');
 const FlightRequest = require('./models/FlightRequest');
 const Passenger = require('./models/Passenger');
+const Notification = require('./models/Notification');
 
 
 
@@ -929,6 +1013,251 @@ app.post('/api/auth/reset-password', async (req, res) => {
   user.resetPasswordExpires = undefined;
   await user.save();
   res.json({ message: 'Password has been reset.' });
+});
+
+// ========================================
+// NOTIFICATION ENDPOINTS
+// ========================================
+
+// GET /api/notifications — Fetch current user's notifications
+app.get('/api/notifications', authenticate, async (req, res) => {
+  try {
+    const { unreadOnly, limit = 50, offset = 0 } = req.query;
+    
+    const filter = { recipient: req.user.id };
+    if (unreadOnly === 'true') filter.read = false;
+
+    const [notifications, unreadCount] = await Promise.all([
+      Notification.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(Number(offset))
+        .limit(Number(limit))
+        .populate('actor', 'fullName')
+        .lean(),
+      Notification.countDocuments({ recipient: req.user.id, read: false })
+    ]);
+
+    res.json({ notifications, unreadCount });
+  } catch (err) {
+    console.error('Error fetching notifications:', err);
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+
+// PATCH /api/notifications/read-all — Mark all notifications as read
+// IMPORTANT: This must come BEFORE the :id route to avoid "read-all" matching as an :id
+app.patch('/api/notifications/read-all', authenticate, async (req, res) => {
+  try {
+    const result = await Notification.updateMany(
+      { recipient: req.user.id, read: false },
+      { read: true }
+    );
+    res.json({ message: 'All notifications marked as read', modified: result.modifiedCount });
+  } catch (err) {
+    console.error('Error marking all notifications as read:', err);
+    res.status(500).json({ error: 'Failed to mark all as read' });
+  }
+});
+
+// PATCH /api/notifications/:id/read — Mark one notification as read
+app.patch('/api/notifications/:id/read', authenticate, async (req, res) => {
+  try {
+    const notification = await Notification.findOneAndUpdate(
+      { _id: req.params.id, recipient: req.user.id },
+      { read: true },
+      { new: true }
+    );
+    if (!notification) return res.status(404).json({ error: 'Notification not found' });
+    res.json({ notification });
+  } catch (err) {
+    console.error('Error marking notification as read:', err);
+    res.status(500).json({ error: 'Failed to mark as read' });
+  }
+});
+
+// DELETE /api/notifications/:id — Delete a single notification
+app.delete('/api/notifications/:id', authenticate, async (req, res) => {
+  try {
+    const result = await Notification.findOneAndDelete({ _id: req.params.id, recipient: req.user.id });
+    if (!result) return res.status(404).json({ error: 'Notification not found' });
+    res.json({ message: 'Notification deleted' });
+  } catch (err) {
+    console.error('Error deleting notification:', err);
+    res.status(500).json({ error: 'Failed to delete notification' });
+  }
+});
+
+// DELETE /api/notifications — Delete all notifications for current user
+app.delete('/api/notifications', authenticate, async (req, res) => {
+  try {
+    const result = await Notification.deleteMany({ recipient: req.user.id });
+    res.json({ message: 'All notifications deleted', deleted: result.deletedCount });
+  } catch (err) {
+    console.error('Error deleting all notifications:', err);
+    res.status(500).json({ error: 'Failed to delete notifications' });
+  }
+});
+
+// ========================================
+// OWNER ACCESS REQUEST ENDPOINTS
+// ========================================
+
+// Request owner access to an event
+app.post('/api/tables/:id/request-owner', authenticate, async (req, res) => {
+  try {
+    const table = await Table.findById(req.params.id);
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+
+    const userId = req.user.id;
+
+    // Must be a planner or admin to request
+    if (!['planner', 'admin'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Only planners and admins can request owner access' });
+    }
+
+    // Already an owner?
+    if (table.owners.some(id => id.toString() === userId)) {
+      return res.status(400).json({ error: 'You are already an owner of this event' });
+    }
+
+    // Already have a pending request?
+    const pendingRequest = (table.ownerRequests || []).find(
+      r => r.userId.toString() === userId && r.status === 'pending'
+    );
+    if (pendingRequest) {
+      return res.status(400).json({ error: 'You already have a pending request for this event' });
+    }
+
+    // Add the request
+    table.ownerRequests = table.ownerRequests || [];
+    table.ownerRequests.push({ userId });
+    await table.save();
+
+    // Get the new request's _id
+    const newRequest = table.ownerRequests[table.ownerRequests.length - 1];
+
+    // Notify the primary (first) owner
+    const primaryOwnerId = table.owners[0];
+    if (primaryOwnerId) {
+      const requester = await User.findById(userId).select('fullName');
+      await createNotification({
+        recipientId: primaryOwnerId,
+        type: 'owner_request',
+        title: 'Owner Access Requested',
+        message: `${requester?.fullName || 'A planner'} is requesting owner access to "${table.title || 'an event'}"`,
+        link: { page: 'events', eventId: req.params.id, params: { ownerRequestId: newRequest._id.toString() } },
+        actorId: userId,
+        eventId: req.params.id,
+        metadata: { requestId: newRequest._id.toString(), requesterId: userId, eventTitle: table.title }
+      });
+    }
+
+    console.log(`🔑 Owner access requested by ${userId} for event ${req.params.id}`);
+    res.json({ message: 'Owner access request sent', requestId: newRequest._id });
+  } catch (err) {
+    console.error('Error requesting owner access:', err);
+    res.status(500).json({ error: 'Failed to submit owner access request' });
+  }
+});
+
+// Approve owner access request
+app.post('/api/tables/:id/owner-requests/:requestId/approve', authenticate, async (req, res) => {
+  try {
+    const table = await Table.findById(req.params.id);
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+
+    // Only current owners can approve
+    const isOwner = table.owners.some(id => id.toString() === req.user.id);
+    if (!isOwner) {
+      return res.status(403).json({ error: 'Only event owners can approve owner requests' });
+    }
+
+    // Find the request
+    const request = (table.ownerRequests || []).find(
+      r => r._id.toString() === req.params.requestId && r.status === 'pending'
+    );
+    if (!request) {
+      return res.status(404).json({ error: 'Pending request not found' });
+    }
+
+    // Approve: update request status
+    request.status = 'approved';
+    request.resolvedAt = new Date();
+
+    // Add user to owners (and remove from leads/sharedWith if present)
+    const requesterId = request.userId;
+    if (!table.owners.some(id => id.equals(requesterId))) {
+      table.owners.push(requesterId);
+    }
+    table.leads = table.leads.filter(id => !id.equals(requesterId));
+    table.sharedWith = table.sharedWith.filter(id => !id.equals(requesterId));
+
+    await table.save();
+    notifyDataChange('tableUpdated', { tableId: table._id });
+
+    // Notify the requester
+    await createNotification({
+      recipientId: requesterId,
+      type: 'owner_request_approved',
+      title: 'Owner Access Approved!',
+      message: `Your request for owner access to "${table.title || 'an event'}" has been approved`,
+      link: { page: 'general', eventId: req.params.id },
+      actorId: req.user.id,
+      eventId: req.params.id,
+      metadata: { eventTitle: table.title }
+    });
+
+    console.log(`✅ Owner access approved for user ${requesterId} on event ${req.params.id}`);
+    res.json({ message: 'Owner access approved' });
+  } catch (err) {
+    console.error('Error approving owner request:', err);
+    res.status(500).json({ error: 'Failed to approve owner request' });
+  }
+});
+
+// Deny owner access request
+app.post('/api/tables/:id/owner-requests/:requestId/deny', authenticate, async (req, res) => {
+  try {
+    const table = await Table.findById(req.params.id);
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+
+    // Only current owners can deny
+    const isOwner = table.owners.some(id => id.toString() === req.user.id);
+    if (!isOwner) {
+      return res.status(403).json({ error: 'Only event owners can deny owner requests' });
+    }
+
+    // Find the request
+    const request = (table.ownerRequests || []).find(
+      r => r._id.toString() === req.params.requestId && r.status === 'pending'
+    );
+    if (!request) {
+      return res.status(404).json({ error: 'Pending request not found' });
+    }
+
+    // Deny: update request status
+    request.status = 'denied';
+    request.resolvedAt = new Date();
+    await table.save();
+
+    // Notify the requester
+    await createNotification({
+      recipientId: request.userId,
+      type: 'owner_request_denied',
+      title: 'Owner Access Denied',
+      message: `Your request for owner access to "${table.title || 'an event'}" was denied`,
+      link: { page: 'events' },
+      actorId: req.user.id,
+      eventId: req.params.id,
+      metadata: { eventTitle: table.title }
+    });
+
+    console.log(`❌ Owner access denied for user ${request.userId} on event ${req.params.id}`);
+    res.json({ message: 'Owner access request denied' });
+  } catch (err) {
+    console.error('Error denying owner request:', err);
+    res.status(500).json({ error: 'Failed to deny owner request' });
+  }
 });
 
 // ========================================
@@ -2583,6 +2912,20 @@ app.post('/api/tables/:id/todos', authenticate, async (req, res) => {
     const savedTodo = table.todos[table.todos.length - 1];
     
     notifyDataChange('todoAdded', { todo: savedTodo }, req.params.id);
+    
+    // 🔔 Notify the assigned user (if different from creator)
+    if (newTodo.owner && newTodo.owner.toString() !== req.user.id) {
+      createNotification({
+        recipientId: newTodo.owner,
+        type: 'task_assigned',
+        title: 'New task assigned to you',
+        message: `"${task}" in ${table.title || 'an event'}`,
+        link: { page: 'todos', eventId: req.params.id },
+        actorId: req.user.id,
+        eventId: req.params.id
+      });
+    }
+    
     res.json({ todo: savedTodo });
   } catch (err) {
     console.error('Error creating todo:', err);
@@ -2606,6 +2949,9 @@ app.put('/api/tables/:id/todos/:todoId', authenticate, async (req, res) => {
     if (!isOwnerOrAdmin && !isAssignee) {
       return res.status(403).json({ error: 'Not authorized to edit this task' });
     }
+    
+    // 🔔 Track previous owner for notification
+    const previousOwnerId = todo.owner ? todo.owner.toString() : null;
     
     // If not owner/admin, only allow status and notes changes
     if (!isOwnerOrAdmin) {
@@ -2640,6 +2986,21 @@ app.put('/api/tables/:id/todos/:todoId', authenticate, async (req, res) => {
     const updatedTodo = table.todos.id(req.params.todoId);
     
     notifyDataChange('todoUpdated', { todo: updatedTodo }, req.params.id);
+    
+    // 🔔 Notify if task was reassigned to a new person
+    const newOwnerId = todo.owner ? todo.owner.toString() : null;
+    if (newOwnerId && newOwnerId !== previousOwnerId && newOwnerId !== req.user.id) {
+      createNotification({
+        recipientId: newOwnerId,
+        type: 'task_assigned',
+        title: 'Task assigned to you',
+        message: `"${todo.task}" in ${table.title || 'an event'}`,
+        link: { page: 'todos', eventId: req.params.id },
+        actorId: req.user.id,
+        eventId: req.params.id
+      });
+    }
+    
     res.json({ todo: updatedTodo });
   } catch (err) {
     console.error('Error updating todo:', err);
@@ -8216,6 +8577,28 @@ app.post('/api/flights', authenticate, async (req, res) => {
     // Notify connected clients
     const eventType = flight.status === 'booked' ? 'flightBookingCreated' : 'flightRequestCreated';
     notifyDataChange(eventType, { flightId: flight._id, status: flight.status });
+
+    // 🔔 Notify all planners & admins about new pending flight request
+    if (flight.status === 'pending') {
+      try {
+        const plannerUsers = await User.find({ role: { $in: ['planner', 'admin'] } }).select('_id');
+        const plannerIds = plannerUsers.map(u => u._id.toString());
+        const passengerNames = (flight.passengers || []).map(p => p.name).join(', ') || 'Unknown';
+        const routeStr = `${flight.from?.code || ''} → ${flight.to?.code || ''}`;
+
+        await createNotificationBulk(plannerIds, {
+          type: 'flight_request',
+          title: 'New Flight Request',
+          message: `${passengerNames} — ${routeStr} on ${new Date(flight.departDate).toLocaleDateString()}`,
+          actorId: req.user.id,
+          eventId: flight.eventId || null,
+          link: { page: 'flights', params: { flightId: flight._id.toString() } },
+          metadata: { flightId: flight._id.toString(), route: routeStr, passengers: passengerNames }
+        });
+      } catch (notifErr) {
+        console.error('🔔 Failed to notify planners about new flight request:', notifErr);
+      }
+    }
     
     res.status(201).json(flight);
   } catch (error) {
@@ -8300,6 +8683,30 @@ app.patch('/api/flights/:id/book', authenticate, async (req, res) => {
     
     // Notify connected clients
     notifyDataChange('flightBooked', { flightId: flight._id });
+
+    // 🔔 Notify the original requester that their flight has been booked
+    if (flight.createdBy && flight.createdBy._id) {
+      try {
+        const passengerNames = (flight.passengers || []).map(p => p.name).join(', ') || 'Unknown';
+        const routeStr = `${flight.from?.code || ''} → ${flight.to?.code || ''}`;
+        const airline = flight.bookedDetails?.airline || '';
+        const flightNum = flight.bookedDetails?.flightNumber || '';
+        const bookingInfo = [airline, flightNum].filter(Boolean).join(' ');
+
+        await createNotification({
+          recipientId: flight.createdBy._id.toString(),
+          type: 'flight_booked',
+          title: 'Flight Booked',
+          message: `${routeStr}${bookingInfo ? ` — ${bookingInfo}` : ''} for ${passengerNames}`,
+          actorId: req.user.id,
+          eventId: flight.eventId?._id || flight.eventId || null,
+          link: { page: 'flights', params: { flightId: flight._id.toString() } },
+          metadata: { flightId: flight._id.toString(), route: routeStr, passengers: passengerNames, airline, flightNumber: flightNum }
+        });
+      } catch (notifErr) {
+        console.error('🔔 Failed to notify requester about flight booking:', notifErr);
+      }
+    }
     
     res.json(flight);
   } catch (error) {
@@ -8886,6 +9293,21 @@ app.post('/api/tables/:id/share', authenticate, async (req, res) => {
 
   await table.save();
   notifyDataChange('tableUpdated', { tableId: table._id });
+
+  // 🔔 In-app notification for the shared user
+  if (user._id.toString() !== req.user.id) {
+    const roleLabel = makeOwner ? 'owner' : makeLead ? 'lead' : 'collaborator';
+    createNotification({
+      recipientId: user._id,
+      type: 'event_shared',
+      title: `Added to event as ${roleLabel}`,
+      message: `You were added to "${table.title || 'an event'}"`,
+      link: { page: 'general', eventId: req.params.id },
+      actorId: req.user.id,
+      eventId: req.params.id,
+      metadata: { role: roleLabel }
+    });
+  }
 
   // Send notification email to the user
   try {

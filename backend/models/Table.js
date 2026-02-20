@@ -52,6 +52,17 @@ const tableSchema = new mongoose.Schema({
   leads: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }], // Per-event leads
   sharedWith: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   
+  // Owner access requests (planners/admins requesting owner rights)
+  ownerRequests: [
+    {
+      _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
+      userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+      status: { type: String, enum: ['pending', 'approved', 'denied'], default: 'pending' },
+      requestedAt: { type: Date, default: Date.now },
+      resolvedAt: { type: Date, default: null }
+    }
+  ],
+  
   // External app integration (for events created from other apps like Invoice App)
   externalSource: { type: String, default: null },  // e.g., 'invoice-app'
   externalId: { type: String, default: null },      // ID from the source app

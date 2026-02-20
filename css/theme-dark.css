@@ -1557,6 +1557,28 @@ body:has(.events-page) {
   font-size: 18px;
 }
 
+/* Inactive badge state - red color for badges that haven't met conditions */
+.event-name .badge-inactive {
+  color: #ef4444 !important;
+  opacity: 0.5;
+}
+
+.event-name .badge-inactive:hover {
+  opacity: 0.8;
+  color: #ef4444 !important;
+}
+
+/* Override the flight badge active background when inactive */
+.event-name .flight-badge.badge-inactive {
+  background: transparent;
+  color: #ef4444 !important;
+}
+
+.event-name .flight-badge.badge-inactive:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444 !important;
+}
+
 .event-name .edit-icon {
   color: var(--text-tertiary);
   font-size: 16px;

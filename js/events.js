@@ -809,34 +809,24 @@ function renderEventRowDark(table, index, userId) {
           <a href="#" class="event-name-link" onclick="window.navigate('general', '${table._id}'); return false;">
             ${table.title || 'Untitled Event'}
           </a>
-          ${table.flightCount > 0 ? `
-            <span class="flight-badge" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" title="${table.flightCount} passenger${table.flightCount !== 1 ? 's' : ''} with flights">
+          <span class="flight-badge ${table.flightCount > 0 ? '' : 'badge-inactive'}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" title="${table.flightCount > 0 ? `${table.flightCount} passenger${table.flightCount !== 1 ? 's' : ''} with flights` : 'No flights'}">
               <span class="material-symbols-outlined">flight</span>
-              <span class="flight-count">${table.flightCount}</span>
+              ${table.flightCount > 0 ? `<span class="flight-count">${table.flightCount}</span>` : ''}
             </span>
-          ` : ''}
-          ${table.hotelCount > 0 ? `
-            <span class="hotel-badge" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" title="${table.hotelCount} hotel booking${table.hotelCount !== 1 ? 's' : ''}">
+          <span class="hotel-badge ${table.hotelCount > 0 ? '' : 'badge-inactive'}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" title="${table.hotelCount > 0 ? `${table.hotelCount} hotel booking${table.hotelCount !== 1 ? 's' : ''}` : 'No accommodations'}">
               <span class="material-symbols-outlined">hotel</span>
-              <span class="hotel-count">${table.hotelCount}</span>
+              ${table.hotelCount > 0 ? `<span class="hotel-count">${table.hotelCount}</span>` : ''}
             </span>
-          ` : ''}
-          ${table.shareCount > 0 ? `
-            <span class="share-badge" onclick="event.stopPropagation(); openShareModal('${table._id}');" title="Shared with ${table.shareCount} ${table.shareCount === 1 ? 'person' : 'people'}">
+          <span class="share-badge ${table.shareCount > 0 ? '' : 'badge-inactive'}" onclick="event.stopPropagation(); openShareModal('${table._id}');" title="${table.shareCount > 0 ? `Shared with ${table.shareCount} ${table.shareCount === 1 ? 'person' : 'people'}` : 'Not shared'}">
               <span class="material-symbols-outlined">send</span>
-              <span class="share-count">${table.shareCount}</span>
+              ${table.shareCount > 0 ? `<span class="share-count">${table.shareCount}</span>` : ''}
             </span>
-          ` : ''}
-          ${table.hasSchedule ? `
-            <span class="schedule-badge" onclick="event.stopPropagation(); window.navigate('schedule', '${table._id}'); return false;" title="Has program schedule">
+          <span class="schedule-badge ${table.hasSchedule ? '' : 'badge-inactive'}" onclick="event.stopPropagation(); window.navigate('schedule', '${table._id}'); return false;" title="${table.hasSchedule ? 'Has program schedule' : 'No schedule'}">
               <span class="material-symbols-outlined">calendar_month</span>
             </span>
-          ` : ''}
-          ${table.hasGear ? `
-            <span class="gear-badge" onclick="event.stopPropagation(); window.navigate('gear', '${table._id}'); return false;" title="Has gear reserved">
+          <span class="gear-badge ${table.hasGear ? '' : 'badge-inactive'}" onclick="event.stopPropagation(); window.navigate('gear', '${table._id}'); return false;" title="${table.hasGear ? 'Has gear reserved' : 'No gear reserved'}">
               <span class="material-symbols-outlined">photo_camera</span>
             </span>
-          ` : ''}
           <span class="material-symbols-outlined edit-icon" onclick="event.stopPropagation(); openEditEventModal('${table._id}', this)">edit</span>
         </div>
         ${cityState ? `

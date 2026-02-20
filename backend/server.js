@@ -781,6 +781,17 @@ function hasEventAccess(table, user, requireOwner = false) {
   return isOwner || isLead || isShared;
 }
 
+// Read-only access check: planners can view all events, but cannot edit unless they are owners/leads/sharedWith
+function hasEventReadAccess(table, user) {
+  if (!table || !user) return false;
+  
+  // Admin and planner users have read access to all events
+  if (user.role === 'admin' || user.role === 'planner') return true;
+  
+  // Otherwise, fall back to normal access check
+  return hasEventAccess(table, user);
+}
+
 // AUTH
 app.post('/api/auth/register', async (req, res) => {
   const { email, password, fullName, role } = req.body; // 🔥 updated
@@ -950,8 +961,8 @@ app.post('/api/chat/global', authenticate, async (req, res) => {
       time: now.toTimeString().split(' ')[0]
     };
 
-    // Determine access query based on user role
-    const accessQuery = req.user.role === 'admin' 
+    // Determine access query based on user role (admins and planners see all events)
+    const accessQuery = (req.user.role === 'admin' || req.user.role === 'planner')
       ? {} 
       : { $or: [{ owners: req.user.id }, { sharedWith: req.user.id }, { leads: req.user.id }] };
     
@@ -1363,13 +1374,8 @@ app.post('/api/chat/:tableId', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Table not found' });
     }
     
-    // Check access: owners, sharedWith, leads, or admin
-    const isOwner = table.owners.includes(req.user.id);
-    const isShared = table.sharedWith.includes(req.user.id);
-    const isLead = table.leads && table.leads.includes(req.user.id);
-    const isAdmin = req.user.role === 'admin';
-    
-    if (!isOwner && !isShared && !isLead && !isAdmin) {
+    // Check access: owners, sharedWith, leads, admin, or planner (read access)
+    if (!hasEventReadAccess(table, req.user)) {
       return res.status(403).json({ error: 'Not authorized to access this event' });
     }
     
@@ -2144,8 +2150,8 @@ app.get('/api/tables', authenticate, async (req, res) => {
     
     let tables;
     
-    // Admin users can see ALL events
-    if (req.user.role === 'admin') {
+    // Admin and planner users can see ALL events
+    if (req.user.role === 'admin' || req.user.role === 'planner') {
       tables = await Table.find({}).populate('owners', 'fullName');
     } else {
       // Regular users only see events they own, are shared with, or are leads on
@@ -2191,13 +2197,7 @@ app.get('/api/tables/:id', authenticate, async (req, res) => {
     return res.status(404).json({ error: 'Event not found' });
   }
   
-  // Admin users can access any event
-  const isAdmin = req.user.role === 'admin';
-  const isOwner = table.owners.includes(req.user.id);
-  const isShared = table.sharedWith.includes(req.user.id);
-  const isLead = table.leads && table.leads.includes(req.user.id);
-  
-  if (!isAdmin && !isOwner && !isShared && !isLead) {
+  if (!hasEventReadAccess(table, req.user)) {
     return res.status(403).json({ error: 'Not authorized' });
   }
   res.json(table);
@@ -2540,7 +2540,7 @@ app.get('/api/tables/:id/todos', authenticate, async (req, res) => {
   try {
     const table = await Table.findById(req.params.id).populate('todos.owner', 'fullName photo');
   if (!table) return res.status(404).json({ error: 'Table not found' });
-    if (!hasEventAccess(table, req.user)) {
+    if (!hasEventReadAccess(table, req.user)) {
     return res.status(403).json({ error: 'Not authorized' });
   }
     res.json({ todos: table.todos || [] });
@@ -2679,12 +2679,13 @@ app.get('/api/tables/:id/admin-notes', authenticate, async (req, res) => {
   const table = await Table.findById(req.params.id);
   if (!table) return res.status(404).json({ error: 'Table not found' });
   
-  // Check if user is owner or admin
+  // Check if user is owner, admin, or planner (read access)
   const isOwner = table.owners.map(String).includes(req.user.id);
   const isAdmin = req.user.role === 'admin';
+  const isPlanner = req.user.role === 'planner';
   
-  if (!isOwner && !isAdmin) {
-    return res.status(403).json({ error: 'Only owners and admins can view admin notes' });
+  if (!isOwner && !isAdmin && !isPlanner) {
+    return res.status(403).json({ error: 'Only owners, admins, and planners can view admin notes' });
   }
   res.json({ adminNotes: table.adminNotes || [] });
 });
@@ -3346,7 +3347,7 @@ app.get('/api/tables/:id/general', authenticate, async (req, res) => {
     return res.status(400).json({ error: "Invalid table ID" });
   }
   const table = await Table.findById(req.params.id);
-  if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
+  if (!table || !hasEventReadAccess(table, req.user)) {
     return res.status(403).json({ error: 'Not authorized or not found' });
   }
   res.json(table.general || {});
@@ -3390,7 +3391,7 @@ app.get('/api/tables/:id/gear', authenticate, async (req, res) => {
   }
   try {
     const table = await Table.findById(req.params.id);
-    if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
+    if (!table || !hasEventReadAccess(table, req.user)) {
       return res.status(403).json({ error: 'Not authorized or not found' });
     }
 
@@ -3492,7 +3493,7 @@ app.get('/api/tables/:id/travel', authenticate, async (req, res) => {
     return res.status(400).json({ error: "Invalid table ID" });
   }
   const table = await Table.findById(req.params.id);
-  if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
+  if (!table || !hasEventReadAccess(table, req.user)) {
     return res.status(403).json({ error: 'Not authorized or not found' });
   }
   res.json({
@@ -3671,7 +3672,7 @@ app.get('/api/tables/:id/program-schedule', authenticate, async (req, res) => {
     return res.status(400).json({ error: "Invalid table ID" });
   }
   const table = await Table.findById(req.params.id);
-  if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
+  if (!table || !hasEventReadAccess(table, req.user)) {
     return res.status(403).json({ error: 'Not authorized or not found' });
   }
   res.json({ programSchedule: table.programSchedule || [] });
@@ -3872,7 +3873,7 @@ app.get('/api/tables/:id/folder-logs', authenticate, async (req, res) => {
   
   try {
     const table = await Table.findById(req.params.id);
-    if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
+    if (!table || !hasEventReadAccess(table, req.user)) {
       return res.status(403).json({ error: 'Not authorized or not found' });
     }
     
@@ -5217,13 +5218,13 @@ app.get('/api/gear-packages/event/:eventId', authenticate, async (req, res) => {
 
     console.log(`[GEAR LOAD] Loading gear for event ${eventId}, list: ${listName || 'Main List'} (collaborative mode)`);
 
-    // Check if user has access to this event
+    // Check if user has access to this event (planners get read-only access)
     const table = await Table.findById(eventId);
     if (!table) {
       return res.status(404).json({ error: 'Event not found' });
     }
     
-    if (!table.owners.includes(userId) && !table.sharedWith.includes(userId)) {
+    if (!hasEventReadAccess(table, req.user)) {
       return res.status(403).json({ error: 'Not authorized to access this event' });
     }
 
@@ -5458,8 +5459,8 @@ app.get('/api/tables/:eventId/gear-lists', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Event not found' });
     }
     
-    // Check access
-    if (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id)) {
+    // Check access (planners get read-only access to all events)
+    if (!hasEventReadAccess(table, req.user)) {
       return res.status(403).json({ error: 'Not authorized to access this event' });
     }
     
@@ -6221,7 +6222,7 @@ app.get('/api/debug/gear/:gearId', authenticate, async (req, res) => {
 app.get('/api/tables/:id/documents', authenticate, async (req, res) => {
   try {
     const table = await Table.findById(req.params.id);
-    if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
+    if (!table || !hasEventReadAccess(table, req.user)) {
       return res.status(403).json({ error: 'Not authorized or not found' });
     }
     
@@ -6236,7 +6237,7 @@ app.get('/api/tables/:id/documents', authenticate, async (req, res) => {
 app.get('/api/tables/:id/documents/:documentId', authenticate, async (req, res) => {
   try {
     const table = await Table.findById(req.params.id);
-    if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
+    if (!table || !hasEventReadAccess(table, req.user)) {
       return res.status(403).json({ error: 'Not authorized or not found' });
     }
     

@@ -1329,6 +1329,9 @@ body:has(.events-page) {
 
 .events-table th:first-child {
   padding-left: 24px;
+  padding-right: 0;
+  width: 1%;
+  white-space: nowrap;
 }
 
 .events-table th:last-child {
@@ -1384,7 +1387,10 @@ body:has(.events-page) {
 
 .event-row td:first-child {
   padding-left: 20px;
+  padding-right: 0;
   border-left: 4px solid var(--row-accent, var(--accent-blue));
+  width: 1%;
+  white-space: nowrap;
 }
 
 .event-row td:last-child {
@@ -1396,6 +1402,7 @@ body:has(.events-page) {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  white-space: nowrap;
 }
 
 .event-name {
@@ -1419,162 +1426,192 @@ body:has(.events-page) {
   text-decoration: underline;
 }
 
-.event-name .flight-badge {
+/* Badges column - ghost column with no header label */
+.badges-col-header {
+  width: 1%;
+  padding: 0 4px !important;
+}
+
+.badges-cell {
+  padding: 8px 24px 8px 4px !important;
+  white-space: nowrap;
+  width: 1%;
+}
+
+.event-badges {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+/* Each badge gets a fixed-width slot so icons align vertically across rows */
+.event-badges .flight-badge,
+.event-badges .hotel-badge,
+.event-badges .share-badge {
+  width: 40px;
+  box-sizing: border-box;
+}
+
+.event-badges .schedule-badge,
+.event-badges .gear-badge {
+  width: 28px;
+  box-sizing: border-box;
+}
+
+.event-badges .flight-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 3px;
   background: var(--primary-color);
   color: white;
-  padding: 4px 8px;
+  padding: 4px 0;
   border-radius: 12px;
   font-size: 12px;
   font-weight: 600;
-  margin-left: 8px;
   cursor: pointer;
   transition: all var(--transition-fast);
   text-decoration: none;
 }
 
-.event-name .flight-badge:hover {
+.event-badges .flight-badge:hover {
   background: var(--primary-color-hover);
   transform: scale(1.05);
 }
 
-.event-name .flight-badge .material-symbols-outlined {
+.event-badges .flight-badge .material-symbols-outlined {
   font-size: 16px;
 }
 
-.event-name .flight-badge .flight-count {
+.event-badges .flight-badge .flight-count {
   line-height: 1;
 }
 
-.event-name .hotel-badge {
+.event-badges .hotel-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 3px;
   background: transparent;
   color: var(--text-secondary);
-  padding: 4px 8px;
+  padding: 4px 0;
   border-radius: 12px;
   font-size: 12px;
   font-weight: 600;
-  margin-left: 4px;
   cursor: pointer;
   transition: all var(--transition-fast);
   text-decoration: none;
 }
 
-.event-name .hotel-badge:hover {
+.event-badges .hotel-badge:hover {
   color: #8b5cf6;
   transform: scale(1.05);
 }
 
-.event-name .hotel-badge .material-symbols-outlined {
+.event-badges .hotel-badge .material-symbols-outlined {
   font-size: 16px;
 }
 
-.event-name .hotel-badge .hotel-count {
+.event-badges .hotel-badge .hotel-count {
   line-height: 1;
 }
 
-.event-name .schedule-badge {
+.event-badges .schedule-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: transparent;
   color: var(--text-secondary);
-  padding: 4px;
+  padding: 4px 0;
   border-radius: 50%;
   font-size: 12px;
   font-weight: 600;
-  margin-left: 4px;
   cursor: pointer;
   transition: all var(--transition-fast);
   text-decoration: none;
 }
 
-.event-name .schedule-badge:hover {
+.event-badges .schedule-badge:hover {
   background: var(--surface-hover);
   color: var(--text-primary);
   transform: scale(1.1);
 }
 
-.event-name .schedule-badge .material-symbols-outlined {
+.event-badges .schedule-badge .material-symbols-outlined {
   font-size: 18px;
 }
 
-.event-name .share-badge {
+.event-badges .share-badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  gap: 3px;
   background: transparent;
   color: var(--text-secondary);
-  padding: 4px 6px;
+  padding: 4px 0;
   border-radius: 12px;
   font-size: 12px;
   font-weight: 600;
-  margin-left: 4px;
   cursor: pointer;
   transition: all var(--transition-fast);
   text-decoration: none;
 }
 
-.event-name .share-badge:hover {
+.event-badges .share-badge:hover {
   background: var(--surface-hover);
   color: var(--text-primary);
 }
 
-.event-name .share-badge .material-symbols-outlined {
+.event-badges .share-badge .material-symbols-outlined {
   font-size: 16px;
 }
 
-.event-name .share-badge .share-count {
+.event-badges .share-badge .share-count {
   line-height: 1;
 }
 
-.event-name .gear-badge {
+.event-badges .gear-badge {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: transparent;
   color: var(--text-secondary);
-  padding: 4px;
+  padding: 4px 0;
   border-radius: 50%;
   font-size: 12px;
   font-weight: 600;
-  margin-left: 4px;
   cursor: pointer;
   transition: all var(--transition-fast);
 }
 
-.event-name .gear-badge:hover {
+.event-badges .gear-badge:hover {
   background: var(--surface-hover);
   color: var(--text-primary);
   transform: scale(1.1);
 }
 
-.event-name .gear-badge .material-symbols-outlined {
+.event-badges .gear-badge .material-symbols-outlined {
   font-size: 18px;
 }
 
 /* Inactive badge state - red color for badges that haven't met conditions */
-.event-name .badge-inactive {
+.event-badges .badge-inactive {
   color: #ef4444 !important;
   opacity: 0.5;
 }
 
-.event-name .badge-inactive:hover {
+.event-badges .badge-inactive:hover {
   opacity: 0.8;
   color: #ef4444 !important;
 }
 
 /* Override the flight badge active background when inactive */
-.event-name .flight-badge.badge-inactive {
+.event-badges .flight-badge.badge-inactive {
   background: transparent;
   color: #ef4444 !important;
 }
 
-.event-name .flight-badge.badge-inactive:hover {
+.event-badges .flight-badge.badge-inactive:hover {
   background: rgba(239, 68, 68, 0.1);
   color: #ef4444 !important;
 }
@@ -1615,12 +1652,6 @@ body:has(.events-page) {
 .event-location-info .material-symbols-outlined {
   font-size: 14px;
   color: var(--text-tertiary);
-}
-
-.event-badges {
-  display: flex;
-  gap: 8px;
-  align-items: center;
 }
 
 .event-badge {
@@ -2637,11 +2668,16 @@ body:has(.events-page) {
   /* Table responsive - hide some columns */
   .events-table th:nth-child(2),
   .events-table td:nth-child(2) {
+    display: none; /* Hide Badges column */
+  }
+
+  .events-table th:nth-child(3),
+  .events-table td:nth-child(3) {
     display: none; /* Hide Client column */
   }
   
-  .events-table th:nth-child(4),
-  .events-table td:nth-child(4) {
+  .events-table th:nth-child(5),
+  .events-table td:nth-child(5) {
     display: none; /* Hide Crew column */
   }
   
@@ -2775,8 +2811,8 @@ body:has(.events-page) {
   }
   
   /* Even more compact table on very small screens */
-  .events-table th:nth-child(3),
-  .events-table td:nth-child(3) {
+  .events-table th:nth-child(4),
+  .events-table td:nth-child(4) {
     display: none; /* Hide Date column too */
   }
   

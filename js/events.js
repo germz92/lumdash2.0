@@ -813,6 +813,18 @@ function renderEventRowDark(table, index, userId) {
           <a href="#" class="event-name-link" onclick="window.navigate('general', '${table._id}'); return false;">
             ${table.title || 'Untitled Event'}
           </a>
+          <span class="material-symbols-outlined edit-icon" onclick="event.stopPropagation(); openEditEventModal('${table._id}', this)">edit</span>
+        </div>
+        ${cityState ? `
+          <div class="event-location-info">
+            <span class="material-symbols-outlined" style="font-size: 14px;">location_on</span>
+            ${cityState}
+          </div>
+          ` : ''}
+      </div>
+    </td>
+    <td class="badges-cell">
+      <div class="event-badges">
           <span class="flight-badge ${table.flightCount > 0 ? '' : 'badge-inactive'}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" title="${table.flightCount > 0 ? `${table.flightCount} passenger${table.flightCount !== 1 ? 's' : ''} with flights` : 'No flights'}">
               <span class="material-symbols-outlined">flight</span>
               ${table.flightCount > 0 ? `<span class="flight-count">${table.flightCount}</span>` : ''}
@@ -831,14 +843,6 @@ function renderEventRowDark(table, index, userId) {
           <span class="gear-badge ${table.hasGear ? '' : 'badge-inactive'}" onclick="event.stopPropagation(); window.navigate('gear', '${table._id}'); return false;" title="${table.hasGear ? 'Has gear reserved' : 'No gear reserved'}">
               <span class="material-symbols-outlined">photo_camera</span>
             </span>
-          <span class="material-symbols-outlined edit-icon" onclick="event.stopPropagation(); openEditEventModal('${table._id}', this)">edit</span>
-        </div>
-        ${cityState ? `
-          <div class="event-location-info">
-            <span class="material-symbols-outlined" style="font-size: 14px;">location_on</span>
-            ${cityState}
-          </div>
-          ` : ''}
       </div>
     </td>
     <td>

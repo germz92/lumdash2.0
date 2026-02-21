@@ -1291,7 +1291,10 @@ async function loadTables(forceRefresh = false) {
     filteredTables = filteredTables.filter(table => {
       const title = (table.title || '').toLowerCase();
       const client = (table.general?.client || '').toLowerCase();
-      return title.includes(q) || client.includes(q);
+      const city = (table.general?.city || '').toLowerCase();
+      const state = (table.general?.state || '').toLowerCase();
+      const location = (table.general?.location || '').toLowerCase();
+      return title.includes(q) || client.includes(q) || city.includes(q) || state.includes(q) || location.includes(q);
     });
   }
 

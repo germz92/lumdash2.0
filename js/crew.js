@@ -39,24 +39,35 @@ let deletedRows = new Set(); // Track deleted rows
 let autosaveTimeout = null; // Debounce autosave
 let isSaving = false; // Track if currently saving
 let isEditing = false; // Track if any field is currently being edited
+let suppressSocketUntil = 0; // Timestamp to suppress socket events until (self-notification suppression)
 
-// Socket.IO real-time updates - disabled when there are unsaved changes
+// Suppress socket events for a short time after own saves
+function suppressNextSocketEvent() {
+  suppressSocketUntil = Date.now() + 3000; // 3 second suppression window
+}
+
+// Socket.IO real-time updates - disabled when there are unsaved changes or self-saving
 if (window.socket) {
   window.socket.on('crewChanged', (data) => {
     const currentTableId = getCurrentTableId();
     if (data && data.tableId && data.tableId !== currentTableId) {
       return;
     }
-    // Don't reload if user has unsaved changes
-    if (hasUnsavedChanges) {
+    // Skip if this is our own save bouncing back
+    if (Date.now() < suppressSocketUntil) {
+      console.log('Ignoring crewChanged (self-notification suppressed)');
+      return;
+    }
+    // Don't reload if user has unsaved changes or is editing
+    if (hasUnsavedChanges || isEditing) {
       console.log('Crew data changed remotely, but you have unsaved changes. Save or discard first.');
       return;
     }
-    console.log('Crew data changed, reloading...');
+    console.log('Crew data changed remotely, reloading...');
     tableId = currentTableId;
     
     if (reloadTimeout) clearTimeout(reloadTimeout);
-    reloadTimeout = setTimeout(() => loadTable(), 500);
+    reloadTimeout = setTimeout(() => loadTable(), 800);
   });
   
   window.socket.on('tableUpdated', (data) => {
@@ -64,16 +75,21 @@ if (window.socket) {
     if (data && data.tableId && data.tableId !== currentTableId) {
       return;
     }
-    // Don't reload if user has unsaved changes
-    if (hasUnsavedChanges) {
+    // Skip if this is our own save bouncing back
+    if (Date.now() < suppressSocketUntil) {
+      console.log('Ignoring tableUpdated (self-notification suppressed)');
+      return;
+    }
+    // Don't reload if user has unsaved changes or is editing
+    if (hasUnsavedChanges || isEditing) {
       console.log('Table updated remotely, but you have unsaved changes. Save or discard first.');
       return;
     }
-    console.log('Table updated, reloading...');
+    console.log('Table updated remotely, reloading...');
     tableId = currentTableId;
     
     if (reloadTimeout) clearTimeout(reloadTimeout);
-    reloadTimeout = setTimeout(() => loadTable(), 500);
+    reloadTimeout = setTimeout(() => loadTable(), 800);
   });
 }
 
@@ -124,11 +140,17 @@ function triggerAutosave() {
   }, 2500);
 }
 
-// Save to localStorage as backup
+// Save to localStorage as backup (only changed/deleted row IDs, not entire table)
 function saveToLocalStorage() {
   try {
+    // Only store the rows that actually changed, not the entire table
+    const changedRowData = {};
+    for (const rowId of changedRows) {
+      const row = tableData.rows.find(r => r._id === rowId);
+      if (row) changedRowData[rowId] = row;
+    }
     const backup = {
-      tableData: tableData,
+      changedRowData,
       changedRows: Array.from(changedRows),
       deletedRows: Array.from(deletedRows),
       timestamp: Date.now()
@@ -809,6 +831,8 @@ async function duplicateRow(rowId) {
       locationBadge: row.locationBadge
     };
     
+    suppressNextSocketEvent();
+    
     const response = await fetch(`${API_BASE}/api/tables/${tableId}/rows`, {
       method: 'POST',
       headers: {
@@ -820,10 +844,19 @@ async function duplicateRow(rowId) {
     
     if (!response.ok) throw new Error('Failed to duplicate');
     
-    showMessage('Shift duplicated!', 'success');
+    const result = await response.json();
+    const savedRow = result.row;
     
-    // Reload fresh data from server to ensure consistency
-    await loadTable();
+    if (savedRow && savedRow._id) {
+      tableData.rows.push(savedRow);
+      renderTableSection();
+      updateCrewCount();
+      showMessage('Shift duplicated!', 'success');
+    } else {
+      // Fallback: reload from server
+      await loadTable();
+      showMessage('Shift duplicated!', 'success');
+    }
   } catch (err) {
     console.error('Duplicate error:', err);
     showMessage('Failed to duplicate shift', 'error');
@@ -1138,12 +1171,8 @@ function makeEditable(cell, row) {
   
   // Update local data only (no API calls)
   const updateValue = async (newValue) => {
-    // Skip if "add new" was already handled by change event
+    // Handle "add new" option
     if (newValue === '__add_new__') {
-      if (addNewHandled) {
-        console.log('⏭️ Skipping __add_new__ (already handled by change event)');
-        return; // Already handled by the change event
-      }
       
       // Fallback: handle it here if change event didn't fire
       if (field === 'name') {
@@ -1235,7 +1264,7 @@ function makeEditable(cell, row) {
   });
 }
 
-// Bulk save all changes to the server
+// Bulk save all changes to the server using single atomic request
 async function saveAllChanges(silent = false) {
   if (!hasUnsavedChanges) {
     if (!silent) {
@@ -1254,109 +1283,76 @@ async function saveAllChanges(silent = false) {
   updateSaveStatus('saving');
   
   try {
-    console.log(`💾 Saving changes: ${changedRows.size} modified, ${deletedRows.size} deleted`);
-    
-    let successCount = 0;
-    let failCount = 0;
-    
-    // Step 1: Handle all updates in parallel (safe - different rows)
-    const updatePromises = [];
+    // Build bulk payload
+    const updates = [];
     for (const rowId of changedRows) {
-      // Skip if this row is also being deleted
-      if (deletedRows.has(rowId)) {
-        console.log(`⏭️ Skipping save for ${rowId} (marked for deletion)`);
-        continue;
-      }
-      
+      if (deletedRows.has(rowId)) continue; // Skip rows marked for deletion
       const row = tableData.rows.find(r => r._id === rowId);
       if (row) {
-        console.log(`📝 Updating row ${rowId}`);
-        updatePromises.push(
-          fetch(`${API_BASE}/api/tables/${tableId}/rows/${rowId}`, {
-            method: 'PUT',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: token
-            },
-            body: JSON.stringify(row)
-          }).then(res => {
-            if (res.ok) {
-              console.log(`✅ Update ${rowId} succeeded`);
-              successCount++;
-            } else {
-              console.error(`❌ Update ${rowId} failed:`, res.status);
-              failCount++;
-            }
-            return res;
-          })
-        );
-      }
-    }
-    
-    // Wait for all updates to complete
-    if (updatePromises.length > 0) {
-      await Promise.all(updatePromises);
-    }
-    
-    // Step 2: Handle deletes SEQUENTIALLY to avoid version conflicts
-    for (const rowId of deletedRows) {
-      console.log(`🗑️ Deleting row ${rowId}`);
-      try {
-        const response = await fetch(`${API_BASE}/api/tables/${tableId}/rows-by-id/${rowId}`, {
-          method: 'DELETE',
-          headers: { Authorization: token }
+        updates.push({
+          rowId: rowId,
+          data: {
+            date: row.date,
+            name: row.name,
+            role: row.role,
+            startTime: row.startTime,
+            endTime: row.endTime,
+            totalHours: row.totalHours,
+            notes: row.notes
+          }
         });
-        
-        if (response.ok) {
-          console.log(`✅ Delete ${rowId} succeeded`);
-          successCount++;
-    } else {
-          const errorText = await response.text();
-          console.error(`❌ Delete ${rowId} failed:`, response.status, errorText);
-          failCount++;
-        }
-      } catch (error) {
-        console.error(`❌ Delete ${rowId} error:`, error);
-        failCount++;
       }
     }
     
-    // Check if we had any operations
-    if (successCount === 0 && failCount === 0) {
+    const deletes = Array.from(deletedRows);
+    
+    const totalOps = updates.length + deletes.length;
+    if (totalOps === 0) {
       console.log('⚠️ No changes to save');
       hasUnsavedChanges = false;
       updateSaveStatus();
-    return;
-  }
-  
-    if (failCount === 0) {
-      console.log(`✅ All ${successCount} changes saved successfully`);
-      
-      // Clear changed tracking
-      changedRows.clear();
-      deletedRows.clear();
-      hasUnsavedChanges = false;
-      
-      // Clear localStorage backup
-      clearLocalStorage();
-      
-      // Update UI
-      updateSaveStatus('saved');
-      
-      if (!silent) {
-        showMessage(`All ${successCount} changes saved successfully`, 'success');
-      }
-      
-      // Don't reload the page for autosave - keeps user in place
-      // Real-time updates will come through sockets when needed
-    } else {
-      throw new Error(`${failCount} of ${successCount + failCount} operations failed`);
+      return;
+    }
+    
+    console.log(`💾 Bulk saving: ${updates.length} updates, ${deletes.length} deletes`);
+    suppressNextSocketEvent(); // Don't reload from our own save
+    
+    const response = await fetch(`${API_BASE}/api/tables/${tableId}/crew-bulk`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: token
+      },
+      body: JSON.stringify({ updates, deletes })
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Bulk save failed: ${response.status} ${errorText}`);
+    }
+    
+    const result = await response.json();
+    console.log(`✅ Bulk save complete: ${result.successCount} operations`);
+    
+    // Clear changed tracking
+    changedRows.clear();
+    deletedRows.clear();
+    hasUnsavedChanges = false;
+    
+    // Clear localStorage backup
+    clearLocalStorage();
+    
+    // Update UI
+    updateSaveStatus('saved');
+    
+    if (!silent) {
+      showMessage(`All changes saved successfully`, 'success');
     }
     
   } catch (error) {
     console.error('❌ Failed to save changes:', error);
     if (!silent) {
-      showMessage('Failed to save some changes. Please try again.', 'error');
+      showMessage('Failed to save changes. Please try again.', 'error');
     }
     updateSaveStatus('unsaved');
   } finally {
@@ -1434,6 +1430,7 @@ async function addRow(date) {
     };
     
     console.log('📝 Adding new row:', newRow);
+    suppressNextSocketEvent(); // Don't reload from our own save
     
     const response = await fetch(`${API_BASE}/api/tables/${tableId}/rows`, {
       method: 'POST',
@@ -1453,19 +1450,17 @@ async function addRow(date) {
     const result = await response.json();
     console.log('✅ Server response:', result);
     
-    // Handle different response formats
-    const savedRow = result.row || result;
+    // Server now returns { row: {...} }
+    const savedRow = result.row;
     
     if (savedRow && savedRow._id) {
       // Ensure date is set correctly
       if (!savedRow.date) {
         savedRow.date = date;
-        console.log('⚠️ Date was missing from server response, using original date:', date);
       }
       
       // Add to local data
       tableData.rows.push(savedRow);
-      console.log('✅ Row added to local data:', savedRow);
       
       // Re-render immediately
       renderTableSection();
@@ -1473,7 +1468,9 @@ async function addRow(date) {
       showMessage('Row added successfully!', 'success');
     } else {
       console.error('❌ Invalid response format:', result);
-      throw new Error('Invalid response from server');
+      // Fallback: reload from server to stay in sync
+      await loadTable();
+      showMessage('Row added!', 'success');
     }
     
   } catch (error) {
@@ -1621,15 +1618,17 @@ async function addDateSection() {
   try {
     showMessage('Adding date...', 'info');
     
-  const newRow = {
-    date,
+    const newRow = {
+      date,
       role: '__placeholder__',
-    name: '',
-    startTime: '',
-    endTime: '',
-    totalHours: 0,
-    notes: ''
-  };
+      name: '',
+      startTime: '',
+      endTime: '',
+      totalHours: 0,
+      notes: ''
+    };
+    
+    suppressNextSocketEvent();
     
     const response = await fetch(`${API_BASE}/api/tables/${tableId}/rows`, {
       method: 'POST',
@@ -1722,6 +1721,7 @@ function handleDrop(targetId, draggedId) {
 async function saveRowOrder() {
   try {
     console.log('🔄 Saving row order...');
+    suppressNextSocketEvent();
     const response = await fetch(`${API_BASE}/api/tables/${tableId}`, {
         method: 'PUT',
         headers: {
@@ -2392,6 +2392,8 @@ async function addDateWithValue(date) {
       totalHours: 0,
       notes: ''
     };
+    
+    suppressNextSocketEvent();
     
     const response = await fetch(`${API_BASE}/api/tables/${tableId}/rows`, {
       method: 'POST',

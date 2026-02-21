@@ -3160,31 +3160,43 @@ app.post('/api/tables/:id/rows', authenticate, async (req, res) => {
   if (!req.params.id || req.params.id === "null") {
     return res.status(400).json({ error: "Invalid table ID" });
   }
-  const table = await Table.findById(req.params.id);
-  if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
-    return res.status(403).json({ error: 'Not authorized or not found' });
+  try {
+    const table = await Table.findById(req.params.id).select('owners leads sharedWith rows');
+    if (!table || !hasEventAccess(table, req.user)) {
+      return res.status(403).json({ error: 'Not authorized or not found' });
+    }
+    table.rows.push(req.body);
+    await table.save();
+    
+    // Return ONLY the newly created row (last one pushed)
+    const newRow = table.rows[table.rows.length - 1];
+    notifyDataChange('crewChanged', null, req.params.id);
+    res.json({ row: newRow });
+  } catch (err) {
+    console.error('Error adding row:', err);
+    res.status(500).json({ error: 'Failed to add row' });
   }
-  table.rows.push(req.body);
-  await table.save();
-  
-  io.emit('crewChanged'); // Notify about crew change
-  res.json(table);
 });
 
 app.put('/api/tables/:id', authenticate, async (req, res) => {
   if (!req.params.id || req.params.id === "null") {
     return res.status(400).json({ error: "Invalid table ID" });
   }
-  const table = await Table.findById(req.params.id);
-  if (!table || !hasEventAccess(table, req.user)) {
-    return res.status(403).json({ error: 'Not authorized or not found' });
+  try {
+    const table = await Table.findById(req.params.id).select('owners leads sharedWith rows');
+    if (!table || !hasEventAccess(table, req.user)) {
+      return res.status(403).json({ error: 'Not authorized or not found' });
+    }
+    table.rows = req.body.rows;
+    await table.save();
+    
+    notifyDataChange('crewChanged', null, req.params.id);
+    notifyDataChange('tableUpdated', null, req.params.id);
+    res.json({ message: 'Table updated' });
+  } catch (err) {
+    console.error('Error updating table rows:', err);
+    res.status(500).json({ error: 'Failed to update table' });
   }
-  table.rows = req.body.rows;
-  await table.save();
-  
-  notifyDataChange('crewChanged', null, req.params.id); // Notify about crew change with tableId
-  notifyDataChange('tableUpdated', null, req.params.id); // Also notify about general table update with tableId
-  res.json({ message: 'Table updated' });
 });
 
 // Helper to ensure _id is a valid ObjectId
@@ -3973,7 +3985,7 @@ app.delete('/api/tables/:id/rows/:index', authenticate, async (req, res) => {
   table.rows.splice(idx, 1);
   await table.save();
   
-  io.emit('crewChanged'); // Notify about crew change
+  notifyDataChange('crewChanged', null, req.params.id); // Notify about crew change with tableId
   res.json({ message: 'Row deleted' });
 });
 
@@ -9396,39 +9408,110 @@ app.put('/api/tables/:id/rows/:rowId', authenticate, async (req, res) => {
   if (!req.params.id || req.params.id === "null" || !req.params.rowId) {
     return res.status(400).json({ error: "Invalid table ID or row ID" });
   }
-  const table = await Table.findById(req.params.id);
-  if (!table || !table.owners.includes(req.user.id)) {
-    return res.status(403).json({ error: 'Not authorized or not found' });
+  try {
+    // Use atomic MongoDB update to avoid version conflicts
+    const result = await Table.updateOne(
+      { _id: req.params.id, 'rows._id': req.params.rowId, owners: req.user.id },
+      { $set: {
+        'rows.$.date': req.body.date,
+        'rows.$.name': req.body.name,
+        'rows.$.role': req.body.role,
+        'rows.$.startTime': req.body.startTime,
+        'rows.$.endTime': req.body.endTime,
+        'rows.$.totalHours': req.body.totalHours,
+        'rows.$.notes': req.body.notes
+      }}
+    );
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'Row not found or not authorized' });
+    }
+    notifyDataChange('crewChanged', null, req.params.id);
+    res.json({ message: 'Row updated' });
+  } catch (err) {
+    console.error('Error updating row:', err);
+    res.status(500).json({ error: 'Failed to update row' });
   }
-  const rowIndex = table.rows.findIndex(r => r._id && r._id.toString() === req.params.rowId);
-  if (rowIndex === -1) {
-    return res.status(404).json({ error: 'Row not found' });
-  }
-  // Update fields
-  table.rows[rowIndex] = { ...table.rows[rowIndex]._doc, ...req.body, _id: table.rows[rowIndex]._id };
-  await table.save();
-  notifyDataChange('crewChanged', null, req.params.id);
-  notifyDataChange('tableUpdated', null, req.params.id);
-  res.json({ message: 'Row updated' });
 });
 
 app.delete('/api/tables/:id/rows-by-id/:rowId', authenticate, async (req, res) => {
   if (!req.params.id || req.params.id === "null" || !req.params.rowId) {
     return res.status(400).json({ error: "Invalid table ID or row ID" });
   }
-  const table = await Table.findById(req.params.id);
-  if (!table || !table.owners.includes(req.user.id)) {
-    return res.status(403).json({ error: 'Not authorized or not found' });
+  try {
+    // Use atomic MongoDB $pull to avoid version conflicts
+    const result = await Table.updateOne(
+      { _id: req.params.id, owners: req.user.id },
+      { $pull: { rows: { _id: req.params.rowId } } }
+    );
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'Table not found or not authorized' });
+    }
+    notifyDataChange('crewChanged', null, req.params.id);
+    res.json({ message: 'Row deleted' });
+  } catch (err) {
+    console.error('Error deleting row:', err);
+    res.status(500).json({ error: 'Failed to delete row' });
   }
-  const rowIndex = table.rows.findIndex(r => r._id && r._id.toString() === req.params.rowId);
-  if (rowIndex === -1) {
-    return res.status(404).json({ error: 'Row not found' });
+});
+
+// Bulk crew update endpoint - handles multiple updates and deletes in one request
+app.put('/api/tables/:id/crew-bulk', authenticate, async (req, res) => {
+  if (!req.params.id || req.params.id === "null") {
+    return res.status(400).json({ error: "Invalid table ID" });
   }
-  table.rows.splice(rowIndex, 1);
-  await table.save();
-  notifyDataChange('crewChanged', null, req.params.id);
-  notifyDataChange('tableUpdated', null, req.params.id);
-  res.json({ message: 'Row deleted' });
+  try {
+    const { updates, deletes } = req.body;
+    // updates: [{ rowId, data: { name, role, startTime, endTime, totalHours, notes, date } }]
+    // deletes: [rowId, rowId, ...]
+    
+    // Verify ownership once
+    const table = await Table.findById(req.params.id).select('owners');
+    if (!table || !table.owners.includes(req.user.id)) {
+      return res.status(403).json({ error: 'Not authorized or not found' });
+    }
+    
+    let successCount = 0;
+    
+    // Process deletes first (as a single atomic $pull)
+    if (Array.isArray(deletes) && deletes.length > 0) {
+      const deleteIds = deletes.map(id => new mongoose.Types.ObjectId(id));
+      await Table.updateOne(
+        { _id: req.params.id },
+        { $pull: { rows: { _id: { $in: deleteIds } } } }
+      );
+      successCount += deletes.length;
+    }
+    
+    // Process updates one by one using atomic $set (no version conflicts)
+    if (Array.isArray(updates) && updates.length > 0) {
+      for (const { rowId, data } of updates) {
+        if (!rowId || !data) continue;
+        const setFields = {};
+        for (const field of ['date', 'name', 'role', 'startTime', 'endTime', 'totalHours', 'notes']) {
+          if (data[field] !== undefined) {
+            setFields[`rows.$.${field}`] = data[field];
+          }
+        }
+        if (Object.keys(setFields).length > 0) {
+          await Table.updateOne(
+            { _id: req.params.id, 'rows._id': rowId },
+            { $set: setFields }
+          );
+          successCount++;
+        }
+      }
+    }
+    
+    // Single notification after all changes
+    if (successCount > 0) {
+      notifyDataChange('crewChanged', null, req.params.id);
+    }
+    
+    res.json({ message: `${successCount} operations completed`, successCount });
+  } catch (err) {
+    console.error('Error in bulk crew update:', err);
+    res.status(500).json({ error: 'Failed to process bulk update' });
+  }
 });
 
 // PATCH endpoint for partial updates (e.g., crewRates)

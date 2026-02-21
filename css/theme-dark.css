@@ -1828,6 +1828,13 @@ body:has(.events-page) {
   cursor: pointer;
 }
 
+/* Red overflow badge when hidden items include unassigned roles */
+.crew-avatar.overflow-count.overflow-unassigned {
+  background: rgba(220, 38, 38, 0.25);
+  border-color: rgba(220, 38, 38, 0.5);
+  color: #f87171;
+}
+
 .crew-expand-trigger {
   position: static;
 }

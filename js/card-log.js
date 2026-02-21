@@ -2178,17 +2178,17 @@ function calculateSDCards() {
   let tableRows = '';
   let prevCameras = 0;
   let prevExtraCards = 0;
-  let totalCardsNeeded = 0;
+  let totalNewCards = 0;
   
   for (let i = 1; i <= numDays; i++) {
     const cameras = parseInt(document.getElementById(`dayCamera${i}`)?.value || 0);
     const cardsNeeded = cameras * 2;
-    totalCardsNeeded += cardsNeeded;
     
     // For the first day, reuseAvailable is 0. For subsequent days, it's prevCameras + prevExtraCards
     const reuseAvailable = i === 1 ? 0 : prevCameras + prevExtraCards;
     const newCards = Math.max(0, cardsNeeded - reuseAvailable);
     const extraCards = reuseAvailable + newCards - cardsNeeded;
+    totalNewCards += newCards;
     
     tableRows += `
       <tr>
@@ -2206,7 +2206,7 @@ function calculateSDCards() {
   }
   
   const backupsNeeded = numDays * 2;
-  const totalWithBackups = totalCardsNeeded + backupsNeeded;
+  const totalWithBackups = totalNewCards + backupsNeeded;
   
   resultsContainer.innerHTML = `
     <table class="calculator-results-table">
@@ -2227,8 +2227,8 @@ function calculateSDCards() {
     
     <div class="calculator-summary">
       <div class="summary-row">
-        <span class="summary-label">Total Cards Needed</span>
-        <span class="summary-value">${totalCardsNeeded}</span>
+        <span class="summary-label">Cards Needed</span>
+        <span class="summary-value">${totalNewCards}</span>
       </div>
       <div class="summary-row">
         <span class="summary-label">Backups (2/day)</span>

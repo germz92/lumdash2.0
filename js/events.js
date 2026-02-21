@@ -523,8 +523,12 @@ function renderCrewAvatarsDark(crewMembers, totalCount, eventId = null, unassign
       unassignedListItems += `<div class="crew-list-item unassigned-list-item"><div class="crew-list-avatar unassigned"><span class="material-symbols-outlined">person</span></div><span class="crew-list-name">Unassigned</span></div>`;
     }
     
+    // Check if any hidden items in overflow are unassigned
+    const hiddenUnassigned = unassignedCount - unassignedToShow;
+    const overflowHasUnassigned = hiddenUnassigned > 0;
+    
     html += `
-      <div class="crew-avatar overflow-count crew-expand-trigger" data-crew-count="${totalItems}">
+      <div class="crew-avatar overflow-count crew-expand-trigger${overflowHasUnassigned ? ' overflow-unassigned' : ''}" data-crew-count="${totalItems}">
         +${overflow}
         <div class="crew-expanded-view">
           <div class="crew-expanded-header">Crew Members (${totalCount})${unassignedCount > 0 ? ` <span class="unassigned-header-count">+ ${unassignedCount} unassigned</span>` : ''}</div>

@@ -56,6 +56,7 @@ let filterDate = 'all';
 let allNotesVisible = false;
 let isOwner = false;
 let lastKnownEventId = null; // Add this declaration
+let cachedScheduleUsers = []; // Cached user list for photographer auto-suggest
 
 // Store the intended event ID at module level to prevent external interference
 let currentEventId = null;
@@ -92,6 +93,32 @@ function startEventIdMonitoring() {
 function stopEventIdMonitoring() {
   eventIdMonitorActive = false;
   console.log(`[MONITOR] Event ID monitoring stopped`);
+}
+
+// Load registered users for photographer auto-suggest
+async function loadScheduleUsers() {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    const res = await fetch(`${API_BASE}/api/users`, {
+      headers: { Authorization: token }
+    });
+    if (res.ok) {
+      const users = await res.json();
+      // Extract first names, deduplicate, and sort
+      cachedScheduleUsers = users
+        .map(u => {
+          const fullName = u.name || u.fullName || '';
+          return fullName.split(' ')[0].trim();
+        })
+        .filter(Boolean)
+        .filter((name, i, arr) => arr.indexOf(name) === i)
+        .sort((a, b) => a.localeCompare(b));
+      console.log('[SCHEDULE] Loaded', cachedScheduleUsers.length, 'user first names for auto-suggest');
+    }
+  } catch (err) {
+    console.error('[SCHEDULE] Failed to load users for auto-suggest:', err);
+  }
 }
 
 // Only check for changes when actually needed
@@ -308,6 +335,9 @@ window.initPage = async function(id) {
     }
   }
 
+
+  // Load users for photographer auto-suggest (don't await - non-blocking)
+  loadScheduleUsers();
 
   // Load collaborative system first
   await loadCollaborativeSystem();
@@ -5067,7 +5097,11 @@ function makeTableCellEditable(cell, program) {
   const displaySpan = cell.querySelector('.cell-display');
   if (!displaySpan) return;
   
-  const currentValue = program[field] || '';
+  // Read from the live tableData instead of the stale program copy
+  // so that re-clicking a cell after editing shows the updated value
+  const programIndex = parseInt(cell.closest('tr').getAttribute('data-program-index'));
+  const liveProgram = tableData.programs[programIndex] || program;
+  const currentValue = liveProgram[field] || '';
   
   cell.classList.add('editing');
   
@@ -5093,18 +5127,120 @@ function makeTableCellEditable(cell, program) {
   
   inputElement.className = 'inline-edit-input';
   
-  // Save on blur
+  // --- Auto-suggest dropdown for photographer field ---
+  let suggestDropdown = null;
+  let suppressBlur = false; // Flag to prevent blur when clicking a suggestion
+  
+  if (field === 'photographer' && cachedScheduleUsers.length > 0) {
+    // Create the suggestion dropdown container
+    suggestDropdown = document.createElement('div');
+    suggestDropdown.className = 'photographer-suggest-dropdown';
+    cell.appendChild(suggestDropdown);
+    
+    // Helper: get the token currently being typed (text after last comma)
+    function getCurrentToken(value) {
+      const parts = value.split(',');
+      return (parts[parts.length - 1] || '').trim();
+    }
+    
+    // Helper: get all tokens before the current one (text before last comma)
+    function getPrefixTokens(value) {
+      const parts = value.split(',');
+      if (parts.length <= 1) return '';
+      const prefix = parts.slice(0, -1).map(t => t.trim()).filter(Boolean).join(', ');
+      return prefix;
+    }
+    
+    // Helper: build final value by replacing the current token with a selected name
+    function buildValueWithSelection(currentInput, selectedName) {
+      const prefix = getPrefixTokens(currentInput);
+      if (prefix) {
+        return prefix + ', ' + selectedName;
+      }
+      return selectedName;
+    }
+    
+    // Show/update suggestions based on current input
+    function updateSuggestions() {
+      const token = getCurrentToken(inputElement.value).toLowerCase();
+      suggestDropdown.innerHTML = '';
+      
+      if (!token) {
+        suggestDropdown.style.display = 'none';
+        return;
+      }
+      
+      // Get names already entered (to avoid suggesting duplicates)
+      const existingNames = inputElement.value.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+      // Don't include the current token in the "existing" list
+      existingNames.pop();
+      
+      const matches = cachedScheduleUsers.filter(name => {
+        const lowerName = name.toLowerCase();
+        return lowerName.startsWith(token) && !existingNames.includes(lowerName);
+      });
+      
+      if (matches.length === 0) {
+        suggestDropdown.style.display = 'none';
+        return;
+      }
+      
+      matches.forEach(name => {
+        const item = document.createElement('div');
+        item.className = 'photographer-suggest-item';
+        item.textContent = name;
+        
+        // Use mousedown instead of click so it fires before blur
+        item.addEventListener('mousedown', (e) => {
+          e.preventDefault(); // Prevent focus loss
+          suppressBlur = true;
+          inputElement.value = buildValueWithSelection(inputElement.value, name);
+          suggestDropdown.style.display = 'none';
+          inputElement.focus();
+          // Reset suppressBlur after a tick
+          setTimeout(() => { suppressBlur = false; }, 0);
+        });
+        
+        suggestDropdown.appendChild(item);
+      });
+      
+      suggestDropdown.style.display = 'block';
+    }
+    
+    // Update suggestions as user types
+    inputElement.addEventListener('input', updateSuggestions);
+    
+    // Show suggestions on focus if there's already a token being typed
+    inputElement.addEventListener('focus', () => {
+      setTimeout(updateSuggestions, 0);
+    });
+  }
+  
+  // --- Save on blur ---
   inputElement.addEventListener('blur', () => {
-    const newValue = inputElement.value;
-    const programIndex = parseInt(cell.closest('tr').getAttribute('data-program-index'));
+    // If the user clicked a suggestion, don't blur yet
+    if (suppressBlur) return;
+    
+    // Clean up the suggest dropdown
+    if (suggestDropdown) {
+      suggestDropdown.remove();
+      suggestDropdown = null;
+    }
+    
+    // Clean up trailing commas and extra spaces for photographer field
+    let newValue = inputElement.value;
+    if (field === 'photographer') {
+      newValue = newValue.split(',').map(t => t.trim()).filter(Boolean).join(', ');
+    }
     
     if (newValue !== currentValue) {
-      // Update the program
+      // Update the program in the live data
       const wasChanged = safeUpdateProgram(programIndex, field, newValue);
       if (wasChanged) {
         // Use atomic save if program has ID
-        if (program._id) {
-          atomicSaveField(inputElement, field, program._id, newValue, currentValue)
+        const liveProgramId = tableData.programs[programIndex] && tableData.programs[programIndex]._id;
+        if (liveProgramId) {
+          atomicSaveField(inputElement, field, liveProgramId, newValue, currentValue)
             .then(() => console.log(`[TABLE VIEW] Saved ${field} for program ${programIndex}`))
             .catch(err => {
               console.error(`[TABLE VIEW] Failed to save ${field}:`, err);
@@ -5127,7 +5263,15 @@ function makeTableCellEditable(cell, program) {
   if (inputElement.tagName !== 'TEXTAREA') {
     inputElement.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
+        if (suggestDropdown) {
+          suggestDropdown.style.display = 'none';
+        }
         inputElement.blur();
+      }
+      if (e.key === 'Escape') {
+        if (suggestDropdown) {
+          suggestDropdown.style.display = 'none';
+        }
       }
     });
   }

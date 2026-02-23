@@ -236,6 +236,14 @@ const tableSchema = new mongoose.Schema({
       updatedAt: { type: Date, default: Date.now }
     }
   ],
+  // Badges marked as "not required" for this event (e.g. flights, hotel, share, schedule, gear)
+  badgesNotRequired: {
+    flight: { type: Boolean, default: false },
+    hotel: { type: Boolean, default: false },
+    share: { type: Boolean, default: false },
+    schedule: { type: Boolean, default: false },
+    gear: { type: Boolean, default: false }
+  },
   archived: { type: Boolean, default: false },
   // Admin-only notes for this event/table (Google Keep style)
   adminNotes: [

@@ -538,6 +538,18 @@ function renderEventRow(event, index) {
               <span class="material-symbols-outlined">archive</span>
               Archive
             </button>
+            ${(() => {
+              try {
+                const tkn = localStorage.getItem('token');
+                const p = JSON.parse(atob(tkn.split('.')[1]));
+                const uid = p.id || p._id || p.userId;
+                const alreadyOwner = Array.isArray(event.owners) && event.owners.some(o => (typeof o === 'string' ? o : (o && o._id)) === uid);
+                if (p.role === 'admin' && !alreadyOwner) {
+                  return `<button class="action-item" onclick="addMeAsOwner('${event._id}')"><span class="material-symbols-outlined">person_add</span> Add Me as Owner</button>`;
+                }
+              } catch(e) {}
+              return '';
+            })()}
           </div>
         </div>
       </td>
@@ -681,12 +693,37 @@ document.addEventListener('keydown', function(e) {
   }
 });
 
+async function addMeAsOwner(eventId) {
+  const token = localStorage.getItem('token');
+  const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : (window.API_BASE || '');
+  try {
+    const res = await fetch(`${apiBase}/api/tables/${eventId}/add-me-as-owner`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: token
+      }
+    });
+    const data = await res.json();
+    if (res.ok) {
+      if (typeof showToast === 'function') showToast('You are now an owner of this event!', 'success');
+      if (typeof loadTables === 'function') loadTables();
+    } else {
+      if (typeof showToast === 'function') showToast(data.error || 'Failed to add as owner', 'error');
+    }
+  } catch (err) {
+    console.error('Error adding self as owner:', err);
+    if (typeof showToast === 'function') showToast('Failed to add as owner. Please try again.', 'error');
+  }
+}
+
 // Make functions globally available (modal functions are in events.js)
 window.renderEventRow = renderEventRow;
 window.openEvent = openEvent;
 window.toggleEventMenu = toggleEventMenu;
 window.archiveEvent = archiveEvent;
 window.addToCalendar = addToCalendar;
+window.addMeAsOwner = addMeAsOwner;
 
 // Initialize Luma AI chat for dashboard
 // Run immediately since this script runs after page injection in SPA

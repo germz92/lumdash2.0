@@ -34,6 +34,134 @@ function getUserIdFromToken() {
 }
 
 // ========================================
+// BADGE NOT-REQUIRED HELPERS
+// ========================================
+
+// Determine badge CSS class based on condition met and not-required status
+function getBadgeClass(badgeType, conditionMet, badgesNotRequired) {
+  const notRequired = badgesNotRequired && badgesNotRequired[badgeType];
+  if (notRequired) return 'badge-not-required';
+  if (!conditionMet) return 'badge-inactive';
+  return '';
+}
+
+// Build title/tooltip for badges
+function getBadgeTitle(badgeType, conditionMet, badgesNotRequired, count) {
+  const notRequired = badgesNotRequired && badgesNotRequired[badgeType];
+  const labels = {
+    flight: { active: `${count || 0} passenger${count !== 1 ? 's' : ''} with flights`, inactive: 'No flights', notRequired: 'Flights — Not required' },
+    hotel: { active: `${count || 0} hotel booking${count !== 1 ? 's' : ''}`, inactive: 'No accommodations', notRequired: 'Hotels — Not required' },
+    share: { active: `Shared with ${count || 0} ${count === 1 ? 'person' : 'people'}`, inactive: 'Not shared', notRequired: 'Sharing — Not required' },
+    schedule: { active: 'Has program schedule', inactive: 'No schedule', notRequired: 'Schedule — Not required' },
+    gear: { active: 'Has gear reserved', inactive: 'No gear reserved', notRequired: 'Gear — Not required' }
+  };
+  const l = labels[badgeType] || {};
+  if (notRequired) return l.notRequired || 'Not required';
+  return conditionMet ? (l.active || '') : (l.inactive || '');
+}
+
+// Show right-click context menu on a badge
+function showBadgeContextMenu(e, eventId, badgeType, isCurrentlyNotRequired) {
+  // Remove any existing context menu
+  const existing = document.querySelector('.badge-context-menu');
+  if (existing) existing.remove();
+
+  const badgeLabels = {
+    flight: 'Flights',
+    hotel: 'Hotels',
+    share: 'Sharing',
+    schedule: 'Schedule',
+    gear: 'Gear'
+  };
+  const label = badgeLabels[badgeType] || badgeType;
+
+  const menu = document.createElement('div');
+  menu.className = 'badge-context-menu';
+  
+  if (isCurrentlyNotRequired) {
+    menu.innerHTML = `
+      <div class="menu-item mark-required" onclick="toggleBadgeRequired('${eventId}', '${badgeType}'); this.closest('.badge-context-menu').remove();">
+        <span class="material-symbols-outlined">check_circle</span>
+        Mark ${label} as required
+      </div>
+    `;
+  } else {
+    menu.innerHTML = `
+      <div class="menu-item" onclick="toggleBadgeRequired('${eventId}', '${badgeType}'); this.closest('.badge-context-menu').remove();">
+        <span class="material-symbols-outlined">block</span>
+        Mark ${label} as not required
+      </div>
+    `;
+  }
+
+  document.body.appendChild(menu);
+
+  // Position the menu at cursor, keep within viewport
+  const menuRect = menu.getBoundingClientRect();
+  let left = e.clientX;
+  let top = e.clientY;
+  if (left + menuRect.width > window.innerWidth - 8) left = window.innerWidth - menuRect.width - 8;
+  if (top + menuRect.height > window.innerHeight - 8) top = window.innerHeight - menuRect.height - 8;
+  menu.style.left = left + 'px';
+  menu.style.top = top + 'px';
+
+  // Close on click outside
+  setTimeout(() => {
+    const closeHandler = (evt) => {
+      if (!menu.contains(evt.target)) {
+        menu.remove();
+        document.removeEventListener('click', closeHandler);
+        document.removeEventListener('contextmenu', closeHandler);
+      }
+    };
+    document.addEventListener('click', closeHandler);
+    document.addEventListener('contextmenu', closeHandler);
+  }, 10);
+}
+
+// Toggle badge not-required status via API
+async function toggleBadgeRequired(eventId, badgeType) {
+  try {
+    const res = await fetch(`${API_BASE}/api/tables/${eventId}/badge-required`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ badge: badgeType })
+    });
+    
+    if (!res.ok) {
+      const err = await res.json();
+      showToast(err.error || 'Failed to update badge', 'error');
+      return;
+    }
+    
+    const data = await res.json();
+    const statusLabel = data.notRequired ? 'not required' : 'required';
+    const badgeLabels = { flight: 'Flights', hotel: 'Hotels', share: 'Sharing', schedule: 'Schedule', gear: 'Gear' };
+    showToast(`${badgeLabels[badgeType] || badgeType} marked as ${statusLabel}`, 'success');
+    
+    // Update the cached data and re-render
+    if (cachedTables) {
+      const tableIdx = cachedTables.findIndex(t => t._id === eventId);
+      if (tableIdx !== -1) {
+        if (!cachedTables[tableIdx].badgesNotRequired) {
+          cachedTables[tableIdx].badgesNotRequired = {};
+        }
+        cachedTables[tableIdx].badgesNotRequired[badgeType] = data.notRequired;
+      }
+    }
+    
+    // Re-render
+    loadTables(false);
+  } catch (error) {
+    console.error('Error toggling badge requirement:', error);
+    showToast('Failed to update badge requirement', 'error');
+  }
+}
+
+// ========================================
 // TOAST NOTIFICATION SYSTEM
 // ========================================
 
@@ -366,6 +494,8 @@ async function openEditEventModal(eventId, clickedElement) {
 
 window.openEditEventModal = openEditEventModal;
 window.openShareModal = openShareModal;
+window.showBadgeContextMenu = showBadgeContextMenu;
+window.toggleBadgeRequired = toggleBadgeRequired;
 
 // Row accent colors for dark theme table view
 const rowAccentColors = [
@@ -825,22 +955,22 @@ function renderEventRowDark(table, index, userId) {
     </td>
     <td class="badges-cell">
       <div class="event-badges">
-          <span class="flight-badge ${table.flightCount > 0 ? '' : 'badge-inactive'}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" title="${table.flightCount > 0 ? `${table.flightCount} passenger${table.flightCount !== 1 ? 's' : ''} with flights` : 'No flights'}">
+          <span class="flight-badge ${getBadgeClass('flight', table.flightCount > 0, table.badgesNotRequired)}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'flight', ${!!(table.badgesNotRequired && table.badgesNotRequired.flight)});" title="${getBadgeTitle('flight', table.flightCount > 0, table.badgesNotRequired, table.flightCount)}">
               <span class="material-symbols-outlined">flight</span>
-              ${table.flightCount > 0 ? `<span class="flight-count">${table.flightCount}</span>` : ''}
+              ${table.flightCount > 0 && !table.badgesNotRequired?.flight ? `<span class="flight-count">${table.flightCount}</span>` : ''}
             </span>
-          <span class="hotel-badge ${table.hotelCount > 0 ? '' : 'badge-inactive'}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" title="${table.hotelCount > 0 ? `${table.hotelCount} hotel booking${table.hotelCount !== 1 ? 's' : ''}` : 'No accommodations'}">
+          <span class="hotel-badge ${getBadgeClass('hotel', table.hotelCount > 0, table.badgesNotRequired)}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'hotel', ${!!(table.badgesNotRequired && table.badgesNotRequired.hotel)});" title="${getBadgeTitle('hotel', table.hotelCount > 0, table.badgesNotRequired, table.hotelCount)}">
               <span class="material-symbols-outlined">hotel</span>
-              ${table.hotelCount > 0 ? `<span class="hotel-count">${table.hotelCount}</span>` : ''}
+              ${table.hotelCount > 0 && !table.badgesNotRequired?.hotel ? `<span class="hotel-count">${table.hotelCount}</span>` : ''}
             </span>
-          <span class="share-badge ${table.shareCount > 0 ? '' : 'badge-inactive'}" onclick="event.stopPropagation(); openShareModal('${table._id}');" title="${table.shareCount > 0 ? `Shared with ${table.shareCount} ${table.shareCount === 1 ? 'person' : 'people'}` : 'Not shared'}">
+          <span class="share-badge ${getBadgeClass('share', table.shareCount > 0, table.badgesNotRequired)}" onclick="event.stopPropagation(); openShareModal('${table._id}');" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'share', ${!!(table.badgesNotRequired && table.badgesNotRequired.share)});" title="${getBadgeTitle('share', table.shareCount > 0, table.badgesNotRequired, table.shareCount)}">
               <span class="material-symbols-outlined">send</span>
-              ${table.shareCount > 0 ? `<span class="share-count">${table.shareCount}</span>` : ''}
+              ${table.shareCount > 0 && !table.badgesNotRequired?.share ? `<span class="share-count">${table.shareCount}</span>` : ''}
             </span>
-          <span class="schedule-badge ${table.hasSchedule ? '' : 'badge-inactive'}" onclick="event.stopPropagation(); window.navigate('schedule', '${table._id}'); return false;" title="${table.hasSchedule ? 'Has program schedule' : 'No schedule'}">
+          <span class="schedule-badge ${getBadgeClass('schedule', table.hasSchedule, table.badgesNotRequired)}" onclick="event.stopPropagation(); window.navigate('schedule', '${table._id}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'schedule', ${!!(table.badgesNotRequired && table.badgesNotRequired.schedule)});" title="${getBadgeTitle('schedule', table.hasSchedule, table.badgesNotRequired)}">
               <span class="material-symbols-outlined">calendar_month</span>
             </span>
-          <span class="gear-badge ${table.hasGear ? '' : 'badge-inactive'}" onclick="event.stopPropagation(); window.navigate('gear', '${table._id}'); return false;" title="${table.hasGear ? 'Has gear reserved' : 'No gear reserved'}">
+          <span class="gear-badge ${getBadgeClass('gear', table.hasGear, table.badgesNotRequired)}" onclick="event.stopPropagation(); window.navigate('gear', '${table._id}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'gear', ${!!(table.badgesNotRequired && table.badgesNotRequired.gear)});" title="${getBadgeTitle('gear', table.hasGear, table.badgesNotRequired)}">
               <span class="material-symbols-outlined">photo_camera</span>
             </span>
       </div>

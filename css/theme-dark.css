@@ -1616,6 +1616,71 @@ body:has(.events-page) {
   color: #ef4444 !important;
 }
 
+/* Not-required badge state - blue color for badges that don't apply to the event */
+.event-badges .badge-not-required {
+  color: #3b82f6 !important;
+  opacity: 0.45;
+}
+
+.event-badges .badge-not-required:hover {
+  opacity: 0.7;
+  color: #3b82f6 !important;
+}
+
+/* Override the flight badge active background when not-required */
+.event-badges .flight-badge.badge-not-required {
+  background: transparent;
+  color: #3b82f6 !important;
+}
+
+.event-badges .flight-badge.badge-not-required:hover {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6 !important;
+}
+
+/* Badge context menu */
+.badge-context-menu {
+  position: fixed;
+  z-index: 99999;
+  background: var(--bg-secondary, #1e1e2e);
+  border: 1px solid var(--border-color, #333);
+  border-radius: 8px;
+  padding: 4px 0;
+  min-width: 180px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  animation: badgeMenuFadeIn 0.15s ease;
+}
+
+@keyframes badgeMenuFadeIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.badge-context-menu .menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  cursor: pointer;
+  color: var(--text-primary, #e0e0e0);
+  font-size: 13px;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.badge-context-menu .menu-item:hover {
+  background: var(--bg-hover, rgba(255, 255, 255, 0.06));
+}
+
+.badge-context-menu .menu-item .material-symbols-outlined {
+  font-size: 18px;
+  color: #3b82f6;
+}
+
+.badge-context-menu .menu-item.mark-required .material-symbols-outlined {
+  color: #ef4444;
+}
+
 .event-name .edit-icon {
   color: var(--text-tertiary);
   font-size: 16px;

@@ -892,7 +892,14 @@ function renderEventRowDark(table, index, userId) {
             try {
               const tkn = localStorage.getItem('token');
               const p = JSON.parse(atob(tkn.split('.')[1]));
-              if (['planner', 'admin'].includes(p.role)) {
+              if (p.role === 'admin') {
+                return `
+                  <button class="action-item add-me-owner-action">
+                    <span class="material-symbols-outlined">person_add</span>
+                    Add Me as Owner
+                  </button>
+                `;
+              } else if (p.role === 'planner') {
                 const hasPending = Array.isArray(table.ownerRequests) && 
                   table.ownerRequests.some(r => r.userId === userId && r.status === 'pending');
                 return `
@@ -1057,6 +1064,41 @@ function renderEventRowDark(table, index, userId) {
     }
   });
   
+  const addMeOwnerBtn = row.querySelector('.add-me-owner-action');
+  if (addMeOwnerBtn) {
+    addMeOwnerBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      menu.classList.remove('show');
+      
+      const confirmed = await showConfirm(
+        'Add Yourself as Owner',
+        `Add yourself as an owner of "${table.title}"?`,
+        { confirmText: 'Add Me', type: 'warning' }
+      );
+      if (!confirmed) return;
+      
+      try {
+        const res = await fetch(`${API_BASE}/api/tables/${table._id}/add-me-as-owner`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: token
+          }
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast('You are now an owner of this event!', 'success');
+          loadTables();
+        } else {
+          showToast(data.error || 'Failed to add as owner', 'error');
+        }
+      } catch (err) {
+        console.error('Error adding self as owner:', err);
+        showToast('Failed to add as owner. Please try again.', 'error');
+      }
+    });
+  }
+
   const requestOwnerBtn = row.querySelector('.request-owner-action');
   if (requestOwnerBtn && !requestOwnerBtn.disabled) {
     requestOwnerBtn.addEventListener('click', async (e) => {

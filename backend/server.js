@@ -1215,6 +1215,39 @@ app.post('/api/tables/:id/owner-requests/:requestId/approve', authenticate, asyn
   }
 });
 
+// Admin: Add self as owner (no approval needed)
+app.post('/api/tables/:id/add-me-as-owner', authenticate, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only admins can directly add themselves as owner' });
+    }
+
+    const table = await Table.findById(req.params.id);
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+
+    const userId = req.user.id;
+
+    // Already an owner?
+    if (table.owners.some(id => id.toString() === userId)) {
+      return res.status(400).json({ error: 'You are already an owner of this event' });
+    }
+
+    // Add to owners and remove from leads/sharedWith if present
+    table.owners.push(userId);
+    table.leads = table.leads.filter(id => id.toString() !== userId);
+    table.sharedWith = table.sharedWith.filter(id => id.toString() !== userId);
+
+    await table.save();
+    notifyDataChange('tableUpdated', { tableId: table._id });
+
+    console.log(`🔑 Admin ${userId} added self as owner of event ${req.params.id}`);
+    res.json({ message: 'You have been added as an owner' });
+  } catch (err) {
+    console.error('Error adding admin as owner:', err);
+    res.status(500).json({ error: 'Failed to add as owner' });
+  }
+});
+
 // Deny owner access request
 app.post('/api/tables/:id/owner-requests/:requestId/deny', authenticate, async (req, res) => {
   try {

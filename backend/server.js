@@ -6221,8 +6221,8 @@ app.put('/api/tables/:eventId/gear-lists/:listName/set-current', authenticate, a
       return res.status(404).json({ error: 'Event not found' });
     }
     
-    // Check access
-    if (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id)) {
+    // Check access (owners, leads, sharedWith, and admins)
+    if (!hasEventAccess(table, req.user)) {
       return res.status(403).json({ error: 'Not authorized to access this event' });
     }
     

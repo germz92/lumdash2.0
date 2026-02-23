@@ -2565,6 +2565,54 @@ app.get('/api/tables/:id', authenticate, async (req, res) => {
   res.json(table);
 });
 
+// --- TOGGLE BADGE NOT-REQUIRED STATUS ---
+app.patch('/api/tables/:id/badge-required', authenticate, async (req, res) => {
+  try {
+    const { badge } = req.body; // 'flight', 'hotel', 'share', 'schedule', 'gear'
+    const validBadges = ['flight', 'hotel', 'share', 'schedule', 'gear'];
+    
+    if (!badge || !validBadges.includes(badge)) {
+      return res.status(400).json({ error: 'Invalid badge type. Must be one of: ' + validBadges.join(', ') });
+    }
+    
+    const table = await Table.findById(req.params.id);
+    if (!table) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    
+    // Only owners and admins can toggle badge requirements
+    const isOwner = Array.isArray(table.owners) && table.owners.map(o => o.toString()).includes(req.user.id);
+    const isAdmin = req.user.role === 'admin';
+    
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Only owners and admins can change badge requirements' });
+    }
+    
+    // Initialize badgesNotRequired if it doesn't exist
+    if (!table.badgesNotRequired) {
+      table.badgesNotRequired = {};
+    }
+    
+    // Toggle the badge's not-required status
+    table.badgesNotRequired[badge] = !table.badgesNotRequired[badge];
+    await table.save();
+    
+    notifyDataChange('badgeRequirementChanged', { 
+      badge, 
+      notRequired: table.badgesNotRequired[badge] 
+    }, req.params.id);
+    
+    res.json({ 
+      badge, 
+      notRequired: table.badgesNotRequired[badge],
+      badgesNotRequired: table.badgesNotRequired 
+    });
+  } catch (error) {
+    console.error('Error toggling badge requirement:', error);
+    res.status(500).json({ error: 'Failed to update badge requirement' });
+  }
+});
+
 // --- TASKS ENDPOINTS (COLLABORATIVE TO-DO LIST) ---
 // --- TODO LIST ENDPOINTS ---
 

@@ -47,6 +47,36 @@ if (process.env.OPENAI_API_KEY && process.env.OPENAI_API_KEY !== 'your_openai_ap
   console.log('⚠️  OpenAI API key not configured - chat feature disabled');
 }
 
+// Simple in-memory cache for AI responses (expires after 5 minutes)
+const responseCache = new Map();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+function generateCacheKey(message, tableId, relevantDataHash) {
+  return `${tableId}-${message.toLowerCase().trim()}-${relevantDataHash}`;
+}
+
+function getCachedResponse(cacheKey) {
+  const cached = responseCache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    return cached.response;
+  }
+  responseCache.delete(cacheKey);
+  return null;
+}
+
+function setCachedResponse(cacheKey, response) {
+  responseCache.set(cacheKey, {
+    response: response,
+    timestamp: Date.now()
+  });
+  
+  // Clean old cache entries (simple cleanup)
+  if (responseCache.size > 100) {
+    const oldestKeys = Array.from(responseCache.keys()).slice(0, 20);
+    oldestKeys.forEach(key => responseCache.delete(key));
+  }
+}
+
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -74,8 +104,15 @@ const io = socketIo(server, {
       const allowedOrigins = [
         'https://www.lumdash.app',
         'https://lumdash.app', 
+        'https://beta.lumdash.app',
+        'https://www.beta.lumdash.app',
         'https://spa-lumdash-backend.onrender.com',
+        'https://lumdash-beta-backend.onrender.com',
         'https://germainedavid.github.io',
+        'https://lumquote.com',           // LumQuote Invoice App
+        'https://www.lumquote.com',
+        'http://localhost:8000',          // LumQuote local development
+        'http://127.0.0.1:8000',
         'http://localhost:3000',
         'http://127.0.0.1:3000',
         'http://localhost:5000',
@@ -90,6 +127,9 @@ const io = socketIo(server, {
       
       // For GitHub Pages, allow any github.io domain
       if (origin.includes('.github.io')) return callback(null, true);
+      
+      // For lumdash.app domains (including subdomains like beta.lumdash.app)
+      if (origin.includes('lumdash.app')) return callback(null, true);
       
       // Check explicit allowed origins
       if (allowedOrigins.includes(origin)) return callback(null, true);
@@ -132,6 +172,15 @@ io.on('connection', (socket) => {
     if (tableId) {
       socket.leave(`table-${tableId}`);
       console.log(`Socket.IO: Client ${socket.id} left table room: table-${tableId}`);
+    }
+  });
+  
+  // Join user-specific room for targeted notifications
+  socket.on('joinUserRoom', (userId) => {
+    if (userId) {
+      socket.join(`user-${userId}`);
+      socket.userId = userId;
+      console.log(`Socket.IO: Client ${socket.id} joined user room: user-${userId}`);
     }
   });
   
@@ -567,12 +616,16 @@ const corsOptions = {
     // Allow any origin
     callback(null, true);
   },
-  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+  methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
   credentials: true,
   optionsSuccessStatus: 204,
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  exposedHeaders: ['rndr-id']
+  exposedHeaders: ['rndr-id'],
+  preflightContinue: false
 };
+
+// Handle preflight requests explicitly
+app.options('*', cors(corsOptions));
 app.use(cors(corsOptions));
 app.use(express.json());
 
@@ -607,7 +660,9 @@ async function calculateCartItemAvailability(cartItem, cart, allCartItems) {
   
   // For specific serial requests, just return individual item availability
   if (cartItem.specificSerial) {
-    return inventoryItem.getAvailableQuantity(cart.checkOutDate, cart.checkInDate);
+    return await AtomicReservationService.getAvailableQuantity(
+      inventoryItem._id, cart.checkOutDate, cart.checkInDate
+    );
   }
   
   // For grouped items, calculate availability across all similar items
@@ -618,10 +673,12 @@ async function calculateCartItemAvailability(cartItem, cart, allCartItems) {
     label: { $regex: `^${brand} ${model}`, $options: 'i' }
   });
   
-  // Calculate total available quantity across all similar items (ONLY based on reservations)
+  // Calculate total available quantity using BULLETPROOF atomic service
   let totalAvailable = 0;
   for (const item of similarItems) {
-    totalAvailable += item.getAvailableQuantity(cart.checkOutDate, cart.checkInDate);
+    totalAvailable += await AtomicReservationService.getAvailableQuantity(
+      item._id, cart.checkOutDate, cart.checkInDate
+    );
   }
   
   // For display purposes, show how many MORE can be added for this brand/model
@@ -666,6 +723,80 @@ function notifyDataChange(eventType, additionalData = null, tableId = null) {
   }
 }
 
+// =============================================================================
+// NOTIFICATION SYSTEM - Create & push notifications
+// =============================================================================
+
+/**
+ * Creates a notification in MongoDB and pushes it via Socket.IO.
+ * This is the SINGLE function to call from any endpoint to send a notification.
+ * Non-blocking: catches errors so the parent operation never fails due to notifications.
+ *
+ * @param {Object} opts
+ * @param {string} opts.recipientId  - User ID to notify
+ * @param {string} opts.type         - Notification type (from the enum)
+ * @param {string} opts.title        - Short title
+ * @param {string} opts.message      - Longer description
+ * @param {Object} opts.link         - { page, eventId, params } for navigation
+ * @param {string} opts.actorId      - User who caused the notification
+ * @param {string} opts.eventId      - Related event ID
+ * @param {Object} opts.metadata     - Extra data specific to this type
+ */
+async function createNotification({ recipientId, type, title, message = '', link = {}, actorId = null, eventId = null, metadata = {} }) {
+  try {
+    // Don't notify yourself
+    if (actorId && recipientId && actorId.toString() === recipientId.toString()) return null;
+
+    const NotificationModel = require('./models/Notification');
+    const notification = await NotificationModel.create({
+      recipient: recipientId,
+      type,
+      title,
+      message,
+      link,
+      actor: actorId,
+      eventId,
+      metadata
+    });
+
+    // Populate actor name for the real-time push
+    await notification.populate('actor', 'fullName');
+
+    // Push via Socket.IO (instant delivery if user is online)
+    io.to(`user-${recipientId}`).emit('new-notification', {
+      _id: notification._id,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      link: notification.link,
+      actor: notification.actor,
+      eventId: notification.eventId,
+      metadata: notification.metadata,
+      read: false,
+      createdAt: notification.createdAt
+    });
+
+    console.log(`🔔 Notification created: [${type}] "${title}" → user ${recipientId}`);
+    return notification;
+  } catch (err) {
+    console.error('🔔 Failed to create notification:', err);
+    return null;
+  }
+}
+
+/**
+ * Send the same notification to multiple users at once.
+ * @param {Array<string>} recipientIds - Array of user IDs
+ * @param {Object} opts - Same options as createNotification (minus recipientId)
+ */
+async function createNotificationBulk(recipientIds, opts) {
+  const uniqueIds = [...new Set(recipientIds.map(String))];
+  const results = await Promise.allSettled(
+    uniqueIds.map(id => createNotification({ ...opts, recipientId: id }))
+  );
+  return results.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
+}
+
 const User = require('./models/User');
 const Table = require('./models/Table');
 const GearInventory = require('./models/GearInventory');
@@ -674,6 +805,10 @@ const ReservedGearItem = require('./models/ReservedGearItem');
 const PackageTemplate = require('./models/PackageTemplate');
 const Cart = require('./models/Cart');
 const FolderLog = require('./models/FolderLog');
+const ManualReservation = require('./models/ManualReservation');
+const FlightRequest = require('./models/FlightRequest');
+const Passenger = require('./models/Passenger');
+const Notification = require('./models/Notification');
 
 
 
@@ -710,6 +845,37 @@ function authenticate(req, res, next) {
   });
 }
 
+// Helper function to check if user has access to an event (admin, owner, lead, or shared)
+function hasEventAccess(table, user, requireOwner = false) {
+  if (!table || !user) return false;
+  
+  // Admin users have access to all events
+  if (user.role === 'admin') return true;
+  
+  const userId = user.id;
+  const isOwner = table.owners && table.owners.map(String).includes(userId);
+  
+  if (requireOwner) {
+    return isOwner;
+  }
+  
+  const isLead = table.leads && table.leads.map(String).includes(userId);
+  const isShared = table.sharedWith && table.sharedWith.map(String).includes(userId);
+  
+  return isOwner || isLead || isShared;
+}
+
+// Read-only access check: planners can view all events, but cannot edit unless they are owners/leads/sharedWith
+function hasEventReadAccess(table, user) {
+  if (!table || !user) return false;
+  
+  // Admin and planner users have read access to all events
+  if (user.role === 'admin' || user.role === 'planner') return true;
+  
+  // Otherwise, fall back to normal access check
+  return hasEventAccess(table, user);
+}
+
 // AUTH
 app.post('/api/auth/register', async (req, res) => {
   const { email, password, fullName, role } = req.body; // 🔥 updated
@@ -732,6 +898,73 @@ app.post('/api/auth/login', async (req, res) => {
 
   const token = jwt.sign({ id: user._id, fullName: user.fullName, role: user.role }, process.env.JWT_SECRET);
   res.json({ token, fullName: user.fullName, role: user.role });
+});
+
+// ===========================================
+// AUTH REDIRECT - For Cross-App Authentication
+// Allows external apps (like LumQuote) to get a valid token via redirect
+// Flow: ExternalApp -> LumDash /auth/redirect -> Frontend auth-redirect.html handles the logic
+// ===========================================
+app.get('/auth/redirect', (req, res) => {
+  const { callback, app } = req.query;
+  
+  if (!callback) {
+    return res.status(400).send('Missing callback parameter');
+  }
+  
+  // Validate callback URL is from allowed origins
+  const allowedCallbackDomains = [
+    'lumquote.com',
+    'www.lumquote.com',
+    'localhost',
+    '127.0.0.1'
+  ];
+  
+  try {
+    const callbackUrl = new URL(callback);
+    const isAllowed = allowedCallbackDomains.some(domain => 
+      callbackUrl.hostname === domain || callbackUrl.hostname.endsWith('.' + domain)
+    );
+    
+    if (!isAllowed) {
+      console.log('Auth redirect blocked for domain:', callbackUrl.hostname);
+      return res.status(403).send('Callback domain not allowed');
+    }
+  } catch (e) {
+    return res.status(400).send('Invalid callback URL');
+  }
+  
+  // Redirect to frontend auth-redirect page which handles the token check
+  // (Token is stored in localStorage on the frontend, not accessible from backend)
+  // Use the request's host to determine the correct frontend URL for local development
+  const requestHost = req.get('host');
+  let frontendUrl;
+  
+  if (requestHost && (requestHost.includes('localhost') || requestHost.includes('127.0.0.1'))) {
+    // Local development - use the same host
+    const protocol = req.protocol || 'http';
+    frontendUrl = `${protocol}://${requestHost}`;
+  } else {
+    // Production - use APP_URL or default to beta.lumdash.app
+    frontendUrl = process.env.APP_URL || 'https://beta.lumdash.app';
+  }
+  
+  const redirectUrl = `${frontendUrl}/auth-redirect.html?callback=${encodeURIComponent(callback)}&app=${encodeURIComponent(app || 'external')}`;
+  
+  console.log(`Auth redirect: ${requestHost} -> ${redirectUrl}`);
+  return res.redirect(redirectUrl);
+});
+
+// Verify token endpoint (for external apps to validate tokens)
+app.get('/api/auth/verify', authenticate, (req, res) => {
+  res.json({ 
+    valid: true, 
+    user: {
+      id: req.user.id,
+      fullName: req.user.fullName,
+      role: req.user.role
+    }
+  });
 });
 
 // Forgot Password Endpoint
@@ -782,7 +1015,705 @@ app.post('/api/auth/reset-password', async (req, res) => {
   res.json({ message: 'Password has been reset.' });
 });
 
-// AI CHAT ENDPOINT
+// ========================================
+// NOTIFICATION ENDPOINTS
+// ========================================
+
+// GET /api/notifications — Fetch current user's notifications
+app.get('/api/notifications', authenticate, async (req, res) => {
+  try {
+    const { unreadOnly, limit = 50, offset = 0 } = req.query;
+    
+    const filter = { recipient: req.user.id };
+    if (unreadOnly === 'true') filter.read = false;
+
+    const [notifications, unreadCount] = await Promise.all([
+      Notification.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(Number(offset))
+        .limit(Number(limit))
+        .populate('actor', 'fullName')
+        .lean(),
+      Notification.countDocuments({ recipient: req.user.id, read: false })
+    ]);
+
+    res.json({ notifications, unreadCount });
+  } catch (err) {
+    console.error('Error fetching notifications:', err);
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+
+// PATCH /api/notifications/read-all — Mark all notifications as read
+// IMPORTANT: This must come BEFORE the :id route to avoid "read-all" matching as an :id
+app.patch('/api/notifications/read-all', authenticate, async (req, res) => {
+  try {
+    const result = await Notification.updateMany(
+      { recipient: req.user.id, read: false },
+      { read: true }
+    );
+    res.json({ message: 'All notifications marked as read', modified: result.modifiedCount });
+  } catch (err) {
+    console.error('Error marking all notifications as read:', err);
+    res.status(500).json({ error: 'Failed to mark all as read' });
+  }
+});
+
+// PATCH /api/notifications/:id/read — Mark one notification as read
+app.patch('/api/notifications/:id/read', authenticate, async (req, res) => {
+  try {
+    const notification = await Notification.findOneAndUpdate(
+      { _id: req.params.id, recipient: req.user.id },
+      { read: true },
+      { new: true }
+    );
+    if (!notification) return res.status(404).json({ error: 'Notification not found' });
+    res.json({ notification });
+  } catch (err) {
+    console.error('Error marking notification as read:', err);
+    res.status(500).json({ error: 'Failed to mark as read' });
+  }
+});
+
+// DELETE /api/notifications/:id — Delete a single notification
+app.delete('/api/notifications/:id', authenticate, async (req, res) => {
+  try {
+    const result = await Notification.findOneAndDelete({ _id: req.params.id, recipient: req.user.id });
+    if (!result) return res.status(404).json({ error: 'Notification not found' });
+    res.json({ message: 'Notification deleted' });
+  } catch (err) {
+    console.error('Error deleting notification:', err);
+    res.status(500).json({ error: 'Failed to delete notification' });
+  }
+});
+
+// DELETE /api/notifications — Delete all notifications for current user
+app.delete('/api/notifications', authenticate, async (req, res) => {
+  try {
+    const result = await Notification.deleteMany({ recipient: req.user.id });
+    res.json({ message: 'All notifications deleted', deleted: result.deletedCount });
+  } catch (err) {
+    console.error('Error deleting all notifications:', err);
+    res.status(500).json({ error: 'Failed to delete notifications' });
+  }
+});
+
+// ========================================
+// OWNER ACCESS REQUEST ENDPOINTS
+// ========================================
+
+// Request owner access to an event
+app.post('/api/tables/:id/request-owner', authenticate, async (req, res) => {
+  try {
+    const table = await Table.findById(req.params.id);
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+
+    const userId = req.user.id;
+
+    // Must be a planner or admin to request
+    if (!['planner', 'admin'].includes(req.user.role)) {
+      return res.status(403).json({ error: 'Only planners and admins can request owner access' });
+    }
+
+    // Already an owner?
+    if (table.owners.some(id => id.toString() === userId)) {
+      return res.status(400).json({ error: 'You are already an owner of this event' });
+    }
+
+    // Already have a pending request?
+    const pendingRequest = (table.ownerRequests || []).find(
+      r => r.userId.toString() === userId && r.status === 'pending'
+    );
+    if (pendingRequest) {
+      return res.status(400).json({ error: 'You already have a pending request for this event' });
+    }
+
+    // Add the request
+    table.ownerRequests = table.ownerRequests || [];
+    table.ownerRequests.push({ userId });
+    await table.save();
+
+    // Get the new request's _id
+    const newRequest = table.ownerRequests[table.ownerRequests.length - 1];
+
+    // Notify the primary (first) owner
+    const primaryOwnerId = table.owners[0];
+    if (primaryOwnerId) {
+      const requester = await User.findById(userId).select('fullName');
+      await createNotification({
+        recipientId: primaryOwnerId,
+        type: 'owner_request',
+        title: 'Owner Access Requested',
+        message: `${requester?.fullName || 'A planner'} is requesting owner access to "${table.title || 'an event'}"`,
+        link: { page: 'events', eventId: req.params.id, params: { ownerRequestId: newRequest._id.toString() } },
+        actorId: userId,
+        eventId: req.params.id,
+        metadata: { requestId: newRequest._id.toString(), requesterId: userId, eventTitle: table.title }
+      });
+    }
+
+    console.log(`🔑 Owner access requested by ${userId} for event ${req.params.id}`);
+    res.json({ message: 'Owner access request sent', requestId: newRequest._id });
+  } catch (err) {
+    console.error('Error requesting owner access:', err);
+    res.status(500).json({ error: 'Failed to submit owner access request' });
+  }
+});
+
+// Approve owner access request
+app.post('/api/tables/:id/owner-requests/:requestId/approve', authenticate, async (req, res) => {
+  try {
+    const table = await Table.findById(req.params.id);
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+
+    // Only current owners can approve
+    const isOwner = table.owners.some(id => id.toString() === req.user.id);
+    if (!isOwner) {
+      return res.status(403).json({ error: 'Only event owners can approve owner requests' });
+    }
+
+    // Find the request
+    const request = (table.ownerRequests || []).find(
+      r => r._id.toString() === req.params.requestId && r.status === 'pending'
+    );
+    if (!request) {
+      return res.status(404).json({ error: 'Pending request not found' });
+    }
+
+    // Approve: update request status
+    request.status = 'approved';
+    request.resolvedAt = new Date();
+
+    // Add user to owners (and remove from leads/sharedWith if present)
+    const requesterId = request.userId;
+    if (!table.owners.some(id => id.equals(requesterId))) {
+      table.owners.push(requesterId);
+    }
+    table.leads = table.leads.filter(id => !id.equals(requesterId));
+    table.sharedWith = table.sharedWith.filter(id => !id.equals(requesterId));
+
+    await table.save();
+    notifyDataChange('tableUpdated', { tableId: table._id });
+
+    // Notify the requester
+    await createNotification({
+      recipientId: requesterId,
+      type: 'owner_request_approved',
+      title: 'Owner Access Approved!',
+      message: `Your request for owner access to "${table.title || 'an event'}" has been approved`,
+      link: { page: 'general', eventId: req.params.id },
+      actorId: req.user.id,
+      eventId: req.params.id,
+      metadata: { eventTitle: table.title }
+    });
+
+    console.log(`✅ Owner access approved for user ${requesterId} on event ${req.params.id}`);
+    res.json({ message: 'Owner access approved' });
+  } catch (err) {
+    console.error('Error approving owner request:', err);
+    res.status(500).json({ error: 'Failed to approve owner request' });
+  }
+});
+
+// Admin: Add self as owner (no approval needed)
+app.post('/api/tables/:id/add-me-as-owner', authenticate, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only admins can directly add themselves as owner' });
+    }
+
+    const table = await Table.findById(req.params.id);
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+
+    const userId = req.user.id;
+
+    // Already an owner?
+    if (table.owners.some(id => id.toString() === userId)) {
+      return res.status(400).json({ error: 'You are already an owner of this event' });
+    }
+
+    // Add to owners and remove from leads/sharedWith if present
+    table.owners.push(userId);
+    table.leads = table.leads.filter(id => id.toString() !== userId);
+    table.sharedWith = table.sharedWith.filter(id => id.toString() !== userId);
+
+    await table.save();
+    notifyDataChange('tableUpdated', { tableId: table._id });
+
+    console.log(`🔑 Admin ${userId} added self as owner of event ${req.params.id}`);
+    res.json({ message: 'You have been added as an owner' });
+  } catch (err) {
+    console.error('Error adding admin as owner:', err);
+    res.status(500).json({ error: 'Failed to add as owner' });
+  }
+});
+
+// Deny owner access request
+app.post('/api/tables/:id/owner-requests/:requestId/deny', authenticate, async (req, res) => {
+  try {
+    const table = await Table.findById(req.params.id);
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+
+    // Only current owners can deny
+    const isOwner = table.owners.some(id => id.toString() === req.user.id);
+    if (!isOwner) {
+      return res.status(403).json({ error: 'Only event owners can deny owner requests' });
+    }
+
+    // Find the request
+    const request = (table.ownerRequests || []).find(
+      r => r._id.toString() === req.params.requestId && r.status === 'pending'
+    );
+    if (!request) {
+      return res.status(404).json({ error: 'Pending request not found' });
+    }
+
+    // Deny: update request status
+    request.status = 'denied';
+    request.resolvedAt = new Date();
+    await table.save();
+
+    // Notify the requester
+    await createNotification({
+      recipientId: request.userId,
+      type: 'owner_request_denied',
+      title: 'Owner Access Denied',
+      message: `Your request for owner access to "${table.title || 'an event'}" was denied`,
+      link: { page: 'events' },
+      actorId: req.user.id,
+      eventId: req.params.id,
+      metadata: { eventTitle: table.title }
+    });
+
+    console.log(`❌ Owner access denied for user ${request.userId} on event ${req.params.id}`);
+    res.json({ message: 'Owner access request denied' });
+  } catch (err) {
+    console.error('Error denying owner request:', err);
+    res.status(500).json({ error: 'Failed to deny owner request' });
+  }
+});
+
+// ========================================
+// GLOBAL AI CHAT ENDPOINT (Dashboard - no specific event)
+// IMPORTANT: This must be defined BEFORE /api/chat/:tableId
+// ========================================
+app.post('/api/chat/global', authenticate, async (req, res) => {
+  try {
+    const { message, conversationHistory = [], pageContext = {} } = req.body;
+    
+    if (!message) {
+      return res.status(400).json({ error: 'Message is required' });
+    }
+
+    if (!openai) {
+      return res.status(503).json({ 
+        error: 'AI chat feature is not available. Please configure OpenAI API key.' 
+      });
+    }
+
+    // ========================================
+    // PHASE 1: LOAD COMPREHENSIVE DATA
+    // Load ALL relevant data upfront - let AI do the filtering/reasoning
+    // ========================================
+    
+    const now = new Date();
+    const currentDateTime = {
+      date: now.toISOString().split('T')[0],
+      dayOfWeek: now.toLocaleDateString('en-US', { weekday: 'long' }),
+      time: now.toTimeString().split(' ')[0]
+    };
+
+    // Determine access query based on user role (admins and planners see all events)
+    const accessQuery = (req.user.role === 'admin' || req.user.role === 'planner')
+      ? {} 
+      : { $or: [{ owners: req.user.id }, { sharedWith: req.user.id }, { leads: req.user.id }] };
+    
+    // Load COMPREHENSIVE event data - not just basics
+    const allEvents = await Table.find(accessQuery)
+      .select('title general rows adminNotes programSchedule owners sharedWith todos')
+      .populate('todos.owner', 'fullName email')
+      .populate('todos.createdBy', 'fullName email')
+      .sort({ 'general.start': -1 })
+      .limit(30) // Limit to most recent 30 events to stay within token limits
+      .lean();
+
+    // Build comprehensive knowledge base
+    const knowledgeBase = {
+      // Current context
+      today: currentDateTime.date,
+      dayOfWeek: currentDateTime.dayOfWeek,
+      currentTime: currentDateTime.time,
+      user: {
+        name: req.user.fullName,
+        firstName: req.user.fullName.split(' ')[0],
+        role: req.user.role,
+        email: req.user.email
+      },
+      
+      // Comprehensive event data
+      events: allEvents.map(e => {
+        const isOwnerOrAdmin = req.user.role === 'admin' || e.owners?.includes(req.user.id);
+        
+        return {
+          name: e.title,
+          client: e.general?.client || null,
+          dates: {
+            start: e.general?.start,
+            end: e.general?.end
+          },
+          location: {
+            venue: e.general?.location,
+            city: e.general?.city,
+            state: e.general?.state
+          },
+          // Contacts - valuable for "who is X" or "where does X live" questions
+          contacts: (e.general?.contacts || []).map(c => ({
+            name: c.name,
+            role: c.role,
+            email: c.email,
+            phone: c.number
+          })),
+          // Locations within the event
+          locations: e.general?.locations || [],
+          // Summary/notes that might contain important info
+          summary: e.general?.summary || null,
+          // Admin notes (only for owners/admins)
+          notes: isOwnerOrAdmin ? (e.adminNotes || []).map(n => ({
+            title: n.title,
+            content: n.content,
+            pinned: n.pinned,
+            createdBy: n.createdByName
+          })) : [],
+          // Crew members and their schedules
+          crew: (e.rows || []).slice(0, 20).map(r => ({ // Limit crew to 20 per event
+            name: r.name,
+            role: r.role,
+            date: r.date,
+            callTime: r.startTime,
+            endTime: r.endTime
+          })),
+          // Program schedule (sessions)
+          schedule: (e.programSchedule || []).slice(0, 15).map(s => ({ // Limit sessions
+            name: s.name,
+            date: s.date,
+            startTime: s.startTime,
+            endTime: s.endTime,
+            location: s.location,
+            photographer: s.photographer
+          })),
+          // To-do list / tasks for this event
+          todos: (e.todos || []).map(t => ({
+            task: t.task,
+            status: t.status,
+            dueDate: t.dueDate ? new Date(t.dueDate).toISOString().split('T')[0] : null,
+            assignedTo: t.owner?.fullName || t.owner?.email || 'Unassigned',
+            notes: t.notes
+          }))
+        };
+      }),
+      
+      // User's personal schedule across all events
+      mySchedule: [],
+      
+      // User's tasks across all events (assigned to them or created by them)
+      myTasks: [],
+      
+      // All tasks due today across all events
+      tasksDueToday: [],
+      
+      // Flight information
+      flights: [],
+      myFlights: []
+    };
+    
+    // Collect user's schedule across all events
+    const userFirstName = req.user.fullName.split(' ')[0].toLowerCase();
+    const todayStr = currentDateTime.date; // YYYY-MM-DD format
+    
+    for (const event of allEvents) {
+      // User's crew schedule
+      const userRows = (event.rows || []).filter(r => 
+        r.name?.toLowerCase().includes(userFirstName)
+      );
+      for (const row of userRows) {
+        knowledgeBase.mySchedule.push({
+          event: event.title,
+          date: row.date,
+          role: row.role,
+          callTime: row.startTime,
+          endTime: row.endTime
+        });
+      }
+      
+      // User's tasks (assigned to them or created by them)
+      // Handle both populated and non-populated owner references
+      const userId = req.user.id?.toString();
+      const userEmail = req.user.email?.toLowerCase();
+      const userTasks = (event.todos || []).filter(t => {
+        // Check if owner is populated (object) or just an ObjectId
+        const ownerId = t.owner?._id?.toString() || t.owner?.toString();
+        const ownerEmail = t.owner?.email?.toLowerCase();
+        const createdById = t.createdBy?._id?.toString() || t.createdBy?.toString();
+        const createdByEmail = t.createdBy?.email?.toLowerCase();
+        
+        return ownerId === userId || 
+               createdById === userId ||
+               ownerEmail === userEmail ||
+               createdByEmail === userEmail;
+      });
+      
+      for (const task of userTasks) {
+        const dueDate = task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : null;
+        const isOverdue = dueDate && dueDate < todayStr && task.status !== 'done';
+        knowledgeBase.myTasks.push({
+          event: event.title,
+          task: task.task,
+          status: task.status,
+          dueDate: dueDate,
+          notes: task.notes,
+          overdue: isOverdue
+        });
+        
+        // Check if due today or overdue (status not done)
+        if (task.status !== 'done') {
+          if (dueDate === todayStr) {
+            knowledgeBase.tasksDueToday.push({
+              event: event.title,
+              task: task.task,
+              status: task.status,
+              dueDate: dueDate,
+              notes: task.notes,
+              urgent: false
+            });
+          } else if (dueDate && dueDate < todayStr) {
+            // Overdue task
+            knowledgeBase.tasksDueToday.push({
+              event: event.title,
+              task: task.task,
+              status: task.status,
+              dueDate: dueDate,
+              notes: task.notes,
+              urgent: true,
+              overdue: true
+            });
+          }
+        }
+      }
+    }
+    
+    // For admins: also get ALL incomplete tasks across events (not just their own)
+    if (req.user.role === 'admin') {
+      for (const event of allEvents) {
+        const incompleteTasks = (event.todos || []).filter(t => t.status !== 'done');
+        for (const task of incompleteTasks) {
+          const dueDate = task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : null;
+          
+          // Check if due today or overdue
+          if (dueDate && (dueDate === todayStr || dueDate < todayStr)) {
+            // Avoid duplicates (user's own tasks already added)
+            const alreadyAdded = knowledgeBase.tasksDueToday.some(
+              t => t.task === task.task && t.event === event.title
+            );
+            if (!alreadyAdded) {
+              knowledgeBase.tasksDueToday.push({
+                event: event.title,
+                task: task.task,
+                status: task.status,
+                dueDate: dueDate,
+                notes: task.notes,
+                urgent: dueDate < todayStr,
+                overdue: dueDate < todayStr
+              });
+            }
+          }
+        }
+      }
+    }
+    
+    // Log task counts for debugging
+    console.log(`[Luma] Tasks loaded - myTasks: ${knowledgeBase.myTasks.length}, dueToday: ${knowledgeBase.tasksDueToday.length}`);
+    
+    // Always load flights - they're often relevant context
+    const accessibleEventIds = allEvents.map(e => e._id);
+    let flightQuery;
+    if (req.user.role === 'admin' || req.user.role === 'planner') {
+      flightQuery = { status: { $in: ['pending', 'booked'] } };
+    } else {
+      flightQuery = {
+        $and: [
+          { status: { $in: ['pending', 'booked'] } },
+          {
+            $or: [
+              { createdBy: req.user.id },
+              { 'passengers.name': { $regex: userFirstName, $options: 'i' } },
+              { eventId: { $in: accessibleEventIds } }
+            ]
+          }
+        ]
+      };
+    }
+    
+    const flights = await FlightRequest.find(flightQuery)
+      .sort({ departDate: 1 })
+      .limit(20)
+      .lean();
+    
+    knowledgeBase.flights = flights.map(f => ({
+      event: f.eventName,
+      from: f.from?.city || f.from?.code,
+      to: f.to?.city || f.to?.code,
+      departDate: f.departDate,
+      returnDate: f.returnDate,
+      passengers: f.passengers?.map(p => p.name) || [],
+      airline: f.bookedDetails?.airline || 'TBD',
+      status: f.status,
+      notes: f.notes
+    }));
+    
+    knowledgeBase.myFlights = knowledgeBase.flights.filter(f => 
+      f.passengers.some(p => p.toLowerCase().includes(userFirstName))
+    );
+
+    // ========================================
+    // PHASE 2: INTELLIGENT SYSTEM PROMPT
+    // Teach the AI how to reason across data sources
+    // ========================================
+    
+    const systemPrompt = `You are Luma, an intelligent AI assistant for LumDash - a professional event management platform used by photographers and videographers.
+
+═══════════════════════════════════════════════════════════════
+📅 CURRENT CONTEXT
+═══════════════════════════════════════════════════════════════
+Today: ${currentDateTime.date} (${currentDateTime.dayOfWeek})
+Time: ${currentDateTime.time}
+User: ${req.user.fullName} (${req.user.role})
+
+═══════════════════════════════════════════════════════════════
+🧠 HOW TO REASON ABOUT QUESTIONS
+═══════════════════════════════════════════════════════════════
+
+You have access to comprehensive event data. Here's how to find answers:
+
+**Finding People:**
+- "Where does Monica from Genesys live?" → 
+  1. Find event where client = "Genesys" OR title contains "Genesys"
+  2. Check that event's contacts for "Monica"
+  3. Check that event's notes for mentions of "Monica"
+  4. Look for location/city information
+
+**Finding Information About Events:**
+- Search by event name in the 'name' field
+- Search by client name in the 'client' field
+- Client names may appear in event titles too
+
+**Finding Crew/Staff Info:**
+- Check the 'crew' array within each event
+- For "who's working on X date" → filter crew by date
+- For "what's my call time" → check mySchedule
+
+**Finding Session/Program Info:**
+- Check the 'schedule' array within each event
+- Sessions have names, times, locations, assigned photographer
+
+**Finding Travel Info:**
+- Check 'flights' for all bookings
+- Check 'myFlights' for the current user's flights
+- Passengers array shows who's on each flight
+
+**Finding Tasks/To-Dos:**
+- Check 'myTasks' for all tasks assigned to the current user across all events
+- Check 'tasksDueToday' for tasks due today AND overdue tasks (marked with overdue: true)
+- Each event also has a 'todos' array with all tasks for that event
+- Task status: 'todo' (not started), 'in-progress', 'done'
+- Tasks with overdue: true are PAST their due date - highlight these!
+- Look at dueDate to find overdue or upcoming tasks
+- When asked "what's due today", include BOTH today's tasks AND overdue tasks
+
+**Cross-Referencing:**
+- A person might appear in: contacts, notes, crew, schedule, flight passengers
+- Search ALL relevant fields when looking for a person
+- Client names link events together
+
+═══════════════════════════════════════════════════════════════
+📊 KNOWLEDGE BASE
+═══════════════════════════════════════════════════════════════
+
+${JSON.stringify(knowledgeBase, null, 2)}
+
+═══════════════════════════════════════════════════════════════
+💡 RESPONSE GUIDELINES
+═══════════════════════════════════════════════════════════════
+
+1. **Be thorough**: Search ALL relevant data sources before saying you don't know
+2. **Be specific**: Use exact names, dates, and times from the data
+3. **Be helpful**: If info isn't found, suggest where it might be stored
+4. **Format nicely**: Use readable date formats (February 25, 2026)
+5. **Cite sources**: "According to the notes for the Genesys event..."
+6. **Reason out loud** (briefly): "Looking at the Genesys event contacts..."
+
+If you truly cannot find information after searching all relevant fields, say so clearly and suggest where the user might add that information.`;
+
+    // Build messages with conversation history
+    const messages = [{ role: "system", content: systemPrompt }];
+    
+    // Include recent conversation for context (last 6 messages for better continuity)
+    const recentHistory = conversationHistory.slice(-6);
+    messages.push(...recentHistory);
+    messages.push({ role: "user", content: message });
+
+    // Log knowledge base size for monitoring
+    const kbSize = JSON.stringify(knowledgeBase).length;
+    console.log(`[Luma] Query: "${message.substring(0, 50)}..." | KB Size: ${(kbSize/1024).toFixed(1)}KB | Events: ${knowledgeBase.events.length}`);
+
+    // Set up streaming response
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+      'Access-Control-Allow-Origin': '*'
+    });
+
+    const stream = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: messages,
+      max_tokens: 800, // Increased for more detailed responses
+      temperature: 0.4, // Slightly higher for more natural responses
+      stream: true
+    });
+
+    let fullResponse = '';
+
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || '';
+      if (content) {
+        fullResponse += content;
+        res.write(`data: ${JSON.stringify({ content, done: false })}\n\n`);
+      }
+    }
+
+    res.write(`data: ${JSON.stringify({ content: '', done: true, fullResponse })}\n\n`);
+    res.end();
+
+  } catch (error) {
+    console.error('Global chat error:', error);
+    
+    let errorMessage = 'AI service temporarily unavailable. Please try again.';
+    if (error.status === 429) {
+      errorMessage = 'API quota exceeded. Please try again later.';
+    }
+
+    try {
+      res.write(`data: ${JSON.stringify({ error: errorMessage, done: true })}\n\n`);
+      res.end();
+    } catch (writeError) {
+      if (!res.headersSent) {
+        res.status(500).json({ error: errorMessage });
+      }
+    }
+  }
+});
+
+// AI CHAT ENDPOINT (Event-specific)
 app.post('/api/chat/:tableId', authenticate, async (req, res) => {
   try {
     const { message, conversationHistory = [], pageContext = {} } = req.body;
@@ -805,111 +1736,333 @@ app.post('/api/chat/:tableId', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Table not found' });
     }
     
-    if (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id)) {
+    // Check access: owners, sharedWith, leads, admin, or planner (read access)
+    if (!hasEventReadAccess(table, req.user)) {
       return res.status(403).json({ error: 'Not authorized to access this event' });
     }
+    
+    // Determine if user can see admin-only data (owners and admins only)
+    const canSeeAdminData = isOwner || isAdmin;
 
-    // Collect all event data including new gear inventory system
-    const eventData = {
+    // Improved data collection - include more context but keep it structured
+    const messageKeywords = message.toLowerCase();
+    
+    // Define broader keyword matching for better data inclusion
+    const isScheduleQuery = messageKeywords.match(/schedule|time|when|start|end|session|keynote|presentation|meeting|event|program|agenda/);
+    const isCrewQuery = messageKeywords.match(/crew|team|photographer|people|who|assignment|role|staff|person|name|call/);
+    const isGearQuery = messageKeywords.match(/gear|camera|equipment|lens|light|audio|pack|reserved|inventory|serial/);
+    const isTaskQuery = messageKeywords.match(/task|todo|deadline|complete|done|work|assign/);
+    const isTravelQuery = messageKeywords.match(/travel|flight|hotel|accommodation|transport|airline|check|fly|flying/);
+    const isCardQuery = messageKeywords.match(/card|memory|storage|sd|cf|media/);
+    const isShotQuery = messageKeywords.match(/shot|photo|picture|image|list|checklist|headshot|booth|activation/);
+    const isGeneralQuery = messageKeywords.match(/location|where|address|contact|client|budget|summary|general|info/);
+    
+    // NEW: Cross-event query detection
+    const isCrossEventQuery = messageKeywords.match(/what day is|when is|what events|all events|other events|which events|is .+ working on|working on .+ \d/);
+    const isEventNameQuery = message.match(/(?:what day is(?: the)?|when is(?: the)?)\s+([A-Za-z0-9\s]+?)(?:\s+event|\?|$)/i);
+    
+    // Detect personal queries (questions about the current user)
+    const isPersonalQuery = messageKeywords.match(/\b(i|my|me|am|do i|when do i|what time do i|where do i|should i)\b/) || 
+                            messageKeywords.includes('my call') || 
+                            messageKeywords.includes('my time') ||
+                            messageKeywords.includes('my assignment') ||
+                            messageKeywords.includes('my role');
+
+    const relevantData = {
       eventTitle: table.title,
-      general: table.general || {},
-      programSchedule: table.programSchedule || [],
-      tasks: table.tasks || [],
-      adminNotes: table.adminNotes || [],
-      travel: table.travel || [],
-      accommodation: table.accommodation || [],
-      cardLog: table.cardLog || [],
-      documents: table.documents || [],
-      gear: table.gear || {},
-      shotlists: table.shotlists || [],
-      rows: table.rows || [],
-      currentUser: req.user.fullName
+      currentUser: req.user.fullName,
+      currentDate: new Date().toISOString()
     };
 
-    // Add new gear inventory and reservation data
-    try {
-      // Get reserved gear items for this event
-      const reservedGearItems = await ReservedGearItem.find({ eventId: table._id })
-        .populate('inventoryId', 'label category serial quantity')
-        .populate('userId', 'fullName email')
-        .sort({ createdAt: -1 });
-
-      // Get gear inventory with availability for this event
-      let gearInventoryWithAvailability = [];
-      if (table.gear?.checkOutDate && table.gear?.checkInDate) {
-        const allGearInventory = await GearInventory.find();
-        gearInventoryWithAvailability = allGearInventory.map(item => {
-          const availableQty = item.getAvailableQuantity(table.gear.checkOutDate, table.gear.checkInDate);
-          return {
-            _id: item._id,
-            label: item.label,
-            category: item.category,
-            serial: item.serial,
-            quantity: item.quantity,
-            availableQuantity: availableQty,
-            reservations: item.reservations.map(res => ({
-              eventId: res.eventId,
-              userId: res.userId,
-              quantity: res.quantity,
-              checkOutDate: res.checkOutDate,
-              checkInDate: res.checkInDate
-            }))
-          };
-        });
-      }
-
-      // Group reserved items by category for better AI understanding
-      const reservedGearByCategory = {};
-      reservedGearItems.forEach(item => {
-        if (!reservedGearByCategory[item.category]) {
-          reservedGearByCategory[item.category] = [];
+    // Always include general info as it's often needed for context
+    // Filter sensitive data (budget) for non-admin/non-owner users
+    const generalInfo = { ...(table.general || {}) };
+    if (!canSeeAdminData) {
+      delete generalInfo.budget;
+      delete generalInfo.contractUrl;
+      delete generalInfo.invoiceUrl;
+    }
+    relevantData.general = generalInfo;
+    
+    // Add user-specific context
+    relevantData.currentUser = {
+      id: req.user.id,
+      fullName: req.user.fullName,
+      role: req.user.role,
+      email: req.user.email
+    };
+    
+    // Include data based on broader keyword matching with smart filtering
+    if (isScheduleQuery || messageKeywords.includes('today') || messageKeywords.includes('now') || messageKeywords.includes('next') || messageKeywords.includes('keynote')) {
+      const allSchedule = table.programSchedule || [];
+      
+      // Smart filtering: prioritize relevant items to avoid data truncation
+      const relevantScheduleItems = [];
+      const otherScheduleItems = [];
+      
+      // Extract search terms from the message for better matching
+      const searchTerms = message.toLowerCase()
+        .replace(/[^\w\s]/g, ' ') // Remove punctuation
+        .split(/\s+/)
+        .filter(term => term.length > 2); // Only words longer than 2 chars
+      
+      for (const item of allSchedule) {
+        const itemText = `${item.name || ''} ${item.location || ''} ${item.notes || ''}`.toLowerCase();
+        const isRelevant = searchTerms.some(term => itemText.includes(term));
+        
+        if (isRelevant) {
+          relevantScheduleItems.push(item);
+        } else {
+          otherScheduleItems.push(item);
         }
-        reservedGearByCategory[item.category].push({
-          _id: item._id,
-          brand: item.brand,
-          model: item.model,
-          quantity: item.quantity,
-          serial: item.serial,
-          isPacked: item.isPacked,
-          listName: item.listName,
-          specificSerialRequested: item.specificSerialRequested,
-          reservedBy: item.userId ? {
-            name: item.userId.fullName,
-            email: item.userId.email
-          } : null,
-          inventoryDetails: item.inventoryId ? {
-            label: item.inventoryId.label,
-            totalQuantity: item.inventoryId.quantity,
-            serial: item.inventoryId.serial
-          } : null
-        });
-      });
+      }
+      
+      // Include relevant items first, then add others up to a reasonable limit
+      const maxItems = 25; // Reasonable limit to prevent data truncation
+      relevantData.programSchedule = [
+        ...relevantScheduleItems,
+        ...otherScheduleItems.slice(0, Math.max(0, maxItems - relevantScheduleItems.length))
+      ];
+      
+      console.log(`📅 Including schedule data: ${relevantData.programSchedule.length} items (${relevantScheduleItems.length} relevant, ${Math.min(otherScheduleItems.length, maxItems - relevantScheduleItems.length)} others)`);
+    }
+    
+    if (isCrewQuery || isPersonalQuery || messageKeywords.includes('today') || messageKeywords.includes('assigned')) {
+      const allCrew = table.rows || [];
+      const searchTerms = message.toLowerCase()
+        .replace(/[^\w\s]/g, ' ')
+        .split(/\s+/)
+        .filter(term => term.length > 2);
+      
+      // Filter crew by relevance (name, role, notes) and prioritize current user
+      const userCrew = []; // Current user's call times
+      const relevantCrew = [];
+      const otherCrew = [];
+      
+      for (const member of allCrew) {
+        const memberText = `${member.name || ''} ${member.role || ''} ${member.notes || ''}`.toLowerCase();
+        const isCurrentUser = member.name && member.name.toLowerCase().includes(req.user.fullName.toLowerCase().split(' ')[0]);
+        const isRelevant = searchTerms.some(term => memberText.includes(term));
+        
+        if (isCurrentUser) {
+          userCrew.push(member); // Always include current user's data
+        } else if (isRelevant) {
+          relevantCrew.push(member);
+        } else {
+          otherCrew.push(member);
+        }
+      }
+      
+      const maxCrewItems = 20;
+      relevantData.rows = [
+        ...userCrew, // Current user's call times first
+        ...relevantCrew,
+        ...otherCrew.slice(0, Math.max(0, maxCrewItems - userCrew.length - relevantCrew.length))
+      ];
+      
+      console.log(`👥 Including crew data: ${relevantData.rows.length} items (${userCrew.length} user, ${relevantCrew.length} relevant)`);
+      if (isPersonalQuery) {
+        console.log(`👤 Personal query detected for user: ${req.user.fullName}`);
+      }
+    }
+    
+    if (isGearQuery) {
+      relevantData.gear = table.gear || {};
+    }
+    
+    if (isTaskQuery) {
+      relevantData.tasks = table.tasks || [];
+    }
+    
+    if (isTravelQuery) {
+      relevantData.travel = table.travel || [];
+      relevantData.accommodation = table.accommodation || [];
+      
+      // NEW: Add FlightRequest data for this event
+      try {
+        const flightRequests = await FlightRequest.find({ 
+          eventId: table._id,
+          status: { $in: ['pending', 'booked'] }
+        }).limit(10).lean();
+        
+        relevantData.flightRequests = flightRequests.map(f => ({
+          from: `${f.from?.code || ''} (${f.from?.city || ''})`,
+          to: `${f.to?.code || ''} (${f.to?.city || ''})`,
+          departDate: f.departDate,
+          returnDate: f.returnDate,
+          passengers: f.passengers?.map(p => p.name) || [],
+          status: f.status,
+          airline: f.bookedDetails?.airline || 'TBD',
+          confirmationCode: f.bookedDetails?.confirmationCode || 'Pending',
+          tripType: f.tripType
+        }));
+        console.log(`✈️ Including ${relevantData.flightRequests.length} flight requests`);
+      } catch (flightErr) {
+        console.error('Error fetching flight requests:', flightErr);
+      }
+    }
+    
+    if (isCardQuery) {
+      relevantData.cardLog = table.cardLog || [];
+    }
+    
+    if (isShotQuery) {
+      relevantData.shotlists = table.shotlists || [];
+      relevantData.shotlist = table.shotlist || []; // Legacy single shotlist
+      // Also include schedule for booth/activation sessions
+      if (!relevantData.programSchedule) {
+        relevantData.programSchedule = table.programSchedule || [];
+      }
+    }
 
-      // Add gear inventory data to eventData
-      eventData.gearInventorySystem = {
-        reservedItems: reservedGearByCategory,
-        totalReservedItems: reservedGearItems.length,
-        availableInventory: gearInventoryWithAvailability,
+    // Add documents and admin notes data
+    if (messageKeywords.match(/document|pdf|file|map|floor.*plan|guide|manual/)) {
+      relevantData.documents = table.documents || [];
+    }
+    
+    // Admin notes are only accessible to owners and admins
+    if (messageKeywords.match(/note|admin|important|reminder/) && canSeeAdminData) {
+      relevantData.adminNotes = table.adminNotes || [];
+    }
+
+    // NEW: Cross-event search capability
+    if (isCrossEventQuery || isEventNameQuery) {
+      try {
+        // Get all events the user has access to
+        const accessQuery = req.user.role === 'admin' 
+          ? {} 
+          : { $or: [{ owners: req.user.id }, { sharedWith: req.user.id }, { leads: req.user.id }] };
+        
+        const allEvents = await Table.find(accessQuery)
+          .select('title general.start general.end general.location general.city general.client rows')
+          .lean();
+        
+        // If searching for a specific event by name
+        if (isEventNameQuery) {
+          const searchedName = isEventNameQuery[1].trim().toLowerCase();
+          const matchingEvents = allEvents.filter(e => 
+            e.title?.toLowerCase().includes(searchedName)
+          );
+          relevantData.matchedEvents = matchingEvents.map(e => ({
+            name: e.title,
+            startDate: e.general?.start,
+            endDate: e.general?.end,
+            location: e.general?.location || e.general?.city,
+            client: e.general?.client
+          }));
+          console.log(`🔍 Found ${relevantData.matchedEvents.length} events matching "${searchedName}"`);
+        }
+        
+        // Check if asking about someone's schedule across events
+        const personScheduleMatch = message.match(/is\s+([A-Za-z]+)\s+working\s+(?:on\s+)?(.+?)(?:\?|$)/i);
+        if (personScheduleMatch) {
+          const personName = personScheduleMatch[1].toLowerCase();
+          const dateQuery = personScheduleMatch[2].trim();
+          
+          // Find all crew assignments for this person
+          const personSchedule = [];
+          for (const event of allEvents) {
+            const crewRows = (event.rows || []).filter(r => 
+              r.name?.toLowerCase().includes(personName)
+            );
+            for (const row of crewRows) {
+              personSchedule.push({
+                event: event.title,
+                date: row.date,
+                role: row.role,
+                startTime: row.startTime,
+                endTime: row.endTime
+              });
+            }
+          }
+          relevantData.personScheduleAcrossEvents = {
+            person: personScheduleMatch[1],
+            searchDate: dateQuery,
+            schedule: personSchedule
+          };
+          console.log(`👤 Found ${personSchedule.length} schedule entries for "${personScheduleMatch[1]}"`);
+        }
+        
+        // Include summary of all events for context
+        relevantData.allEventsOverview = allEvents.slice(0, 15).map(e => ({
+          name: e.title,
+          startDate: e.general?.start,
+          endDate: e.general?.end,
+          location: e.general?.city || e.general?.location
+        }));
+        
+      } catch (crossEventErr) {
+        console.error('Error fetching cross-event data:', crossEventErr);
+      }
+    }
+
+    // For general questions or when no specific keywords match, include core data (limited)
+    if (!isScheduleQuery && !isCrewQuery && !isGearQuery && !isTaskQuery && !isTravelQuery && !isCardQuery && !isShotQuery) {
+      // Include minimal core data for general questions
+      relevantData.programSchedule = (table.programSchedule || []).slice(0, 3);
+      relevantData.rows = (table.rows || []).slice(0, 3);
+      relevantData.tasks = (table.tasks || []).slice(0, 3);
+      relevantData.documents = (table.documents || []).slice(0, 2);
+      console.log(`📊 General query: Including minimal core data`);
+    }
+
+    // Generate cache key for this request
+    const crypto = require('crypto');
+    const relevantDataHash = crypto.createHash('md5').update(JSON.stringify(relevantData)).digest('hex').substring(0, 8);
+    const cacheKey = generateCacheKey(message, tableId, relevantDataHash);
+    
+    // Check cache for common queries (don't cache personalized responses)
+    if (!message.toLowerCase().includes(req.user.fullName.split(' ')[0].toLowerCase())) {
+      const cachedResponse = getCachedResponse(cacheKey);
+      if (cachedResponse) {
+        // Send cached response
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+        });
+        
+        res.write(`data: ${JSON.stringify({ content: cachedResponse, done: true, fullResponse: cachedResponse })}\n\n`);
+        res.end();
+        return;
+      }
+    }
+
+    // Add gear inventory data if gear-related query
+    if (isGearQuery) {
+      try {
+        // Get reserved gear items for this event (limited for performance)
+        const reservedGearItems = await ReservedGearItem.find({ eventId: table._id })
+          .populate('inventoryId', 'label category')
+          .populate('userId', 'fullName')
+          .limit(15) // Limit to reduce response time
+          .sort({ createdAt: -1 });
+
+        // Simplified gear data
+        relevantData.gearInventorySystem = {
+          packingProgress: {
+            totalItems: reservedGearItems.length,
+            packedItems: reservedGearItems.filter(item => item.isPacked).length
+          },
+          recentReservations: reservedGearItems.slice(0, 8).map(item => ({
+            item: `${item.brand || 'Unknown'} ${item.model || 'Unknown'}`,
+            category: item.category,
+            reservedBy: item.userId?.fullName,
+            packed: item.isPacked,
+            serial: item.serial
+          })),
         eventDates: {
           checkOutDate: table.gear?.checkOutDate,
           checkInDate: table.gear?.checkInDate
-        },
-        packingProgress: {
-          totalItems: reservedGearItems.length,
-          packedItems: reservedGearItems.filter(item => item.isPacked).length,
-          unpackedItems: reservedGearItems.filter(item => !item.isPacked).length
         }
       };
 
     } catch (gearError) {
-      console.error('Error loading gear inventory data for chat:', gearError);
-      // Don't fail the entire chat if gear data fails to load
-      eventData.gearInventorySystem = {
-        error: 'Unable to load gear inventory data',
-        reservedItems: {},
-        totalReservedItems: 0,
-        availableInventory: []
-      };
+        console.error('Error fetching gear inventory:', gearError);
+        relevantData.gearInventorySystem = { error: 'Gear data unavailable' };
+      }
     }
 
     // Get current date and time information
@@ -944,78 +2097,162 @@ app.post('/api/chat/:tableId', authenticate, async (req, res) => {
       }
     }
 
-    // Create context-aware prompt with better personality and instructions
-    const systemPrompt = `You are Luma, an AI assistant specialized in event photography and production management. You're helping manage the event "${table.title}".
+    // Check data size and truncate if too large to prevent token limit issues
+    const dataString = JSON.stringify(relevantData);
+    const dataSize = dataString.length;
+    
+    console.log(`📊 Data size for query: ${dataSize} characters`);
+    
+    // If data is too large, use minimal version to prevent errors
+    let finalData = relevantData;
+    if (dataSize > 6000) { // More conservative limit to prevent truncation
+      console.log('⚠️  Data too large, using minimal version');
+      finalData = {
+        eventTitle: table.title,
+        currentUser: req.user.fullName,
+        currentDate: new Date().toISOString(),
+        general: {
+          location: table.general?.location,
+          start: table.general?.start,
+          end: table.general?.end,
+          client: table.general?.client
+        },
+        dataStatus: `Full data available but truncated due to size (${dataSize} chars). Ask more specific questions.`
+      };
+      
+      // Add small samples of relevant data (preserving smart filtering)
+      if (relevantData.programSchedule?.length > 0) {
+        // Take the first items which should be the most relevant due to our smart filtering
+        finalData.programSchedule = relevantData.programSchedule.slice(0, 5);
+      }
+      if (relevantData.rows?.length > 0) {
+        finalData.rows = relevantData.rows.slice(0, 5);
+      }
+      if (relevantData.tasks?.length > 0) {
+        finalData.tasks = relevantData.tasks.slice(0, 3);
+      }
+    }
 
-CURRENT DATE & TIME CONTEXT:
-- Today's Date: ${currentDateTime.date} (${currentDateTime.dayOfWeek})
-- Current Time: ${currentDateTime.time}
-- Event Status: ${eventStatus}
-${eventDates.start ? `- Event Start Date: ${eventDates.start}` : ''}
-${eventDates.end ? `- Event End Date: ${eventDates.end}` : ''}
+    // Comprehensive system prompt with full event management context
+    const systemPrompt = `You are Luma, the AI assistant for "${table.title}" event management.
 
-USER CONTEXT:
-- Current Page: ${pageContext.currentPage || 'unknown'}
-- Active Tab/Section: ${pageContext.activeTab || 'none'}
-- Browser Language: ${pageContext.browserLanguage || 'en-US'}
+📅 Today: ${currentDateTime.date} (${eventStatus})
+👤 User: ${req.user.fullName} (${req.user.role})
+📄 Current Page: ${pageContext.currentPage || 'dashboard'}
+🔐 Access Level: ${canSeeAdminData ? 'Full (Owner/Admin)' : 'Standard (Team Member)'}
 
-INTRODUCTION: Always introduce yourself as "Hi! I'm Luma, your AI assistant for ${table.title}." when greeting new users or when the conversation starts fresh.
+⚠️ SECURITY NOTE: Only share data that is included in the AVAILABLE DATA section below.
+${!canSeeAdminData ? 'Budget, contract, invoice, and admin notes are restricted for this user.' : ''}
 
-PERSONALITY: Be friendly, professional, and proactive. Think like an experienced event coordinator who understands photography workflows, production schedules, and team coordination. Use time-aware language (e.g., "later today", "tomorrow", "next week").
+🎯 EVENT MANAGEMENT EXPERTISE:
+I understand all aspects of your event:
 
-CONTEXT AWARENESS: This is user ${req.user.fullName}. Remember details from your conversations and build upon them. If someone asks follow-up questions, reference previous parts of the conversation naturally. Be aware of timing relative to the event dates.
+📅 SCHEDULE PAGE (programSchedule) - EVENT RUNDOWN:
+- The actual conference/event sessions and their rundown
+- Contains: session names (keynotes, breakouts, panels, etc.), times, locations, speakers
+- This is the EVENT PROGRAM - what's happening at the event and when
+- Fields: date, name (session title), startTime, endTime, location, photographer, notes, done
+- Search by: session name, speaker, time, location, date
+- Example: "When is the keynote?" → find session where name contains "keynote"
+- Example: "What sessions are in Ballroom A?" → find sessions by location
 
-IMPORTANT: For all times and schedules, display them exactly as they appear in the data without any timezone conversion. Do not adjust times to local timezone - show all times as stored in the system.
+👥 CREW PAGE (rows) - STAFF CALL TIMES:
+- The list of all crew members and when they need to arrive/work
+- This is the CALL SHEET - staff schedules and shift times
+- Contains: crew member names, roles, call times (when to show up), work hours
+- Fields: name, role, date, startTime (call time), endTime, totalHours, notes
+- Search by: person name, role, date, call time
+- Example: "What time do I need to be there?" → find user's call time in rows
+- Example: "Who's working on Feb 25?" → find crew members by date
+- Example: "What's John's call time?" → find row where name = John
 
-EVENT DATA ACCESS:
-${JSON.stringify(eventData, null, 2)}
+📷 GEAR PAGE (gear/gearInventorySystem):
+- Equipment lists, reservations, packing status
+- Categories: Cameras, Lenses, Lighting, Support, Audio, etc.
+- Search by: equipment type, brand, model, serial, packed status
 
-EXPERTISE AREAS & SEARCH GUIDANCE:
-- 📅 SCHEDULE: For timing questions ("when is keynote", "what's next"), search programSchedule array by session name, speaker, or location. Be aware of current time and suggest what's happening now/next.
-- 👥 CREW: For team questions ("who's shooting", "photographer assignments"), check rows array for crew assignments and schedules. Consider current date for active assignments.
-- 📷 GEAR INVENTORY: For equipment questions ("what cameras", "lens list", "gear availability"), use the NEW gearInventorySystem data:
-  * Reserved gear: Check gearInventorySystem.reservedItems by category (Camera, Lenses, Lighting, Support, Audio, etc.)
-  * Availability: Use gearInventorySystem.availableInventory to show what's available for the event dates
-  * Packing status: Reference gearInventorySystem.packingProgress for packing completion
-  * Individual items: Each reserved item shows brand, model, quantity, serial number, and packing status
-  * Reservations: Show which user reserved what equipment and when
-  * Dates: Use gearInventorySystem.eventDates for checkout/checkin information
-- 📦 GEAR LEGACY: For older gear list questions, also check gear.lists by category (for backwards compatibility)
-- 💾 CARDS: For memory card tracking ("card status", "which cards used"), check cardLog array by date. Use current date to show today's card usage.
-- 🗺️ MAPS/DOCS: For location/document questions ("floor plan", "venue map"), search documents array by filename and type
-- 📸 SHOTLISTS: For shot planning questions ("what shots needed", "photo checklist", "which shots completed"), check shotlists array by list name and shot items. Prioritize based on event timing.
-- ✈️ LOGISTICS: For travel/accommodation ("hotel info", "flight details"), check travel and accommodation arrays. Alert about upcoming departures/arrivals.
-- ✅ TASKS: For to-do items ("what needs doing", "deadlines"), review tasks array. Prioritize by urgency relative to current date and event dates.
+✅ TASKS PAGE (tasks):
+- To-do items with deadlines and completion status
+- Search by: title keywords, deadline dates, completion status
 
-CONTEXTUAL INTELLIGENCE:
-- Weather Awareness: If someone asks about outdoor shoots, remind them to check weather
-- Pre-Event Phase: Focus on preparation, planning, gear checks, team coordination
-  * Gear: Emphasize reservation completion, packing preparation, serial number verification
-  * Remind about gear checkout dates and availability conflicts
-- During Event: Focus on real-time coordination, troubleshooting, schedule adjustments
-  * Gear: Monitor packing status, track missing items, coordinate equipment sharing
-  * Check for unpacked items that might be needed soon
-- Post-Event: Focus on wrap-up tasks, file organization, equipment returns
-  * Gear: Remind about check-in dates, verify all items are accounted for
-  * Help with post-event gear inventory reconciliation
+✈️ TRAVEL & ACCOMMODATION (travel/accommodation/flightRequests):
+- Flight details, hotel bookings, transportation
+- FlightRequests: Official flight bookings with status (pending/booked)
+- Search by: person name, dates, airline, hotel, confirmation numbers
+- For "when do I fly in?" check flightRequests for passenger matching user
 
-RESPONSE STYLE:
-- Be conversational but precise
-- Use relevant emojis sparingly for clarity
-- Provide specific times, names, and details when available
-- Reference time context naturally ("Since it's Monday morning..." or "With the event starting tomorrow...")
-- If information is missing, suggest exactly where/how to add it
-- Offer proactive help ("Also, I notice..." or "You might also want to know...")
-- Alert about time-sensitive items (deadlines approaching, schedules starting soon)
-- Keep responses under 200 words unless detailed explanations are needed`;
+💾 CARD LOG (cardLog):
+- Memory card usage tracking by date and person
+- Search by: date, card type, person, usage status
+
+📸 SHOTLIST PAGE (shotlists):
+- Photo checklists with completion tracking
+- Search by: shot type, completion status, list name
+
+📄 DOCUMENTS (documents):
+- PDFs, maps, floor plans, guides
+- Search by: filename, type, upload date
+
+📝 NOTES (adminNotes):
+- Important reminders and administrative notes
+- Search by: date, content, importance
+
+🏢 GENERAL INFO (general):
+- Event location, dates, client, budget, contacts, attendees
+- Core event details and contact information
+
+🔍 SMART SEARCH RULES:
+1. Always search the exact data below for answers
+2. Understand relationships: link crew to schedule, gear to crew, etc.
+3. Be time-aware: prioritize current/upcoming items
+4. Cross-reference data: if someone asks about "today's photographer", check both schedule and crew
+5. Use specific details: times, names, locations, dates
+6. If data missing, suggest which page/section to check
+
+🧠 INTELLIGENT CROSS-PAGE QUERIES:
+- "Who's shooting the keynote?" → Check schedule for keynote, then crew for photographer
+- "What gear does John need today?" → Check crew for John's assignments, then gear lists
+- "Are we ready for tomorrow's sessions?" → Check schedule + crew assignments + gear packed
+- "What's missing for the 2pm session?" → Check schedule, crew, gear, tasks for that time
+- "Who has the Canon 5D?" → Check gear reservations and crew assignments
+
+🌐 CROSS-EVENT QUERIES (when data available):
+- "What day is the [Event Name]?" → Check matchedEvents or allEventsOverview
+- "Is [Person] working on [Date]?" → Check personScheduleAcrossEvents
+- "What events do I have?" → Check allEventsOverview
+- "When do I fly in?" → Check flightRequests for current user as passenger
+
+📱 PAGE CONTEXT AWARENESS:
+- If on Schedule page: Prioritize schedule-related answers and cross-reference crew
+- If on Crew page: Focus on assignments and link to schedule sessions
+- If on Gear page: Emphasize equipment status and link to crew who need it
+- If on Tasks page: Show deadlines relative to schedule timing
+- Suggest relevant pages: "You can find more details on the [Page Name] page"
+
+💡 PROACTIVE ASSISTANCE:
+- Alert about conflicts: crew assigned to multiple sessions, gear double-booked
+- Remind about deadlines: tasks due before event dates
+- Suggest preparations: gear packing for upcoming sessions
+- Flag missing data: sessions without photographers, unpacked essential gear
+
+👤 PERSONALIZED USER RESPONSES:
+- Recognize when user asks about themselves: "What time do I need to be there?" "Am I working tomorrow?" "What's my call time?"
+- For personal questions, search the crew data (rows) for the current user's name
+- Show user's specific call times, roles, and assignments first
+- Provide personalized context: "Your call time is..." vs "John's call time is..."
+- If user is admin, provide management overview; if user, focus on personal schedule
+- Understand possessive questions: "my call time", "my assignments", "when do I work"
+
+📊 AVAILABLE DATA:
+${JSON.stringify(finalData, null, 2)}`;
 
     // Build messages array with conversation history for context awareness
     const messages = [
       { role: "system", content: systemPrompt }
     ];
     
-    // Add conversation history (keep last 10 messages for context, but not too much to avoid token limits)
-    const recentHistory = conversationHistory.slice(-10);
+    // Add conversation history (keep last 4 messages for context to reduce tokens)
+    const recentHistory = conversationHistory.slice(-4);
     messages.push(...recentHistory);
     
     // Add the current message
@@ -1031,13 +2268,13 @@ RESPONSE STYLE:
     });
 
     const stream = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: "gpt-4o-mini", // Better reasoning, 128K context
       messages: messages,
-      max_tokens: 600, // Increased for more detailed responses
-      temperature: 0.3, // Lower temperature for more consistent/accurate responses
-      presence_penalty: 0.1, // Slight penalty to encourage focused responses
-      frequency_penalty: 0.1, // Slight penalty to avoid repetition
-      stream: true // Enable streaming
+      max_tokens: 500, // Increased for more complete answers
+      temperature: 0.2, // Lower for more focused responses
+      presence_penalty: 0.2,
+      frequency_penalty: 0.1,
+      stream: true
     });
 
     let fullResponse = '';
@@ -1055,8 +2292,26 @@ RESPONSE STYLE:
     res.write(`data: ${JSON.stringify({ content: '', done: true, fullResponse })}\n\n`);
     res.end();
 
+    // Cache the response if it's not personalized
+    if (fullResponse && !message.toLowerCase().includes(req.user.fullName.split(' ')[0].toLowerCase())) {
+      setCachedResponse(cacheKey, fullResponse);
+    }
+
+    // Log for debugging data comprehension issues
+    console.log(`Chat query: "${message}"`);
+    console.log(`Data sections included:`, Object.keys(relevantData));
+    if (relevantData.programSchedule) console.log(`Schedule items: ${relevantData.programSchedule.length}`);
+    if (relevantData.rows) console.log(`Crew rows: ${relevantData.rows.length}`);
+    if (relevantData.tasks) console.log(`Tasks: ${relevantData.tasks.length}`);
+
   } catch (error) {
     console.error('Chat API error:', error);
+    console.error('Error details:', {
+      message: error.message,
+      status: error.status,
+      type: error.type,
+      code: error.code
+    });
     
     // Handle different types of OpenAI errors for streaming
     let errorMessage = 'AI service temporarily unavailable. Please try again later.';
@@ -1065,6 +2320,12 @@ RESPONSE STYLE:
       errorMessage = 'OpenAI quota exceeded. Please add billing to your OpenAI account at platform.openai.com/billing';
     } else if (error.status === 401) {
       errorMessage = 'Invalid OpenAI API key. Please check your configuration.';
+    } else if (error.message?.includes('context_length_exceeded')) {
+      errorMessage = 'Query too complex. Try asking a more specific question.';
+    } else if (error.message?.includes('invalid_request_error')) {
+      errorMessage = 'Invalid request format. Please try a different question.';
+    } else if (error.type === 'invalid_request_error') {
+      errorMessage = 'Request format error. The data might be too large or malformed.';
     }
 
     // Send error as streaming event
@@ -1130,14 +2391,163 @@ app.post('/api/tables', authenticate, async (req, res) => {
   res.json(table);
 });
 
+// ===========================================
+// EXTERNAL EVENT CREATION API
+// Allows external apps (like Invoice App) to create events in LumDash
+// Both apps must share the same JWT_SECRET and users collection
+// ===========================================
+app.post('/api/events/external-create', authenticate, async (req, res) => {
+  try {
+    const { 
+      name,           // Required: Event name
+      startDate,      // Optional: Start date (YYYY-MM-DD or ISO format)
+      endDate,        // Optional: End date (YYYY-MM-DD or ISO format)
+      city,           // Optional: City
+      state,          // Optional: State
+      client,         // Optional: Client name
+      location,       // Optional: Location/venue name
+      externalSource, // Required: Source app identifier (e.g., 'invoice-app')
+      externalId      // Optional: ID from source app for linking/dedup
+    } = req.body;
+    
+    // Validate required fields
+    if (!name || name.trim() === '') {
+      return res.status(400).json({ 
+        success: false,
+        error: 'Event name is required' 
+      });
+    }
+    
+    if (!externalSource) {
+      return res.status(400).json({ 
+        success: false,
+        error: 'externalSource is required (e.g., "invoice-app")' 
+      });
+    }
+    
+    // Check for duplicate (prevent double-transfers)
+    if (externalId) {
+      const existing = await Table.findOne({ 
+        externalId: externalId,
+        externalSource: externalSource 
+      });
+      
+      if (existing) {
+        console.log(`External event already exists: ${existing.title} (${existing._id}) from ${externalSource}:${externalId}`);
+        return res.json({ 
+          success: true, 
+          eventId: existing._id.toString(),
+          alreadyExists: true,
+          message: 'Event already exists',
+          redirectUrl: `/dashboard.html#general?id=${existing._id}`
+        });
+      }
+    }
+    
+    // Create the event
+    const newTable = new Table({
+      title: name.trim(),
+      owners: [req.user.id],
+      leads: [],
+      sharedWith: [],
+      rows: [],
+      externalSource: externalSource,
+      externalId: externalId || null,
+      general: {
+        start: startDate || '',
+        end: endDate || '',
+        city: city || '',
+        state: state || '',
+        client: client || '',
+        location: location || ''
+      },
+      gear: {
+        lists: {
+          Default: {
+            Cameras: [],
+            Lenses: [],
+            Lighting: [],
+            Support: [],
+            Accessories: []
+          }
+        },
+        gearLists: [{
+          name: 'Main List',
+          createdBy: req.user.id,
+          createdAt: new Date()
+        }],
+        currentList: 'Main List'
+      }
+    });
+    
+    await newTable.save();
+    
+    // Notify clients about the new table
+    notifyDataChange('tableCreated', { tableId: newTable._id });
+    
+    console.log(`External event created: "${newTable.title}" (${newTable._id}) by user ${req.user.id} from ${externalSource}${externalId ? `:${externalId}` : ''}`);
+    
+    res.json({ 
+      success: true, 
+      eventId: newTable._id.toString(),
+      alreadyExists: false,
+      message: 'Event created successfully',
+      redirectUrl: `/dashboard.html#general?id=${newTable._id}`
+    });
+    
+  } catch (err) {
+    console.error('External create error:', err);
+    res.status(500).json({ 
+      success: false,
+      error: 'Failed to create event' 
+    });
+  }
+});
+
 app.get('/api/tables', authenticate, async (req, res) => {
-  const tables = await Table.find({
-    $or: [
-      { owners: req.user.id }, // ✅ use correct field name
-      { sharedWith: req.user.id }
-    ]
-  });
-  res.json(tables);
+  try {
+    // Get the user to check their archived events and role
+    const User = require('./models/User');
+    const user = await User.findById(req.user.id);
+    
+    let tables;
+    
+    // Admin and planner users can see ALL events
+    if (req.user.role === 'admin' || req.user.role === 'planner') {
+      tables = await Table.find({}).populate('owners', 'fullName');
+    } else {
+      // Regular users only see events they own, are shared with, or are leads on
+      tables = await Table.find({
+      $or: [
+        { owners: req.user.id },
+        { sharedWith: req.user.id },
+        { leads: req.user.id }
+      ]
+      }).populate('owners', 'fullName');
+    }
+
+    // Add user-specific archive status to each table
+    const tablesWithUserArchiveStatus = tables.map(table => {
+      const tableObj = table.toObject();
+      // Convert ObjectIds to strings for comparison
+      // Handle case where user.archivedEvents doesn't exist (for existing users in production)
+      const userArchivedEvents = user && user.archivedEvents ? user.archivedEvents : [];
+      const userArchivedIds = userArchivedEvents.map(id => id.toString());
+      tableObj.userArchived = userArchivedIds.includes(table._id.toString());
+      
+      // Extract owner names for display
+      tableObj.ownerNames = (tableObj.owners || [])
+        .filter(owner => owner && owner.fullName)
+        .map(owner => owner.fullName);
+      
+      return tableObj;
+    });
+
+    res.json(tablesWithUserArchiveStatus);
+  } catch (error) {
+    console.error('Error fetching tables:', error);
+    res.status(500).json({ error: 'Failed to fetch tables' });
+  }
 });
 
 app.get('/api/tables/:id', authenticate, async (req, res) => {
@@ -1145,181 +2555,681 @@ app.get('/api/tables/:id', authenticate, async (req, res) => {
     return res.status(400).json({ error: "Invalid table ID" });
   }
   const table = await Table.findById(req.params.id);
-  if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
-    return res.status(403).json({ error: 'Not authorized or not found' });
+  if (!table) {
+    return res.status(404).json({ error: 'Event not found' });
+  }
+  
+  if (!hasEventReadAccess(table, req.user)) {
+    return res.status(403).json({ error: 'Not authorized' });
   }
   res.json(table);
 });
 
 // --- TASKS ENDPOINTS (COLLABORATIVE TO-DO LIST) ---
-app.get('/api/tables/:id/tasks', authenticate, async (req, res) => {
-  const table = await Table.findById(req.params.id);
+// --- TODO LIST ENDPOINTS ---
+
+// Get all todos across all events for the current user
+app.get('/api/tasks/all', authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const isAdmin = req.user.role === 'admin';
+    const myTasksOnly = req.query.myTasks === 'true';
+    
+    // Find all tables the user has access to
+    let query = {};
+    if (!isAdmin) {
+      // Non-admins only see events they have access to
+      query = {
+        $or: [
+          { owners: userId },
+          { leads: userId },
+          { sharedWith: userId }
+        ]
+      };
+    }
+    
+    const tables = await Table.find(query)
+      .populate('todos.owner', 'fullName photo email')
+      .populate('owners', 'fullName')
+      .select('title todos owners general');
+    
+    // Flatten todos from all tables and add event info
+    let allTodos = [];
+    
+    for (const table of tables) {
+      if (!table.todos || table.todos.length === 0) continue;
+      
+      const isOwner = table.owners.some(o => o._id.toString() === userId);
+      
+      for (const todo of table.todos) {
+        // If myTasksOnly filter is on, only include tasks assigned to this user
+        if (myTasksOnly && todo.owner && todo.owner._id.toString() !== userId) {
+          continue;
+        }
+        
+        allTodos.push({
+          _id: todo._id.toString(),
+          task: todo.task,
+          status: todo.status,
+          dueDate: todo.dueDate,
+          owner: todo.owner,
+          notes: todo.notes,
+          createdAt: todo.createdAt,
+          event: {
+            _id: table._id.toString(),
+            title: table.title || 'Untitled Event'
+          },
+          canEdit: isAdmin || isOwner,
+          canChangeStatus: true
+        });
+      }
+    }
+    
+    // Sort by due date (soonest first, nulls last), then alphabetically
+    allTodos.sort((a, b) => {
+      // Handle null due dates (put them last)
+      if (!a.dueDate && !b.dueDate) {
+        return (a.task || '').localeCompare(b.task || '');
+      }
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      
+      const dateCompare = new Date(a.dueDate) - new Date(b.dueDate);
+      if (dateCompare !== 0) return dateCompare;
+      
+      // Secondary sort: alphabetical by task name
+      return (a.task || '').localeCompare(b.task || '');
+    });
+    
+    res.json({ 
+      todos: allTodos,
+      totalCount: allTodos.length,
+      isAdmin
+    });
+  } catch (err) {
+    console.error('Error fetching all todos:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ===========================================
+// PERSONAL TASKS - User-specific general tasks (not tied to events)
+// ===========================================
+const PersonalTask = require('./models/PersonalTask');
+
+// Get all personal tasks for the current user
+app.get('/api/personal-tasks', authenticate, async (req, res) => {
+  try {
+    const tasks = await PersonalTask.find({ user: req.user.id })
+      .sort({ createdAt: -1 });
+    
+    res.json({ tasks });
+  } catch (err) {
+    console.error('Error fetching personal tasks:', err);
+    res.status(500).json({ error: 'Failed to fetch personal tasks' });
+  }
+});
+
+// Create a new personal task
+app.post('/api/personal-tasks', authenticate, async (req, res) => {
+  try {
+    const { task, status, dueDate, notes } = req.body;
+    
+    if (!task || !task.trim()) {
+      return res.status(400).json({ error: 'Task description is required' });
+    }
+    
+    const newTask = new PersonalTask({
+      user: req.user.id,
+      task: task.trim(),
+      status: status || 'todo',
+      dueDate: dueDate || null,
+      notes: notes || ''
+    });
+    
+    await newTask.save();
+    
+    res.status(201).json({ task: newTask });
+  } catch (err) {
+    console.error('Error creating personal task:', err);
+    res.status(500).json({ error: 'Failed to create personal task' });
+  }
+});
+
+// Update a personal task
+app.put('/api/personal-tasks/:id', authenticate, async (req, res) => {
+  try {
+    const { task, status, dueDate, notes } = req.body;
+    
+    const existingTask = await PersonalTask.findOne({ 
+      _id: req.params.id, 
+      user: req.user.id 
+    });
+    
+    if (!existingTask) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    // Update fields if provided
+    if (task !== undefined) existingTask.task = task.trim();
+    if (status !== undefined) existingTask.status = status;
+    if (dueDate !== undefined) existingTask.dueDate = dueDate || null;
+    if (notes !== undefined) existingTask.notes = notes;
+    
+    await existingTask.save();
+    
+    res.json({ task: existingTask });
+  } catch (err) {
+    console.error('Error updating personal task:', err);
+    res.status(500).json({ error: 'Failed to update personal task' });
+  }
+});
+
+// Delete a personal task
+app.delete('/api/personal-tasks/:id', authenticate, async (req, res) => {
+  try {
+    const result = await PersonalTask.findOneAndDelete({ 
+      _id: req.params.id, 
+      user: req.user.id 
+    });
+    
+    if (!result) {
+      return res.status(404).json({ error: 'Task not found' });
+    }
+    
+    res.json({ success: true, message: 'Task deleted' });
+  } catch (err) {
+    console.error('Error deleting personal task:', err);
+    res.status(500).json({ error: 'Failed to delete personal task' });
+  }
+});
+
+// ===========================================
+// CALL TIMES - Get all crew call times across all events
+// ===========================================
+app.get('/api/calltimes/all', authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const userFullName = req.user.fullName;
+    const isAdmin = req.user.role === 'admin';
+    const myCallsOnly = req.query.myCalls === 'true';
+    const statusFilter = req.query.status || 'all'; // 'all', 'live', 'upcoming', 'past'
+    const dateFilter = req.query.dateFilter || 'all'; // 'all', 'this-month', 'last-month', 'last-3-months', 'this-year', 'last-year', 'custom'
+    const customStart = req.query.customStart; // ISO date string
+    const customEnd = req.query.customEnd; // ISO date string
+    
+    // Find all tables the user has access to
+    let query = {};
+    if (!isAdmin) {
+      // Non-admins only see events they have access to
+      query = {
+        $or: [
+          { owners: userId },
+          { leads: userId },
+          { sharedWith: userId }
+        ]
+      };
+    }
+    
+    const tables = await Table.find(query)
+      .populate('owners', 'fullName')
+      .select('title rows general');
+    
+    // Get today's date at midnight for comparisons (local time simulation)
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    
+    // Calculate date filter range
+    let filterStartDate = null;
+    let filterEndDate = null;
+    
+    if (dateFilter === 'this-month') {
+      filterStartDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      filterEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else if (dateFilter === 'last-month') {
+      filterStartDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      filterEndDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+    } else if (dateFilter === 'last-3-months') {
+      filterStartDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+      filterEndDate = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    } else if (dateFilter === 'this-year') {
+      filterStartDate = new Date(now.getFullYear(), 0, 1);
+      filterEndDate = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+    } else if (dateFilter === 'last-year') {
+      filterStartDate = new Date(now.getFullYear() - 1, 0, 1);
+      filterEndDate = new Date(now.getFullYear() - 1, 11, 31, 23, 59, 59, 999);
+    } else if (dateFilter === 'custom' && customStart && customEnd) {
+      filterStartDate = new Date(customStart);
+      filterEndDate = new Date(customEnd);
+      filterEndDate.setHours(23, 59, 59, 999);
+    }
+    
+    // Helper to parse date string as local date
+    function parseLocalDate(dateStr) {
+      if (!dateStr) return null;
+      const match = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (match) {
+        const [, year, month, day] = match;
+        return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0);
+      }
+      return new Date(dateStr);
+    }
+    
+    // Flatten call times from all tables
+    let allCallTimes = [];
+    
+    for (const table of tables) {
+      if (!table.rows || table.rows.length === 0) continue;
+      
+      for (const row of table.rows) {
+        // Skip if name doesn't exist
+        if (!row.name) continue;
+        
+        // If myCallsOnly filter is on, only include calls for this user
+        if (myCallsOnly && row.name.toLowerCase() !== userFullName.toLowerCase()) {
+          continue;
+        }
+        
+        // For non-admins, only show their own call times
+        if (!isAdmin && row.name.toLowerCase() !== userFullName.toLowerCase()) {
+          continue;
+        }
+        
+        // Parse the crew call date
+        const callDate = parseLocalDate(row.date);
+        
+        // Apply status filter based on crew call date
+        if (statusFilter !== 'all' && callDate) {
+          if (statusFilter === 'live') {
+            // Live = call date is today
+            if (callDate < todayStart || callDate > todayEnd) continue;
+          } else if (statusFilter === 'upcoming') {
+            // Upcoming = call date is after today
+            if (callDate <= todayEnd) continue;
+          } else if (statusFilter === 'past') {
+            // Past = call date is before today
+            if (callDate >= todayStart) continue;
+          }
+        }
+        
+        // Apply date range filter
+        if (filterStartDate && filterEndDate && callDate) {
+          if (callDate < filterStartDate || callDate > filterEndDate) continue;
+        }
+        
+        allCallTimes.push({
+          _id: row._id.toString(),
+          name: row.name || '',
+          date: row.date || '',
+          startTime: row.startTime || '',
+          endTime: row.endTime || '',
+          totalHours: row.totalHours || 0,
+          role: row.role || '',
+          notes: row.notes || '',
+          event: {
+            _id: table._id.toString(),
+            title: table.title || 'Untitled Event',
+            city: table.general?.city || '',
+            state: table.general?.state || ''
+          }
+        });
+      }
+    }
+    
+    // Sort by date (soonest first), then by event name
+    allCallTimes.sort((a, b) => {
+      const dateA = a.date ? new Date(a.date) : new Date(0);
+      const dateB = b.date ? new Date(b.date) : new Date(0);
+      const dateCompare = dateA - dateB;
+      if (dateCompare !== 0) return dateCompare;
+      return (a.event.title || '').localeCompare(b.event.title || '');
+    });
+    
+    res.json({ 
+      callTimes: allCallTimes,
+      totalCount: allCallTimes.length,
+      isAdmin
+    });
+  } catch (err) {
+    console.error('Error fetching all call times:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get all todos for a table
+app.get('/api/tables/:id/todos', authenticate, async (req, res) => {
+  try {
+    const table = await Table.findById(req.params.id).populate('todos.owner', 'fullName photo');
   if (!table) return res.status(404).json({ error: 'Table not found' });
-  if (!table.owners.map(String).includes(req.user.id) && !table.sharedWith.map(String).includes(req.user.id)) {
+    if (!hasEventReadAccess(table, req.user)) {
     return res.status(403).json({ error: 'Not authorized' });
   }
-  res.json({ tasks: table.tasks || [] });
+    res.json({ todos: table.todos || [] });
+  } catch (err) {
+    console.error('Error fetching todos:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-app.post('/api/tables/:id/tasks', authenticate, async (req, res) => {
+// Create a new todo (owners and admins only)
+app.post('/api/tables/:id/todos', authenticate, async (req, res) => {
+  try {
   const table = await Table.findById(req.params.id);
   if (!table) return res.status(404).json({ error: 'Table not found' });
-  if (!table.owners.map(String).includes(req.user.id)) {
-    return res.status(403).json({ error: 'Only owners can add tasks' });
+    
+    // Only owners and admins can create todos
+    if (!hasEventAccess(table, req.user, true)) {
+      return res.status(403).json({ error: 'Only owners and admins can add tasks' });
   }
-  const { title, deadline } = req.body;
-  if (!title) return res.status(400).json({ error: 'Title is required' });
-  const task = {
-    title,
-    deadline: deadline || '',
-    completed: false,
-    createdBy: req.user.id
+    
+    const { task, status, dueDate, owner, notes } = req.body;
+    if (!task) return res.status(400).json({ error: 'Task is required' });
+    
+    const newTodo = {
+      task,
+      status: status || 'todo',
+      dueDate: dueDate ? new Date(dueDate) : null,
+      owner: owner || null,
+      notes: notes || '',
+      createdBy: req.user.id,
+      createdAt: new Date(),
+      updatedAt: new Date()
   };
-  table.tasks.push(task);
+    
+    table.todos.push(newTodo);
   await table.save();
-  const newTask = table.tasks[table.tasks.length - 1];
-  notifyDataChange('taskAdded', { task: newTask }, req.params.id);
-  res.json({ task: newTask });
+    
+    // Populate the owner before returning
+    await table.populate('todos.owner', 'fullName photo');
+    const savedTodo = table.todos[table.todos.length - 1];
+    
+    notifyDataChange('todoAdded', { todo: savedTodo }, req.params.id);
+    
+    // 🔔 Notify the assigned user (if different from creator)
+    if (newTodo.owner && newTodo.owner.toString() !== req.user.id) {
+      createNotification({
+        recipientId: newTodo.owner,
+        type: 'task_assigned',
+        title: 'New task assigned to you',
+        message: `"${task}" in ${table.title || 'an event'}`,
+        link: { page: 'todos', eventId: req.params.id },
+        actorId: req.user.id,
+        eventId: req.params.id
+      });
+    }
+    
+    res.json({ todo: savedTodo });
+  } catch (err) {
+    console.error('Error creating todo:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-app.put('/api/tables/:id/tasks/:taskId', authenticate, async (req, res) => {
+// Update a todo
+app.put('/api/tables/:id/todos/:todoId', authenticate, async (req, res) => {
+  try {
   const table = await Table.findById(req.params.id);
   if (!table) return res.status(404).json({ error: 'Table not found' });
-  if (!table.owners.map(String).includes(req.user.id)) {
-    return res.status(403).json({ error: 'Only owners can edit tasks' });
-  }
-  const task = table.tasks.id(req.params.taskId);
-  if (!task) return res.status(404).json({ error: 'Task not found' });
-  if (typeof req.body.title === 'string') task.title = req.body.title;
-  if (typeof req.body.deadline === 'string') task.deadline = req.body.deadline;
-  if (typeof req.body.completed === 'boolean') task.completed = req.body.completed;
+    
+    const todo = table.todos.id(req.params.todoId);
+    if (!todo) return res.status(404).json({ error: 'Todo not found' });
+    
+    const isOwnerOrAdmin = hasEventAccess(table, req.user, true);
+    const isAssignee = todo.owner && todo.owner.toString() === req.user.id;
+    
+    // Regular users can only update status and notes on tasks assigned to them
+    if (!isOwnerOrAdmin && !isAssignee) {
+      return res.status(403).json({ error: 'Not authorized to edit this task' });
+    }
+    
+    // 🔔 Track previous owner for notification
+    const previousOwnerId = todo.owner ? todo.owner.toString() : null;
+    
+    // If not owner/admin, only allow status and notes changes
+    if (!isOwnerOrAdmin) {
+      if (typeof req.body.status === 'string' && ['todo', 'in-progress', 'done'].includes(req.body.status)) {
+        todo.status = req.body.status;
+      }
+      if (typeof req.body.notes === 'string') {
+        todo.notes = req.body.notes;
+      }
+    } else {
+      // Owners/admins can update all fields
+      if (typeof req.body.task === 'string') todo.task = req.body.task;
+      if (typeof req.body.status === 'string' && ['todo', 'in-progress', 'done'].includes(req.body.status)) {
+        todo.status = req.body.status;
+      }
+      if (req.body.dueDate !== undefined) {
+        todo.dueDate = req.body.dueDate ? new Date(req.body.dueDate) : null;
+      }
+      if (req.body.owner !== undefined) {
+        todo.owner = req.body.owner || null;
+      }
+      if (typeof req.body.notes === 'string') {
+        todo.notes = req.body.notes;
+      }
+    }
+    
+    todo.updatedAt = new Date();
   await table.save();
-  notifyDataChange('taskUpdated', { task }, req.params.id);
-  res.json({ task });
+    
+    // Populate owner before returning
+    await table.populate('todos.owner', 'fullName photo');
+    const updatedTodo = table.todos.id(req.params.todoId);
+    
+    notifyDataChange('todoUpdated', { todo: updatedTodo }, req.params.id);
+    
+    // 🔔 Notify if task was reassigned to a new person
+    const newOwnerId = todo.owner ? todo.owner.toString() : null;
+    if (newOwnerId && newOwnerId !== previousOwnerId && newOwnerId !== req.user.id) {
+      createNotification({
+        recipientId: newOwnerId,
+        type: 'task_assigned',
+        title: 'Task assigned to you',
+        message: `"${todo.task}" in ${table.title || 'an event'}`,
+        link: { page: 'todos', eventId: req.params.id },
+        actorId: req.user.id,
+        eventId: req.params.id
+      });
+    }
+    
+    res.json({ todo: updatedTodo });
+  } catch (err) {
+    console.error('Error updating todo:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
-app.delete('/api/tables/:id/tasks/:taskId', authenticate, async (req, res) => {
+// Delete a todo (owners and admins only)
+app.delete('/api/tables/:id/todos/:todoId', authenticate, async (req, res) => {
   try {
     const table = await Table.findById(req.params.id);
     if (!table) return res.status(404).json({ error: 'Table not found' });
-    if (!table.owners.map(String).includes(req.user.id)) {
-      return res.status(403).json({ error: 'Only owners can delete tasks' });
+    
+    if (!hasEventAccess(table, req.user, true)) {
+      return res.status(403).json({ error: 'Only owners and admins can delete tasks' });
     }
-    const taskIndex = table.tasks.findIndex(t => t._id && t._id.toString() === req.params.taskId);
-    if (taskIndex === -1) {
-      console.error(`Task not found: ${req.params.taskId} in table ${req.params.id}`);
-      return res.status(404).json({ error: 'Task not found' });
+    
+    const todoIndex = table.todos.findIndex(t => t._id && t._id.toString() === req.params.todoId);
+    if (todoIndex === -1) {
+      return res.status(404).json({ error: 'Todo not found' });
     }
-    table.tasks.splice(taskIndex, 1);
+    
+    table.todos.splice(todoIndex, 1);
     await table.save();
-    notifyDataChange('taskDeleted', { taskId: req.params.taskId }, req.params.id);
+    
+    notifyDataChange('todoDeleted', { todoId: req.params.todoId }, req.params.id);
     res.json({ success: true });
   } catch (err) {
-    console.error('Error deleting task:', err);
-    res.status(500).json({ error: 'Server error while deleting task' });
+    console.error('Error deleting todo:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
-// --- ADMIN NOTES ENDPOINTS (MULTI-NOTE) ---
-// Get all admin notes for a table (owners only)
+// --- ADMIN NOTES ENDPOINTS (MULTI-NOTE - Google Keep Style) ---
+// Get all admin notes for a table (owners and admins only)
 app.get('/api/tables/:id/admin-notes', authenticate, async (req, res) => {
   const table = await Table.findById(req.params.id);
   if (!table) return res.status(404).json({ error: 'Table not found' });
-  if (!table.owners.map(String).includes(req.user.id)) {
-    return res.status(403).json({ error: 'Only owners can view admin notes' });
+  
+  // Check if user is owner, admin, or planner (read access)
+  const isOwner = table.owners.map(String).includes(req.user.id);
+  const isAdmin = req.user.role === 'admin';
+  const isPlanner = req.user.role === 'planner';
+  
+  if (!isOwner && !isAdmin && !isPlanner) {
+    return res.status(403).json({ error: 'Only owners, admins, and planners can view admin notes' });
   }
   res.json({ adminNotes: table.adminNotes || [] });
 });
 
-// Add a new admin note (owners only)
+// Add a new admin note (owners and admins only)
 app.post('/api/tables/:id/admin-notes', authenticate, async (req, res) => {
-  const table = await Table.findById(req.params.id);
-  if (!table) return res.status(404).json({ error: 'Table not found' });
-  if (!table.owners.map(String).includes(req.user.id)) {
-    return res.status(403).json({ error: 'Only owners can add admin notes' });
+  try {
+    const table = await Table.findById(req.params.id);
+    if (!table) return res.status(404).json({ error: 'Table not found' });
+    
+    // Check if user is owner or admin
+    const isOwner = table.owners.map(String).includes(req.user.id);
+    const isAdmin = req.user.role === 'admin';
+    
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Only owners and admins can add admin notes' });
+    }
+    
+    const { title, content, pinned, color } = req.body;
+    
+    // Get user name for the note
+    const User = require('./models/User');
+    const user = await User.findById(req.user.id);
+    const userName = user ? user.name : 'Unknown';
+    
+    const note = {
+      title: title || '',
+      content: content || '',
+      pinned: pinned || false,
+      color: color || 'default',
+      createdBy: req.user.id,
+      createdByName: userName,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    
+    table.adminNotes.push(note);
+    await table.save();
+    
+    // Notify about notes change with tableId
+    notifyDataChange('notesChanged', null, req.params.id);
+    res.json({ adminNotes: table.adminNotes });
+  } catch (err) {
+    console.error('[ADMIN-NOTES] Error creating note:', err);
+    res.status(500).json({ error: 'Failed to create note' });
   }
-  const { title, content, date } = req.body;
-  if (!title) return res.status(400).json({ error: 'Title is required' });
-  let noteDate = date;
-  if (!noteDate) {
-    const now = new Date();
-    noteDate = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString().slice(0, 10);
-  }
-  const note = {
-    title,
-    content: content || '',
-    date: noteDate
-  };
-  table.adminNotes.push(note);
-  await table.save();
-  
-  // Notify about notes change with tableId
-  notifyDataChange('notesChanged', null, req.params.id);
-  res.json({ adminNotes: table.adminNotes });
 });
 
-// Edit an admin note (owners only)
+// Edit an admin note (owners and admins only)
 app.put('/api/tables/:id/admin-notes/:noteId', authenticate, async (req, res) => {
-  const table = await Table.findById(req.params.id);
-  if (!table) return res.status(404).json({ error: 'Table not found' });
-  if (!table.owners.map(String).includes(req.user.id)) {
-    return res.status(403).json({ error: 'Only owners can edit admin notes' });
+  try {
+    const table = await Table.findById(req.params.id);
+    if (!table) return res.status(404).json({ error: 'Table not found' });
+    
+    // Check if user is owner or admin
+    const isOwner = table.owners.map(String).includes(req.user.id);
+    const isAdmin = req.user.role === 'admin';
+    
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Only owners and admins can edit admin notes' });
+    }
+    
+    const note = table.adminNotes.id(req.params.noteId);
+    if (!note) return res.status(404).json({ error: 'Note not found' });
+    
+    // Update fields
+    if (req.body.title !== undefined) note.title = req.body.title;
+    if (req.body.content !== undefined) note.content = req.body.content;
+    if (req.body.pinned !== undefined) note.pinned = req.body.pinned;
+    if (req.body.color !== undefined) note.color = req.body.color;
+    note.updatedAt = new Date();
+    
+    await table.save();
+    
+    // Notify about notes change with tableId
+    notifyDataChange('notesChanged', null, req.params.id);
+    res.json({ adminNotes: table.adminNotes });
+  } catch (err) {
+    console.error('[ADMIN-NOTES] Error updating note:', err);
+    res.status(500).json({ error: 'Failed to update note' });
   }
-  const note = table.adminNotes.id(req.params.noteId);
-  if (!note) return res.status(404).json({ error: 'Note not found' });
-  note.title = req.body.title || note.title;
-  note.content = req.body.content || note.content;
-  await table.save();
-  
-  // Notify about notes change with tableId
-  notifyDataChange('notesChanged', null, req.params.id);
-  res.json({ adminNotes: table.adminNotes });
 });
 
-// Delete an admin note (owners only)
+// Delete an admin note (owners and admins only)
 app.delete('/api/tables/:id/admin-notes/:noteId', authenticate, async (req, res) => {
-  const table = await Table.findById(req.params.id);
-  if (!table) return res.status(404).json({ error: 'Table not found' });
-  if (!table.owners.map(String).includes(req.user.id)) {
-    return res.status(403).json({ error: 'Only owners can delete admin notes' });
+  try {
+    const table = await Table.findById(req.params.id);
+    if (!table) return res.status(404).json({ error: 'Table not found' });
+    
+    // Check if user is owner or admin
+    const isOwner = table.owners.map(String).includes(req.user.id);
+    const isAdmin = req.user.role === 'admin';
+    
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Only owners and admins can delete admin notes' });
+    }
+    
+    table.adminNotes = table.adminNotes.filter(n => n._id.toString() !== req.params.noteId);
+    await table.save();
+    
+    // Notify about notes change with tableId
+    notifyDataChange('notesChanged', null, req.params.id);
+    res.json({ adminNotes: table.adminNotes });
+  } catch (err) {
+    console.error('[ADMIN-NOTES] Error deleting note:', err);
+    res.status(500).json({ error: 'Failed to delete note' });
   }
-  table.adminNotes = table.adminNotes.filter(n => n._id.toString() !== req.params.noteId);
-  await table.save();
-  
-  // Notify about notes change with tableId
-  notifyDataChange('notesChanged', null, req.params.id);
-  res.json({ adminNotes: table.adminNotes });
 });
 
 app.post('/api/tables/:id/rows', authenticate, async (req, res) => {
   if (!req.params.id || req.params.id === "null") {
     return res.status(400).json({ error: "Invalid table ID" });
   }
-  const table = await Table.findById(req.params.id);
-  if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
-    return res.status(403).json({ error: 'Not authorized or not found' });
+  try {
+    const table = await Table.findById(req.params.id).select('owners leads sharedWith rows');
+    if (!table || !hasEventAccess(table, req.user)) {
+      return res.status(403).json({ error: 'Not authorized or not found' });
+    }
+    table.rows.push(req.body);
+    await table.save();
+    
+    // Return ONLY the newly created row (last one pushed)
+    const newRow = table.rows[table.rows.length - 1];
+    notifyDataChange('crewChanged', null, req.params.id);
+    res.json({ row: newRow });
+  } catch (err) {
+    console.error('Error adding row:', err);
+    res.status(500).json({ error: 'Failed to add row' });
   }
-  table.rows.push(req.body);
-  await table.save();
-  
-  io.emit('crewChanged'); // Notify about crew change
-  res.json(table);
 });
 
 app.put('/api/tables/:id', authenticate, async (req, res) => {
   if (!req.params.id || req.params.id === "null") {
     return res.status(400).json({ error: "Invalid table ID" });
   }
-  const table = await Table.findById(req.params.id);
-  if (!table || !table.owners.includes(req.user.id)) {
-    return res.status(403).json({ error: 'Not authorized or not found' });
+  try {
+    const table = await Table.findById(req.params.id).select('owners leads sharedWith rows');
+    if (!table || !hasEventAccess(table, req.user)) {
+      return res.status(403).json({ error: 'Not authorized or not found' });
+    }
+    table.rows = req.body.rows;
+    await table.save();
+    
+    notifyDataChange('crewChanged', null, req.params.id);
+    notifyDataChange('tableUpdated', null, req.params.id);
+    res.json({ message: 'Table updated' });
+  } catch (err) {
+    console.error('Error updating table rows:', err);
+    res.status(500).json({ error: 'Failed to update table' });
   }
-  table.rows = req.body.rows;
-  await table.save();
-  
-  notifyDataChange('crewChanged', null, req.params.id); // Notify about crew change with tableId
-  notifyDataChange('tableUpdated', null, req.params.id); // Also notify about general table update with tableId
-  res.json({ message: 'Table updated' });
 });
 
 // Helper to ensure _id is a valid ObjectId
@@ -1341,7 +3251,10 @@ function sanitizeCardLog(cardLog) {
           camera: entry.camera || '',
           card1: entry.card1 || '',
           card2: entry.card2 || '',
-          user: entry.user || ''
+          user: entry.user || '',
+          createdBy: entry.createdBy || null,
+          createdAt: entry.createdAt || new Date(),
+          updatedAt: entry.updatedAt || new Date()
         }))
       : []
   }));
@@ -1524,6 +3437,61 @@ app.put('/api/tables/:id/cardlog', authenticate, async (req, res) => {
   } catch (err) {
     console.error('[CARDLOG] Unhandled error in card log update:', err);
     return res.status(500).json({ error: 'Failed to update card log', details: err.message });
+  }
+});
+
+// ✅ Save SD Card Calculator data
+app.put('/api/tables/:id/sd-calculator', authenticate, async (req, res) => {
+  if (!req.params.id || req.params.id === "null") {
+    return res.status(400).json({ error: "Invalid table ID" });
+  }
+  
+  try {
+    const { numDays, camerasPerDay } = req.body;
+    
+    const table = await Table.findById(req.params.id);
+    if (!table) {
+      return res.status(404).json({ error: "Table not found" });
+    }
+    
+    // Check permissions - admin users have access to all events
+    if (!hasEventAccess(table, req.user)) {
+      return res.status(403).json({ error: "Not authorized" });
+    }
+    
+    // Update the calculator data
+    table.sdCardCalculator = {
+      numDays: numDays || 1,
+      camerasPerDay: Array.isArray(camerasPerDay) ? camerasPerDay : [],
+      lastUpdated: new Date()
+    };
+    
+    await table.save();
+    
+    console.log(`[SD-CALC] Saved calculator data for table ${req.params.id}: ${numDays} days`);
+    return res.json({ message: 'Calculator data saved successfully', sdCardCalculator: table.sdCardCalculator });
+  } catch (err) {
+    console.error('[SD-CALC] Error saving calculator data:', err);
+    return res.status(500).json({ error: 'Failed to save calculator data', details: err.message });
+  }
+});
+
+// ✅ Get SD Card Calculator data
+app.get('/api/tables/:id/sd-calculator', authenticate, async (req, res) => {
+  if (!req.params.id || req.params.id === "null") {
+    return res.status(400).json({ error: "Invalid table ID" });
+  }
+  
+  try {
+    const table = await Table.findById(req.params.id).select('sdCardCalculator');
+    if (!table) {
+      return res.status(404).json({ error: "Table not found" });
+    }
+    
+    return res.json({ sdCardCalculator: table.sdCardCalculator || { numDays: 1, camerasPerDay: [] } });
+  } catch (err) {
+    console.error('[SD-CALC] Error loading calculator data:', err);
+    return res.status(500).json({ error: 'Failed to load calculator data', details: err.message });
   }
 });
 
@@ -1785,7 +3753,7 @@ app.get('/api/tables/:id/general', authenticate, async (req, res) => {
     return res.status(400).json({ error: "Invalid table ID" });
   }
   const table = await Table.findById(req.params.id);
-  if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
+  if (!table || !hasEventReadAccess(table, req.user)) {
     return res.status(403).json({ error: 'Not authorized or not found' });
   }
   res.json(table.general || {});
@@ -1794,12 +3762,14 @@ app.get('/api/tables/:id/general', authenticate, async (req, res) => {
 app.put('/api/tables/:id/general', authenticate, async (req, res) => {
   const { title, general } = req.body;
   const table = await Table.findById(req.params.id);
-  if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
+  if (!table || !hasEventAccess(table, req.user)) {
     return res.status(403).json({ error: 'Not authorized or not found' });
   }
   
-  // Only allow owners to update title
-  if (table.owners.includes(req.user.id) && title) {
+  // Allow owners and admins to update title
+  const canEditTitle = req.user.role === 'admin' || table.owners.includes(req.user.id);
+  const oldTitle = table.title;
+  if (canEditTitle && title) {
     table.title = title;
   }
   
@@ -1812,6 +3782,21 @@ app.put('/api/tables/:id/general', authenticate, async (req, res) => {
   }
   
   await table.save();
+
+  // If the title was changed, sync eventName on all linked flights
+  if (canEditTitle && title && title !== oldTitle) {
+    try {
+      const result = await FlightRequest.updateMany(
+        { eventId: table._id },
+        { $set: { eventName: title } }
+      );
+      if (result.modifiedCount > 0) {
+        console.log(`✈️ Synced eventName on ${result.modifiedCount} flight(s) for renamed event "${oldTitle}" → "${title}"`);
+      }
+    } catch (syncErr) {
+      console.error('Failed to sync flight eventNames after event rename:', syncErr);
+    }
+  }
   
   // Notify clients about the general info update
   notifyDataChange('generalChanged', null, req.params.id);
@@ -1828,7 +3813,7 @@ app.get('/api/tables/:id/gear', authenticate, async (req, res) => {
   }
   try {
     const table = await Table.findById(req.params.id);
-    if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
+    if (!table || !hasEventReadAccess(table, req.user)) {
       return res.status(403).json({ error: 'Not authorized or not found' });
     }
 
@@ -1861,15 +3846,21 @@ app.put('/api/tables/:id/gear', authenticate, async (req, res) => {
     const oldTable = await Table.findById(req.params.id);
     const oldLists = oldTable && oldTable.gear && oldTable.gear.lists ? Object.fromEntries(oldTable.gear.lists) : {};
 
-    // Find and update in one atomic operation (fixes versioning issues)
-    const result = await Table.findOneAndUpdate(
-      {
+    // Build query - admins can access any event
+    const isAdmin = req.user.role === 'admin';
+    const query = isAdmin 
+      ? { _id: req.params.id }
+      : {
         _id: req.params.id,
         $or: [
           { owners: req.user.id },
           { sharedWith: req.user.id }
         ]
-      },
+        };
+
+    // Find and update in one atomic operation (fixes versioning issues)
+    const result = await Table.findOneAndUpdate(
+      query,
       {
         $set: {
           'gear.lists': req.body.lists ? new Map(Object.entries(req.body.lists)) : new Map(),
@@ -1924,7 +3915,7 @@ app.get('/api/tables/:id/travel', authenticate, async (req, res) => {
     return res.status(400).json({ error: "Invalid table ID" });
   }
   const table = await Table.findById(req.params.id);
-  if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
+  if (!table || !hasEventReadAccess(table, req.user)) {
     return res.status(403).json({ error: 'Not authorized or not found' });
   }
   res.json({
@@ -1938,7 +3929,7 @@ app.put('/api/tables/:id/travel', authenticate, async (req, res) => {
     return res.status(400).json({ error: "Invalid table ID" });
   }
   const table = await Table.findById(req.params.id);
-  if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
+  if (!table || !hasEventAccess(table, req.user)) {
     return res.status(403).json({ error: 'Not authorized or not found' });
   }
   table.travel = req.body.travel || [];
@@ -1952,7 +3943,8 @@ app.put('/api/tables/:id/travel', authenticate, async (req, res) => {
 // DELETE
 app.delete('/api/tables/:id', authenticate, async (req, res) => {
   const table = await Table.findById(req.params.id);
-  if (!table || !table.owners.includes(req.user.id)) {
+  // Only owners and admins can delete events
+  if (!table || !hasEventAccess(table, req.user, true)) {
     return res.status(403).json({ error: 'Not authorized or not found' });
   }
   
@@ -1971,29 +3963,17 @@ app.delete('/api/tables/:id', authenticate, async (req, res) => {
     
     console.log(`[DELETE EVENT] Found ${gearItems.length} gear items associated with this event`);
     
-    // Release all reservations for this event from each gear item
+    // BULLETPROOF ATOMIC CLEANUP - Remove all reservations for this event
+    try {
+      await AtomicReservationService.cleanupEventReservations(req.params.id);
+      console.log(`[DELETE EVENT] ✅ Atomically cleaned up all reservations for event ${req.params.id}`);
+    } catch (cleanupError) {
+      console.error(`[DELETE EVENT] ❌ Failed to cleanup reservations:`, cleanupError.message);
+      // Continue with event deletion even if cleanup fails
+    }
+    
+    // Legacy cleanup for single-quantity items (backward compatibility)
     for (const gear of gearItems) {
-      console.log(`[DELETE EVENT] Processing gear item: ${gear.label} (${gear._id})`);
-      
-      const originalReservationCount = gear.reservations?.length || 0;
-      const originalHistoryCount = gear.history?.length || 0;
-      
-      // Remove all reservations for this event
-      if (gear.reservations && gear.reservations.length > 0) {
-        gear.reservations = gear.reservations.filter(reservation => 
-          reservation.eventId.toString() !== req.params.id.toString()
-        );
-        console.log(`[DELETE EVENT] Removed ${originalReservationCount - gear.reservations.length} reservations from ${gear.label}`);
-      }
-      
-      // Remove all history entries for this event
-      if (gear.history && gear.history.length > 0) {
-        gear.history = gear.history.filter(entry => 
-          !entry.event || entry.event.toString() !== req.params.id.toString()
-        );
-        console.log(`[DELETE EVENT] Removed ${originalHistoryCount - gear.history.length} history entries from ${gear.label}`);
-      }
-      
       // Update status for single-quantity items if they were checked out for this event
       if (gear.quantity === 1 && gear.checkedOutEvent && gear.checkedOutEvent.toString() === req.params.id.toString()) {
         gear.status = 'available';
@@ -2001,11 +3981,9 @@ app.delete('/api/tables/:id', authenticate, async (req, res) => {
         gear.checkedOutEvent = null;
         gear.checkOutDate = null;
         gear.checkInDate = null;
+        await gear.save();
         console.log(`[DELETE EVENT] Reset status to available for ${gear.label}`);
       }
-      
-      await gear.save();
-      console.log(`[DELETE EVENT] Successfully updated ${gear.label}`);
     }
     
     // Now delete the table
@@ -2040,7 +4018,7 @@ app.delete('/api/tables/:id/rows/:index', authenticate, async (req, res) => {
   table.rows.splice(idx, 1);
   await table.save();
   
-  io.emit('crewChanged'); // Notify about crew change
+  notifyDataChange('crewChanged', null, req.params.id); // Notify about crew change with tableId
   res.json({ message: 'Row deleted' });
 });
 
@@ -2053,6 +4031,26 @@ app.get('/api/users', authenticate, async (req, res) => {
     email: u.email,
     role: u.role || 'user'
   })));
+});
+
+// Get single user by ID (for profile/photo display)
+app.get('/api/users/:id', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id, 'fullName email role photo');
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json({
+      _id: user._id,
+      name: user.fullName,
+      email: user.email,
+      role: user.role || 'user',
+      photo: user.photo || null
+    });
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 app.put('/api/users/:id', authenticate, async (req, res) => {
@@ -2096,7 +4094,7 @@ app.get('/api/tables/:id/program-schedule', authenticate, async (req, res) => {
     return res.status(400).json({ error: "Invalid table ID" });
   }
   const table = await Table.findById(req.params.id);
-  if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
+  if (!table || !hasEventReadAccess(table, req.user)) {
     return res.status(403).json({ error: 'Not authorized or not found' });
   }
   res.json({ programSchedule: table.programSchedule || [] });
@@ -2108,9 +4106,48 @@ app.put('/api/tables/:id/program-schedule', authenticate, async (req, res) => {
   }
   
   try {
-    // Get the old schedule for diffing
+    // CRITICAL: Validate request body to prevent data loss
+    if (!req.body || typeof req.body !== 'object') {
+      console.error('❌ [SCHEDULE UPDATE] Invalid request body');
+      return res.status(400).json({ error: 'Invalid request body' });
+    }
+    
+    const newSchedule = req.body.programSchedule;
+    
+    // CRITICAL: Validate that programSchedule is an array
+    if (!Array.isArray(newSchedule)) {
+      console.error('❌ [SCHEDULE UPDATE] programSchedule is not an array:', typeof newSchedule);
+      return res.status(400).json({ error: 'programSchedule must be an array' });
+    }
+    
+    // Get the old schedule for diffing and validation
     const oldTable = await Table.findById(req.params.id);
-    const oldSchedule = oldTable ? (oldTable.programSchedule || []) : [];
+    if (!oldTable) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    
+    const oldSchedule = oldTable.programSchedule || [];
+    
+    // CRITICAL: Prevent accidental data deletion
+    // If old schedule has data but new schedule is empty, require explicit confirmation
+    if (oldSchedule.length > 0 && newSchedule.length === 0) {
+      console.warn(`⚠️ [SCHEDULE UPDATE] WARNING: Attempting to delete all ${oldSchedule.length} programs for event ${req.params.id}`);
+      
+      // Only allow if explicitly marked as intentional deletion
+      if (!req.body._intentionalDeletion) {
+        console.error('❌ [SCHEDULE UPDATE] BLOCKED: Refusing to save empty schedule when data exists. This prevents accidental data loss.');
+        return res.status(400).json({ 
+          error: 'Cannot delete all schedule data without explicit confirmation',
+          oldCount: oldSchedule.length,
+          newCount: 0
+        });
+      } else {
+        console.warn('⚠️ [SCHEDULE UPDATE] Intentional deletion confirmed, proceeding...');
+      }
+    }
+    
+    console.log(`💾 [SCHEDULE UPDATE] Updating schedule for event ${req.params.id}: ${oldSchedule.length} → ${newSchedule.length} programs`);
+    
     // Use findOneAndUpdate instead of find + save to avoid version conflicts
     const result = await Table.findOneAndUpdate(
       { 
@@ -2120,18 +4157,21 @@ app.put('/api/tables/:id/program-schedule', authenticate, async (req, res) => {
           { sharedWith: req.user.id }
         ]
       },
-      { $set: { programSchedule: req.body.programSchedule || [] } },
+      { $set: { programSchedule: newSchedule } },
       { new: true, runValidators: true }
     );
     
     if (!result) {
-    return res.status(403).json({ error: 'Not authorized or not found' });
-  }
+      return res.status(403).json({ error: 'Not authorized or not found' });
+    }
+    
+    console.log(`✅ [SCHEDULE UPDATE] Successfully updated schedule for event ${req.params.id}`);
+    
     // --- Partial update events ---
-    const newSchedule = req.body.programSchedule || [];
     // Build maps for fast lookup
     const oldMap = new Map(oldSchedule.map(p => [p._id?.toString?.(), p]));
     const newMap = new Map(newSchedule.map(p => [p._id?.toString?.(), p]));
+    
     // Added
     for (const p of newSchedule) {
       if (!oldMap.has(p._id?.toString?.())) {
@@ -2151,9 +4191,10 @@ app.put('/api/tables/:id/program-schedule', authenticate, async (req, res) => {
         notifyDataChange('programDeleted', { program: p }, req.params.id);
       }
     }
-  res.json({ message: 'Program schedule updated' });
+    
+    res.json({ message: 'Program schedule updated' });
   } catch (err) {
-    console.error('Error updating program schedule:', err);
+    console.error('❌ [SCHEDULE UPDATE] Error updating program schedule:', err);
     res.status(500).json({ error: 'Failed to update program schedule' });
   }
 });
@@ -2164,50 +4205,85 @@ app.patch('/api/tables/:id/program-field', authenticate, async (req, res) => {
     return res.status(400).json({ error: "Invalid table ID" });
   }
   
-  const { programId, field, value } = req.body;
+  const { programId, field, value, userId, sessionId } = req.body;
   if (!programId || !field) {
     return res.status(400).json({ error: "programId and field are required" });
   }
   
   try {
-    console.log(`🔧 Updating single field: ${field} = ${value} for program ${programId} in table ${req.params.id}`);
+    console.log(`🔧 [ATOMIC] Updating single field: ${field} = "${value}" for program ${programId} by user ${req.user.id}`);
     
-    // Use MongoDB's positional operator to update only the specific field
+    // Get current state first for conflict detection
+    const currentTable = await Table.findById(req.params.id);
+    if (!currentTable) {
+      return res.status(404).json({ error: 'Table not found' });
+    }
+    
+    // Check permissions
+    const isOwner = currentTable.owners.includes(req.user.id);
+    const isShared = currentTable.sharedWith.includes(req.user.id);
+    if (!isOwner && !isShared) {
+      return res.status(403).json({ error: 'Not authorized to edit this table' });
+    }
+    
+    // Find the current program
+    const currentProgram = currentTable.programSchedule.find(p => p._id.toString() === programId);
+    if (!currentProgram) {
+      return res.status(404).json({ error: 'Program not found' });
+    }
+    
+    const oldValue = currentProgram[field];
+    
+    // Use MongoDB's positional operator to update only the specific field atomically
     const result = await Table.findOneAndUpdate(
       { 
         _id: req.params.id,
-        $or: [
-          { owners: req.user.id },
-          { sharedWith: req.user.id }
-        ],
         'programSchedule._id': programId
       },
       { 
-        $set: { [`programSchedule.$.${field}`]: value }
+        $set: { 
+          [`programSchedule.$.${field}`]: value,
+          [`programSchedule.$.lastModified`]: new Date(),
+          [`programSchedule.$.lastModifiedBy`]: req.user.id
+        }
       },
       { new: true, runValidators: true }
     );
     
     if (!result) {
-      return res.status(403).json({ error: 'Not authorized, table not found, or program not found' });
+      return res.status(500).json({ error: 'Failed to update program field' });
     }
     
     // Find the updated program for notification
     const updatedProgram = result.programSchedule.find(p => p._id.toString() === programId);
     if (updatedProgram) {
-      console.log(`✅ Updated field ${field} for program ${programId}`);
-      notifyDataChange('programFieldUpdated', { 
+      console.log(`✅ [ATOMIC] Updated field ${field}: "${oldValue}" → "${value}" for program ${programId}`);
+      
+      // Broadcast field-level update to all users in the room except the sender
+      io.to(`event-${req.params.id}`).emit('programFieldUpdated', { 
+        eventId: req.params.id,
         programId, 
         field, 
         value, 
-        program: updatedProgram 
-      }, req.params.id);
+        oldValue,
+        userId: req.user.id,
+        sessionId: sessionId || null,
+        userName: req.user.fullName || req.user.name || 'Unknown User',
+        timestamp: Date.now()
+      });
+      
+      console.log(`📡 [ATOMIC] Broadcasted field update to event-${req.params.id} room`);
     }
     
-    res.json({ message: 'Program field updated successfully' });
+    res.json({ 
+      message: 'Program field updated successfully',
+      field,
+      value,
+      oldValue
+    });
   } catch (err) {
-    console.error('Error updating program field:', err);
-    res.status(500).json({ error: 'Failed to update program field' });
+    console.error('❌ [ATOMIC] Error updating program field:', err);
+    res.status(500).json({ error: 'Failed to update program field', details: err.message });
   }
 });
 
@@ -2219,7 +4295,7 @@ app.get('/api/tables/:id/folder-logs', authenticate, async (req, res) => {
   
   try {
     const table = await Table.findById(req.params.id);
-    if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
+    if (!table || !hasEventReadAccess(table, req.user)) {
       return res.status(403).json({ error: 'Not authorized or not found' });
     }
     
@@ -2291,6 +4367,49 @@ app.get('/api/gear-inventory', authenticate, async (req, res) => {
   }
 });
 
+// Get inventory with availability for specific date range
+app.get('/api/gear-inventory/availability', authenticate, async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: 'Start date and end date are required' });
+    }
+    
+    const gear = await GearInventory.find();
+    
+    // Calculate availability using BULLETPROOF atomic service
+    const gearWithAvailability = await Promise.all(gear.map(async (item) => {
+      try {
+        const availableQty = await AtomicReservationService.getAvailableQuantity(
+          item._id, startDate, endDate
+        );
+        const reservedQty = item.quantity - availableQty;
+        
+        return {
+          ...item.toObject(),
+          availableQuantity: availableQty,
+          reservedQuantity: reservedQty,
+          isAvailable: availableQty > 0
+        };
+      } catch (error) {
+        console.error(`Error calculating availability for item ${item._id}:`, error);
+        return {
+          ...item.toObject(),
+          availableQuantity: 0,
+          reservedQuantity: item.quantity,
+          isAvailable: false
+        };
+      }
+    }));
+    
+    res.json(gearWithAvailability);
+  } catch (err) {
+    console.error('Error fetching gear inventory with availability:', err);
+    res.status(500).json({ error: 'Failed to fetch gear inventory with availability' });
+  }
+});
+
 // List gear inventory with availability for specific event dates
 app.get('/api/gear-inventory/available/:eventId', authenticate, async (req, res) => {
   try {
@@ -2309,14 +4428,16 @@ app.get('/api/gear-inventory/available/:eventId', authenticate, async (req, res)
     
     const gear = await GearInventory.find();
     
-    // Calculate availability for each item (only considering hard reservations)
-    const gearWithAvailability = gear.map(item => {
-      const availableQty = item.getAvailableQuantity(cart.checkOutDate, cart.checkInDate);
+    // Calculate availability using BULLETPROOF atomic service
+    const gearWithAvailability = await Promise.all(gear.map(async (item) => {
+      const availableQty = await AtomicReservationService.getAvailableQuantity(
+        item._id, cart.checkOutDate, cart.checkInDate  // Don't exclude current event
+      );
       return {
         ...item.toObject(),
         availableQuantity: availableQty
       };
-    });
+    }));
     
     res.json(gearWithAvailability);
   } catch (err) {
@@ -2375,18 +4496,31 @@ app.post('/api/gear-inventory/checkout', authenticate, async (req, res) => {
           message: `Reservation updated to ${newQuantity} units`, 
           gear,
           reservedQuantity: newQuantity,
-          availableQuantity: gear.getAvailableQuantity(checkOutDate, checkInDate)
+          availableQuantity: await AtomicReservationService.getAvailableQuantity(
+            gear._id, checkOutDate, checkInDate
+          )
         });
       } else {
-        // Create new reservation
-        gear.reserveQuantity(eventId, req.user.id, quantity, checkOutDate, checkInDate);
-        await gear.save();
+        // Create new reservation using BULLETPROOF atomic service
+        await AtomicReservationService.createReservation({
+          inventoryId: gearId,
+          eventId,
+          userId: req.user.id,
+          quantity,
+          checkOutDate,
+          checkInDate,
+          listName: 'Main List', // Default list for direct checkout
+          serial: gear.serial,
+          specificSerialRequested: gear.serial && gear.serial !== 'N/A'
+        });
         
         return res.json({ 
           message: `${quantity} units reserved`, 
           gear,
           reservedQuantity: quantity,
-          availableQuantity: gear.getAvailableQuantity(checkOutDate, checkInDate)
+          availableQuantity: await AtomicReservationService.getAvailableQuantity(
+            gear._id, checkOutDate, checkInDate
+          )
         });
       }
     }
@@ -2577,7 +4711,9 @@ app.post('/api/gear-inventory/checkin', authenticate, async (req, res) => {
         await removeGearFromEventLists(eventId, gearId, gear.label, quantity);
       }
       
-      const availableQty = gear.getAvailableQuantity(checkOutDate, checkInDate);
+      const availableQty = await AtomicReservationService.getAvailableQuantity(
+        gear._id, checkOutDate, checkInDate
+      );
       return res.json({ 
         message: 'Quantity reservation released', 
         gear,
@@ -2803,11 +4939,11 @@ app.post('/api/gear-inventory', authenticate, async (req, res) => {
     
     // Check for duplicate serial (only if serial is not blank/N/A)
     if (serialValue !== 'N/A') {
-      const existingWithSerial = await GearInventory.findOne({ serial: serialValue });
-      if (existingWithSerial) {
-        return res.status(409).json({ 
-          error: `Duplicate serial: this value already exists.`
-        });
+    const existingWithSerial = await GearInventory.findOne({ serial: serialValue });
+    if (existingWithSerial) {
+      return res.status(409).json({ 
+        error: `Duplicate serial: this value already exists.`
+      });
       }
     }
     
@@ -3180,6 +5316,19 @@ app.post('/api/gear-inventory/:id/release-all', authenticate, async (req, res) =
 
 // ========= GEAR PACKAGES API =========
 
+// Get list of events that have gear reserved (for dashboard badges)
+// This route MUST be defined BEFORE the gearPackagesRoutes router to avoid being caught by /:id
+app.get('/api/gear-packages/events-with-gear', authenticate, async (req, res) => {
+  try {
+    // Get distinct eventIds that have reserved gear items
+    const eventIds = await ReservedGearItem.distinct('eventId');
+    res.json({ eventIds });
+  } catch (err) {
+    console.error('[EVENTS WITH GEAR] Error:', err);
+    res.status(500).json({ error: 'Failed to fetch events with gear' });
+  }
+});
+
 // Use the gear packages routes
 const gearPackagesRoutes = require('./routes/gearPackages');
 app.use('/api/gear-packages', authenticate, gearPackagesRoutes);
@@ -3461,86 +5610,19 @@ app.delete('/api/inventory/:inventoryId/reservations/all', authenticate, async (
   }
 });
 
-// ========= ATOMIC RESERVATION HELPERS =========
+// ========= ATOMIC RESERVATION SERVICE =========
+const AtomicReservationService = require('./services/AtomicReservationService');
 
-// Helper function to create atomic reservation (both GearInventory and ReservedGearItem)
+// Legacy helper for backward compatibility (now uses bulletproof service)
 async function createAtomicReservation(inventoryId, eventId, userId, quantity, checkOutDate, checkInDate, listName, serial = null, specificSerialRequested = false) {
-  const session = await mongoose.startSession();
-  
-  try {
-    let reservedItem = null;
-    
-    await session.withTransaction(async () => {
-      // 1. Reserve in GearInventory (availability engine)
-      const inventoryItem = await GearInventory.findById(inventoryId).session(session);
-      if (!inventoryItem) {
-        throw new Error('Inventory item not found');
-      }
-      
-      // Check availability before reserving
-      const availableQty = inventoryItem.getAvailableQuantity(checkOutDate, checkInDate);
-      if (quantity > availableQty) {
-        throw new Error(`Only ${availableQty} units available for the requested dates`);
-      }
-      
-      inventoryItem.reserveQuantity(eventId, userId, quantity, checkOutDate, checkInDate);
-      await inventoryItem.save({ session });
-      
-      // 2. Create ReservedGearItem (user-facing reservation)
-      const labelParts = inventoryItem.label.split(' ');
-      reservedItem = new ReservedGearItem({
-        eventId: eventId,
-        userId: userId,
-        listName: listName,
-        inventoryId: inventoryItem._id,
-        brand: labelParts[0] || 'Unknown',
-        model: labelParts.slice(1).join(' ') || 'Unknown',
-        category: inventoryItem.category,
-        quantity: quantity,
-        serial: serial,
-        specificSerialRequested: specificSerialRequested,
-        isPacked: false
-      });
-      await reservedItem.save({ session });
-      
-      console.log(`[ATOMIC RESERVE] Created reservation: ${quantity}x ${inventoryItem.label} for event ${eventId}`);
-    });
-    
-    return reservedItem;
-    
-  } finally {
-    await session.endSession();
-  }
+  return await AtomicReservationService.createReservation({
+    inventoryId, eventId, userId, quantity, checkOutDate, checkInDate, listName, serial, specificSerialRequested
+  });
 }
 
-// Helper function to release atomic reservation (both models)
+// Legacy helper for backward compatibility (now uses bulletproof service)
 async function releaseAtomicReservation(reservedItemId) {
-  const session = await mongoose.startSession();
-  
-  try {
-    await session.withTransaction(async () => {
-      // Find the ReservedGearItem
-      const reservedItem = await ReservedGearItem.findById(reservedItemId).session(session);
-      if (!reservedItem) {
-        throw new Error('Reserved item not found');
-      }
-      
-      // Release from GearInventory (availability engine)
-      const inventoryItem = await GearInventory.findById(reservedItem.inventoryId).session(session);
-      if (inventoryItem) {
-        inventoryItem.releaseQuantity(reservedItem.eventId, reservedItem.userId, reservedItem.quantity);
-        await inventoryItem.save({ session });
-      }
-      
-      // Delete ReservedGearItem (user-facing reservation)
-      await ReservedGearItem.findByIdAndDelete(reservedItemId, { session });
-      
-      console.log(`[ATOMIC RELEASE] Released reservation: ${reservedItem.quantity}x ${reservedItem.brand} ${reservedItem.model}`);
-    });
-    
-  } finally {
-    await session.endSession();
-  }
+  return await AtomicReservationService.releaseReservation(reservedItemId);
 }
 
 // ========= END ATOMIC RESERVATION HELPERS =========
@@ -3556,16 +5638,25 @@ app.get('/api/gear-packages/event/:eventId', authenticate, async (req, res) => {
     const { listName } = req.query; // Get list name from query parameter
     const userId = req.user.id;
 
-    console.log(`[GEAR LOAD] Loading gear for user ${userId}, event ${eventId}, list: ${listName || 'Main List'}`);
+    console.log(`[GEAR LOAD] Loading gear for event ${eventId}, list: ${listName || 'Main List'} (collaborative mode)`);
 
-    // Find reserved gear items for this user and event (this is what the reservation process creates)
+    // Check if user has access to this event (planners get read-only access)
+    const table = await Table.findById(eventId);
+    if (!table) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    
+    if (!hasEventReadAccess(table, req.user)) {
+      return res.status(403).json({ error: 'Not authorized to access this event' });
+    }
+
+    // Find ALL reserved gear items for this event and list (collaborative mode)
     const reservedItems = await ReservedGearItem.find({ 
-      userId, 
       eventId,
       listName: listName || 'Main List'
     }).populate('inventoryId', 'label category serial quantity');
 
-    console.log(`[GEAR LOAD] Found ${reservedItems.length} reserved items`);
+    console.log(`[GEAR LOAD] Found ${reservedItems.length} reserved items (all users)`);
 
     // Filter out items with null inventoryId (orphaned items)
     const validItems = reservedItems.filter(item => item.inventoryId !== null);
@@ -3590,7 +5681,14 @@ app.get('/api/gear-packages/event/:eventId', authenticate, async (req, res) => {
     // If no valid items found, return empty result
     if (!validItems || validItems.length === 0) {
       console.log(`[GEAR LOAD] No valid reserved items found, returning empty array`);
-      return res.json({ reservedItems: [] });
+      return res.json({ 
+        reservedItems: [],
+        userPermissions: {
+          canReserve: table.owners.includes(userId) || req.user.role === 'admin',
+          canManageLists: table.owners.includes(userId) || req.user.role === 'admin',
+          canPack: true
+        }
+      });
     }
     
     // Log sample data for debugging
@@ -3605,7 +5703,19 @@ app.get('/api/gear-packages/event/:eventId', authenticate, async (req, res) => {
       });
     }
     
-    res.json({ reservedItems: validItems });
+    // Get manual items for the current list
+    const currentGearList = table.gear?.gearLists?.find(list => list.name === (listName || 'Main List'));
+    const manualItems = currentGearList?.manualItems || [];
+
+    res.json({ 
+      reservedItems: validItems,
+      manualItems: manualItems,
+      userPermissions: {
+        canReserve: table.owners.includes(userId) || req.user.role === 'admin',
+        canManageLists: table.owners.includes(userId) || req.user.role === 'admin', 
+        canPack: true
+      }
+    });
   } catch (error) {
     console.error('Error getting reserved items for event:', error);
     res.status(500).json({ error: 'Failed to get reserved items' });
@@ -3635,14 +5745,17 @@ app.patch('/api/gear-packages/:itemId/toggle-packed', authenticate, async (req, 
 
     console.log(`[TOGGLE PACKED] Toggling packed status for item ${itemId}, user ${userId}`);
 
-    const reservedItem = await ReservedGearItem.findOne({ 
-      _id: itemId, 
-      userId 
-    });
+    const reservedItem = await ReservedGearItem.findById(itemId);
 
     if (!reservedItem) {
       console.log(`[TOGGLE PACKED] Reserved item not found`);
       return res.status(404).json({ error: 'Reserved item not found' });
+    }
+
+    // Verify user has access to this event
+    const table = await Table.findById(reservedItem.eventId);
+    if (!table || (!table.owners.includes(userId) && !table.sharedWith.includes(userId))) {
+      return res.status(403).json({ error: 'Not authorized to access this event' });
     }
 
     // Toggle packed status (ReservedGearItem uses isPacked field)
@@ -3768,8 +5881,8 @@ app.get('/api/tables/:eventId/gear-lists', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Event not found' });
     }
     
-    // Check access
-    if (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id)) {
+    // Check access (planners get read-only access to all events)
+    if (!hasEventReadAccess(table, req.user)) {
       return res.status(403).json({ error: 'Not authorized to access this event' });
     }
     
@@ -3820,9 +5933,9 @@ app.post('/api/tables/:eventId/gear-lists', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Event not found' });
     }
     
-    // Check access
-    if (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id)) {
-      return res.status(403).json({ error: 'Not authorized to access this event' });
+    // Check access - only owners and admins can create lists
+    if (!table.owners.includes(req.user.id) && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only event owners and admins can create gear lists' });
     }
     
     // Check if list name already exists
@@ -3870,9 +5983,9 @@ app.put('/api/tables/:eventId/gear-lists/:listName', authenticate, async (req, r
       return res.status(404).json({ error: 'Event not found' });
     }
     
-    // Check access
-    if (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id)) {
-      return res.status(403).json({ error: 'Not authorized to access this event' });
+    // Check access - only owners and admins can update lists
+    if (!table.owners.includes(req.user.id) && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only event owners and admins can update gear lists' });
     }
     
     // Find the list
@@ -3921,9 +6034,9 @@ app.delete('/api/tables/:eventId/gear-lists/:listName', authenticate, async (req
       return res.status(404).json({ error: 'Event not found' });
     }
     
-    // Check access
-    if (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id)) {
-      return res.status(403).json({ error: 'Not authorized to access this event' });
+    // Check access - only owners and admins can delete lists
+    if (!table.owners.includes(req.user.id) && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only event owners and admins can delete gear lists' });
     }
     
     // Check if trying to delete Main List
@@ -4001,6 +6114,136 @@ app.delete('/api/tables/:eventId/gear-lists/:listName', authenticate, async (req
   }
 });
 
+// MANUAL ITEMS API ENDPOINTS
+// Add manual item to gear list
+app.post('/api/tables/:eventId/gear-lists/:listName/manual-items', authenticate, async (req, res) => {
+  try {
+    const { eventId, listName } = req.params;
+    const { text } = req.body;
+    
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: 'Item text is required' });
+    }
+    
+    const table = await Table.findById(eventId);
+    if (!table) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    
+    // Check permissions - only owners and admins can add manual items
+    if (!table.owners.includes(req.user.id) && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only event owners and admins can add manual items' });
+    }
+    
+    // Find the gear list
+    const gearList = table.gear?.gearLists?.find(list => list.name === listName);
+    if (!gearList) {
+      return res.status(404).json({ error: 'Gear list not found' });
+    }
+    
+    // Add manual item
+    if (!gearList.manualItems) {
+      gearList.manualItems = [];
+    }
+    
+    const newItem = {
+      text: text.trim(),
+      completed: false,
+      createdBy: req.user.id,
+      createdAt: new Date()
+    };
+    
+    gearList.manualItems.push(newItem);
+    await table.save();
+    
+    res.status(201).json({ 
+      message: 'Manual item added successfully',
+      item: newItem
+    });
+  } catch (error) {
+    console.error('Error adding manual item:', error);
+    res.status(500).json({ error: 'Failed to add manual item' });
+  }
+});
+
+// Toggle manual item completion
+app.patch('/api/tables/:eventId/gear-lists/:listName/manual-items/:itemId/toggle', authenticate, async (req, res) => {
+  try {
+    const { eventId, listName, itemId } = req.params;
+    
+    const table = await Table.findById(eventId);
+    if (!table) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    
+    // Check access to the event
+    if (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id) && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Not authorized to access this event' });
+    }
+    
+    // Find the gear list
+    const gearList = table.gear?.gearLists?.find(list => list.name === listName);
+    if (!gearList) {
+      return res.status(404).json({ error: 'Gear list not found' });
+    }
+    
+    // Find the manual item
+    const manualItem = gearList.manualItems?.find(item => item._id.toString() === itemId);
+    if (!manualItem) {
+      return res.status(404).json({ error: 'Manual item not found' });
+    }
+    
+    // Toggle completion status
+    manualItem.completed = !manualItem.completed;
+    await table.save();
+    
+    res.json({ 
+      message: 'Manual item updated successfully',
+      item: manualItem
+    });
+  } catch (error) {
+    console.error('Error toggling manual item:', error);
+    res.status(500).json({ error: 'Failed to toggle manual item' });
+  }
+});
+
+// Delete manual item
+app.delete('/api/tables/:eventId/gear-lists/:listName/manual-items/:itemId', authenticate, async (req, res) => {
+  try {
+    const { eventId, listName, itemId } = req.params;
+    
+    const table = await Table.findById(eventId);
+    if (!table) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    
+    // Check permissions - only owners and admins can delete manual items
+    if (!table.owners.includes(req.user.id) && req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only event owners and admins can delete manual items' });
+    }
+    
+    // Find the gear list
+    const gearList = table.gear?.gearLists?.find(list => list.name === listName);
+    if (!gearList) {
+      return res.status(404).json({ error: 'Gear list not found' });
+    }
+    
+    // Find and remove the manual item
+    const itemIndex = gearList.manualItems?.findIndex(item => item._id.toString() === itemId);
+    if (itemIndex === -1) {
+      return res.status(404).json({ error: 'Manual item not found' });
+    }
+    
+    gearList.manualItems.splice(itemIndex, 1);
+    await table.save();
+    
+    res.json({ message: 'Manual item deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting manual item:', error);
+    res.status(500).json({ error: 'Failed to delete manual item' });
+  }
+});
+
 // Set current gear list
 app.put('/api/tables/:eventId/gear-lists/:listName/set-current', authenticate, async (req, res) => {
   try {
@@ -4011,8 +6254,8 @@ app.put('/api/tables/:eventId/gear-lists/:listName/set-current', authenticate, a
       return res.status(404).json({ error: 'Event not found' });
     }
     
-    // Check access
-    if (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id)) {
+    // Check access (owners, leads, sharedWith, and admins)
+    if (!hasEventAccess(table, req.user)) {
       return res.status(403).json({ error: 'Not authorized to access this event' });
     }
     
@@ -4401,7 +6644,7 @@ app.get('/api/debug/gear/:gearId', authenticate, async (req, res) => {
 app.get('/api/tables/:id/documents', authenticate, async (req, res) => {
   try {
     const table = await Table.findById(req.params.id);
-    if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
+    if (!table || !hasEventReadAccess(table, req.user)) {
       return res.status(403).json({ error: 'Not authorized or not found' });
     }
     
@@ -4416,7 +6659,7 @@ app.get('/api/tables/:id/documents', authenticate, async (req, res) => {
 app.get('/api/tables/:id/documents/:documentId', authenticate, async (req, res) => {
   try {
     const table = await Table.findById(req.params.id);
-    if (!table || (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id))) {
+    if (!table || !hasEventReadAccess(table, req.user)) {
       return res.status(403).json({ error: 'Not authorized or not found' });
     }
     
@@ -4584,11 +6827,18 @@ app.get('/api/carts/:eventId', authenticate, async (req, res) => {
         return res.status(404).json({ error: 'Event not found' });
       }
 
+      // Validate that event has proper gear dates set
+      if (!event.gear?.checkOutDate || !event.gear?.checkInDate) {
+        return res.status(400).json({ 
+          error: 'Event must have checkout and checkin dates set before items can be added to cart. Please set dates in the gear section of this event.' 
+        });
+      }
+
       cart = new Cart({
         userId,
         eventId,
-        checkOutDate: event.gear?.checkOutDate || new Date(),
-        checkInDate: event.gear?.checkInDate || new Date(),
+        checkOutDate: event.gear.checkOutDate,
+        checkInDate: event.gear.checkInDate,
         items: []
       });
       await cart.save();
@@ -4627,11 +6877,18 @@ app.post('/api/carts/:eventId/items', authenticate, async (req, res) => {
         return res.status(404).json({ error: 'Event not found' });
       }
 
+      // Validate that event has proper gear dates set
+      if (!event.gear?.checkOutDate || !event.gear?.checkInDate) {
+        return res.status(400).json({ 
+          error: 'Event must have checkout and checkin dates set before items can be added to cart. Please set dates in the gear section of this event.' 
+        });
+      }
+
       cart = new Cart({
         userId,
         eventId,
-        checkOutDate: event.gear?.checkOutDate || new Date(),
-        checkInDate: event.gear?.checkInDate || new Date(),
+        checkOutDate: event.gear.checkOutDate,
+        checkInDate: event.gear.checkInDate,
         items: []
       });
     }
@@ -4650,10 +6907,12 @@ app.post('/api/carts/:eventId/items', authenticate, async (req, res) => {
       label: { $regex: `^${brand} ${model}`, $options: 'i' }
     });
     
-    // Calculate total available quantity across all similar items (ONLY based on reservations)
+    // Calculate total available quantity using BULLETPROOF atomic service
     let totalAvailableQty = 0;
     for (const item of similarItems) {
-      totalAvailableQty += item.getAvailableQuantity(cart.checkOutDate, cart.checkInDate);
+      totalAvailableQty += await AtomicReservationService.getAvailableQuantity(
+        item._id, cart.checkOutDate, cart.checkInDate
+      );
     }
     
     // Check how many of this brand/model are already in the cart
@@ -4697,6 +6956,211 @@ app.post('/api/carts/:eventId/items', authenticate, async (req, res) => {
   }
 });
 
+// Batch add items to cart (optimized for package loading)
+app.post('/api/carts/:eventId/items/batch', authenticate, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const userId = req.user.id;
+    const { items } = req.body; // Array of { inventoryId, quantity, specificSerial }
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Items array is required' });
+    }
+
+    // 1. Get or create cart (ONE query)
+    let cart = await Cart.findOne({ userId, eventId });
+    if (!cart) {
+      const event = await Table.findById(eventId);
+      if (!event) {
+        return res.status(404).json({ error: 'Event not found' });
+      }
+      if (!event.gear?.checkOutDate || !event.gear?.checkInDate) {
+        return res.status(400).json({ 
+          error: 'Event must have checkout and checkin dates set before items can be added to cart.' 
+        });
+      }
+      cart = new Cart({
+        userId,
+        eventId,
+        checkOutDate: event.gear.checkOutDate,
+        checkInDate: event.gear.checkInDate,
+        items: []
+      });
+    }
+
+    // 2. Collect all unique inventory IDs from request
+    const requestedInventoryIds = [...new Set(items.map(i => i.inventoryId))];
+
+    // 3. Fetch ALL needed inventory items in ONE query
+    const allInventoryItems = await GearInventory.find({
+      _id: { $in: requestedInventoryIds }
+    });
+    const inventoryMap = new Map(allInventoryItems.map(item => [item._id.toString(), item]));
+
+    // 4. Build a set of all brand/model combos to look up similar items
+    const brandModelPairs = new Set();
+    for (const invItem of allInventoryItems) {
+      const parts = invItem.label.split(' ');
+      const brand = parts[0] || '';
+      const model = parts.slice(1).join(' ') || '';
+      brandModelPairs.add(`${brand}|||${model}`);
+    }
+
+    // 5. Find ALL similar inventory items (same brand/model) in ONE query using $or
+    const orConditions = [];
+    for (const pair of brandModelPairs) {
+      const [brand, model] = pair.split('|||');
+      orConditions.push({ label: { $regex: `^${brand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} ${model.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, $options: 'i' } });
+    }
+    const allSimilarItems = orConditions.length > 0 
+      ? await GearInventory.find({ $or: orConditions })
+      : [];
+    
+    // Group similar items by brand/model key
+    const similarItemsByKey = new Map();
+    for (const item of allSimilarItems) {
+      const parts = item.label.split(' ');
+      const key = `${parts[0] || ''}|||${parts.slice(1).join(' ') || ''}`;
+      if (!similarItemsByKey.has(key)) similarItemsByKey.set(key, []);
+      similarItemsByKey.get(key).push(item);
+    }
+
+    // 6. Get ALL overlapping reservations and manual reservations in TWO queries
+    const allSimilarIds = allSimilarItems.map(item => item._id);
+    const now = new Date();
+    now.setUTCHours(0, 0, 0, 0);
+    const checkOutDate = cart.checkOutDate;
+    const checkInDate = cart.checkInDate;
+
+    const [overlappingReservations, manualReservations] = await Promise.all([
+      ReservedGearItem.find({
+        inventoryId: { $in: allSimilarIds },
+        $and: [
+          { checkOutDate: { $lte: checkInDate } },
+          { checkInDate: { $gte: checkOutDate } },
+          { checkInDate: { $gte: now } }
+        ]
+      }),
+      ManualReservation.find({
+        inventoryId: { $in: allSimilarIds },
+        $and: [
+          { startDate: { $lte: checkInDate } },
+          { endDate: { $gte: checkOutDate } },
+          { endDate: { $gte: now } }
+        ]
+      })
+    ]);
+
+    // 7. Build availability map: inventoryId -> reservedQuantity
+    const reservedByInventoryId = new Map();
+    for (const res of overlappingReservations) {
+      const id = res.inventoryId.toString();
+      reservedByInventoryId.set(id, (reservedByInventoryId.get(id) || 0) + res.quantity);
+    }
+    for (const res of manualReservations) {
+      const id = res.inventoryId.toString();
+      reservedByInventoryId.set(id, (reservedByInventoryId.get(id) || 0) + res.quantity);
+    }
+
+    // Helper: get available quantity from pre-fetched data
+    function getAvailableQty(inventoryItem) {
+      const reserved = reservedByInventoryId.get(inventoryItem._id.toString()) || 0;
+      return Math.max(0, inventoryItem.quantity - reserved);
+    }
+
+    // Helper: get total available for a brand/model
+    function getTotalAvailableForBrandModel(invItem) {
+      const parts = invItem.label.split(' ');
+      const key = `${parts[0] || ''}|||${parts.slice(1).join(' ') || ''}`;
+      const similarItems = similarItemsByKey.get(key) || [invItem];
+      return similarItems.reduce((sum, item) => sum + getAvailableQty(item), 0);
+    }
+
+    // 8. Process each item — check availability and add to cart
+    const results = [];
+    // Track quantities being added in this batch to prevent over-allocation
+    const batchAddedByBrandModel = new Map();
+
+    for (const reqItem of items) {
+      const { inventoryId, quantity = 1, specificSerial = null } = reqItem;
+      const inventoryItem = inventoryMap.get(inventoryId);
+
+      if (!inventoryItem) {
+        results.push({ inventoryId, success: false, error: 'Inventory item not found' });
+        continue;
+      }
+
+      const parts = inventoryItem.label.split(' ');
+      const bmKey = `${parts[0] || ''}|||${parts.slice(1).join(' ') || ''}`;
+
+      if (specificSerial) {
+        // For specific serial: check individual item availability
+        const itemAvailable = getAvailableQty(inventoryItem);
+        const existingSerialInCart = cart.items
+          .filter(ci => ci.inventoryId.toString() === inventoryId && ci.specificSerial === specificSerial)
+          .reduce((sum, ci) => sum + ci.quantity, 0);
+        
+        if (existingSerialInCart + quantity > itemAvailable) {
+          results.push({ inventoryId, success: false, error: 'Serial not available' });
+          continue;
+        }
+      } else {
+        // For no-preference: check brand/model total availability
+        const totalAvailable = getTotalAvailableForBrandModel(inventoryItem);
+
+        // How many of this brand/model already in cart (before this batch)
+        const similarItems = similarItemsByKey.get(bmKey) || [inventoryItem];
+        const similarIds = new Set(similarItems.map(si => si._id.toString()));
+        const existingCartQty = cart.items
+          .filter(ci => similarIds.has(ci.inventoryId.toString()) && !ci.specificSerial)
+          .reduce((sum, ci) => sum + ci.quantity, 0);
+
+        // How many already added in this batch for the same brand/model
+        const batchAdded = batchAddedByBrandModel.get(bmKey) || 0;
+        const totalRequested = existingCartQty + batchAdded + quantity;
+
+        if (totalRequested > totalAvailable) {
+          const remaining = Math.max(0, totalAvailable - existingCartQty - batchAdded);
+          results.push({ 
+            inventoryId, 
+            success: false, 
+            error: `Only ${remaining} more units available`,
+            availableQuantity: remaining
+          });
+          continue;
+        }
+      }
+
+      // Add to cart
+      cart.addItem(inventoryItem, quantity, specificSerial);
+      if (!specificSerial) {
+        const batchAdded = batchAddedByBrandModel.get(bmKey) || 0;
+        batchAddedByBrandModel.set(bmKey, batchAdded + quantity);
+      }
+      results.push({ inventoryId, success: true, quantity });
+    }
+
+    // 9. Save cart ONCE
+    await cart.save();
+
+    // 10. Return results (skip expensive per-item availability recalculation)
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+
+    res.json({
+      message: `Added ${successCount} item(s) to cart${failCount > 0 ? `, ${failCount} failed` : ''}`,
+      results,
+      successCount,
+      failCount,
+      totalCartItems: cart.items.length
+    });
+
+  } catch (err) {
+    console.error('Error batch adding items to cart:', err);
+    res.status(500).json({ error: 'Failed to batch add items to cart' });
+  }
+});
+
 // Update item quantity in cart
 app.put('/api/carts/:eventId/items/:itemId', authenticate, async (req, res) => {
   try {
@@ -4733,10 +7197,12 @@ app.put('/api/carts/:eventId/items/:itemId', authenticate, async (req, res) => {
       label: { $regex: `^${brand} ${model}`, $options: 'i' }
     });
     
-    // Calculate total available quantity across all similar items (ONLY based on reservations)
+    // Calculate total available quantity using BULLETPROOF atomic service
     let totalAvailableQty = 0;
     for (const item of similarItems) {
-      totalAvailableQty += item.getAvailableQuantity(cart.checkOutDate, cart.checkInDate);
+      totalAvailableQty += await AtomicReservationService.getAvailableQuantity(
+        item._id, cart.checkOutDate, cart.checkInDate
+      );
     }
     
     // Check how many of this brand/model are already in the cart (excluding this item)
@@ -4853,139 +7319,103 @@ app.post('/api/carts/:eventId/reserve', authenticate, async (req, res) => {
     const eventTable = await Table.findById(eventId);
     const currentListName = eventTable?.gear?.currentList || 'Main List';
 
-    // Process each cart item
+    // BULLETPROOF ATOMIC BULK RESERVATION
+    // Prepare all reservations for atomic bulk processing
+    const reservationRequests = [];
+    
     for (const cartItem of cart.items) {
-      try {
-        if (cartItem.specificSerialRequested && cartItem.serial) {
-          // Handle specific serial request
-          const inventoryItem = cartItem.inventoryId;
+      if (cartItem.specificSerialRequested && cartItem.serial) {
+        // Handle specific serial request
+        reservationRequests.push({
+          inventoryId: cartItem.inventoryId._id,
+          eventId,
+          userId,
+          quantity: cartItem.quantity,
+          checkOutDate: cart.checkOutDate,
+          checkInDate: cart.checkInDate,
+          listName: currentListName,
+          serial: cartItem.serial,
+          specificSerialRequested: true
+        });
+      } else {
+        // Handle grouped items (same brand/model) - need to split into individual units
+        const baseItem = cartItem.inventoryId;
+        const labelParts = baseItem.label.split(' ');
+        const brand = labelParts[0];
+        const model = labelParts.slice(1).join(' ');
+        
+        // Find all similar items (same brand/model/category)
+        const similarItems = await GearInventory.find({
+          category: baseItem.category,
+          label: { $regex: `^${brand}\\s+${model}`, $options: 'i' }
+        }).sort({ serial: 1 }); // Sort by serial for consistent allocation
+        
+        let remainingToReserve = cartItem.quantity;
+        
+        // Prepare reservations for similar items in order
+        for (const item of similarItems) {
+          if (remainingToReserve <= 0) break;
           
-          // Check if item is still available
-          const availableQty = inventoryItem.getAvailableQuantity(cart.checkOutDate, cart.checkInDate);
-          if (cartItem.quantity > availableQty) {
-            errors.push({
-              item: inventoryItem.label,
-              requested: cartItem.quantity,
-              available: availableQty,
-              message: `${inventoryItem.label} (Serial: ${cartItem.serial}): Only ${availableQty} available (requested ${cartItem.quantity})`
-            });
-            continue;
-          }
-
-          // Reserve the specific item
-          inventoryItem.reserveQuantity(
-            eventId,
-            userId,
-            cartItem.quantity,
-            cart.checkOutDate,
-            cart.checkInDate
+          // Check availability using NEW atomic service
+          const availableQty = await AtomicReservationService.getAvailableQuantity(
+            item._id, cart.checkOutDate, cart.checkInDate  // Don't exclude current event
           );
-          await inventoryItem.save();
           
-          // Create ReservedGearItem entry for gear page
-          const reservedItem = new ReservedGearItem({
-            eventId: eventId,
-            userId: userId,
-            listName: currentListName,
-            inventoryId: inventoryItem._id,
-            brand: inventoryItem.label.split(' ')[0] || 'Unknown',
-            model: inventoryItem.label.split(' ').slice(1).join(' ') || 'Unknown',
-            category: inventoryItem.category || 'Accessories',
-            quantity: cartItem.quantity,
-            serial: cartItem.serial,
-            specificSerialRequested: true,
-            isPacked: false
-          });
-          await reservedItem.save();
-
-          reservationResults.push({
-            item: inventoryItem.label,
-            quantity: cartItem.quantity,
-            serial: cartItem.serial,
-            status: 'reserved'
-          });
-
-        } else {
-          // Handle "no preference" request - find available units with same brand/model
-          const baseItem = cartItem.inventoryId;
-          const labelParts = baseItem.label.split(' ');
-          const brand = labelParts[0];
-          const model = labelParts.slice(1).join(' ');
-
-          // Find all items with same brand/model/category
-          const similarItems = await GearInventory.find({
-            category: baseItem.category,
-            label: { $regex: `^${brand}\\s+${model}`, $options: 'i' }
-          }).sort({ serial: 1 }); // Sort alphabetically by serial
-
-          let remainingToReserve = cartItem.quantity;
-          const reservedUnits = [];
-
-          // Reserve units in alphabetical order by serial
-          for (const item of similarItems) {
-            if (remainingToReserve <= 0) break;
-
-            const availableQty = item.getAvailableQuantity(cart.checkOutDate, cart.checkInDate);
-            if (availableQty > 0) {
-              const quantityToReserve = Math.min(remainingToReserve, availableQty);
-              
-              item.reserveQuantity(
-                eventId,
-                userId,
-                quantityToReserve,
-                cart.checkOutDate,
-                cart.checkInDate
-              );
-              await item.save();
-
-              // Create ReservedGearItem entry for gear page
-              const reservedItem = new ReservedGearItem({
-                eventId: eventId,
-                userId: userId,
-                listName: currentListName,
-                inventoryId: item._id,
-                brand: item.label.split(' ')[0] || 'Unknown',
-                model: item.label.split(' ').slice(1).join(' ') || 'Unknown',
-                category: item.category || 'Accessories',
-                quantity: quantityToReserve,
-                serial: item.serial,
-                specificSerialRequested: false,
-                isPacked: false
-              });
-              await reservedItem.save();
-
-              reservedUnits.push({
-                item: item.label,
-                quantity: quantityToReserve,
-                serial: item.serial,
-                status: 'reserved'
-              });
-
-              remainingToReserve -= quantityToReserve;
-            }
-          }
-
-          // Add to results
-          reservationResults.push(...reservedUnits);
-
-          // Check if we couldn't reserve all requested units
-          if (remainingToReserve > 0) {
-            errors.push({
-              item: `${brand} ${model}`,
-              requested: cartItem.quantity,
-              available: cartItem.quantity - remainingToReserve,
-              message: `${brand} ${model}: Only ${cartItem.quantity - remainingToReserve} units available (requested ${cartItem.quantity})`
+          if (availableQty > 0) {
+            const quantityToReserve = Math.min(remainingToReserve, availableQty);
+            
+            reservationRequests.push({
+              inventoryId: item._id,
+              eventId,
+              userId,
+              quantity: quantityToReserve,
+              checkOutDate: cart.checkOutDate,
+              checkInDate: cart.checkInDate,
+              listName: currentListName,
+              serial: item.serial,
+              specificSerialRequested: false
             });
+            
+            remainingToReserve -= quantityToReserve;
           }
         }
-
-      } catch (err) {
-        console.error(`Error reserving ${cartItem.inventoryId.label}:`, err);
-        errors.push({
-          item: cartItem.inventoryId.label,
-          message: err.message
+        
+        // Track if we couldn't reserve all requested units
+        if (remainingToReserve > 0) {
+          errors.push({
+            item: `${brand} ${model}`,
+            requested: cartItem.quantity,
+            available: cartItem.quantity - remainingToReserve,
+            message: `${brand} ${model}: Only ${cartItem.quantity - remainingToReserve} units available (requested ${cartItem.quantity})`
+          });
+        }
+      }
+    }
+    
+    // Execute ALL reservations atomically (all succeed or all fail)
+    try {
+      console.log(`[CART RESERVE] Processing ${reservationRequests.length} reservations atomically`);
+      
+      const createdReservations = await AtomicReservationService.createBulkReservations(reservationRequests);
+      
+      // Convert to response format
+      for (const reservation of createdReservations) {
+        reservationResults.push({
+          item: `${reservation.brand} ${reservation.model}`,
+          quantity: reservation.quantity,
+          serial: reservation.serial,
+          status: 'reserved'
         });
       }
+      
+      console.log(`[CART RESERVE] ✅ Successfully reserved ${createdReservations.length} items atomically`);
+      
+    } catch (bulkError) {
+      console.error(`[CART RESERVE] ❌ Bulk reservation failed:`, bulkError.message);
+      errors.push({
+        item: 'Bulk Reservation',
+        message: `Reservation failed: ${bulkError.message}`
+      });
     }
 
     // Clear cart after successful reservations
@@ -5039,7 +7469,9 @@ app.get('/api/inventory/:id/available-serials', authenticate, async (req, res) =
 
     const availableSerials = [];
     for (const item of similarItems) {
-      const availableQty = item.getAvailableQuantity(checkOutDate, checkInDate);
+      const availableQty = await AtomicReservationService.getAvailableQuantity(
+        item._id, checkOutDate, checkInDate  // Don't exclude current event
+      );
       if (availableQty > 0) {
         availableSerials.push({
           id: item._id,
@@ -5106,10 +7538,12 @@ app.put('/api/carts/:eventId/grouped-quantity', authenticate, async (req, res) =
         label: { $regex: `^${brand}\\s+${model}`, $options: 'i' }
       }).sort({ serial: 1 }); // Sort by serial for sequential allocation
 
-      // Check total available quantity
+      // Check total available quantity using BULLETPROOF atomic service
       let totalAvailableQty = 0;
       for (const item of inventoryItems) {
-        totalAvailableQty += item.getAvailableQuantity(cart.checkOutDate, cart.checkInDate);
+        totalAvailableQty += await AtomicReservationService.getAvailableQuantity(
+          item._id, cart.checkOutDate, cart.checkInDate
+        );
       }
       
       if (newQuantity > totalAvailableQty) {
@@ -5124,8 +7558,10 @@ app.put('/api/carts/:eventId/grouped-quantity', authenticate, async (req, res) =
       for (const inventoryItem of inventoryItems) {
         if (remainingToAdd <= 0) break;
 
-        // Check availability for this specific item
-        const availableQty = inventoryItem.getAvailableQuantity(cart.checkOutDate, cart.checkInDate);
+        // Check availability using BULLETPROOF atomic service
+        const availableQty = await AtomicReservationService.getAvailableQuantity(
+          inventoryItem._id, cart.checkOutDate, cart.checkInDate
+        );
         console.log(`[GROUPED QUANTITY] Item ${inventoryItem.serial}: ${availableQty} available`);
 
         if (availableQty > 0) {
@@ -5230,6 +7666,1671 @@ app.put('/api/carts/:eventId/grouped-quantity', authenticate, async (req, res) =
   }
 });
 
+// ========= MANUAL RESERVATIONS API =========
+
+// Helper function to format reservation email
+function formatReservationEmail(reservations, personName) {
+  const formatDate = (dateStr) => {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+  };
+
+  const studioAddress = "Lumetry Media<br>7940 Silverton Ave Ste 101B<br>San Diego, CA 92126";
+  const contactInfo = "Phone: <a href='tel:+18583291444' style='color: #CC0007; text-decoration: none;'>858.329.1444</a><br>Email: <a href='mailto:info@lumetrymedia.com' style='color: #CC0007; text-decoration: none;'>info@lumetrymedia.com</a>";
+
+  // Group reservations by date range
+  const groupedReservations = {};
+  reservations.forEach(reservation => {
+    const key = `${reservation.startDate}_${reservation.endDate}`;
+    if (!groupedReservations[key]) {
+      groupedReservations[key] = {
+        startDate: reservation.startDate,
+        endDate: reservation.endDate,
+        items: []
+      };
+    }
+    groupedReservations[key].items.push(reservation);
+  });
+
+  const dateRanges = Object.values(groupedReservations);
+
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <title>Gear Reservation Confirmation</title>
+      <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 2px solid #CC0007; }
+        .logo { color: #CC0007; font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+        .title { color: #333; font-size: 20px; margin: 0; }
+        .section { margin: 25px 0; }
+        .section-title { color: #CC0007; font-size: 18px; font-weight: bold; margin-bottom: 15px; }
+        .item-list { background: #f8f9fa; padding: 20px; border-radius: 6px; margin: 10px 0; }
+        .item { margin: 8px 0; padding: 8px 0; border-bottom: 1px solid #e9ecef; }
+        .item:last-child { border-bottom: none; }
+        .item-name { font-weight: bold; color: #333; }
+        .item-details { color: #666; font-size: 14px; }
+        .date-range { background: #e3f2fd; padding: 15px; border-radius: 6px; margin: 15px 0; }
+        .date-range-title { font-weight: bold; color: #1976d2; margin-bottom: 8px; }
+        .info-box { background: #f5f5f5; padding: 20px; border-radius: 6px; margin: 20px 0; }
+        .info-title { font-weight: bold; color: #333; margin-bottom: 10px; }
+        .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e9ecef; color: #666; font-size: 14px; }
+      </style>
+    </head>
+    <body>
+      <div class="container">
+        <div class="header">
+          <div class="logo">Lumetry Media</div>
+          <h1 class="title">Gear Reservation Confirmation</h1>
+        </div>
+
+        <p>Dear ${personName},</p>
+        <p>Thank you for your gear reservation! Below are the details of your reserved items:</p>
+
+        ${dateRanges.map(dateRange => `
+          <div class="date-range">
+            <div class="date-range-title">Reservation Period</div>
+            <strong>Pickup:</strong> ${formatDate(dateRange.startDate)}<br>
+            <strong>Return:</strong> ${formatDate(dateRange.endDate)}
+          </div>
+
+          <div class="section">
+            <div class="section-title">Reserved Items</div>
+            <div class="item-list">
+              ${dateRange.items.map(item => `
+                <div class="item">
+                  <div class="item-name">${item.brand} ${item.model}</div>
+                  <div class="item-details">
+                    Category: ${item.category} | Quantity: ${item.quantity}
+                    ${item.serial ? ` | Serial: ${item.serial}` : ''}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        `).join('')}
+
+        <div class="info-box">
+          <div class="info-title">📍 Studio Address</div>
+          ${studioAddress}
+        </div>
+
+        <div class="info-box">
+          <div class="info-title">📞 Contact Information</div>
+          ${contactInfo}
+        </div>
+
+                 <div class="info-box">
+           <div class="info-title">🕐 Business Hours</div>
+           <strong>Monday - Friday: 8:00 AM - 5:00 PM</strong><br>
+           <em>Closed weekends and holidays</em>
+         </div>
+
+         <div class="section">
+           <p><strong>Important:</strong></p>
+           <ul>
+             <li>Please arrive during business hours (8 AM - 5 PM, Mon-Fri) for pickup and return</li>
+             <li>All items must be returned in the same condition as received</li>
+             <li>Contact us if you have any questions about your reservation</li>
+             <li>Late returns may incur additional fees</li>
+           </ul>
+         </div>
+
+        <div class="footer">
+          <p>This is an automated email from Lumetry Media's LumDash system.</p>
+          <p>If you have any questions, please contact us at info@lumetrymedia.com</p>
+        </div>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+// Get all manual reservations (admin only)
+app.get('/api/manual-reservations', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    }
+
+    const reservations = await ManualReservation.find({})
+      .populate('inventoryId', 'label category serial quantity')
+      .populate('createdBy', 'fullName email')
+      .sort({ createdAt: -1 });
+
+    res.json(reservations);
+  } catch (error) {
+    console.error('Error fetching manual reservations:', error);
+    res.status(500).json({ error: 'Failed to fetch manual reservations' });
+  }
+});
+
+// Create multiple manual reservations in bulk (admin only)
+app.post('/api/manual-reservations/bulk', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    }
+
+    const { personName, personEmail, startDate, endDate, items, notes } = req.body;
+
+    // Validate required fields
+    if (!personName || !personEmail || !startDate || !endDate || !items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ error: 'Missing required fields: personName, personEmail, startDate, endDate, items (array)' });
+    }
+
+    // Validate dates
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (start >= end) {
+      return res.status(400).json({ error: 'Start date must be before end date' });
+    }
+
+    const createdReservations = [];
+    const errors = [];
+
+    // Process each item
+    for (const item of items) {
+      try {
+        const { inventoryId, quantity, serial, specificSerialRequested } = item;
+
+        if (!inventoryId || !quantity) {
+          errors.push(`Missing inventoryId or quantity for item: ${JSON.stringify(item)}`);
+          continue;
+        }
+
+        // Get inventory item
+        const inventoryItem = await GearInventory.findById(inventoryId);
+        if (!inventoryItem) {
+          errors.push(`Inventory item not found: ${inventoryId}`);
+          continue;
+        }
+
+        // Check availability using BULLETPROOF atomic service
+        const availableQty = await AtomicReservationService.getAvailableQuantity(
+          inventoryId, startDate, endDate
+        );
+        if (quantity > availableQty) {
+          errors.push(`Only ${availableQty} units available for ${inventoryItem.label} (requested ${quantity})`);
+          continue;
+        }
+
+        // Extract brand and model from label
+        const labelParts = inventoryItem.label.split(' ');
+        const brand = labelParts[0] || 'Unknown';
+        const model = labelParts.slice(1).join(' ') || 'Unknown';
+
+        // Create manual reservation
+        const reservation = new ManualReservation({
+          personName: personName.trim(),
+          personEmail: personEmail.trim().toLowerCase(),
+          startDate: startDate,
+          endDate: endDate,
+          inventoryId: inventoryId,
+          brand: brand,
+          model: model,
+          category: inventoryItem.category,
+          quantity: quantity,
+          serial: serial || null,
+          specificSerialRequested: specificSerialRequested || false,
+          createdBy: req.user.id,
+          notes: notes || ''
+        });
+
+        await reservation.save();
+        await reservation.populate('inventoryId', 'label category serial quantity');
+        await reservation.populate('createdBy', 'fullName email');
+        
+        createdReservations.push(reservation);
+      } catch (error) {
+        console.error('Error creating individual reservation:', error);
+        errors.push(`Failed to create reservation for item ${item.inventoryId}: ${error.message}`);
+      }
+    }
+
+    // If no reservations were created successfully, return error
+    if (createdReservations.length === 0) {
+      return res.status(400).json({ 
+        error: 'Failed to create any reservations', 
+        details: errors 
+      });
+    }
+
+    // Send ONE confirmation email for all created reservations
+    try {
+      const emailHtml = formatReservationEmail(createdReservations, personName);
+
+      const msg = {
+        to: personEmail.trim().toLowerCase(),
+        from: process.env.SENDGRID_FROM_EMAIL,
+        subject: 'Gear Reservation Confirmation - Lumetry Media',
+        html: emailHtml
+      };
+
+      await sgMail.send(msg);
+      console.log(`Bulk reservation confirmation email sent to ${personEmail} for ${createdReservations.length} items`);
+    } catch (emailError) {
+      console.error('Failed to send bulk reservation confirmation email:', emailError);
+      // Don't fail the request if email fails - reservations were created successfully
+    }
+
+    res.status(201).json({
+      message: `Successfully created ${createdReservations.length} manual reservations${errors.length > 0 ? ` (${errors.length} failed)` : ''}`,
+      reservations: createdReservations,
+      errors: errors.length > 0 ? errors : undefined
+    });
+
+  } catch (error) {
+    console.error('Error creating bulk manual reservations:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Create a new manual reservation (admin only)
+app.post('/api/manual-reservations', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    }
+
+    const { personName, personEmail, startDate, endDate, inventoryId, quantity, serial, specificSerialRequested, notes } = req.body;
+
+    // Validate required fields
+    if (!personName || !personEmail || !startDate || !endDate || !inventoryId || !quantity) {
+      return res.status(400).json({ error: 'Missing required fields: personName, personEmail, startDate, endDate, inventoryId, quantity' });
+    }
+
+    // Validate dates - use the original date strings, let the model handle normalization
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    if (start >= end) {
+      return res.status(400).json({ error: 'Start date must be before end date' });
+    }
+
+    // Get inventory item
+    const inventoryItem = await GearInventory.findById(inventoryId);
+    if (!inventoryItem) {
+      return res.status(404).json({ error: 'Inventory item not found' });
+    }
+
+    // Check availability using BULLETPROOF atomic service
+    const availableQty = await AtomicReservationService.getAvailableQuantity(
+      inventoryId, startDate, endDate
+    );
+    if (quantity > availableQty) {
+      return res.status(400).json({ 
+        error: `Only ${availableQty} units available for the requested dates (requested ${quantity})` 
+      });
+    }
+
+    // Extract brand and model from label
+    const labelParts = inventoryItem.label.split(' ');
+    const brand = labelParts[0] || 'Unknown';
+    const model = labelParts.slice(1).join(' ') || 'Unknown';
+
+    // Create manual reservation - pass original date strings to let model handle normalization
+    const reservation = new ManualReservation({
+      personName: personName.trim(),
+      personEmail: personEmail.trim().toLowerCase(),
+      startDate: startDate,  // Pass original string, let model normalize
+      endDate: endDate,      // Pass original string, let model normalize
+      inventoryId: inventoryId,
+      brand: brand,
+      model: model,
+      category: inventoryItem.category,
+      quantity: quantity,
+      serial: serial || null,
+      specificSerialRequested: specificSerialRequested || false,
+      createdBy: req.user.id,
+      notes: notes || ''
+    });
+
+    await reservation.save();
+
+    // Populate the response
+    await reservation.populate('inventoryId', 'label category serial quantity');
+    await reservation.populate('createdBy', 'fullName email');
+
+    // Send confirmation email
+    try {
+      // Find all reservations for this person and date range to send one comprehensive email
+      const allPersonReservations = await ManualReservation.find({
+        personEmail: personEmail.trim().toLowerCase(),
+        startDate: startDate,
+        endDate: endDate
+      }).populate('inventoryId', 'label category serial quantity');
+
+      const emailHtml = formatReservationEmail(allPersonReservations, personName);
+
+      const msg = {
+        to: personEmail.trim().toLowerCase(),
+        from: process.env.SENDGRID_FROM_EMAIL,
+        subject: 'Gear Reservation Confirmation - Lumetry Media',
+        html: emailHtml
+      };
+
+      await sgMail.send(msg);
+      console.log(`Reservation confirmation email sent to ${personEmail}`);
+    } catch (emailError) {
+      console.error('Failed to send reservation confirmation email:', emailError);
+      // Don't fail the request if email fails - reservation was created successfully
+    }
+
+    res.status(201).json({
+      message: 'Manual reservation created successfully',
+      reservation: reservation
+    });
+
+  } catch (error) {
+    console.error('Error creating manual reservation:', error);
+    res.status(500).json({ error: 'Failed to create manual reservation' });
+  }
+});
+
+// Delete a manual reservation (admin only)
+app.delete('/api/manual-reservations/:id', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    }
+
+    const { id } = req.params;
+
+    const reservation = await ManualReservation.findById(id);
+    if (!reservation) {
+      return res.status(404).json({ error: 'Manual reservation not found' });
+    }
+
+    await ManualReservation.findByIdAndDelete(id);
+
+    res.json({ message: 'Manual reservation deleted successfully' });
+
+  } catch (error) {
+    console.error('Error deleting manual reservation:', error);
+    res.status(500).json({ error: 'Failed to delete manual reservation' });
+  }
+});
+
+// Send email summary for manual reservations (admin only)
+app.post('/api/manual-reservations/send-email', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    }
+
+    const { personName, personEmail, startDate, endDate } = req.body;
+
+    // Validate required fields
+    if (!personName || !personEmail || !startDate || !endDate) {
+      return res.status(400).json({ error: 'Missing required fields: personName, personEmail, startDate, endDate' });
+    }
+
+    // Find all reservations for this person and date range
+    const reservations = await ManualReservation.find({
+      personName: personName,
+      startDate: startDate,
+      endDate: endDate
+    }).populate('inventoryId', 'label category serial quantity');
+
+    if (reservations.length === 0) {
+      return res.status(404).json({ error: 'No reservations found for the specified criteria' });
+    }
+
+    // Generate and send email
+    const emailHtml = formatReservationEmail(reservations, personName);
+
+    const msg = {
+      to: personEmail.trim().toLowerCase(),
+      from: process.env.SENDGRID_FROM_EMAIL,
+      subject: 'Gear Reservation Summary - Lumetry Media',
+      html: emailHtml
+    };
+
+    await sgMail.send(msg);
+    console.log(`Reservation summary email sent to ${personEmail}`);
+
+    res.json({ 
+      message: `Email summary sent successfully to ${personEmail}`,
+      reservationCount: reservations.length
+    });
+
+  } catch (error) {
+    console.error('Error sending reservation email summary:', error);
+    res.status(500).json({ error: 'Failed to send email summary' });
+  }
+});
+
+// Get manual reservations for a specific inventory item (admin only)
+app.get('/api/manual-reservations/inventory/:inventoryId', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    }
+
+    const { inventoryId } = req.params;
+
+    const reservations = await ManualReservation.find({ inventoryId })
+      .populate('createdBy', 'fullName email')
+      .sort({ startDate: 1 });
+
+    res.json(reservations);
+
+  } catch (error) {
+    console.error('Error fetching manual reservations for inventory:', error);
+    res.status(500).json({ error: 'Failed to fetch manual reservations' });
+  }
+});
+
+// ========= END MANUAL RESERVATIONS API =========
+
+// ========= CREW PLANNER API =========
+
+const CrewPlanner = require('./models/CrewPlanner');
+
+// Get all crew planner tables for the current user (admin only)
+app.get('/api/crew-planner', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin privileges required' });
+    }
+
+    const tables = await CrewPlanner.find()
+      .populate('createdBy', 'fullName email')
+      .sort({ updatedAt: -1 });
+
+    res.json(tables);
+  } catch (error) {
+    console.error('Error fetching crew planner tables:', error);
+    res.status(500).json({ error: 'Failed to fetch crew planner tables' });
+  }
+});
+
+// Get specific crew planner table by ID
+app.get('/api/crew-planner/:id', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin privileges required' });
+    }
+
+    const table = await CrewPlanner.findById(req.params.id)
+      .populate('createdBy', 'fullName email');
+
+    if (!table) {
+      return res.status(404).json({ error: 'Crew planner table not found' });
+    }
+
+    res.json(table);
+  } catch (error) {
+    console.error('Error fetching crew planner table:', error);
+    res.status(500).json({ error: 'Failed to fetch crew planner table' });
+  }
+});
+
+// Create new crew planner table
+app.post('/api/crew-planner', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin privileges required' });
+    }
+
+    const { name, description } = req.body;
+
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Table name is required' });
+    }
+
+    // Check if table with same name already exists
+    const existingTable = await CrewPlanner.findOne({ 
+      name: name.trim(),
+      createdBy: req.user.id 
+    });
+
+    if (existingTable) {
+      return res.status(400).json({ error: 'A table with this name already exists' });
+    }
+
+    const table = new CrewPlanner({
+      name: name.trim(),
+      description: description?.trim() || '',
+      createdBy: req.user.id,
+      dates: []
+    });
+
+    await table.save();
+
+    const populatedTable = await CrewPlanner.findById(table._id)
+      .populate('createdBy', 'fullName email');
+
+    res.status(201).json(populatedTable);
+  } catch (error) {
+    console.error('Error creating crew planner table:', error);
+    res.status(500).json({ error: 'Failed to create crew planner table' });
+  }
+});
+
+// Update crew planner table
+app.put('/api/crew-planner/:id', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin privileges required' });
+    }
+
+    const table = await CrewPlanner.findById(req.params.id);
+
+    if (!table) {
+      return res.status(404).json({ error: 'Crew planner table not found' });
+    }
+
+    const { name, description, dates } = req.body;
+
+    if (name && name.trim()) {
+      table.name = name.trim();
+    }
+
+    if (description !== undefined) {
+      table.description = description.trim();
+    }
+
+    if (dates !== undefined) {
+      table.dates = dates;
+    }
+
+    table.updatedAt = new Date();
+    await table.save();
+
+    const populatedTable = await CrewPlanner.findById(table._id)
+      .populate('createdBy', 'fullName email');
+
+    res.json(populatedTable);
+  } catch (error) {
+    console.error('Error updating crew planner table:', error);
+    res.status(500).json({ error: 'Failed to update crew planner table' });
+  }
+});
+
+// Delete crew planner table
+app.delete('/api/crew-planner/:id', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin privileges required' });
+    }
+
+    const table = await CrewPlanner.findById(req.params.id);
+
+    if (!table) {
+      return res.status(404).json({ error: 'Crew planner table not found' });
+    }
+
+    await CrewPlanner.findByIdAndDelete(req.params.id);
+
+    res.json({ message: 'Crew planner table deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting crew planner table:', error);
+    res.status(500).json({ error: 'Failed to delete crew planner table' });
+  }
+});
+
+// ========= END CREW PLANNER API =========
+
+// ========= CREW CALENDAR API =========
+
+// Get all crew assignments across all events for calendar view (admin only)
+app.get('/api/crew-calendar', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin privileges required' });
+    }
+
+    // Fetch all tables (including archived) with crew data
+    const tables = await Table.find({})
+      .select('title archived rows')
+      .lean();
+
+    // Transform data to include only crew rows with dates
+    const eventsWithCrew = tables.map(table => ({
+      _id: table._id,
+      title: table.title,
+      archived: table.archived || false,
+      crew: (table.rows || [])
+        .filter(row => row.date && row.name && row.role !== '__placeholder__')
+        .map(row => ({
+          date: row.date,
+          name: row.name,
+          role: row.role,
+          _id: row._id
+        }))
+    })).filter(event => event.crew.length > 0); // Only include events with crew data
+
+    res.json({ events: eventsWithCrew });
+  } catch (error) {
+    console.error('Error fetching crew calendar data:', error);
+    res.status(500).json({ error: 'Failed to fetch crew calendar data' });
+  }
+});
+
+// ========= END CREW CALENDAR API =========
+
+// ===========================================
+// FLIGHT MANAGEMENT API ROUTES
+// ===========================================
+
+// Helper function to check if user has planner/admin access
+// Note: 'owner' role is for event ownership, not system-wide admin access
+function hasPlannerAccess(user) {
+  return user && (user.role === 'admin' || user.role === 'planner');
+}
+
+// ===== PASSENGER ROUTES =====
+
+// Get all passengers
+app.get('/api/passengers', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const passengers = await Passenger.find({ isActive: true })
+      .populate('userId', 'fullName email')
+      .sort({ lastName: 1, firstName: 1 });
+    
+    res.json(passengers);
+  } catch (error) {
+    console.error('Get passengers error:', error);
+    res.status(500).json({ error: 'Failed to fetch passengers' });
+  }
+});
+
+// Get single passenger
+app.get('/api/passengers/:id', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const passenger = await Passenger.findById(req.params.id)
+      .populate('userId', 'fullName email');
+    if (!passenger) {
+      return res.status(404).json({ error: 'Passenger not found' });
+    }
+    
+    res.json(passenger);
+  } catch (error) {
+    console.error('Get passenger error:', error);
+    res.status(500).json({ error: 'Failed to fetch passenger' });
+  }
+});
+
+// Create new passenger
+app.post('/api/passengers', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const passengerData = {
+      ...req.body,
+      createdBy: req.user.id
+    };
+
+    const passenger = new Passenger(passengerData);
+    await passenger.save();
+    
+    console.log('✅ New passenger created:', passenger.fullName);
+    res.status(201).json(passenger);
+  } catch (error) {
+    console.error('Create passenger error:', error);
+    res.status(500).json({ error: 'Failed to create passenger' });
+  }
+});
+
+// Update passenger
+app.put('/api/passengers/:id', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const passenger = await Passenger.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    );
+    
+    if (!passenger) {
+      return res.status(404).json({ error: 'Passenger not found' });
+    }
+    
+    console.log('✅ Passenger updated:', passenger.fullName);
+    res.json(passenger);
+  } catch (error) {
+    console.error('Update passenger error:', error);
+    res.status(500).json({ error: 'Failed to update passenger' });
+  }
+});
+
+// Delete (soft delete) passenger
+app.delete('/api/passengers/:id', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const passenger = await Passenger.findByIdAndUpdate(
+      req.params.id,
+      { isActive: false },
+      { new: true }
+    );
+    
+    if (!passenger) {
+      return res.status(404).json({ error: 'Passenger not found' });
+    }
+    
+    console.log('✅ Passenger deleted (soft):', passenger.fullName);
+    res.json({ message: 'Passenger deleted', passenger });
+  } catch (error) {
+    console.error('Delete passenger error:', error);
+    res.status(500).json({ error: 'Failed to delete passenger' });
+  }
+});
+
+// ===== FLIGHT REQUEST ROUTES =====
+
+// Get all flight requests (with optional status filter)
+app.get('/api/flights', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const { status, eventId } = req.query;
+    const query = {};
+    
+    if (status) {
+      query.status = status;
+    }
+    if (eventId) {
+      query.eventId = eventId;
+    }
+
+    const flights = await FlightRequest.find(query)
+      .populate('createdBy', 'fullName email')
+      .populate('eventId', 'title')
+      .populate('bookedDetails.bookedBy', 'fullName email')
+      .populate('returnBookedDetails.bookedBy', 'fullName email')
+      .sort({ createdAt: -1 });
+    
+    res.json(flights);
+  } catch (error) {
+    console.error('Get flights error:', error);
+    res.status(500).json({ error: 'Failed to fetch flight requests' });
+  }
+});
+
+// Get pending requests (includes both pending and change_requested)
+app.get('/api/flights/pending', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const flights = await FlightRequest.find({ status: { $in: ['pending', 'change_requested'] } })
+      .populate('createdBy', 'fullName email')
+      .populate('eventId', 'title')
+      .populate('bookedDetails.bookedBy', 'fullName email')
+      .populate('returnBookedDetails.bookedBy', 'fullName email')
+      .populate('changeDetails.requestedBy', 'fullName email')
+      .populate('changeDetails.originalFlightId')
+      .sort({ departDate: 1 });
+    
+    res.json(flights);
+  } catch (error) {
+    console.error('Get pending flights error:', error);
+    res.status(500).json({ error: 'Failed to fetch pending requests' });
+  }
+});
+
+// Get booked flights
+app.get('/api/flights/booked', authenticate, async (req, res) => {
+  try {
+    const { eventId, eventName } = req.query;
+    
+    // If filtering by eventId or eventName, allow any authenticated user
+    // (they can only see flights for events they have access to via travel page)
+    // If no filter, require planner access (for Flight Management page)
+    if (!eventId && !eventName && !hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    // Build query
+    const query = { status: 'booked' };
+    
+    // Prefer filtering by eventId (source of truth), fall back to eventName for backward compat
+    if (eventId) {
+      query.eventId = eventId;
+    } else if (eventName) {
+      query.eventName = { $regex: new RegExp(`^${eventName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') };
+    }
+
+    const flights = await FlightRequest.find(query)
+      .populate('createdBy', 'fullName email')
+      .populate('bookedDetails.bookedBy', 'fullName email')
+      .populate('returnBookedDetails.bookedBy', 'fullName email')
+      .populate('eventId', 'title')
+      .sort({ departDate: 1 });
+    
+    res.json(flights);
+  } catch (error) {
+    console.error('Get booked flights error:', error);
+    res.status(500).json({ error: 'Failed to fetch booked flights' });
+  }
+});
+
+// Get events for linking to flight requests (autocomplete) - must be before :id route
+app.get('/api/flights/events/search', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const { q } = req.query;
+    const query = { archived: { $ne: true } };
+    
+    if (q) {
+      query.title = { $regex: q, $options: 'i' };
+    }
+
+    const events = await Table.find(query)
+      .select('title general.startDate general.endDate')
+      .sort({ createdAt: -1 })
+      .limit(10);
+    
+    res.json(events);
+  } catch (error) {
+    console.error('Search events error:', error);
+    res.status(500).json({ error: 'Failed to search events' });
+  }
+});
+
+// Get single flight request
+app.get('/api/flights/:id', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const flight = await FlightRequest.findById(req.params.id)
+      .populate('createdBy', 'fullName email')
+      .populate('eventId', 'title')
+      .populate('bookedDetails.bookedBy', 'fullName email')
+      .populate('returnBookedDetails.bookedBy', 'fullName email');
+    
+    if (!flight) {
+      return res.status(404).json({ error: 'Flight request not found' });
+    }
+    
+    res.json(flight);
+  } catch (error) {
+    console.error('Get flight error:', error);
+    res.status(500).json({ error: 'Failed to fetch flight request' });
+  }
+});
+
+// Create new flight request
+app.post('/api/flights', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const flightData = {
+      ...req.body,
+      createdBy: req.user.id,
+      status: req.body.status || 'pending'  // Use provided status or default to 'pending'
+    };
+
+    // Auto-sync eventName from eventId (eventId is the source of truth)
+    if (flightData.eventId) {
+      try {
+        const linkedEvent = await Table.findById(flightData.eventId).select('title');
+        if (linkedEvent) {
+          flightData.eventName = linkedEvent.title;
+        }
+      } catch (e) {
+        console.warn('Could not resolve eventId to event title:', e.message);
+      }
+    }
+
+    // If status is 'booked', add bookedBy and bookedAt to bookedDetails
+    if (flightData.status === 'booked' && flightData.bookedDetails) {
+      flightData.bookedDetails.bookedBy = req.user.id;
+      flightData.bookedDetails.bookedAt = new Date();
+      
+      // Also for return flight if exists
+      if (flightData.returnBookedDetails) {
+        flightData.returnBookedDetails.bookedBy = req.user.id;
+        flightData.returnBookedDetails.bookedAt = new Date();
+      }
+    }
+
+    const flight = new FlightRequest(flightData);
+    await flight.save();
+    
+    // Populate for response
+    await flight.populate('createdBy', 'fullName email');
+    if (flight.eventId) {
+      await flight.populate('eventId', 'title');
+    }
+    if (flight.bookedDetails?.bookedBy) {
+      await flight.populate('bookedDetails.bookedBy', 'fullName email');
+    }
+    if (flight.returnBookedDetails?.bookedBy) {
+      await flight.populate('returnBookedDetails.bookedBy', 'fullName email');
+    }
+    
+    console.log(`✅ New flight ${flight.status === 'booked' ? 'booking' : 'request'} created:`, flight._id);
+    
+    // Notify connected clients
+    const eventType = flight.status === 'booked' ? 'flightBookingCreated' : 'flightRequestCreated';
+    notifyDataChange(eventType, { flightId: flight._id, status: flight.status });
+
+    // 🔔 Notify all planners & admins about new pending flight request
+    if (flight.status === 'pending') {
+      try {
+        const plannerUsers = await User.find({ role: { $in: ['planner', 'admin'] } }).select('_id');
+        const plannerIds = plannerUsers.map(u => u._id.toString());
+        const passengerNames = (flight.passengers || []).map(p => p.name).join(', ') || 'Unknown';
+        const routeStr = `${flight.from?.code || ''} → ${flight.to?.code || ''}`;
+
+        await createNotificationBulk(plannerIds, {
+          type: 'flight_request',
+          title: 'New Flight Request',
+          message: `${passengerNames} — ${routeStr} on ${new Date(flight.departDate).toLocaleDateString()}`,
+          actorId: req.user.id,
+          eventId: flight.eventId || null,
+          link: { page: 'flights', params: { flightId: flight._id.toString() } },
+          metadata: { flightId: flight._id.toString(), route: routeStr, passengers: passengerNames }
+        });
+      } catch (notifErr) {
+        console.error('🔔 Failed to notify planners about new flight request:', notifErr);
+      }
+    }
+    
+    res.status(201).json(flight);
+  } catch (error) {
+    console.error('Create flight error:', error);
+    res.status(500).json({ error: 'Failed to create flight request' });
+  }
+});
+
+// Update flight request
+app.put('/api/flights/:id', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const updateData = { ...req.body };
+
+    // Auto-sync eventName from eventId (eventId is the source of truth)
+    if (updateData.eventId) {
+      try {
+        const linkedEvent = await Table.findById(updateData.eventId).select('title');
+        if (linkedEvent) {
+          updateData.eventName = linkedEvent.title;
+        }
+      } catch (e) {
+        console.warn('Could not resolve eventId to event title:', e.message);
+      }
+    } else if (updateData.eventId === null) {
+      // Explicitly clearing the event association
+      updateData.eventName = updateData.eventName || '';
+    }
+
+    const flight = await FlightRequest.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true, runValidators: true }
+    ).populate('createdBy', 'fullName email')
+     .populate('eventId', 'title')
+     .populate('bookedDetails.bookedBy', 'fullName email')
+     .populate('returnBookedDetails.bookedBy', 'fullName email');
+    
+    if (!flight) {
+      return res.status(404).json({ error: 'Flight request not found' });
+    }
+    
+    console.log('✅ Flight request updated:', flight._id);
+    
+    // Notify connected clients
+    notifyDataChange('flightRequestUpdated', { flightId: flight._id });
+    
+    res.json(flight);
+  } catch (error) {
+    console.error('Update flight error:', error);
+    res.status(500).json({ error: 'Failed to update flight request' });
+  }
+});
+
+// Book a flight (update status to booked with booking details)
+app.patch('/api/flights/:id/book', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const { bookedDetails, returnBookedDetails } = req.body;
+
+    const updateData = {
+      status: 'booked',
+      bookedDetails: {
+        ...bookedDetails,
+        bookedAt: new Date(),
+        bookedBy: req.user.id
+      }
+    };
+
+    // If roundtrip and return details provided
+    if (returnBookedDetails) {
+      updateData.returnBookedDetails = {
+        ...returnBookedDetails,
+        bookedAt: new Date(),
+        bookedBy: req.user.id
+      };
+    }
+
+    const flight = await FlightRequest.findByIdAndUpdate(
+      req.params.id,
+      updateData,
+      { new: true, runValidators: true }
+    ).populate('createdBy', 'fullName email')
+     .populate('bookedDetails.bookedBy', 'fullName email')
+     .populate('returnBookedDetails.bookedBy', 'fullName email')
+     .populate('eventId', 'title');
+    
+    if (!flight) {
+      return res.status(404).json({ error: 'Flight request not found' });
+    }
+    
+    console.log('✅ Flight booked:', flight._id);
+    
+    // Notify connected clients
+    notifyDataChange('flightBooked', { flightId: flight._id });
+
+    // 🔔 Notify the original requester that their flight has been booked
+    if (flight.createdBy && flight.createdBy._id) {
+      try {
+        const passengerNames = (flight.passengers || []).map(p => p.name).join(', ') || 'Unknown';
+        const routeStr = `${flight.from?.code || ''} → ${flight.to?.code || ''}`;
+        const airline = flight.bookedDetails?.airline || '';
+        const flightNum = flight.bookedDetails?.flightNumber || '';
+        const bookingInfo = [airline, flightNum].filter(Boolean).join(' ');
+
+        await createNotification({
+          recipientId: flight.createdBy._id.toString(),
+          type: 'flight_booked',
+          title: 'Flight Booked',
+          message: `${routeStr}${bookingInfo ? ` — ${bookingInfo}` : ''} for ${passengerNames}`,
+          actorId: req.user.id,
+          eventId: flight.eventId?._id || flight.eventId || null,
+          link: { page: 'flights', params: { flightId: flight._id.toString() } },
+          metadata: { flightId: flight._id.toString(), route: routeStr, passengers: passengerNames, airline, flightNumber: flightNum }
+        });
+      } catch (notifErr) {
+        console.error('🔔 Failed to notify requester about flight booking:', notifErr);
+      }
+    }
+    
+    res.json(flight);
+  } catch (error) {
+    console.error('Book flight error:', error);
+    res.status(500).json({ error: 'Failed to book flight' });
+  }
+});
+
+// Cancel flight request
+app.patch('/api/flights/:id/cancel', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const flight = await FlightRequest.findByIdAndUpdate(
+      req.params.id,
+      { status: 'cancelled' },
+      { new: true }
+    );
+    
+    if (!flight) {
+      return res.status(404).json({ error: 'Flight request not found' });
+    }
+    
+    console.log('✅ Flight request cancelled:', flight._id);
+    
+    // Notify connected clients
+    notifyDataChange('flightRequestCancelled', { flightId: flight._id });
+    
+    res.json(flight);
+  } catch (error) {
+    console.error('Cancel flight error:', error);
+    res.status(500).json({ error: 'Failed to cancel flight request' });
+  }
+});
+
+// Delete flight request (hard delete - use with caution)
+app.delete('/api/flights/:id', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const flight = await FlightRequest.findByIdAndDelete(req.params.id);
+    
+    if (!flight) {
+      return res.status(404).json({ error: 'Flight request not found' });
+    }
+    
+    console.log('✅ Flight request deleted:', req.params.id);
+    
+    // Notify connected clients
+    notifyDataChange('flightRequestDeleted', { flightId: req.params.id });
+    
+    res.json({ message: 'Flight request deleted' });
+  } catch (error) {
+    console.error('Delete flight error:', error);
+    res.status(500).json({ error: 'Failed to delete flight request' });
+  }
+});
+
+// Request a change to a booked flight (creates a change_requested entry in pending)
+app.post('/api/flights/:id/request-change', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const originalFlight = await FlightRequest.findById(req.params.id);
+    if (!originalFlight) {
+      return res.status(404).json({ error: 'Flight not found' });
+    }
+    if (originalFlight.status !== 'booked') {
+      return res.status(400).json({ error: 'Can only request changes for booked flights' });
+    }
+
+    const { requestedChanges, changeReason } = req.body;
+
+    // Create a new pending request that represents the change request
+    const changeRequest = new FlightRequest({
+      eventId: originalFlight.eventId,
+      eventName: originalFlight.eventName,
+      createdBy: req.user.id,
+      tripType: originalFlight.tripType,
+      from: originalFlight.from,
+      to: originalFlight.to,
+      // Use requested dates if provided, otherwise keep originals
+      departDate: requestedChanges?.departDate || originalFlight.departDate,
+      returnDate: requestedChanges?.returnDate !== undefined ? requestedChanges.returnDate : originalFlight.returnDate,
+      departTimePreference: requestedChanges?.departTimePreference || originalFlight.departTimePreference,
+      returnTimePreference: requestedChanges?.returnTimePreference || originalFlight.returnTimePreference,
+      passengers: originalFlight.passengers,
+      status: 'change_requested',
+      notes: requestedChanges?.notes || originalFlight.notes,
+      changeDetails: {
+        originalFlightId: originalFlight._id,
+        changeReason: changeReason || '',
+        requestedBy: req.user.id,
+        requestedAt: new Date(),
+        requestedChanges: {
+          departDate: requestedChanges?.departDate || null,
+          returnDate: requestedChanges?.returnDate || null,
+          departTimePreference: requestedChanges?.departTimePreference || null,
+          returnTimePreference: requestedChanges?.returnTimePreference || null,
+          notes: requestedChanges?.notes || null
+        }
+      }
+    });
+
+    await changeRequest.save();
+
+    const populated = await FlightRequest.findById(changeRequest._id)
+      .populate('createdBy', 'fullName email')
+      .populate('eventId', 'title')
+      .populate('changeDetails.requestedBy', 'fullName email')
+      .populate('changeDetails.originalFlightId');
+
+    console.log('✅ Flight change requested:', changeRequest._id, 'for original:', originalFlight._id);
+
+    // Notify connected clients
+    notifyDataChange('flightChangeRequested', { flightId: changeRequest._id, originalFlightId: originalFlight._id });
+
+    res.status(201).json(populated);
+  } catch (error) {
+    console.error('Request flight change error:', error);
+    res.status(500).json({ error: 'Failed to create change request' });
+  }
+});
+
+// Approve a change request (apply changes to original flight and delete the change request)
+app.patch('/api/flights/:id/approve-change', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const changeRequest = await FlightRequest.findById(req.params.id);
+    if (!changeRequest) {
+      return res.status(404).json({ error: 'Change request not found' });
+    }
+    if (changeRequest.status !== 'change_requested') {
+      return res.status(400).json({ error: 'This is not a change request' });
+    }
+
+    const originalFlightId = changeRequest.changeDetails?.originalFlightId;
+    if (!originalFlightId) {
+      return res.status(400).json({ error: 'No original flight linked to this change request' });
+    }
+
+    const { updatedBookedDetails, updatedReturnBookedDetails } = req.body;
+
+    // Build update object from the change request's top-level fields (which already have the new values)
+    const updateData = {
+      departDate: changeRequest.departDate,
+      returnDate: changeRequest.returnDate,
+      departTimePreference: changeRequest.departTimePreference,
+      returnTimePreference: changeRequest.returnTimePreference,
+      notes: changeRequest.notes
+    };
+
+    // If new booking details were provided, merge them into the existing booked details
+    if (updatedBookedDetails) {
+      // Get the original flight to preserve existing fields not being overwritten
+      const origFlight = await FlightRequest.findById(originalFlightId);
+      const existingBooked = origFlight?.bookedDetails?.toObject?.() || origFlight?.bookedDetails || {};
+      
+      updateData.bookedDetails = {
+        ...existingBooked,
+        // Only overwrite fields that have non-empty values
+        ...(updatedBookedDetails.confirmationCode ? { confirmationCode: updatedBookedDetails.confirmationCode } : {}),
+        ...(updatedBookedDetails.airline ? { airline: updatedBookedDetails.airline } : {}),
+        ...(updatedBookedDetails.flightNumber ? { flightNumber: updatedBookedDetails.flightNumber } : {}),
+        ...(updatedBookedDetails.departTime ? { departTime: updatedBookedDetails.departTime } : {}),
+        ...(updatedBookedDetails.arriveTime ? { arriveTime: updatedBookedDetails.arriveTime } : {}),
+        bookedAt: new Date(),
+        bookedBy: req.user.id
+      };
+
+      // Handle return flight details for roundtrip
+      if (updatedReturnBookedDetails && changeRequest.tripType === 'roundtrip') {
+        const existingReturn = origFlight?.returnBookedDetails?.toObject?.() || origFlight?.returnBookedDetails || {};
+        updateData.returnBookedDetails = {
+          ...existingReturn,
+          ...(updatedReturnBookedDetails.flightNumber ? { flightNumber: updatedReturnBookedDetails.flightNumber } : {}),
+          ...(updatedReturnBookedDetails.departTime ? { departTime: updatedReturnBookedDetails.departTime } : {}),
+          ...(updatedReturnBookedDetails.arriveTime ? { arriveTime: updatedReturnBookedDetails.arriveTime } : {}),
+          // Carry forward confirmation code and airline from outbound
+          ...(updatedBookedDetails.confirmationCode ? { confirmationCode: updatedBookedDetails.confirmationCode } : {}),
+          ...(updatedBookedDetails.airline ? { airline: updatedBookedDetails.airline } : {}),
+          bookedAt: new Date(),
+          bookedBy: req.user.id
+        };
+      }
+    }
+
+    // Apply changes to the original booked flight
+    const updatedFlight = await FlightRequest.findByIdAndUpdate(
+      originalFlightId,
+      updateData,
+      { new: true, runValidators: true }
+    ).populate('createdBy', 'fullName email')
+     .populate('bookedDetails.bookedBy', 'fullName email')
+     .populate('returnBookedDetails.bookedBy', 'fullName email')
+     .populate('eventId', 'title');
+
+    if (!updatedFlight) {
+      return res.status(404).json({ error: 'Original booked flight not found' });
+    }
+
+    // Delete the change request
+    await FlightRequest.findByIdAndDelete(req.params.id);
+
+    console.log('✅ Flight change approved:', req.params.id, '→ updated original:', originalFlightId);
+
+    // Notify connected clients
+    notifyDataChange('flightChangeApproved', { flightId: originalFlightId, changeRequestId: req.params.id });
+
+    res.json(updatedFlight);
+  } catch (error) {
+    console.error('Approve flight change error:', error);
+    res.status(500).json({ error: 'Failed to approve change request' });
+  }
+});
+
+// Reject a change request (just delete it)
+app.patch('/api/flights/:id/reject-change', authenticate, async (req, res) => {
+  try {
+    if (!hasPlannerAccess(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
+    }
+
+    const changeRequest = await FlightRequest.findById(req.params.id);
+    if (!changeRequest) {
+      return res.status(404).json({ error: 'Change request not found' });
+    }
+    if (changeRequest.status !== 'change_requested') {
+      return res.status(400).json({ error: 'This is not a change request' });
+    }
+
+    await FlightRequest.findByIdAndDelete(req.params.id);
+
+    console.log('✅ Flight change rejected and deleted:', req.params.id);
+
+    // Notify connected clients
+    notifyDataChange('flightChangeRejected', { changeRequestId: req.params.id });
+
+    res.json({ message: 'Change request rejected and removed' });
+  } catch (error) {
+    console.error('Reject flight change error:', error);
+    res.status(500).json({ error: 'Failed to reject change request' });
+  }
+});
+
+// ========= END FLIGHT MANAGEMENT API =========
+
+// ========= TIMESHEETS API =========
+
+// Debug endpoint to see raw timesheets data structure
+app.get('/api/timesheets/debug', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    const timesheetsCollection = mongoose.connection.collection('timesheets');
+    const sample = await timesheetsCollection.find({}).limit(5).toArray();
+    const count = await timesheetsCollection.countDocuments();
+    
+    console.log('[TIMESHEETS DEBUG] Collection count:', count);
+    console.log('[TIMESHEETS DEBUG] Sample documents:', JSON.stringify(sample, null, 2));
+    
+    res.json({ 
+      count, 
+      sample,
+      fields: sample.length > 0 ? Object.keys(sample[0]) : []
+    });
+  } catch (error) {
+    console.error('Timesheets debug error:', error);
+    res.status(500).json({ error: 'Debug failed', message: error.message });
+  }
+});
+
+// Get all timesheets (admin only)
+app.get('/api/timesheets', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    // Get timesheets collection directly from MongoDB
+    const timesheetsCollection = mongoose.connection.collection('timesheets');
+    const timesheets = await timesheetsCollection.find({}).toArray();
+    
+    console.log('[TIMESHEETS] Found', timesheets.length, 'total entries');
+    
+    res.json(timesheets);
+  } catch (error) {
+    console.error('Get timesheets error:', error);
+    res.status(500).json({ error: 'Failed to fetch timesheets' });
+  }
+});
+
+// Get timesheets for a specific user (admin only)
+app.get('/api/timesheets/user/:userId', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    const timesheetsCollection = mongoose.connection.collection('timesheets');
+    
+    // Try multiple possible field names for userId
+    const timesheets = await timesheetsCollection.find({ 
+      $or: [
+        { userId: req.params.userId },
+        { user_id: req.params.userId },
+        { user: req.params.userId },
+        { userId: new mongoose.Types.ObjectId(req.params.userId) }
+      ]
+    }).sort({ date: -1, timestamp: -1, createdAt: -1 }).toArray();
+    
+    res.json(timesheets);
+  } catch (error) {
+    console.error('Get user timesheets error:', error);
+    res.status(500).json({ error: 'Failed to fetch user timesheets' });
+  }
+});
+
+// Get timesheet summary by user (aggregated hours)
+app.get('/api/timesheets/summary', authenticate, async (req, res) => {
+  try {
+    // Check if user is admin
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    const { startDate, endDate } = req.query;
+    
+    const timesheetsCollection = mongoose.connection.collection('timesheets');
+    
+    // Get all timesheet documents (each document = one user with their entries array)
+    const allDocs = await timesheetsCollection.find({}).toArray();
+    console.log('[TIMESHEETS SUMMARY] Total user documents in collection:', allDocs.length);
+    
+    if (allDocs.length === 0) {
+      return res.json([]);
+    }
+    
+    // Parse date filters
+    const filterStartDate = startDate ? new Date(startDate) : null;
+    const filterEndDate = endDate ? new Date(endDate) : null;
+    
+    // Process each user's timesheet document
+    const summaries = await Promise.all(allDocs.map(async (doc) => {
+      let userName = 'Unknown User';
+      let userEmail = '';
+      
+      // Get user info
+      try {
+        let userDoc = null;
+        if (doc.userId && mongoose.Types.ObjectId.isValid(doc.userId)) {
+          userDoc = await User.findById(doc.userId);
+        }
+        if (!userDoc && doc.userId) {
+          userDoc = await User.findOne({ _id: doc.userId });
+        }
+        
+        if (userDoc) {
+          userName = userDoc.fullName || userDoc.name || userDoc.email;
+          userEmail = userDoc.email;
+        }
+      } catch (e) {
+        console.log('Could not find user:', doc.userId, e.message);
+      }
+      
+      // Get entries array and filter by date if needed
+      let entries = doc.entries || [];
+      
+      if (filterStartDate && filterEndDate) {
+        entries = entries.filter(entry => {
+          const entryDate = new Date(entry.date);
+          return entryDate >= filterStartDate && entryDate <= filterEndDate;
+        });
+      }
+      
+      console.log('[TIMESHEETS SUMMARY] User', userName, 'has', entries.length, 'entries in date range');
+      
+      return {
+        userId: doc.userId,
+        userName,
+        userEmail,
+        totalEntries: entries.length,
+        entries: entries
+      };
+    }));
+    
+    // Filter out users with no entries in the date range
+    const filteredSummaries = summaries.filter(s => s.totalEntries > 0);
+    
+    console.log('[TIMESHEETS SUMMARY] Returning', filteredSummaries.length, 'user summaries');
+    res.json(filteredSummaries);
+  } catch (error) {
+    console.error('Get timesheet summary error:', error);
+    res.status(500).json({ error: 'Failed to fetch timesheet summary' });
+  }
+});
+
+// Update a timesheet entry
+app.put('/api/timesheets/entry', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { userId, entryId, type, date, time, hours, notes } = req.body;
+    
+    if (!userId || !entryId) {
+      return res.status(400).json({ error: 'userId and entryId are required' });
+    }
+
+    console.log('[TIMESHEETS] Updating entry:', { userId, entryId, type, date, time, hours, notes });
+
+    const timesheetsCollection = mongoose.connection.collection('timesheets');
+    
+    // Find the user's timesheet document
+    const timesheetDoc = await timesheetsCollection.findOne({ userId: userId });
+    if (!timesheetDoc) {
+      return res.status(404).json({ error: 'Timesheet not found for user' });
+    }
+
+    // Find and update the entry in the entries array
+    const entryIndex = timesheetDoc.entries.findIndex(e => 
+      e._id && e._id.toString() === entryId
+    );
+
+    if (entryIndex === -1) {
+      return res.status(404).json({ error: 'Entry not found' });
+    }
+
+    // Build the update object
+    const updatedEntry = {
+      ...timesheetDoc.entries[entryIndex],
+      type: type,
+      date: new Date(date),
+      notes: notes || ''
+    };
+
+    // Set time or hours based on type
+    if (type === 'travel') {
+      updatedEntry.time = null;
+      updatedEntry.hours = hours || 4;
+    } else {
+      updatedEntry.time = time;
+      updatedEntry.hours = null;
+    }
+
+    // Update the entry in the array
+    const updateResult = await timesheetsCollection.updateOne(
+      { userId: userId },
+      { $set: { [`entries.${entryIndex}`]: updatedEntry } }
+    );
+
+    console.log('[TIMESHEETS] Entry updated:', updateResult.modifiedCount);
+    res.json({ success: true, message: 'Entry updated' });
+  } catch (error) {
+    console.error('Update timesheet entry error:', error);
+    res.status(500).json({ error: 'Failed to update entry' });
+  }
+});
+
+// Delete a timesheet entry
+app.delete('/api/timesheets/entry', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { userId, entryId } = req.body;
+    
+    if (!userId || !entryId) {
+      return res.status(400).json({ error: 'userId and entryId are required' });
+    }
+
+    console.log('[TIMESHEETS] Deleting entry:', { userId, entryId });
+
+    const timesheetsCollection = mongoose.connection.collection('timesheets');
+    
+    // Remove the entry from the entries array using $pull
+    const updateResult = await timesheetsCollection.updateOne(
+      { userId: userId },
+      { $pull: { entries: { _id: new mongoose.Types.ObjectId(entryId) } } }
+    );
+
+    if (updateResult.modifiedCount === 0) {
+      // Try with string comparison if ObjectId didn't work
+      const timesheetDoc = await timesheetsCollection.findOne({ userId: userId });
+      if (timesheetDoc && timesheetDoc.entries) {
+        const filteredEntries = timesheetDoc.entries.filter(e => 
+          !(e._id && e._id.toString() === entryId)
+        );
+        
+        if (filteredEntries.length < timesheetDoc.entries.length) {
+          await timesheetsCollection.updateOne(
+            { userId: userId },
+            { $set: { entries: filteredEntries } }
+          );
+          console.log('[TIMESHEETS] Entry deleted via filter');
+          return res.json({ success: true, message: 'Entry deleted' });
+        }
+      }
+      return res.status(404).json({ error: 'Entry not found' });
+    }
+
+    console.log('[TIMESHEETS] Entry deleted:', updateResult.modifiedCount);
+    res.json({ success: true, message: 'Entry deleted' });
+  } catch (error) {
+    console.error('Delete timesheet entry error:', error);
+    res.status(500).json({ error: 'Failed to delete entry' });
+  }
+});
+
+// ========= END TIMESHEETS API =========
+
 // SERVER
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => console.log(`Server started on port ${PORT}`));
@@ -5285,6 +9386,21 @@ app.post('/api/tables/:id/share', authenticate, async (req, res) => {
   await table.save();
   notifyDataChange('tableUpdated', { tableId: table._id });
 
+  // 🔔 In-app notification for the shared user
+  if (user._id.toString() !== req.user.id) {
+    const roleLabel = makeOwner ? 'owner' : makeLead ? 'lead' : 'collaborator';
+    createNotification({
+      recipientId: user._id,
+      type: 'event_shared',
+      title: `Added to event as ${roleLabel}`,
+      message: `You were added to "${table.title || 'an event'}"`,
+      link: { page: 'general', eventId: req.params.id },
+      actorId: req.user.id,
+      eventId: req.params.id,
+      metadata: { role: roleLabel }
+    });
+  }
+
   // Send notification email to the user
   try {
     let subject = 'You have been added to an event in LumDash';
@@ -5325,39 +9441,110 @@ app.put('/api/tables/:id/rows/:rowId', authenticate, async (req, res) => {
   if (!req.params.id || req.params.id === "null" || !req.params.rowId) {
     return res.status(400).json({ error: "Invalid table ID or row ID" });
   }
-  const table = await Table.findById(req.params.id);
-  if (!table || !table.owners.includes(req.user.id)) {
-    return res.status(403).json({ error: 'Not authorized or not found' });
+  try {
+    // Use atomic MongoDB update to avoid version conflicts
+    const result = await Table.updateOne(
+      { _id: req.params.id, 'rows._id': req.params.rowId, owners: req.user.id },
+      { $set: {
+        'rows.$.date': req.body.date,
+        'rows.$.name': req.body.name,
+        'rows.$.role': req.body.role,
+        'rows.$.startTime': req.body.startTime,
+        'rows.$.endTime': req.body.endTime,
+        'rows.$.totalHours': req.body.totalHours,
+        'rows.$.notes': req.body.notes
+      }}
+    );
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'Row not found or not authorized' });
+    }
+    notifyDataChange('crewChanged', null, req.params.id);
+    res.json({ message: 'Row updated' });
+  } catch (err) {
+    console.error('Error updating row:', err);
+    res.status(500).json({ error: 'Failed to update row' });
   }
-  const rowIndex = table.rows.findIndex(r => r._id && r._id.toString() === req.params.rowId);
-  if (rowIndex === -1) {
-    return res.status(404).json({ error: 'Row not found' });
-  }
-  // Update fields
-  table.rows[rowIndex] = { ...table.rows[rowIndex]._doc, ...req.body, _id: table.rows[rowIndex]._id };
-  await table.save();
-  notifyDataChange('crewChanged', null, req.params.id);
-  notifyDataChange('tableUpdated', null, req.params.id);
-  res.json({ message: 'Row updated' });
 });
 
 app.delete('/api/tables/:id/rows-by-id/:rowId', authenticate, async (req, res) => {
   if (!req.params.id || req.params.id === "null" || !req.params.rowId) {
     return res.status(400).json({ error: "Invalid table ID or row ID" });
   }
-  const table = await Table.findById(req.params.id);
-  if (!table || !table.owners.includes(req.user.id)) {
-    return res.status(403).json({ error: 'Not authorized or not found' });
+  try {
+    // Use atomic MongoDB $pull to avoid version conflicts
+    const result = await Table.updateOne(
+      { _id: req.params.id, owners: req.user.id },
+      { $pull: { rows: { _id: req.params.rowId } } }
+    );
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'Table not found or not authorized' });
+    }
+    notifyDataChange('crewChanged', null, req.params.id);
+    res.json({ message: 'Row deleted' });
+  } catch (err) {
+    console.error('Error deleting row:', err);
+    res.status(500).json({ error: 'Failed to delete row' });
   }
-  const rowIndex = table.rows.findIndex(r => r._id && r._id.toString() === req.params.rowId);
-  if (rowIndex === -1) {
-    return res.status(404).json({ error: 'Row not found' });
+});
+
+// Bulk crew update endpoint - handles multiple updates and deletes in one request
+app.put('/api/tables/:id/crew-bulk', authenticate, async (req, res) => {
+  if (!req.params.id || req.params.id === "null") {
+    return res.status(400).json({ error: "Invalid table ID" });
   }
-  table.rows.splice(rowIndex, 1);
-  await table.save();
-  notifyDataChange('crewChanged', null, req.params.id);
-  notifyDataChange('tableUpdated', null, req.params.id);
-  res.json({ message: 'Row deleted' });
+  try {
+    const { updates, deletes } = req.body;
+    // updates: [{ rowId, data: { name, role, startTime, endTime, totalHours, notes, date } }]
+    // deletes: [rowId, rowId, ...]
+    
+    // Verify ownership once
+    const table = await Table.findById(req.params.id).select('owners');
+    if (!table || !table.owners.includes(req.user.id)) {
+      return res.status(403).json({ error: 'Not authorized or not found' });
+    }
+    
+    let successCount = 0;
+    
+    // Process deletes first (as a single atomic $pull)
+    if (Array.isArray(deletes) && deletes.length > 0) {
+      const deleteIds = deletes.map(id => new mongoose.Types.ObjectId(id));
+      await Table.updateOne(
+        { _id: req.params.id },
+        { $pull: { rows: { _id: { $in: deleteIds } } } }
+      );
+      successCount += deletes.length;
+    }
+    
+    // Process updates one by one using atomic $set (no version conflicts)
+    if (Array.isArray(updates) && updates.length > 0) {
+      for (const { rowId, data } of updates) {
+        if (!rowId || !data) continue;
+        const setFields = {};
+        for (const field of ['date', 'name', 'role', 'startTime', 'endTime', 'totalHours', 'notes']) {
+          if (data[field] !== undefined) {
+            setFields[`rows.$.${field}`] = data[field];
+          }
+        }
+        if (Object.keys(setFields).length > 0) {
+          await Table.updateOne(
+            { _id: req.params.id, 'rows._id': rowId },
+            { $set: setFields }
+          );
+          successCount++;
+        }
+      }
+    }
+    
+    // Single notification after all changes
+    if (successCount > 0) {
+      notifyDataChange('crewChanged', null, req.params.id);
+    }
+    
+    res.json({ message: `${successCount} operations completed`, successCount });
+  } catch (err) {
+    console.error('Error in bulk crew update:', err);
+    res.status(500).json({ error: 'Failed to process bulk update' });
+  }
 });
 
 // PATCH endpoint for partial updates (e.g., crewRates)
@@ -5376,6 +9563,108 @@ app.patch('/api/tables/:id', authenticate, async (req, res) => {
     return res.json({ crewRates: table.crewRates });
   }
   res.status(400).json({ error: 'No valid fields to update' });
+});
+
+// PATCH endpoint for archiving events
+app.patch('/api/tables/:id/archive', authenticate, async (req, res) => {
+  if (!req.params.id || req.params.id === "null") {
+    return res.status(400).json({ error: "Invalid table ID" });
+  }
+  
+  try {
+    const table = await Table.findById(req.params.id);
+    if (!table) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    
+    if (!table.owners.includes(req.user.id)) {
+      return res.status(403).json({ error: 'Not authorized - only owners can archive events' });
+    }
+    
+    // Update the archived status
+    table.archived = req.body.archived !== undefined ? req.body.archived : true;
+    await table.save();
+    
+    // Notify clients of the change
+    notifyDataChange('tableArchived', { tableId: table._id, archived: table.archived });
+    
+    res.json({ 
+      message: table.archived ? 'Event archived successfully' : 'Event unarchived successfully',
+      archived: table.archived 
+    });
+    
+  } catch (error) {
+    console.error('Archive endpoint error:', error);
+    res.status(500).json({ error: 'Failed to archive event' });
+  }
+});
+
+// User-specific event archiving endpoint
+app.patch('/api/tables/:id/user-archive', authenticate, async (req, res) => {
+  if (!req.params.id || req.params.id === "null") {
+    return res.status(400).json({ error: "Invalid table ID" });
+  }
+
+  try {
+    const table = await Table.findById(req.params.id);
+    if (!table) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    // Check if user has access to this event (owner, lead, or shared with)
+    const userId = req.user.id;
+    const hasAccess = table.owners.includes(userId) || 
+                     table.leads.includes(userId) || 
+                     table.sharedWith.includes(userId);
+    
+    if (!hasAccess) {
+      return res.status(403).json({ error: 'Not authorized - no access to this event' });
+    }
+
+    // Get the user document
+    const User = require('./models/User');
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const archive = req.body.archive !== undefined ? req.body.archive : true;
+    const tableId = table._id;
+
+    // Initialize archivedEvents if it doesn't exist (for existing users in production)
+    if (!user.archivedEvents) {
+      user.archivedEvents = [];
+    }
+
+    if (archive) {
+      // Add to user's archived events if not already there
+      const userArchivedIds = user.archivedEvents.map(id => id.toString());
+      if (!userArchivedIds.includes(tableId.toString())) {
+        user.archivedEvents.push(tableId);
+      }
+    } else {
+      // Remove from user's archived events
+      user.archivedEvents = user.archivedEvents.filter(id => id.toString() !== tableId.toString());
+    }
+
+    await user.save();
+
+    // Notify clients of the change
+    notifyDataChange('userEventArchived', { 
+      userId: userId,
+      tableId: tableId, 
+      archived: archive 
+    });
+
+    res.json({ 
+      message: archive ? 'Event archived for you' : 'Event unarchived for you',
+      archived: archive 
+    });
+
+  } catch (error) {
+    console.error('User archive endpoint error:', error);
+    res.status(500).json({ error: 'Failed to archive event for user' });
+  }
 });
 
 // Convert PDF to image
@@ -5464,5 +9753,3 @@ app.get('/api/tables/:id/documents/:documentId/view', authenticate, async (req, 
     res.status(500).json({ error: 'Failed to view document' });
   }
 });
-
-// End of server.js

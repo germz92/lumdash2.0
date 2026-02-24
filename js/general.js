@@ -6,6 +6,2708 @@ let tableId = params.get('id') || localStorage.getItem('eventId');
 let isOwner = false;
 let clockInterval = null; // Global clock interval for time modal
 let isSummaryExpanded = true; // Track Event Summary collapse state
+let currentTableData = null; // Store table data for dark theme
+
+// ========================================
+// DARK THEME GENERAL PAGE FUNCTIONS
+// ========================================
+
+function isDarkTheme() {
+  return document.querySelector('.dark-theme.general-page') !== null;
+}
+
+// Parse date string as local date to avoid timezone shifts
+function parseLocalDate(dateStr) {
+  if (!dateStr) return null;
+  // Handle ISO date strings like "2026-01-15" or "2026-01-15T00:00:00.000Z"
+  const str = String(dateStr);
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [, year, month, day] = match;
+    // Create date in local timezone at midnight
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0);
+  }
+  // Fallback to regular parsing
+  return new Date(dateStr);
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  const date = parseLocalDate(dateStr);
+  const options = { month: 'short', day: 'numeric', year: 'numeric' };
+  return date.toLocaleDateString('en-US', options);
+}
+
+function formatDateRange(start, end) {
+  if (!start) return 'Dates not set';
+  const startDate = parseLocalDate(start);
+  const endDate = end ? parseLocalDate(end) : null;
+  
+  const startMonth = startDate.toLocaleDateString('en-US', { month: 'short' });
+  const startDay = startDate.getDate();
+  const startYear = startDate.getFullYear();
+  
+  if (!endDate) return `${startMonth} ${startDay}, ${startYear}`;
+  
+  const endMonth = endDate.toLocaleDateString('en-US', { month: 'short' });
+  const endDay = endDate.getDate();
+  const endYear = endDate.getFullYear();
+  
+  if (startYear === endYear && startMonth === endMonth) {
+    return `${startMonth} ${startDay} → ${endDay}, ${startYear}`;
+  } else if (startYear === endYear) {
+    return `${startMonth} ${startDay} → ${endMonth} ${endDay}, ${startYear}`;
+  }
+  return `${startMonth} ${startDay}, ${startYear} → ${endMonth} ${endDay}, ${endYear}`;
+}
+
+function formatCurrency(amount) {
+  if (!amount) return '$0';
+  const num = parseFloat(amount.toString().replace(/[^0-9.-]/g, ''));
+  if (isNaN(num)) return '$0';
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0, maximumFractionDigits: 0 }).format(num);
+}
+
+function formatNumber(num) {
+  if (!num) return '0';
+  const n = parseInt(num.toString().replace(/[^0-9]/g, ''));
+  if (isNaN(n)) return '0';
+  return new Intl.NumberFormat('en-US').format(n);
+}
+
+function getEventStatus(start, end) {
+  if (!start) return 'upcoming';
+  const now = new Date();
+  const startDate = new Date(start);
+  const endDate = end ? new Date(end) : startDate;
+  
+  if (now < startDate) return 'upcoming';
+  if (now > endDate) return 'past';
+  return 'live';
+}
+
+function getInitials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(' ');
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
+function renderDarkThemeHeader(table) {
+  const general = table.general || {};
+  
+  // Event Title
+  const titleEl = document.getElementById('eventTitle');
+  if (titleEl) titleEl.textContent = table.title || 'Untitled Event';
+  
+  // Client (stored in general.client)
+  const clientEl = document.getElementById('eventClient');
+  if (clientEl) clientEl.textContent = general.client || 'No client';
+  
+  // Dates
+  const datesEl = document.getElementById('eventDates');
+  if (datesEl) datesEl.textContent = formatDateRange(general.start, general.end);
+  
+  // Location Header
+  const locationEl = document.getElementById('eventLocationHeader');
+  if (locationEl) {
+    const city = general.city || '';
+    const state = general.state || '';
+    locationEl.textContent = city && state ? `${city}, ${state}` : (general.location || 'Location TBD');
+  }
+  
+  // Status Badge
+  const statusBadge = document.getElementById('eventStatusBadge');
+  if (statusBadge) {
+    const status = getEventStatus(general.start, general.end);
+    statusBadge.className = `event-status-badge ${status}`;
+    statusBadge.innerHTML = `<span class="status-dot"></span><span>${status.toUpperCase()}</span>`;
+  }
+}
+
+function renderDarkThemeSummary(table) {
+  const general = table.general || {};
+  
+  // Notes/Summary (only notes in this card now)
+  const notesEl = document.getElementById('summaryNotes');
+  if (notesEl) {
+    const summary = general.summary || '';
+    if (summary) {
+      // Display rich HTML content with URL linkification
+      if (summary.includes('<') && summary.includes('>')) {
+        notesEl.innerHTML = linkifyText(summary);
+      } else {
+        // Plain text - preserve line breaks
+        notesEl.innerHTML = `<p>${linkifyText(summary).replace(/\n/g, '<br>')}</p>`;
+      }
+      notesEl.classList.remove('empty');
+    } else {
+      notesEl.innerHTML = '<p class="empty-notes">No notes added yet. Click edit to add notes.</p>';
+      notesEl.classList.add('empty');
+    }
+  }
+  
+  // Event Info Card - Client and Location
+  const clientEl = document.getElementById('summaryClient');
+  if (clientEl) clientEl.textContent = general.client || 'No client';
+  
+  const cityEl = document.getElementById('summaryCity');
+  const stateEl = document.getElementById('summaryState');
+  if (cityEl) cityEl.textContent = general.city || 'City';
+  if (stateEl) stateEl.textContent = general.state || 'State';
+}
+
+function renderDarkThemeStats(table) {
+  const general = table.general || {};
+  
+  // Start Date
+  const startEl = document.getElementById('statStartDate');
+  if (startEl) startEl.textContent = formatDate(general.start);
+  
+  // End Date
+  const endEl = document.getElementById('statEndDate');
+  if (endEl) endEl.textContent = formatDate(general.end);
+  
+  // Budget
+  const budgetEl = document.getElementById('statBudget');
+  if (budgetEl) budgetEl.textContent = formatCurrency(general.budget);
+  
+  // Attendees
+  const attendeesEl = document.getElementById('statAttendees');
+  if (attendeesEl) attendeesEl.textContent = formatNumber(general.attendees);
+}
+
+function renderDarkThemeContacts(contacts) {
+  const grid = document.getElementById('contactsGrid');
+  if (!grid) return;
+  
+  grid.innerHTML = '';
+  
+  if (!contacts || contacts.length === 0) {
+    grid.innerHTML = '<div class="empty-state">No contacts added yet</div>';
+    return;
+  }
+  
+  contacts.forEach((contact, index) => {
+    const card = document.createElement('div');
+    card.className = 'contact-card clickable';
+    card.dataset.contactIndex = index;
+    card.innerHTML = `
+      <div class="contact-avatar initials">${getInitials(contact.name)}</div>
+      <div class="contact-info">
+        <div class="contact-name">${contact.name || 'Unknown'}</div>
+        <div class="contact-role">${contact.role || 'No role specified'}</div>
+        <div class="contact-details">
+          ${contact.number ? `<div class="contact-detail"><span class="material-symbols-outlined">call</span><span>${contact.number}</span></div>` : ''}
+          ${contact.email ? `<div class="contact-detail"><span class="material-symbols-outlined">mail</span><span>${contact.email}</span></div>` : ''}
+        </div>
+      </div>
+    `;
+    
+    // Click handler to edit contact
+    card.addEventListener('click', (e) => {
+      // Prevent opening modal when clicking action buttons
+      if (e.target.closest('.contact-action-btn')) return;
+      openEditContactModal(index);
+    });
+    
+    grid.appendChild(card);
+  });
+}
+
+function renderDarkThemeLocations(locations) {
+  const list = document.getElementById('locationsList');
+  if (!list) return;
+  
+  list.innerHTML = '';
+  
+  if (!locations || locations.length === 0) {
+    list.innerHTML = '<div class="empty-state">No locations added yet</div>';
+    return;
+  }
+  
+  locations.forEach((loc, index) => {
+    const item = document.createElement('div');
+    item.className = 'location-item clickable';
+    item.dataset.locationIndex = index;
+    
+    const addressLink = loc.address ? 
+      `https://www.google.com/maps/search/?q=${encodeURIComponent(loc.address)}` : '#';
+    
+    item.innerHTML = `
+      <div class="location-icon">
+        <span class="material-symbols-outlined">place</span>
+      </div>
+      <div class="location-info">
+        <div class="location-name">${loc.name || 'Unnamed Location'}</div>
+        <div class="location-address">${loc.address || 'No address'}</div>
+      </div>
+      <div class="location-actions">
+        <button class="location-action-btn open-maps-btn" title="Open in Maps">
+          <span class="material-symbols-outlined">open_in_new</span>
+        </button>
+      </div>
+      ${loc.event ? `<div class="location-event-badge">${loc.event}</div>` : ''}
+    `;
+    
+    // Click handler to edit location
+    item.addEventListener('click', (e) => {
+      // Prevent opening modal when clicking the maps button
+      if (e.target.closest('.open-maps-btn')) {
+        window.open(addressLink, '_blank');
+        return;
+      }
+      openEditLocationModal(index);
+    });
+    
+    list.appendChild(item);
+  });
+}
+
+async function fetchWeatherForEvent(city, startDate, endDate) {
+  const forecastEl = document.getElementById('weatherForecast');
+  const conditionEl = document.getElementById('weatherCondition');
+  
+  if (!forecastEl || !city) {
+    renderWeatherPlaceholder('No city set');
+    return;
+  }
+  
+  // Show loading state
+  forecastEl.innerHTML = `
+    <div class="weather-loading">
+      <span class="material-symbols-outlined spinning">sync</span>
+      <span>Loading weather...</span>
+    </div>
+  `;
+  if (conditionEl) conditionEl.textContent = 'Loading...';
+  
+  try {
+    // Use OpenWeatherMap free API (user needs to set their API key)
+    const apiKey = window.OPENWEATHER_API_KEY || localStorage.getItem('openweather_api_key');
+    
+    if (!apiKey) {
+      renderWeatherPlaceholder('API key needed');
+      return;
+    }
+    
+    // Get coordinates for the city
+    const geoUrl = `https://api.openweathermap.org/geo/1.0/direct?q=${encodeURIComponent(city)}&limit=1&appid=${apiKey}`;
+    const geoRes = await fetch(geoUrl);
+    
+    // Check for API errors
+    if (geoRes.status === 401) {
+      console.error('OpenWeatherMap API key invalid or not yet activated (can take up to 2 hours)');
+      renderWeatherPlaceholder('API key activating...');
+      return;
+    }
+    
+    if (!geoRes.ok) {
+      console.error('Weather geo API error:', geoRes.status);
+      renderWeatherPlaceholder('Weather unavailable');
+      return;
+    }
+    
+    const geoData = await geoRes.json();
+    
+    if (!geoData || geoData.length === 0) {
+      renderWeatherPlaceholder('City not found');
+      return;
+    }
+    
+    const { lat, lon } = geoData[0];
+    
+    // Get 5-day forecast
+    const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lon}&units=imperial&appid=${apiKey}`;
+    const forecastRes = await fetch(forecastUrl);
+    const forecastData = await forecastRes.json();
+    
+    if (!forecastData || !forecastData.list) {
+      renderWeatherPlaceholder('Weather unavailable');
+      return;
+    }
+    
+    // Check if event dates are valid for weather lookup
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    // Safely parse event dates
+    let eventStartDate = null;
+    let eventEndDate = null;
+    
+    try {
+      if (startDate && startDate.trim()) {
+        const startStr = startDate.includes('T') ? startDate.split('T')[0] : startDate;
+        eventStartDate = new Date(startStr + 'T00:00:00');
+        if (isNaN(eventStartDate.getTime())) eventStartDate = null;
+      }
+      if (endDate && endDate.trim()) {
+        const endStr = endDate.includes('T') ? endDate.split('T')[0] : endDate;
+        eventEndDate = new Date(endStr + 'T23:59:59');
+        if (isNaN(eventEndDate.getTime())) eventEndDate = null;
+      }
+      if (eventStartDate && !eventEndDate) {
+        eventEndDate = new Date(eventStartDate);
+        eventEndDate.setHours(23, 59, 59);
+      }
+    } catch (e) {
+      console.warn('Error parsing event dates for weather:', e);
+    }
+    
+    // Check if event is in the past
+    if (eventEndDate && eventEndDate < today) {
+      renderWeatherPlaceholder('Event has passed');
+      return;
+    }
+    
+    // Check if event is too far in the future (beyond 5 days)
+    // Weather APIs typically provide 5-day forecasts
+    const forecastDays = 5;
+    const forecastLimit = new Date(today);
+    forecastLimit.setDate(forecastLimit.getDate() + forecastDays);
+    
+    if (eventStartDate && eventStartDate > forecastLimit) {
+      const daysUntilEvent = Math.ceil((eventStartDate - today) / (1000 * 60 * 60 * 24));
+      const daysUntilAvailable = daysUntilEvent - forecastDays;
+      
+      if (daysUntilAvailable <= 0) {
+        // Should be available now, try to fetch anyway
+      } else if (daysUntilAvailable === 1) {
+        renderWeatherPlaceholder('Available tomorrow');
+        return;
+      } else {
+        renderWeatherPlaceholder(`Available in ${daysUntilAvailable} days`);
+        return;
+      }
+    }
+    
+    // Process forecast data - group by day and filter to event dates
+    const dailyForecasts = processForecastData(forecastData.list, startDate, endDate);
+    
+    if (dailyForecasts.length === 0) {
+      // If no event dates set, show next few days
+      if (!eventStartDate) {
+        const allForecasts = processForecastData(forecastData.list, null, null);
+        renderWeatherForecast(allForecasts, conditionEl);
+        return;
+      }
+      renderWeatherPlaceholder('No forecast for event dates');
+      return;
+    }
+    
+    renderWeatherForecast(dailyForecasts, conditionEl);
+    
+  } catch (err) {
+    console.error('Weather fetch error:', err);
+    renderWeatherPlaceholder('Weather unavailable');
+  }
+}
+
+function processForecastData(forecastList, eventStart, eventEnd) {
+  const dailyData = {};
+  
+  // Parse event dates safely
+  let eventStartDate = null;
+  let eventEndDate = null;
+  let eventStartKey = null;
+  let eventEndKey = null;
+  
+  try {
+    if (eventStart && eventStart.trim()) {
+      // Handle both ISO format and date-only format
+      const startStr = eventStart.includes('T') ? eventStart.split('T')[0] : eventStart;
+      eventStartDate = new Date(startStr + 'T00:00:00');
+      if (!isNaN(eventStartDate.getTime())) {
+        eventStartKey = startStr;
+      } else {
+        eventStartDate = null;
+      }
+    }
+    
+    if (eventEnd && eventEnd.trim()) {
+      const endStr = eventEnd.includes('T') ? eventEnd.split('T')[0] : eventEnd;
+      eventEndDate = new Date(endStr + 'T23:59:59');
+      if (!isNaN(eventEndDate.getTime())) {
+        eventEndKey = endStr;
+      } else {
+        eventEndDate = null;
+      }
+    }
+    
+    // If we have start but no end, use start as end
+    if (eventStartDate && !eventEndDate) {
+      eventEndDate = eventStartDate;
+      eventEndKey = eventStartKey;
+    }
+  } catch (e) {
+    console.warn('Error parsing event dates:', e);
+  }
+  
+  // Group forecasts by day
+  forecastList.forEach(item => {
+    const date = new Date(item.dt * 1000);
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateKey = `${year}-${month}-${day}`;
+    
+    if (!dailyData[dateKey]) {
+      dailyData[dateKey] = {
+        date: date,
+        dateKey: dateKey,
+        temps: [],
+        icons: [],
+        descriptions: []
+      };
+    }
+    
+    dailyData[dateKey].temps.push(item.main.temp);
+    dailyData[dateKey].icons.push(item.weather[0].icon);
+    dailyData[dateKey].descriptions.push(item.weather[0].main);
+  });
+  
+  // Convert to array and calculate high/low
+  let days = Object.keys(dailyData).sort().map(key => {
+    const day = dailyData[key];
+    const high = Math.round(Math.max(...day.temps));
+    const low = Math.round(Math.min(...day.temps));
+    const mostCommonIcon = getMostCommon(day.icons);
+    const mostCommonDesc = getMostCommon(day.descriptions);
+    
+    return {
+      date: day.date,
+      dateKey: day.dateKey,
+      high,
+      low,
+      icon: mostCommonIcon,
+      description: mostCommonDesc
+    };
+  });
+  
+  // Filter to only show event dates if we have valid event dates
+  if (eventStartKey && eventEndKey) {
+    days = days.filter(day => {
+      return day.dateKey >= eventStartKey && day.dateKey <= eventEndKey;
+    });
+  }
+  
+  // Limit to 5 days max
+  return days.slice(0, 5);
+}
+
+function getMostCommon(arr) {
+  const counts = {};
+  arr.forEach(item => {
+    counts[item] = (counts[item] || 0) + 1;
+  });
+  return Object.entries(counts).sort((a, b) => b[1] - a[1])[0][0];
+}
+
+function getWeatherEmoji(iconCode) {
+  const iconMap = {
+    '01d': '☀️', '01n': '🌙',
+    '02d': '⛅', '02n': '☁️',
+    '03d': '☁️', '03n': '☁️',
+    '04d': '☁️', '04n': '☁️',
+    '09d': '🌧️', '09n': '🌧️',
+    '10d': '🌦️', '10n': '🌧️',
+    '11d': '⛈️', '11n': '⛈️',
+    '13d': '❄️', '13n': '❄️',
+    '50d': '🌫️', '50n': '🌫️'
+  };
+  return iconMap[iconCode] || '🌤️';
+}
+
+function formatDayName(date) {
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  
+  // Show weekday and date (e.g., "Mon 15")
+  const weekday = date.toLocaleDateString('en-US', { weekday: 'short' });
+  const dayNum = date.getDate();
+  
+  // Add "Today" or "Tomorrow" indicator if applicable
+  if (date.toDateString() === today.toDateString()) {
+    return `Today`;
+  }
+  if (date.toDateString() === tomorrow.toDateString()) {
+    return `Tomorrow`;
+  }
+  
+  return `${weekday} ${dayNum}`;
+}
+
+function renderWeatherForecast(days, conditionEl) {
+  const forecastEl = document.getElementById('weatherForecast');
+  if (!forecastEl) return;
+  
+  if (days.length === 0) {
+    renderWeatherPlaceholder('No forecast available');
+    return;
+  }
+  
+  forecastEl.innerHTML = days.map(day => `
+    <div class="weather-day">
+      <div class="weather-day-name">${formatDayName(day.date)}</div>
+      <div class="weather-icon">${getWeatherEmoji(day.icon)}</div>
+      <div class="weather-temp"><span class="high">${day.high}°</span>/<span class="low">${day.low}°</span></div>
+    </div>
+  `).join('');
+  
+  if (conditionEl && days[0]) {
+    conditionEl.textContent = days[0].description;
+  }
+}
+
+function renderWeatherPlaceholder(message) {
+  const forecastEl = document.getElementById('weatherForecast');
+  const conditionEl = document.getElementById('weatherCondition');
+  
+  if (forecastEl) {
+    forecastEl.innerHTML = `
+      <div class="weather-placeholder">
+        <span class="material-symbols-outlined">cloud_off</span>
+        <span>${message}</span>
+      </div>
+    `;
+  }
+  
+  if (conditionEl) {
+    conditionEl.textContent = message;
+  }
+}
+
+function renderDarkThemeWeather(weather) {
+  // This is now a fallback - actual weather is fetched separately
+  const forecastEl = document.getElementById('weatherForecast');
+  const conditionEl = document.getElementById('weatherCondition');
+  
+  if (!forecastEl) return;
+  
+  // Show placeholder until real weather is fetched
+  forecastEl.innerHTML = `
+    <div class="weather-day">
+      <div class="weather-day-name">Today</div>
+      <div class="weather-icon">🌤️</div>
+      <div class="weather-temp"><span class="high">--°</span>/<span class="low">--°</span></div>
+    </div>
+    <div class="weather-day">
+      <div class="weather-day-name">Tomorrow</div>
+      <div class="weather-icon">☀️</div>
+      <div class="weather-temp"><span class="high">--°</span>/<span class="low">--°</span></div>
+    </div>
+    <div class="weather-day">
+      <div class="weather-day-name">Wed</div>
+      <div class="weather-icon">🌧️</div>
+      <div class="weather-temp"><span class="high">--°</span>/<span class="low">--°</span></div>
+    </div>
+  `;
+  
+  if (conditionEl) {
+    conditionEl.textContent = weather || 'Loading...';
+  }
+}
+
+// Modal show/hide functions for dark theme
+function showEditModal() {
+  const modal = document.getElementById('editEventModal');
+  if (modal) {
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function hideEditModal() {
+  const modal = document.getElementById('editEventModal');
+  if (modal) {
+    modal.classList.remove('show');
+    document.body.style.overflow = '';
+  }
+}
+
+function showContactModal() {
+  const modal = document.getElementById('addContactModal');
+  if (modal) {
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function hideContactModal() {
+  const modal = document.getElementById('addContactModal');
+  if (modal) {
+    modal.classList.remove('show');
+    document.body.style.overflow = '';
+    resetContactModal();
+  }
+}
+
+function showLocationModal() {
+  const modal = document.getElementById('addLocationModal');
+  if (modal) {
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+  }
+}
+
+function hideLocationModal() {
+  const modal = document.getElementById('addLocationModal');
+  if (modal) {
+    modal.classList.remove('show');
+    document.body.style.overflow = '';
+    resetLocationModal();
+  }
+}
+
+// Track which item is being edited (-1 = adding new)
+let editingContactIndex = -1;
+let editingLocationIndex = -1;
+
+function openEditContactModal(index) {
+  editingContactIndex = index;
+  const contact = currentTableData?.general?.contacts?.[index];
+  if (!contact) return;
+  
+  // Populate form with existing data
+  document.getElementById('contactName').value = contact.name || '';
+  document.getElementById('contactRole').value = contact.role || '';
+  document.getElementById('contactPhone').value = contact.number || '';
+  document.getElementById('contactEmail').value = contact.email || '';
+  
+  // Update modal title and button
+  const modalTitle = document.querySelector('#addContactModal .modal-header-dark h3');
+  const saveBtn = document.getElementById('saveContactBtn');
+  if (modalTitle) modalTitle.textContent = 'Edit Contact';
+  if (saveBtn) saveBtn.textContent = 'Save Changes';
+  
+  // Add delete button if not present
+  let deleteBtn = document.getElementById('deleteContactBtn');
+  if (!deleteBtn) {
+    const footer = document.querySelector('#addContactModal .modal-footer-dark');
+    if (footer) {
+      deleteBtn = document.createElement('button');
+      deleteBtn.id = 'deleteContactBtn';
+      deleteBtn.className = 'btn-danger';
+      deleteBtn.innerHTML = '<span class="material-symbols-outlined">delete</span> Delete';
+      deleteBtn.onclick = () => deleteContact(index);
+      footer.insertBefore(deleteBtn, footer.firstChild);
+    }
+  }
+  deleteBtn.style.display = 'flex';
+  
+  showContactModal();
+}
+
+function openEditLocationModal(index) {
+  editingLocationIndex = index;
+  const location = currentTableData?.general?.locations?.[index];
+  if (!location) return;
+  
+  // Populate form with existing data
+  document.getElementById('locationName').value = location.name || '';
+  document.getElementById('locationAddress').value = location.address || '';
+  const eventField = document.getElementById('locationEvent');
+  if (eventField) eventField.value = location.event || '';
+  
+  // Update modal title and button
+  const modalTitle = document.querySelector('#addLocationModal .modal-header-dark h3');
+  const saveBtn = document.getElementById('saveLocationBtn');
+  if (modalTitle) modalTitle.textContent = 'Edit Location';
+  if (saveBtn) saveBtn.textContent = 'Save Changes';
+  
+  // Add delete button if not present
+  let deleteBtn = document.getElementById('deleteLocationBtn');
+  if (!deleteBtn) {
+    const footer = document.querySelector('#addLocationModal .modal-footer-dark');
+    if (footer) {
+      deleteBtn = document.createElement('button');
+      deleteBtn.id = 'deleteLocationBtn';
+      deleteBtn.className = 'btn-danger';
+      deleteBtn.innerHTML = '<span class="material-symbols-outlined">delete</span> Delete';
+      deleteBtn.onclick = () => deleteLocation(index);
+      footer.insertBefore(deleteBtn, footer.firstChild);
+    }
+  }
+  deleteBtn.style.display = 'flex';
+  
+  showLocationModal();
+}
+
+async function deleteContact(index) {
+  if (!confirm('Are you sure you want to delete this contact?')) return;
+  
+  const tableId = currentTableData?._id;
+  if (!tableId) return;
+  
+  try {
+    const contacts = [...(currentTableData?.general?.contacts || [])];
+    contacts.splice(index, 1);
+    
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/general`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': window.token
+      },
+      body: JSON.stringify({
+        general: {
+          ...currentTableData?.general,
+          contacts
+        }
+      })
+    });
+    
+    if (!res.ok) throw new Error('Failed to delete contact');
+    
+    hideContactModal();
+    initPageDarkTheme(tableId);
+  } catch (err) {
+    console.error('Delete contact error:', err);
+    alert('Failed to delete contact');
+  }
+}
+
+async function deleteLocation(index) {
+  if (!confirm('Are you sure you want to delete this location?')) return;
+  
+  const tableId = currentTableData?._id;
+  if (!tableId) return;
+  
+  try {
+    const locations = [...(currentTableData?.general?.locations || [])];
+    locations.splice(index, 1);
+    
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/general`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': window.token
+      },
+      body: JSON.stringify({
+        general: {
+          ...currentTableData?.general,
+          locations
+        }
+      })
+    });
+    
+    if (!res.ok) throw new Error('Failed to delete location');
+    
+    hideLocationModal();
+    initPageDarkTheme(tableId);
+  } catch (err) {
+    console.error('Delete location error:', err);
+    alert('Failed to delete location');
+  }
+}
+
+function resetContactModal() {
+  editingContactIndex = -1;
+  const nameEl = document.getElementById('contactName');
+  const roleEl = document.getElementById('contactRole');
+  const phoneEl = document.getElementById('contactPhone');
+  const emailEl = document.getElementById('contactEmail');
+  
+  if (nameEl) nameEl.value = '';
+  if (roleEl) roleEl.value = '';
+  if (phoneEl) phoneEl.value = '';
+  if (emailEl) emailEl.value = '';
+  
+  const modalTitle = document.querySelector('#addContactModal .modal-header-dark h3');
+  const saveBtn = document.getElementById('saveContactBtn');
+  const deleteBtn = document.getElementById('deleteContactBtn');
+  
+  if (modalTitle) modalTitle.textContent = 'Add Contact';
+  if (saveBtn) saveBtn.textContent = 'Add Contact';
+  if (deleteBtn) deleteBtn.style.display = 'none';
+}
+
+function resetLocationModal() {
+  editingLocationIndex = -1;
+  const nameEl = document.getElementById('locationName');
+  const addressEl = document.getElementById('locationAddress');
+  const eventEl = document.getElementById('locationEvent');
+  
+  if (nameEl) nameEl.value = '';
+  if (addressEl) addressEl.value = '';
+  if (eventEl) eventEl.value = '';
+  
+  const modalTitle = document.querySelector('#addLocationModal .modal-header-dark h3');
+  const saveBtn = document.getElementById('saveLocationBtn');
+  const deleteBtn = document.getElementById('deleteLocationBtn');
+  
+  if (modalTitle) modalTitle.textContent = 'Add Location';
+  if (saveBtn) saveBtn.textContent = 'Add Location';
+  if (deleteBtn) deleteBtn.style.display = 'none';
+}
+
+// Gallery URL Modal Functions
+function openGalleryModal() {
+  console.log('[Gallery] Opening gallery modal');
+  const urlInput = document.getElementById('galleryUrlInput');
+  if (urlInput) {
+    urlInput.value = currentTableData?.general?.galleryUrl || '';
+  }
+  
+  // Show the modal
+  const modal = document.getElementById('galleryUrlModal');
+  if (modal) {
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+  } else {
+    console.error('[Gallery] Gallery modal not found');
+  }
+}
+
+function hideGalleryModal() {
+  const modal = document.getElementById('galleryUrlModal');
+  if (modal) {
+    modal.classList.remove('show');
+    document.body.style.overflow = '';
+  }
+}
+
+async function saveGalleryUrl(tableId) {
+  const saveBtn = document.getElementById('saveGalleryBtn');
+  const urlInput = document.getElementById('galleryUrlInput');
+  
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+  }
+  
+  try {
+    let galleryUrl = urlInput?.value?.trim() || '';
+    
+    // Add https:// if URL doesn't have a protocol
+    if (galleryUrl && !galleryUrl.match(/^https?:\/\//i)) {
+      galleryUrl = 'https://' + galleryUrl;
+    }
+    
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/general`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': window.token
+      },
+      body: JSON.stringify({
+        general: {
+          ...currentTableData?.general,
+          galleryUrl: galleryUrl
+        }
+      })
+    });
+    
+    if (!res.ok) throw new Error('Failed to save gallery URL');
+    
+    // Update local data
+    if (currentTableData && currentTableData.general) {
+      currentTableData.general.galleryUrl = galleryUrl;
+    }
+    
+    hideGalleryModal();
+    
+    // Show success feedback
+    if (galleryUrl) {
+      alert('Gallery link saved! Click "Open Gallery" to visit the link.');
+    }
+  } catch (err) {
+    console.error('Save gallery URL error:', err);
+    alert('Failed to save gallery link');
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+    }
+  }
+}
+
+// Handle gallery button click (for inline onclick handler)
+function handleGalleryClick() {
+  console.log('[Gallery] handleGalleryClick called');
+  const galleryUrl = currentTableData?.general?.galleryUrl;
+  
+  if (galleryUrl && galleryUrl.trim()) {
+    console.log('[Gallery] Opening URL:', galleryUrl);
+    window.open(galleryUrl, '_blank');
+  } else if (isOwner || isAdmin()) {
+    console.log('[Gallery] Opening modal to set URL');
+    openGalleryModal();
+  } else {
+    alert('No gallery link has been set for this event.');
+  }
+}
+
+// ================================
+// Contract URL Modal Functions
+// ================================
+
+function openContractModal() {
+  console.log('[Contract] Opening contract modal');
+  const urlInput = document.getElementById('contractUrlInput');
+  if (urlInput) {
+    urlInput.value = currentTableData?.general?.contractUrl || '';
+  }
+  
+  // Show the modal
+  const modal = document.getElementById('contractUrlModal');
+  if (modal) {
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+  } else {
+    console.error('[Contract] Contract modal not found');
+  }
+}
+
+function hideContractModal() {
+  const modal = document.getElementById('contractUrlModal');
+  if (modal) {
+    modal.classList.remove('show');
+    document.body.style.overflow = '';
+  }
+}
+
+async function saveContractUrl(tableId) {
+  const saveBtn = document.getElementById('saveContractBtn');
+  const urlInput = document.getElementById('contractUrlInput');
+  
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+  }
+  
+  try {
+    let contractUrl = urlInput?.value?.trim() || '';
+    
+    // Add https:// if URL doesn't have a protocol
+    if (contractUrl && !contractUrl.match(/^https?:\/\//i)) {
+      contractUrl = 'https://' + contractUrl;
+    }
+    
+    console.log('[Contract] Saving contract URL:', contractUrl);
+    
+    const payload = {
+      general: {
+        ...currentTableData?.general,
+        contractUrl: contractUrl
+      }
+    };
+    
+    console.log('[Contract] Sending payload to server:', payload);
+    
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/general`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': window.token
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error('[Contract] Save failed:', errorText);
+      throw new Error('Failed to save contract URL');
+    }
+    
+    const savedData = await res.json();
+    console.log('[Contract] Server response:', savedData);
+    console.log('[Contract] Server response general:', savedData.general);
+    console.log('[Contract] Server response contractUrl:', savedData.general?.contractUrl);
+    
+    // Update local data
+    if (currentTableData && currentTableData.general) {
+      currentTableData.general.contractUrl = contractUrl;
+      console.log('[Contract] Updated local contractUrl:', currentTableData.general.contractUrl);
+    } else if (currentTableData) {
+      // Create general object if it doesn't exist
+      currentTableData.general = { contractUrl: contractUrl };
+      console.log('[Contract] Created general object with contractUrl:', contractUrl);
+    }
+    
+    hideContractModal();
+  } catch (err) {
+    console.error('Save contract URL error:', err);
+    alert('Failed to save contract link: ' + err.message);
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+    }
+  }
+}
+
+// Handle contract button click (for inline onclick handler)
+function handleContractClick() {
+  console.log('[Contract] handleContractClick called');
+  const contractUrl = currentTableData?.general?.contractUrl;
+  
+  if (contractUrl && contractUrl.trim()) {
+    console.log('[Contract] Opening URL:', contractUrl);
+    window.open(contractUrl, '_blank');
+  } else if (isOwner || isAdmin()) {
+    console.log('[Contract] Opening modal to set URL');
+    openContractModal();
+  } else {
+    alert('No contract link has been set for this event.');
+  }
+}
+
+// ================================
+// Invoice URL Modal Functions
+// ================================
+
+function openInvoiceModal() {
+  console.log('[Invoice] Opening invoice modal');
+  const urlInput = document.getElementById('invoiceUrlInput');
+  if (urlInput) {
+    urlInput.value = currentTableData?.general?.invoiceUrl || '';
+  }
+  
+  // Show the modal
+  const modal = document.getElementById('invoiceUrlModal');
+  if (modal) {
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+  } else {
+    console.error('[Invoice] Invoice modal not found');
+  }
+}
+
+function hideInvoiceModal() {
+  const modal = document.getElementById('invoiceUrlModal');
+  if (modal) {
+    modal.classList.remove('show');
+    document.body.style.overflow = '';
+  }
+}
+
+async function saveInvoiceUrl(tableId) {
+  const saveBtn = document.getElementById('saveInvoiceBtn');
+  const urlInput = document.getElementById('invoiceUrlInput');
+  
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+  }
+  
+  try {
+    let invoiceUrl = urlInput?.value?.trim() || '';
+    
+    // Add https:// if URL doesn't have a protocol
+    if (invoiceUrl && !invoiceUrl.match(/^https?:\/\//i)) {
+      invoiceUrl = 'https://' + invoiceUrl;
+    }
+    
+    console.log('[Invoice] Saving invoice URL:', invoiceUrl);
+    
+    const payload = {
+      general: {
+        ...currentTableData?.general,
+        invoiceUrl: invoiceUrl
+      }
+    };
+    
+    console.log('[Invoice] Sending payload to server:', payload);
+    
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/general`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': window.token
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.error('[Invoice] Save failed:', errorText);
+      throw new Error('Failed to save invoice URL');
+    }
+    
+    const savedData = await res.json();
+    console.log('[Invoice] Server response:', savedData);
+    console.log('[Invoice] Server response general:', savedData.general);
+    console.log('[Invoice] Server response invoiceUrl:', savedData.general?.invoiceUrl);
+    
+    // Update local data
+    if (currentTableData && currentTableData.general) {
+      currentTableData.general.invoiceUrl = invoiceUrl;
+      console.log('[Invoice] Updated local invoiceUrl:', currentTableData.general.invoiceUrl);
+    } else if (currentTableData) {
+      // Create general object if it doesn't exist
+      currentTableData.general = { invoiceUrl: invoiceUrl };
+      console.log('[Invoice] Created general object with invoiceUrl:', invoiceUrl);
+    }
+    
+    hideInvoiceModal();
+  } catch (err) {
+    console.error('Save invoice URL error:', err);
+    alert('Failed to save invoice link: ' + err.message);
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+    }
+  }
+}
+
+// Handle invoice button click (for inline onclick handler)
+function handleInvoiceClick() {
+  console.log('[Invoice] handleInvoiceClick called');
+  const invoiceUrl = currentTableData?.general?.invoiceUrl;
+  
+  if (invoiceUrl && invoiceUrl.trim()) {
+    console.log('[Invoice] Opening URL:', invoiceUrl);
+    window.open(invoiceUrl, '_blank');
+  } else if (isOwner || isAdmin()) {
+    console.log('[Invoice] Opening modal to set URL');
+    openInvoiceModal();
+  } else {
+    alert('No invoice link has been set for this event.');
+  }
+}
+
+// ================================
+// FTP Folder Names Functions
+// ================================
+let folderNamesEditMode = false;
+let originalFolderNames = [];
+
+async function loadFolderNames(tableId) {
+  console.log('[FolderNames] Loading folder names for tableId:', tableId);
+  try {
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/folder-logs`, {
+      headers: { Authorization: window.token }
+    });
+    
+    if (!res.ok) {
+      console.error('[FolderNames] Failed to load folder names:', res.status);
+      return;
+    }
+    
+    const data = await res.json();
+    console.log('[FolderNames] Loaded folder names:', data);
+    originalFolderNames = data.folders || [];
+    renderFolderNames(data.folders || []);
+  } catch (error) {
+    console.error('[FolderNames] Error loading folder names:', error);
+  }
+}
+
+function formatFolderDate(dateStr) {
+  if (!dateStr) return '';
+  const [year, month, day] = dateStr.split('-');
+  return new Date(Number(year), Number(month) - 1, Number(day)).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric'
+  });
+}
+
+function renderFolderNames(folders) {
+  const tableBody = document.getElementById('folderNamesTableBody');
+  const emptyEl = document.getElementById('folderNamesEmpty');
+  const editActionsEl = document.getElementById('folderNamesEditActions');
+  const tableWrapper = document.querySelector('.folder-names-table-wrapper');
+  
+  if (!tableBody) return;
+  
+  // Show/hide edit actions based on mode
+  if (editActionsEl) {
+    editActionsEl.style.display = folderNamesEditMode ? 'block' : 'none';
+  }
+  
+  // Handle empty state
+  if (!folders || folders.length === 0) {
+    if (!folderNamesEditMode) {
+      // Show empty state, hide table
+      if (emptyEl) emptyEl.style.display = 'flex';
+      if (tableWrapper) tableWrapper.style.display = 'none';
+      tableBody.innerHTML = '';
+      return;
+    } else {
+      // In edit mode, add one empty row
+      if (emptyEl) emptyEl.style.display = 'none';
+      if (tableWrapper) tableWrapper.style.display = 'block';
+      tableBody.innerHTML = createFolderRowHtml('', '', '', true);
+      return;
+    }
+  }
+  
+  // Show table, hide empty state
+  if (emptyEl) emptyEl.style.display = 'none';
+  if (tableWrapper) tableWrapper.style.display = 'block';
+  
+  // Render table rows
+  tableBody.innerHTML = folders.map(folder => 
+    createFolderRowHtml(folder.date || '', folder.folderName || '', folder.description || '', folderNamesEditMode)
+  ).join('');
+}
+
+function createFolderRowHtml(date, folderName, description, isEditable) {
+  if (isEditable) {
+    return `
+      <tr>
+        <td><input type="date" class="folder-date-input" value="${date}"></td>
+        <td><input type="text" class="folder-name-input" placeholder="Folder Name" value="${escapeHtml(folderName)}"></td>
+        <td><input type="text" class="folder-desc-input" placeholder="Description" value="${escapeHtml(description)}"></td>
+        <td class="action-col">
+          <button type="button" class="delete-row-btn" onclick="window.removeFolderRow(this)">
+            <span class="material-symbols-outlined">delete</span>
+          </button>
+        </td>
+      </tr>
+    `;
+  } else {
+    return `
+      <tr>
+        <td class="folder-date-cell">${formatFolderDate(date)}</td>
+        <td class="folder-name-cell"><span class="folder-name-text">${escapeHtml(folderName) || '—'}</span></td>
+        <td class="folder-desc-cell">${escapeHtml(description) || '—'}</td>
+        <td class="action-col"></td>
+      </tr>
+    `;
+  }
+}
+
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+function enterFolderNamesEditMode() {
+  console.log('[FolderNames] Entering edit mode');
+  if (!isOwner && !isAdmin()) {
+    alert('You do not have permission to edit folder names.');
+    return;
+  }
+  
+  folderNamesEditMode = true;
+  const editBtn = document.getElementById('editFolderNamesBtn');
+  if (editBtn) editBtn.style.display = 'none';
+  
+  renderFolderNames(originalFolderNames);
+}
+
+function exitFolderNamesEditMode() {
+  console.log('[FolderNames] Exiting edit mode');
+  folderNamesEditMode = false;
+  const editBtn = document.getElementById('editFolderNamesBtn');
+  if (editBtn) editBtn.style.display = 'block';
+  
+  renderFolderNames(originalFolderNames);
+}
+
+function addFolderRow() {
+  console.log('[FolderNames] Adding new row');
+  const tableBody = document.getElementById('folderNamesTableBody');
+  if (!tableBody) return;
+  
+  const row = document.createElement('tr');
+  row.innerHTML = createFolderRowHtml('', '', '', true).replace('<tr>', '').replace('</tr>', '');
+  tableBody.appendChild(row);
+}
+
+function removeFolderRow(button) {
+  console.log('[FolderNames] Removing row');
+  const row = button.closest('tr');
+  if (row) row.remove();
+}
+
+function collectFolderNamesData() {
+  const tableBody = document.getElementById('folderNamesTableBody');
+  if (!tableBody) return [];
+  
+  const rows = tableBody.querySelectorAll('tr');
+  return Array.from(rows).map(row => {
+    const dateInput = row.querySelector('.folder-date-input');
+    const nameInput = row.querySelector('.folder-name-input');
+    const descInput = row.querySelector('.folder-desc-input');
+    
+    return {
+      date: dateInput?.value || '',
+      folderName: nameInput?.value || '',
+      description: descInput?.value || ''
+    };
+  }).filter(item => item.date || item.folderName || item.description); // Filter out completely empty rows
+}
+
+async function saveFolderNames(tableId) {
+  console.log('[FolderNames] Saving folder names');
+  const saveBtn = document.getElementById('saveFolderNamesBtn');
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+  }
+  
+  try {
+    const folders = collectFolderNamesData();
+    console.log('[FolderNames] Data to save:', folders);
+    
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/folder-logs`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: window.token
+      },
+      body: JSON.stringify({ folders })
+    });
+    
+    if (!res.ok) {
+      throw new Error('Failed to save folder names');
+    }
+    
+    console.log('[FolderNames] Saved successfully');
+    originalFolderNames = folders;
+    exitFolderNamesEditMode();
+  } catch (error) {
+    console.error('[FolderNames] Error saving folder names:', error);
+    alert('Failed to save folder names. Please try again.');
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+    }
+  }
+}
+
+function setupFolderNamesEventListeners(tableId) {
+  console.log('[FolderNames] Setting up event listeners');
+  
+  const editBtn = document.getElementById('editFolderNamesBtn');
+  if (editBtn && !editBtn._listenerAttached) {
+    editBtn._listenerAttached = true;
+    editBtn.addEventListener('click', enterFolderNamesEditMode);
+    
+    // Hide edit button for non-owners/non-admins
+    if (!isOwner && !isAdmin()) {
+      editBtn.style.display = 'none';
+    }
+  }
+  
+  const addRowBtn = document.getElementById('addFolderRowBtn');
+  if (addRowBtn && !addRowBtn._listenerAttached) {
+    addRowBtn._listenerAttached = true;
+    addRowBtn.addEventListener('click', addFolderRow);
+  }
+  
+  const cancelBtn = document.getElementById('cancelFolderNamesBtn');
+  if (cancelBtn && !cancelBtn._listenerAttached) {
+    cancelBtn._listenerAttached = true;
+    cancelBtn.addEventListener('click', exitFolderNamesEditMode);
+  }
+  
+  const saveBtn = document.getElementById('saveFolderNamesBtn');
+  if (saveBtn && !saveBtn._listenerAttached) {
+    saveBtn._listenerAttached = true;
+    saveBtn.addEventListener('click', () => saveFolderNames(tableId));
+  }
+}
+
+// Expose folder names functions to window
+window.enterFolderNamesEditMode = enterFolderNamesEditMode;
+window.exitFolderNamesEditMode = exitFolderNamesEditMode;
+window.addFolderRow = addFolderRow;
+window.removeFolderRow = removeFolderRow;
+window.saveFolderNames = saveFolderNames;
+
+// ================================
+// Collapsible Cards Functions
+// ================================
+const COLLAPSED_CARDS_KEY = 'general_collapsed_cards';
+
+function getCollapsedCards() {
+  try {
+    const stored = localStorage.getItem(COLLAPSED_CARDS_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+function saveCollapsedCards(collapsed) {
+  try {
+    localStorage.setItem(COLLAPSED_CARDS_KEY, JSON.stringify(collapsed));
+  } catch (e) {
+    console.error('[General] Failed to save collapsed state:', e);
+  }
+}
+
+function toggleCardCollapse(cardElement) {
+  if (!cardElement) return;
+  
+  const cardId = cardElement.dataset.cardId;
+  const isCollapsed = cardElement.classList.toggle('collapsed');
+  
+  // Save state to localStorage
+  const collapsedCards = getCollapsedCards();
+  if (isCollapsed) {
+    collapsedCards[cardId] = true;
+  } else {
+    delete collapsedCards[cardId];
+  }
+  saveCollapsedCards(collapsedCards);
+  
+  console.log('[General] Card', cardId, 'collapsed:', isCollapsed);
+}
+
+function restoreCollapsedStates() {
+  const collapsedCards = getCollapsedCards();
+  const cards = document.querySelectorAll('.collapsible-card');
+  
+  cards.forEach(card => {
+    const cardId = card.dataset.cardId;
+    if (collapsedCards[cardId]) {
+      card.classList.add('collapsed');
+    }
+  });
+  
+  console.log('[General] Restored collapsed states:', Object.keys(collapsedCards));
+}
+
+// Expose collapse function to window
+window.toggleCardCollapse = toggleCardCollapse;
+
+// Expose gallery functions to window
+window.openGalleryModal = openGalleryModal;
+window.hideGalleryModal = hideGalleryModal;
+window.saveGalleryUrl = saveGalleryUrl;
+window.handleGalleryClick = handleGalleryClick;
+
+// Expose contract functions to window
+window.openContractModal = openContractModal;
+window.hideContractModal = hideContractModal;
+window.saveContractUrl = saveContractUrl;
+window.handleContractClick = handleContractClick;
+
+// Expose invoice functions to window
+window.openInvoiceModal = openInvoiceModal;
+window.hideInvoiceModal = hideInvoiceModal;
+window.saveInvoiceUrl = saveInvoiceUrl;
+window.handleInvoiceClick = handleInvoiceClick;
+
+// Expose to window for onclick handlers
+window.showEditModal = showEditModal;
+window.hideEditModal = hideEditModal;
+window.showContactModal = showContactModal;
+window.hideContactModal = hideContactModal;
+window.showLocationModal = showLocationModal;
+window.hideLocationModal = hideLocationModal;
+window.openEditContactModal = openEditContactModal;
+window.openEditLocationModal = openEditLocationModal;
+
+let isInlineEditMode = false;
+let isInfoEditMode = false;
+let isStatsEditMode = false;
+let notesQuillEditor = null;
+let quillLoaded = false;
+
+// Load Quill dynamically
+function loadQuill() {
+  return new Promise((resolve, reject) => {
+    // Check if Quill is already available
+    if (typeof Quill !== 'undefined') {
+      quillLoaded = true;
+      resolve();
+      return;
+    }
+    
+    // Load CSS first
+    if (!document.querySelector('link[href*="quill.snow.css"]')) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = 'https://cdn.quilljs.com/1.3.7/quill.snow.css';
+      link.crossOrigin = 'anonymous';
+      document.head.appendChild(link);
+    }
+    
+    // Remove any existing quill script that may have failed
+    const existingScript = document.querySelector('script[src*="quill.min.js"]');
+    if (existingScript) {
+      existingScript.remove();
+    }
+    
+    // Load JS
+    const script = document.createElement('script');
+    script.src = 'https://cdn.quilljs.com/1.3.7/quill.min.js';
+    script.crossOrigin = 'anonymous';
+    
+    let resolved = false;
+    
+    script.onload = () => {
+      if (resolved) return;
+      resolved = true;
+      
+      // Wait a bit for Quill to be defined
+      setTimeout(() => {
+        if (typeof Quill !== 'undefined') {
+          quillLoaded = true;
+          resolve();
+        } else {
+          reject(new Error('Quill loaded but not defined'));
+        }
+      }, 100);
+    };
+    
+    script.onerror = (e) => {
+      if (resolved) return;
+      resolved = true;
+      console.error('Failed to load Quill script:', e);
+      reject(new Error('Failed to load Quill script'));
+    };
+    
+    document.head.appendChild(script);
+    
+    // Timeout after 10 seconds
+    setTimeout(() => {
+      if (resolved) return;
+      resolved = true;
+      reject(new Error('Quill load timeout'));
+    }, 10000);
+  });
+}
+
+function initDarkThemeEventListeners(tableId) {
+  console.log('[General] initDarkThemeEventListeners called with tableId:', tableId);
+  
+  // Edit Summary Button - switches to inline edit mode
+  const editSummaryBtn = document.getElementById('editSummaryBtn');
+  if (editSummaryBtn && !editSummaryBtn._listenerAttached) {
+    editSummaryBtn._listenerAttached = true;
+    editSummaryBtn.addEventListener('click', () => {
+      if (currentTableData) {
+        if (isInlineEditMode) {
+          cancelInlineEdit(tableId);
+        } else {
+          switchToInlineEditMode(tableId);
+        }
+      }
+    });
+  }
+  
+  // Add Contact Button
+  const addContactBtn = document.getElementById('addContactBtn');
+  if (addContactBtn && !addContactBtn._listenerAttached) {
+    addContactBtn._listenerAttached = true;
+    addContactBtn.addEventListener('click', () => {
+      showContactModal();
+    });
+  }
+  
+  // Add Location Button
+  const addLocationBtn = document.getElementById('addLocationBtn');
+  if (addLocationBtn && !addLocationBtn._listenerAttached) {
+    addLocationBtn._listenerAttached = true;
+    addLocationBtn.addEventListener('click', () => {
+      showLocationModal();
+    });
+  }
+  
+  // Edit Info Button - switches to inline edit mode for Event Info card
+  const editInfoBtn = document.getElementById('editInfoBtn');
+  if (editInfoBtn && !editInfoBtn._listenerAttached) {
+    editInfoBtn._listenerAttached = true;
+    editInfoBtn.addEventListener('click', () => {
+      if (currentTableData) {
+        if (isInfoEditMode) {
+          cancelInfoEdit(tableId);
+        } else {
+          switchToInfoEditMode(tableId);
+        }
+      }
+    });
+  }
+  
+  
+  // Save Event Button
+  const saveEventBtn = document.getElementById('saveEventBtn');
+  if (saveEventBtn && !saveEventBtn._listenerAttached) {
+    saveEventBtn._listenerAttached = true;
+    saveEventBtn.addEventListener('click', () => saveDarkThemeEvent(tableId));
+  }
+  
+  // Save Contact Button
+  const saveContactBtn = document.getElementById('saveContactBtn');
+  if (saveContactBtn && !saveContactBtn._listenerAttached) {
+    saveContactBtn._listenerAttached = true;
+    saveContactBtn.addEventListener('click', () => saveDarkThemeContact(tableId));
+  }
+  
+  // Save Location Button
+  const saveLocationBtn = document.getElementById('saveLocationBtn');
+  if (saveLocationBtn && !saveLocationBtn._listenerAttached) {
+    saveLocationBtn._listenerAttached = true;
+    saveLocationBtn.addEventListener('click', () => saveDarkThemeLocation(tableId));
+  }
+  
+  // Open Gallery Button
+  const openGalleryBtn = document.getElementById('openGalleryBtn');
+  console.log('[Gallery] openGalleryBtn found:', !!openGalleryBtn);
+  if (openGalleryBtn && !openGalleryBtn._listenerAttached) {
+    openGalleryBtn._listenerAttached = true;
+    openGalleryBtn.addEventListener('click', (e) => {
+      console.log('[Gallery] Button clicked, currentTableData:', currentTableData?.general?.galleryUrl);
+      console.log('[Gallery] isOwner:', isOwner, 'isAdmin:', isAdmin());
+      
+      const galleryUrl = currentTableData?.general?.galleryUrl;
+      
+      if (galleryUrl && galleryUrl.trim()) {
+        // Open the gallery URL in a new tab
+        console.log('[Gallery] Opening URL:', galleryUrl);
+        window.open(galleryUrl, '_blank');
+      } else if (isOwner || isAdmin()) {
+        // No URL set and user is owner/admin - show modal to set it
+        console.log('[Gallery] Opening modal to set URL');
+        openGalleryModal();
+      } else {
+        // No URL set and user is not owner/admin
+        alert('No gallery link has been set for this event.');
+      }
+    });
+    
+    // Right-click to edit (for owners)
+    openGalleryBtn.addEventListener('contextmenu', (e) => {
+      if (isOwner || isAdmin()) {
+        e.preventDefault();
+        openGalleryModal();
+      }
+    });
+  }
+  
+  // Save Gallery URL Button
+  const saveGalleryBtn = document.getElementById('saveGalleryBtn');
+  if (saveGalleryBtn && !saveGalleryBtn._listenerAttached) {
+    saveGalleryBtn._listenerAttached = true;
+    saveGalleryBtn.addEventListener('click', () => saveGalleryUrl(tableId));
+  }
+  
+  // Contract Button - Only visible to owners/admins
+  const contractRow = document.getElementById('contractRow');
+  const contractBtn = document.getElementById('contractBtn');
+  
+  if (contractRow && contractBtn) {
+    // Show contract button only for owners/admins
+    if (isOwner || isAdmin()) {
+      contractRow.style.display = '';
+      
+      if (!contractBtn._listenerAttached) {
+        contractBtn._listenerAttached = true;
+        
+        // Left-click to open the URL
+        contractBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          console.log('[Contract] ===== LEFT CLICK =====');
+          console.log('[Contract] currentTableData:', currentTableData);
+          console.log('[Contract] currentTableData.general:', currentTableData?.general);
+          console.log('[Contract] contractUrl:', currentTableData?.general?.contractUrl);
+          console.log('[Contract] isOwner:', isOwner, 'isAdmin:', isAdmin());
+          
+          const contractUrl = currentTableData?.general?.contractUrl;
+          
+          if (contractUrl && contractUrl.trim()) {
+            // Open the contract URL in a new tab
+            console.log('[Contract] Opening URL:', contractUrl);
+            window.open(contractUrl, '_blank');
+          } else {
+            // No URL set - show modal to set it
+            console.log('[Contract] No URL set, opening modal');
+            openContractModal();
+          }
+        });
+        
+        // Right-click to always open modal for editing
+        contractBtn.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          console.log('[Contract] ===== RIGHT CLICK =====');
+          openContractModal();
+        });
+      }
+    } else {
+      // Hide contract button for non-owners/non-admins
+      contractRow.style.display = 'none';
+    }
+  }
+  
+  // Save Contract URL Button
+  const saveContractBtn = document.getElementById('saveContractBtn');
+  if (saveContractBtn && !saveContractBtn._listenerAttached) {
+    saveContractBtn._listenerAttached = true;
+    saveContractBtn.addEventListener('click', () => saveContractUrl(tableId));
+  }
+  
+  // Invoice Button - Only visible to owners/admins
+  const invoiceRow = document.getElementById('invoiceRow');
+  const invoiceBtn = document.getElementById('invoiceBtn');
+  
+  if (invoiceRow && invoiceBtn) {
+    // Show invoice button only for owners/admins
+    if (isOwner || isAdmin()) {
+      invoiceRow.style.display = '';
+      
+      if (!invoiceBtn._listenerAttached) {
+        invoiceBtn._listenerAttached = true;
+        
+        // Left-click to open the URL
+        invoiceBtn.addEventListener('click', (e) => {
+          e.preventDefault();
+          console.log('[Invoice] ===== LEFT CLICK =====');
+          console.log('[Invoice] currentTableData:', currentTableData);
+          console.log('[Invoice] currentTableData.general:', currentTableData?.general);
+          console.log('[Invoice] invoiceUrl:', currentTableData?.general?.invoiceUrl);
+          console.log('[Invoice] isOwner:', isOwner, 'isAdmin:', isAdmin());
+          
+          const invoiceUrl = currentTableData?.general?.invoiceUrl;
+          
+          if (invoiceUrl && invoiceUrl.trim()) {
+            // Open the invoice URL in a new tab
+            console.log('[Invoice] Opening URL:', invoiceUrl);
+            window.open(invoiceUrl, '_blank');
+          } else {
+            // No URL set - show modal to set it
+            console.log('[Invoice] No URL set, opening modal');
+            openInvoiceModal();
+          }
+        });
+        
+        // Right-click to always open modal for editing
+        invoiceBtn.addEventListener('contextmenu', (e) => {
+          e.preventDefault();
+          console.log('[Invoice] ===== RIGHT CLICK =====');
+          openInvoiceModal();
+        });
+      }
+    } else {
+      // Hide invoice button for non-owners/non-admins
+      invoiceRow.style.display = 'none';
+    }
+  }
+  
+  // Save Invoice URL Button
+  const saveInvoiceBtn = document.getElementById('saveInvoiceBtn');
+  if (saveInvoiceBtn && !saveInvoiceBtn._listenerAttached) {
+    saveInvoiceBtn._listenerAttached = true;
+    saveInvoiceBtn.addEventListener('click', () => saveInvoiceUrl(tableId));
+  }
+  
+  // Load user info in sidebar
+  loadUserInfoDarkTheme();
+}
+
+function loadUserInfoDarkTheme() {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    
+    // Get user name from localStorage (set during login) or from token
+    let userName = localStorage.getItem('fullName');
+    
+    if (!userName) {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      userName = payload.fullName || payload.name || payload.email || 'User';
+    }
+    
+    const sidebarUserName = document.getElementById('sidebarUserName');
+    if (sidebarUserName) sidebarUserName.textContent = userName;
+    
+    // Also try to get user photo
+    fetchAndDisplayUserPhoto();
+    
+    // Check for admin
+    const adminNavItem = document.getElementById('adminNavItem');
+    if (adminNavItem) {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.role === 'admin') {
+        adminNavItem.style.display = 'flex';
+      }
+    }
+  } catch (e) {
+    console.error('Error loading user info:', e);
+  }
+}
+
+async function fetchAndDisplayUserPhoto() {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const userId = payload.id;
+    
+    if (!userId) return;
+    
+    const res = await fetch(`${API_BASE}/api/users/${userId}`, {
+      headers: { Authorization: token }
+    });
+    
+    if (res.ok) {
+      const user = await res.json();
+      const avatarImg = document.getElementById('sidebarAvatarImg');
+      const avatarIcon = document.getElementById('sidebarAvatarIcon');
+      
+      if (user.photo && avatarImg) {
+        avatarImg.src = user.photo;
+        avatarImg.style.display = 'block';
+        if (avatarIcon) avatarIcon.style.display = 'none';
+      }
+    }
+  } catch (e) {
+    console.error('Error fetching user photo:', e);
+  }
+}
+
+function populateEditModal(table) {
+  const general = table.general || {};
+  
+  document.getElementById('editEventName').value = table.title || '';
+  document.getElementById('editClientName').value = general.client || '';
+  document.getElementById('editStartDate').value = general.start?.split('T')[0] || '';
+  document.getElementById('editEndDate').value = general.end?.split('T')[0] || '';
+  document.getElementById('editLocation').value = general.location || '';
+  document.getElementById('editCity').value = general.city || '';
+  document.getElementById('editState').value = general.state || '';
+  document.getElementById('editAttendees').value = general.attendees || '';
+  document.getElementById('editBudget').value = general.budget || '';
+  document.getElementById('editSummary').value = general.summary || '';
+}
+
+async function switchToInlineEditMode(tableId) {
+  if (isInlineEditMode) return;
+  isInlineEditMode = true;
+  
+  const general = currentTableData?.general || {};
+  const card = document.getElementById('eventSummaryCard');
+  if (!card) return;
+  
+  // Add editing class to card
+  card.classList.add('editing');
+  
+  // Update the edit button to show "Cancel"
+  const editBtn = document.getElementById('editSummaryBtn');
+  if (editBtn) {
+    editBtn.innerHTML = '<span class="material-symbols-outlined">close</span>';
+    editBtn.title = 'Cancel';
+  }
+  
+  // Convert Notes to Quill rich text editor (at top)
+  const notesEl = document.getElementById('summaryNotes');
+  if (notesEl) {
+    const editorContainer = document.createElement('div');
+    editorContainer.id = 'editInlineNotesContainer';
+    editorContainer.className = 'inline-quill-container';
+    
+    const editorDiv = document.createElement('div');
+    editorDiv.id = 'editInlineNotes';
+    editorContainer.appendChild(editorDiv);
+    
+    notesEl.replaceWith(editorContainer);
+    
+    // Load and initialize Quill editor
+    try {
+      await loadQuill();
+      
+      notesQuillEditor = new Quill('#editInlineNotes', {
+        theme: 'snow',
+        placeholder: 'Add notes about this event...',
+        modules: {
+          toolbar: [
+            ['bold', 'italic', 'underline'],
+            [{ 'header': [1, 2, 3, false] }],
+            [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+            [{ 'color': [] }],
+            ['link'],
+            ['clean']
+          ]
+        }
+      });
+      
+      // Set initial content
+      const initialContent = general.summary || '';
+      if (initialContent) {
+        notesQuillEditor.root.innerHTML = initialContent;
+      }
+    } catch (err) {
+      console.error('Failed to load Quill editor:', err);
+      // Fallback to textarea if Quill fails
+      const textarea = document.createElement('textarea');
+      textarea.id = 'editInlineNotesFallback';
+      textarea.className = 'inline-edit-textarea';
+      textarea.value = general.summary || '';
+      textarea.placeholder = 'Add notes about this event...';
+      textarea.rows = 4;
+      editorContainer.replaceWith(textarea);
+    }
+  }
+  
+  // Add save button at the bottom of the card
+  const cardContent = card.querySelector('.card-content');
+  if (cardContent && !document.getElementById('inlineSaveBtn')) {
+    const saveContainer = document.createElement('div');
+    saveContainer.className = 'inline-save-container';
+    saveContainer.id = 'inlineSaveContainer';
+    saveContainer.innerHTML = `
+      <button class="btn-secondary" id="inlineCancelBtn">Cancel</button>
+      <button class="btn-primary" id="inlineSaveBtn">Save Changes</button>
+    `;
+    cardContent.appendChild(saveContainer);
+    
+    document.getElementById('inlineCancelBtn').addEventListener('click', () => cancelInlineEdit(tableId));
+    document.getElementById('inlineSaveBtn').addEventListener('click', () => saveInlineEdit(tableId));
+  }
+}
+
+function restoreSummaryCardStructure() {
+  const card = document.getElementById('eventSummaryCard');
+  if (!card) return;
+  
+  // Remove editing class
+  card.classList.remove('editing');
+  
+  // Restore the edit button icon
+  const editBtn = document.getElementById('editSummaryBtn');
+  if (editBtn) {
+    editBtn.innerHTML = '<span class="material-symbols-outlined">edit</span>';
+    editBtn.title = 'Edit';
+  }
+  
+  // Remove save container
+  const saveContainer = document.getElementById('inlineSaveContainer');
+  if (saveContainer) saveContainer.remove();
+  
+  // Restore Notes field (clean up Quill container or fallback textarea)
+  const notesContainer = document.getElementById('editInlineNotesContainer');
+  const notesFallback = document.getElementById('editInlineNotesFallback');
+  
+  if (notesContainer) {
+    const div = document.createElement('div');
+    div.className = 'summary-notes-content';
+    div.id = 'summaryNotes';
+    notesContainer.replaceWith(div);
+  } else if (notesFallback) {
+    const div = document.createElement('div');
+    div.className = 'summary-notes-content';
+    div.id = 'summaryNotes';
+    notesFallback.replaceWith(div);
+  }
+  
+  // Clean up Quill editor
+  if (notesQuillEditor) {
+    notesQuillEditor = null;
+  }
+}
+
+function cancelInlineEdit(tableId) {
+  isInlineEditMode = false;
+  restoreSummaryCardStructure();
+  initPageDarkTheme(tableId); // Reload the page to restore read-only state
+}
+
+async function saveInlineEdit(tableId) {
+  const saveBtn = document.getElementById('inlineSaveBtn');
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+  }
+  
+  // Get notes from Quill editor or fallback textarea
+  let notesValue = '';
+  if (notesQuillEditor) {
+    notesValue = notesQuillEditor.root.innerHTML;
+    // Clean up empty content
+    if (notesValue === '<p><br></p>') {
+      notesValue = '';
+    }
+  } else {
+    // Fallback to textarea if Quill failed to load
+    const fallbackTextarea = document.getElementById('editInlineNotesFallback');
+    if (fallbackTextarea) {
+      notesValue = fallbackTextarea.value || '';
+    }
+  }
+  
+  try {
+    const eventData = {
+      title: currentTableData?.title, // Keep the existing title
+      general: {
+        ...currentTableData?.general,
+        summary: notesValue
+      }
+    };
+    
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/general`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': window.token
+      },
+      body: JSON.stringify(eventData)
+    });
+    
+    if (!res.ok) throw new Error('Failed to save');
+    
+    isInlineEditMode = false;
+    restoreSummaryCardStructure();
+    initPageDarkTheme(tableId); // Reload data
+  } catch (err) {
+    console.error('Save error:', err);
+    alert('Failed to save changes');
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save Changes';
+    }
+  }
+}
+
+// ========================================
+// EVENT INFO CARD INLINE EDIT
+// ========================================
+
+function switchToInfoEditMode(tableId) {
+  if (isInfoEditMode) return;
+  isInfoEditMode = true;
+  
+  const general = currentTableData?.general || {};
+  const card = document.getElementById('eventInfoCard');
+  if (!card) return;
+  
+  card.classList.add('editing');
+  
+  // Update edit button to show cancel
+  const editBtn = document.getElementById('editInfoBtn');
+  if (editBtn) {
+    editBtn.innerHTML = '<span class="material-symbols-outlined">close</span>';
+    editBtn.title = 'Cancel';
+  }
+  
+  // Convert Client to input
+  const clientEl = document.getElementById('summaryClient');
+  if (clientEl) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'editInfoClient';
+    input.className = 'inline-edit-input';
+    input.value = general.client || '';
+    input.placeholder = 'Client name';
+    clientEl.replaceWith(input);
+  }
+  
+  // Convert City to input
+  const cityEl = document.getElementById('summaryCity');
+  if (cityEl) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'editInfoCity';
+    input.className = 'inline-edit-input';
+    input.value = general.city || '';
+    input.placeholder = 'City';
+    cityEl.replaceWith(input);
+  }
+  
+  // Convert State to input
+  const stateEl = document.getElementById('summaryState');
+  if (stateEl) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'editInfoState';
+    input.className = 'inline-edit-input';
+    input.value = general.state || '';
+    input.placeholder = 'State';
+    stateEl.replaceWith(input);
+  }
+  
+  // Convert Start Date to input
+  const startEl = document.getElementById('statStartDate');
+  if (startEl) {
+    const input = document.createElement('input');
+    input.type = 'date';
+    input.id = 'editInfoStart';
+    input.className = 'inline-edit-input';
+    input.value = general.start?.split('T')[0] || '';
+    startEl.replaceWith(input);
+  }
+  
+  // Convert End Date to input
+  const endEl = document.getElementById('statEndDate');
+  if (endEl) {
+    const input = document.createElement('input');
+    input.type = 'date';
+    input.id = 'editInfoEnd';
+    input.className = 'inline-edit-input';
+    input.value = general.end?.split('T')[0] || '';
+    endEl.replaceWith(input);
+  }
+  
+  // Convert Budget to input
+  const budgetEl = document.getElementById('statBudget');
+  if (budgetEl) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'editInfoBudget';
+    input.className = 'inline-edit-input';
+    input.value = general.budget || '';
+    input.placeholder = '$0';
+    budgetEl.replaceWith(input);
+  }
+  
+  // Convert Attendees to input
+  const attendeesEl = document.getElementById('statAttendees');
+  if (attendeesEl) {
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.id = 'editInfoAttendees';
+    input.className = 'inline-edit-input';
+    input.value = general.attendees || '';
+    input.placeholder = '0';
+    attendeesEl.replaceWith(input);
+  }
+  
+  // Add save buttons
+  const cardContent = card.querySelector('.card-content');
+  if (cardContent && !document.getElementById('infoSaveBtn')) {
+    const saveContainer = document.createElement('div');
+    saveContainer.className = 'inline-save-container';
+    saveContainer.id = 'infoSaveContainer';
+    saveContainer.innerHTML = `
+      <button class="btn-secondary" id="infoCancelBtn">Cancel</button>
+      <button class="btn-primary" id="infoSaveBtn">Save</button>
+    `;
+    cardContent.appendChild(saveContainer);
+    
+    document.getElementById('infoCancelBtn').addEventListener('click', () => cancelInfoEdit(tableId));
+    document.getElementById('infoSaveBtn').addEventListener('click', () => saveInfoEdit(tableId));
+  }
+}
+
+function restoreInfoCardStructure() {
+  const card = document.getElementById('eventInfoCard');
+  if (!card) return;
+  
+  card.classList.remove('editing');
+  
+  const editBtn = document.getElementById('editInfoBtn');
+  if (editBtn) {
+    editBtn.innerHTML = '<span class="material-symbols-outlined">edit</span>';
+    editBtn.title = 'Edit';
+  }
+  
+  const saveContainer = document.getElementById('infoSaveContainer');
+  if (saveContainer) saveContainer.remove();
+  
+  // Restore fields
+  const clientInput = document.getElementById('editInfoClient');
+  if (clientInput) {
+    const span = document.createElement('span');
+    span.className = 'info-value';
+    span.id = 'summaryClient';
+    clientInput.replaceWith(span);
+  }
+  
+  const cityInput = document.getElementById('editInfoCity');
+  if (cityInput) {
+    const span = document.createElement('span');
+    span.className = 'info-city';
+    span.id = 'summaryCity';
+    cityInput.replaceWith(span);
+  }
+  
+  const stateInput = document.getElementById('editInfoState');
+  if (stateInput) {
+    const span = document.createElement('span');
+    span.className = 'info-state';
+    span.id = 'summaryState';
+    stateInput.replaceWith(span);
+  }
+  
+  const startInput = document.getElementById('editInfoStart');
+  if (startInput) {
+    const span = document.createElement('span');
+    span.className = 'info-value';
+    span.id = 'statStartDate';
+    startInput.replaceWith(span);
+  }
+  
+  const endInput = document.getElementById('editInfoEnd');
+  if (endInput) {
+    const span = document.createElement('span');
+    span.className = 'info-value';
+    span.id = 'statEndDate';
+    endInput.replaceWith(span);
+  }
+  
+  const budgetInput = document.getElementById('editInfoBudget');
+  if (budgetInput) {
+    const span = document.createElement('span');
+    span.className = 'info-value';
+    span.id = 'statBudget';
+    budgetInput.replaceWith(span);
+  }
+  
+  const attendeesInput = document.getElementById('editInfoAttendees');
+  if (attendeesInput) {
+    const span = document.createElement('span');
+    span.className = 'info-value';
+    span.id = 'statAttendees';
+    attendeesInput.replaceWith(span);
+  }
+}
+
+function cancelInfoEdit(tableId) {
+  isInfoEditMode = false;
+  restoreInfoCardStructure();
+  initPageDarkTheme(tableId);
+}
+
+async function saveInfoEdit(tableId) {
+  const saveBtn = document.getElementById('infoSaveBtn');
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+  }
+  
+  const clientValue = document.getElementById('editInfoClient')?.value || '';
+  const cityValue = document.getElementById('editInfoCity')?.value || '';
+  const stateValue = document.getElementById('editInfoState')?.value || '';
+  const startValue = document.getElementById('editInfoStart')?.value || '';
+  const endValue = document.getElementById('editInfoEnd')?.value || '';
+  const budgetValue = document.getElementById('editInfoBudget')?.value || '';
+  const attendeesValue = document.getElementById('editInfoAttendees')?.value || '';
+  
+  try {
+    const eventData = {
+      title: currentTableData?.title,
+      general: {
+        ...currentTableData?.general,
+        client: clientValue,
+        city: cityValue,
+        state: stateValue,
+        start: startValue,
+        end: endValue,
+        budget: budgetValue,
+        attendees: attendeesValue
+      }
+    };
+    
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/general`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': window.token
+      },
+      body: JSON.stringify(eventData)
+    });
+    
+    if (!res.ok) throw new Error('Failed to save');
+    
+    isInfoEditMode = false;
+    restoreInfoCardStructure();
+    initPageDarkTheme(tableId);
+  } catch (err) {
+    console.error('Save error:', err);
+    alert('Failed to save changes');
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+    }
+  }
+}
+
+// ========================================
+// STATS CARD INLINE EDIT
+// ========================================
+
+function switchToStatsEditMode(tableId) {
+  if (isStatsEditMode) return;
+  isStatsEditMode = true;
+  
+  const general = currentTableData?.general || {};
+  const card = document.getElementById('statsCard');
+  if (!card) return;
+  
+  card.classList.add('editing');
+  
+  // Update edit button to show cancel
+  const editBtn = document.getElementById('editStatsBtn');
+  if (editBtn) {
+    editBtn.innerHTML = '<span class="material-symbols-outlined">close</span>';
+    editBtn.title = 'Cancel';
+  }
+  
+  // Convert Start Date to input
+  const startEl = document.getElementById('statStartDate');
+  if (startEl) {
+    const input = document.createElement('input');
+    input.type = 'date';
+    input.id = 'editStatStart';
+    input.className = 'inline-edit-input';
+    input.value = general.start?.split('T')[0] || '';
+    startEl.replaceWith(input);
+  }
+  
+  // Convert End Date to input
+  const endEl = document.getElementById('statEndDate');
+  if (endEl) {
+    const input = document.createElement('input');
+    input.type = 'date';
+    input.id = 'editStatEnd';
+    input.className = 'inline-edit-input';
+    input.value = general.end?.split('T')[0] || '';
+    endEl.replaceWith(input);
+  }
+  
+  // Convert Budget to input
+  const budgetEl = document.getElementById('statBudget');
+  if (budgetEl) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'editStatBudget';
+    input.className = 'inline-edit-input';
+    input.value = general.budget || '';
+    input.placeholder = '$0';
+    budgetEl.replaceWith(input);
+  }
+  
+  // Convert Attendees to input
+  const attendeesEl = document.getElementById('statAttendees');
+  if (attendeesEl) {
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.id = 'editStatAttendees';
+    input.className = 'inline-edit-input';
+    input.value = general.attendees || '';
+    input.placeholder = '0';
+    attendeesEl.replaceWith(input);
+  }
+  
+  // Add save buttons
+  const cardContent = card.querySelector('.card-content');
+  if (cardContent && !document.getElementById('statsSaveBtn')) {
+    const saveContainer = document.createElement('div');
+    saveContainer.className = 'inline-save-container';
+    saveContainer.id = 'statsSaveContainer';
+    saveContainer.innerHTML = `
+      <button class="btn-secondary" id="statsCancelBtn">Cancel</button>
+      <button class="btn-primary" id="statsSaveBtn">Save</button>
+    `;
+    cardContent.appendChild(saveContainer);
+    
+    document.getElementById('statsCancelBtn').addEventListener('click', () => cancelStatsEdit(tableId));
+    document.getElementById('statsSaveBtn').addEventListener('click', () => saveStatsEdit(tableId));
+  }
+}
+
+function restoreStatsCardStructure() {
+  const card = document.getElementById('statsCard');
+  if (!card) return;
+  
+  card.classList.remove('editing');
+  
+  const editBtn = document.getElementById('editStatsBtn');
+  if (editBtn) {
+    editBtn.innerHTML = '<span class="material-symbols-outlined">edit</span>';
+    editBtn.title = 'Edit';
+  }
+  
+  const saveContainer = document.getElementById('statsSaveContainer');
+  if (saveContainer) saveContainer.remove();
+  
+  // Restore fields
+  const startInput = document.getElementById('editStatStart');
+  if (startInput) {
+    const span = document.createElement('span');
+    span.className = 'stat-value';
+    span.id = 'statStartDate';
+    startInput.replaceWith(span);
+  }
+  
+  const endInput = document.getElementById('editStatEnd');
+  if (endInput) {
+    const span = document.createElement('span');
+    span.className = 'stat-value';
+    span.id = 'statEndDate';
+    endInput.replaceWith(span);
+  }
+  
+  const budgetInput = document.getElementById('editStatBudget');
+  if (budgetInput) {
+    const span = document.createElement('span');
+    span.className = 'stat-value large';
+    span.id = 'statBudget';
+    budgetInput.replaceWith(span);
+  }
+  
+  const attendeesInput = document.getElementById('editStatAttendees');
+  if (attendeesInput) {
+    const span = document.createElement('span');
+    span.className = 'stat-value large';
+    span.id = 'statAttendees';
+    attendeesInput.replaceWith(span);
+  }
+}
+
+function cancelStatsEdit(tableId) {
+  isStatsEditMode = false;
+  restoreStatsCardStructure();
+  initPageDarkTheme(tableId);
+}
+
+async function saveStatsEdit(tableId) {
+  const saveBtn = document.getElementById('statsSaveBtn');
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+  }
+  
+  const startValue = document.getElementById('editStatStart')?.value || '';
+  const endValue = document.getElementById('editStatEnd')?.value || '';
+  const budgetValue = document.getElementById('editStatBudget')?.value || '';
+  const attendeesValue = document.getElementById('editStatAttendees')?.value || '';
+  
+  try {
+    const eventData = {
+      title: currentTableData?.title,
+      general: {
+        ...currentTableData?.general,
+        start: startValue,
+        end: endValue,
+        budget: budgetValue,
+        attendees: attendeesValue
+      }
+    };
+    
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/general`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': window.token
+      },
+      body: JSON.stringify(eventData)
+    });
+    
+    if (!res.ok) throw new Error('Failed to save');
+    
+    isStatsEditMode = false;
+    restoreStatsCardStructure();
+    initPageDarkTheme(tableId);
+  } catch (err) {
+    console.error('Save error:', err);
+    alert('Failed to save changes');
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save';
+    }
+  }
+}
+
+async function saveDarkThemeEvent(tableId) {
+  const saveBtn = document.getElementById('saveEventBtn');
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+  }
+  
+  try {
+    const eventData = {
+      title: document.getElementById('editEventName').value,
+      general: {
+        ...currentTableData?.general,
+        client: document.getElementById('editClientName').value,
+        start: document.getElementById('editStartDate').value,
+        end: document.getElementById('editEndDate').value,
+        location: document.getElementById('editLocation').value,
+        city: document.getElementById('editCity').value,
+        state: document.getElementById('editState').value,
+        attendees: document.getElementById('editAttendees').value,
+        budget: document.getElementById('editBudget').value,
+        summary: document.getElementById('editSummary').value
+      }
+    };
+    
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/general`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': window.token
+      },
+      body: JSON.stringify(eventData)
+    });
+    
+    if (!res.ok) throw new Error('Failed to save');
+    
+    hideEditModal();
+    initPageDarkTheme(tableId); // Reload data
+  } catch (err) {
+    console.error('Save error:', err);
+    alert('Failed to save changes');
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = 'Save Changes';
+    }
+  }
+}
+
+async function saveDarkThemeContact(tableId) {
+  const saveBtn = document.getElementById('saveContactBtn');
+  const isEditing = editingContactIndex >= 0;
+  
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+  }
+  
+  try {
+    const contactData = {
+      name: document.getElementById('contactName').value,
+      role: document.getElementById('contactRole').value,
+      number: document.getElementById('contactPhone').value,
+      email: document.getElementById('contactEmail').value
+    };
+    
+    let contacts = [...(currentTableData?.general?.contacts || [])];
+    
+    if (isEditing) {
+      // Update existing contact
+      contacts[editingContactIndex] = contactData;
+    } else {
+      // Add new contact
+      contacts.push(contactData);
+    }
+    
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/general`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': window.token
+      },
+      body: JSON.stringify({
+        general: {
+          ...currentTableData?.general,
+          contacts
+        }
+      })
+    });
+    
+    if (!res.ok) throw new Error('Failed to save contact');
+    
+    resetContactModal();
+    hideContactModal();
+    initPageDarkTheme(tableId);
+  } catch (err) {
+    console.error('Save contact error:', err);
+    alert('Failed to save contact');
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = isEditing ? 'Save Changes' : 'Add Contact';
+    }
+  }
+}
+
+async function saveDarkThemeLocation(tableId) {
+  const saveBtn = document.getElementById('saveLocationBtn');
+  const isEditing = editingLocationIndex >= 0;
+  
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.textContent = 'Saving...';
+  }
+  
+  try {
+    const locationData = {
+      name: document.getElementById('locationName').value,
+      address: document.getElementById('locationAddress').value,
+      event: document.getElementById('locationEvent')?.value || ''
+    };
+    
+    let locations = [...(currentTableData?.general?.locations || [])];
+    
+    if (isEditing) {
+      // Update existing location
+      locations[editingLocationIndex] = locationData;
+    } else {
+      // Add new location
+      locations.push(locationData);
+    }
+    
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/general`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': window.token
+      },
+      body: JSON.stringify({
+        general: {
+          ...currentTableData?.general,
+          locations
+        }
+      })
+    });
+    
+    if (!res.ok) throw new Error('Failed to save location');
+    
+    resetLocationModal();
+    hideLocationModal();
+    initPageDarkTheme(tableId);
+  } catch (err) {
+    console.error('Save location error:', err);
+    alert('Failed to save location');
+  } finally {
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.textContent = isEditing ? 'Save Changes' : 'Add Location';
+    }
+  }
+}
+
+function initPageDarkTheme(id) {
+  if (!id || !window.token) return;
+  
+  fetch(`${API_BASE}/api/tables/${id}`, {
+    headers: { Authorization: window.token }
+  })
+    .then(res => res.json())
+    .then(table => {
+      currentTableData = table;
+      console.log('[General] currentTableData set:', currentTableData);
+      console.log('[General] general object:', table.general);
+      console.log('[General] contractUrl:', table.general?.contractUrl);
+      console.log('[General] invoiceUrl:', table.general?.invoiceUrl);
+      const general = table.general || {};
+      
+      // Render all sections
+      renderDarkThemeHeader(table);
+      renderDarkThemeSummary(table);
+      renderDarkThemeStats(table);
+      renderDarkThemeContacts(general.contacts);
+      renderDarkThemeLocations(general.locations);
+      
+      // Load FTP folder names
+      loadFolderNames(id);
+      
+      // Fetch weather based on event city and dates
+      const city = general.city || '';
+      const startDate = general.start || '';
+      const endDate = general.end || '';
+      fetchWeatherForEvent(city, startDate, endDate);
+      
+      // Set up event listeners
+      initDarkThemeEventListeners(id);
+      
+      // Set up folder names event listeners
+      setupFolderNamesEventListeners(id);
+      
+      // Restore collapsed card states
+      restoreCollapsedStates();
+    })
+    .catch(err => console.error('Error loading event:', err));
+}
+
+// ========================================
+// END DARK THEME FUNCTIONS
+// ========================================
 
 // Socket.IO real-time updates
 if (window.socket) {
@@ -646,7 +3348,9 @@ function closeQRCodeModal() {
 
 function initPage(id) {
   // Safeguard: Only run on the general page
-  const currentPage = location.hash.replace('#', '') || 'events';
+  // Parse the page name from hash, handling #page?id=xxx format
+  const hash = location.hash.replace('#', '') || 'events';
+  const currentPage = hash.split('?')[0];
   if (currentPage !== 'general') {
     console.log(`general.js initPage called on wrong page: ${currentPage}, skipping execution`);
     return;
@@ -655,6 +3359,13 @@ function initPage(id) {
   console.log('[GENERAL] initPage called with id:', id);
   
   if (!id || !window.token) return;
+  
+  // Check if dark theme and use dark theme functions
+  if (isDarkTheme()) {
+    console.log('[GENERAL] Dark theme detected, using dark theme layout');
+    initPageDarkTheme(id);
+    return;
+  }
 
   fetch(`${API_BASE}/api/tables/${id}`, {
     headers: { Authorization: window.token }

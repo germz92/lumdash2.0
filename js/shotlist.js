@@ -659,10 +659,6 @@ async function deleteList(listId) {
     return;
   }
   
-  if (!confirm('Are you sure you want to delete this entire list?')) {
-    return;
-  }
-  
   debugLog('Deleting list', listId);
   
   try {
@@ -795,6 +791,7 @@ function renderShotlists() {
     if (emptyState) emptyState.style.display = 'block';
     container.innerHTML = '';
     selectedListId = null;
+    updateProgressSummary(); // Update progress even when empty
     return;
   }
 
@@ -856,7 +853,33 @@ function renderShotlists() {
     newContainer.innerHTML = '';
   }
   
+  // Update the overall progress summary
+  updateProgressSummary();
+  
   debugLog('Shotlists rendered successfully');
+}
+
+// Update the overall progress summary in the header
+function updateProgressSummary() {
+  const progressSummary = document.getElementById('progressSummary');
+  if (!progressSummary) return;
+  
+  const progressText = progressSummary.querySelector('.progress-text');
+  if (!progressText) return;
+  
+  // Calculate totals across all shotlists
+  let totalItems = 0;
+  let completedItems = 0;
+  
+  shotlists.forEach(list => {
+    if (list.items && Array.isArray(list.items)) {
+      totalItems += list.items.length;
+      completedItems += list.items.filter(item => item.completed).length;
+    }
+  });
+  
+  progressText.textContent = `${completedItems} / ${totalItems} completed`;
+  debugLog('Progress summary updated:', completedItems, '/', totalItems);
 }
 
 // Update the list selector dropdown
@@ -899,8 +922,8 @@ function renderShotlist(list, listIndex) {
           <span class="list-progress">${progressText}</span>
           ${canEdit ? `
             <div class="list-actions">
-              <button class="btn-icon delete-list-btn" title="Delete List">
-                <span class="material-symbols-outlined">delete</span>
+              <button class="btn-icon list-action-btn" title="More options" data-list-id="${listId}">
+                <span class="material-symbols-outlined">more_horiz</span>
               </button>
             </div>
           ` : ''}
@@ -960,8 +983,8 @@ function renderShotItem(item, itemIndex) {
           <button class="btn-icon cancel-item-btn" title="Cancel" style="display: none;">
             <span class="material-symbols-outlined">close</span>
           </button>
-          <button class="btn-icon delete" title="Delete">
-            <span class="material-symbols-outlined">delete</span>
+          <button class="btn-icon item-action-btn" title="More options" data-item-id="${itemId}">
+            <span class="material-symbols-outlined">more_horiz</span>
           </button>
         </div>
       ` : ''}
@@ -991,7 +1014,31 @@ function setupListEventDelegation() {
 function handleListClicks(e) {
   debugLog('Click detected on:', e.target);
   
-  // Delete list button
+  // List action button (3-dot menu)
+  if (e.target.closest('.list-action-btn')) {
+    e.preventDefault();
+    e.stopPropagation();
+    const btn = e.target.closest('.list-action-btn');
+    const listId = btn.dataset.listId;
+    if (listId) {
+      showListActionMenu(listId, btn);
+    }
+    return;
+  }
+  
+  // Item action button (3-dot menu)
+  if (e.target.closest('.item-action-btn')) {
+    e.preventDefault();
+    e.stopPropagation();
+    const btn = e.target.closest('.item-action-btn');
+    const itemId = btn.dataset.itemId;
+    if (itemId) {
+      showItemActionMenu(itemId, btn);
+    }
+    return;
+  }
+  
+  // Delete list button (legacy - keep for backwards compatibility)
   if (e.target.closest('.delete-list-btn')) {
     e.preventDefault();
     e.stopPropagation();
@@ -1384,6 +1431,327 @@ function cleanupShotlist() {
   debugLog('Shotlist page cleaned up');
 }
 
+// ========================================
+// DARK THEME SUPPORT
+// ========================================
+
+// Check if dark theme is active
+function isDarkThemeShotlist() {
+  return !!document.querySelector('.shotlist-page.dark-theme');
+}
+
+// Initialize dark theme elements
+function initDarkThemeShotlist() {
+  debugLog('Initializing dark theme shotlist');
+  
+  // Load sidebar user info
+  loadShotlistSidebarUser();
+  
+  // Setup sidebar navigation
+  setupShotlistSidebarNav();
+  
+  // Setup mobile menu
+  setupShotlistMobileMenu();
+  
+  // Setup action dropdowns
+  setupShotlistActionDropdowns();
+}
+
+// Load user info in sidebar
+async function loadShotlistSidebarUser() {
+  const nameEl = document.getElementById('sidebarUserName');
+  const avatarImg = document.getElementById('sidebarAvatarImg');
+  const avatarIcon = document.getElementById('sidebarAvatarIcon');
+  
+  try {
+    let userName = localStorage.getItem('fullName');
+    if (!userName) {
+      userName = localStorage.getItem('userName') || 'User';
+    }
+    
+    if (nameEl) nameEl.textContent = userName;
+    
+    // Try to load user photo
+    const userId = localStorage.getItem('userId');
+    if (userId && avatarImg && avatarIcon) {
+      try {
+        const res = await fetch(`${API_BASE}/api/users/${userId}`, {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        });
+        if (res.ok) {
+          const userData = await res.json();
+          if (userData.profilePicture) {
+            avatarImg.src = userData.profilePicture;
+            avatarImg.style.display = 'block';
+            avatarIcon.style.display = 'none';
+          }
+        }
+      } catch (err) {
+        debugLog('Could not load user photo:', err.message);
+      }
+    }
+  } catch (error) {
+    debugLog('Error loading sidebar user:', error);
+    if (nameEl) nameEl.textContent = 'User';
+  }
+}
+
+// Setup sidebar navigation
+function setupShotlistSidebarNav() {
+  const navItems = document.querySelectorAll('.shotlist-page .sidebar-nav .nav-item');
+  const tableId = getCurrentTableId();
+  
+  navItems.forEach(item => {
+    item.addEventListener('click', (e) => {
+      e.preventDefault();
+      const page = item.getAttribute('data-page');
+      
+      if (page === 'events') {
+        window.navigate('events');
+      } else if (page && tableId) {
+        window.navigate(page, tableId);
+      }
+    });
+  });
+}
+
+// ========================================
+// ACTION DROPDOWN MENUS
+// ========================================
+
+let selectedListId_dropdown = null;
+let selectedItemId_dropdown = null;
+
+// Show list action dropdown
+function showListActionMenu(listId, button) {
+  selectedListId_dropdown = listId;
+  
+  const dropdown = document.getElementById('shotlistListActionDropdown');
+  if (!dropdown) return;
+  
+  // Hide item dropdown if open
+  hideItemActionMenu();
+  
+  if (dropdown.classList.contains('show')) {
+    hideListActionMenu();
+    return;
+  }
+  
+  const rect = button.getBoundingClientRect();
+  const viewportWidth = window.innerWidth;
+  const dropdownWidth = 160;
+  
+  let left = rect.left;
+  if (left + dropdownWidth > viewportWidth - 20) {
+    left = rect.right - dropdownWidth;
+  }
+  
+  dropdown.style.top = `${rect.bottom + 4}px`;
+  dropdown.style.left = `${left}px`;
+  dropdown.classList.add('show');
+  
+  setTimeout(() => {
+    document.addEventListener('click', handleListDropdownOutsideClick);
+  }, 10);
+}
+
+function hideListActionMenu() {
+  const dropdown = document.getElementById('shotlistListActionDropdown');
+  if (dropdown) dropdown.classList.remove('show');
+  selectedListId_dropdown = null;
+  document.removeEventListener('click', handleListDropdownOutsideClick);
+}
+
+function handleListDropdownOutsideClick(e) {
+  const dropdown = document.getElementById('shotlistListActionDropdown');
+  if (dropdown && !dropdown.contains(e.target) && !e.target.closest('.list-action-btn')) {
+    hideListActionMenu();
+  }
+}
+
+// Show item action dropdown
+function showItemActionMenu(itemId, button) {
+  selectedItemId_dropdown = itemId;
+  
+  const dropdown = document.getElementById('shotlistItemActionDropdown');
+  if (!dropdown) return;
+  
+  // Hide list dropdown if open
+  hideListActionMenu();
+  
+  if (dropdown.classList.contains('show')) {
+    hideItemActionMenu();
+    return;
+  }
+  
+  const rect = button.getBoundingClientRect();
+  const viewportWidth = window.innerWidth;
+  const dropdownWidth = 140;
+  
+  let left = rect.left;
+  if (left + dropdownWidth > viewportWidth - 20) {
+    left = rect.right - dropdownWidth;
+  }
+  
+  dropdown.style.top = `${rect.bottom + 4}px`;
+  dropdown.style.left = `${left}px`;
+  dropdown.classList.add('show');
+  
+  setTimeout(() => {
+    document.addEventListener('click', handleItemDropdownOutsideClick);
+  }, 10);
+}
+
+function hideItemActionMenu() {
+  const dropdown = document.getElementById('shotlistItemActionDropdown');
+  if (dropdown) dropdown.classList.remove('show');
+  selectedItemId_dropdown = null;
+  document.removeEventListener('click', handleItemDropdownOutsideClick);
+}
+
+function handleItemDropdownOutsideClick(e) {
+  const dropdown = document.getElementById('shotlistItemActionDropdown');
+  if (dropdown && !dropdown.contains(e.target) && !e.target.closest('.item-action-btn')) {
+    hideItemActionMenu();
+  }
+}
+
+// Setup action dropdown handlers
+function setupShotlistActionDropdowns() {
+  // Delete list action
+  const deleteListBtn = document.getElementById('deleteListAction');
+  if (deleteListBtn) {
+    deleteListBtn.onclick = (e) => {
+      e.stopPropagation();
+      const listId = selectedListId_dropdown;
+      hideListActionMenu();
+      if (listId) {
+        // Find the list element and trigger delete
+        const listEl = document.querySelector(`[data-list-id="${listId}"]`);
+        if (listEl) {
+          const listIndex = parseInt(listEl.dataset.listIndex, 10);
+          showDeleteConfirmation('list', listId, listIndex);
+        }
+      }
+    };
+  }
+  
+  // Delete item action
+  const deleteItemBtn = document.getElementById('deleteItemAction');
+  if (deleteItemBtn) {
+    deleteItemBtn.onclick = (e) => {
+      e.stopPropagation();
+      const itemId = selectedItemId_dropdown;
+      hideItemActionMenu();
+      if (itemId) {
+        // Find the item element and trigger delete
+        const itemEl = document.querySelector(`[data-item-id="${itemId}"]`);
+        if (itemEl) {
+          showDeleteConfirmation('item', itemId);
+        }
+      }
+    };
+  }
+}
+
+// Show delete confirmation modal
+function showDeleteConfirmation(type, id, listIndex) {
+  const modal = document.getElementById('shotlistDeleteModal');
+  const titleEl = document.getElementById('shotlistDeleteTitle');
+  const messageEl = document.getElementById('shotlistDeleteMessage');
+  const confirmBtn = document.getElementById('shotlistConfirmDelete');
+  const cancelBtn = document.getElementById('shotlistCancelDelete');
+  
+  if (!modal) return;
+  
+  if (type === 'list') {
+    const list = shotlists[listIndex];
+    if (titleEl) titleEl.textContent = 'Delete List';
+    if (messageEl) messageEl.textContent = `Are you sure you want to delete "${list?.name || 'this list'}" and all its items?`;
+  } else {
+    if (titleEl) titleEl.textContent = 'Delete Item';
+    if (messageEl) messageEl.textContent = 'Are you sure you want to delete this item?';
+  }
+  
+  modal.classList.add('show');
+  
+  // Clone buttons to remove old listeners
+  const newConfirmBtn = confirmBtn.cloneNode(true);
+  const newCancelBtn = cancelBtn.cloneNode(true);
+  confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+  cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+  
+  newConfirmBtn.onclick = async () => {
+    modal.classList.remove('show');
+    if (type === 'list') {
+      // Pass the listId (id parameter) not the listIndex
+      await deleteList(id);
+    } else {
+      await deleteItemById(id);
+    }
+  };
+  
+  newCancelBtn.onclick = () => {
+    modal.classList.remove('show');
+  };
+}
+
+// Delete item by ID
+async function deleteItemById(itemId) {
+  try {
+    for (const list of shotlists) {
+      const itemIndex = list.items.findIndex(item => 
+        (item._id && item._id === itemId) || 
+        `temp-item-${list.items.indexOf(item)}` === itemId
+      );
+      
+      if (itemIndex !== -1) {
+        list.items.splice(itemIndex, 1);
+        renderShotlists();
+        await saveShotlists();
+        debugLog('Item deleted successfully');
+        return;
+      }
+    }
+  } catch (error) {
+    console.error('🎯 SHOTLIST: Failed to delete item:', error);
+  }
+}
+
+// Setup mobile menu
+function setupShotlistMobileMenu() {
+  const menuBtn = document.getElementById('mobileMenuBtn');
+  const sidebar = document.getElementById('shotlistSidebar');
+  const overlay = document.getElementById('shotlistSidebarOverlay');
+  
+  if (menuBtn && sidebar) {
+    menuBtn.onclick = () => {
+      sidebar.classList.add('show');
+      if (overlay) overlay.classList.add('show');
+    };
+  }
+  
+  if (overlay && sidebar) {
+    overlay.onclick = () => {
+      sidebar.classList.remove('show');
+      overlay.classList.remove('show');
+    };
+  }
+  
+  // Close sidebar when clicking nav items on mobile
+  const navItems = sidebar?.querySelectorAll('.nav-item');
+  navItems?.forEach(item => {
+    item.addEventListener('click', () => {
+      if (window.innerWidth <= 768) {
+        sidebar.classList.remove('show');
+        if (overlay) overlay.classList.remove('show');
+      }
+    });
+  });
+}
+
 // Set up initPage function for app.js compatibility
 window.initPage = async function(id) {
   debugLog('initPage called with id:', id);
@@ -1418,6 +1786,12 @@ window.initPage = async function(id) {
   
   // Initialize the shotlist functionality
   await initializeShotlist();
+  
+  // Initialize dark theme if detected
+  if (isDarkThemeShotlist()) {
+    debugLog('Dark theme detected, initializing...');
+    initDarkThemeShotlist();
+  }
 };
 
 // Export functions for global access

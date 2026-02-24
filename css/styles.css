@@ -5,6 +5,8 @@ html {
   box-sizing: inherit;
 }
 
+/* Material Symbols visibility is now handled in theme-dark.css */
+
 :root {
   /* Material Design Text Colors (on light surfaces) */
   --md-sys-color-on-surface: rgba(0, 0, 0, 0.87); /* High emphasis */
@@ -350,23 +352,11 @@ body:has(.bottom-nav-material) #page-container {
   display: none !important;
 }
 
-/* Hide bottom navbar on call-times page */
-.call-times-page .bottom-nav-material,
-.call-times-page #bottomNav {
+/* Hide the chat button in navbar on events page (we use floating button instead) */
+.events-page .chat-button-nav {
   display: none !important;
 }
-
-/* Hide bottom navbar on flights page */
-.flights-page .bottom-nav-material,
-.flights-page #bottomNav {
-  display: none !important;
-}
-
-/* Also hide floating Luma button on events page */
-.events-page .chat-button-nav,
-.events-page #chatButton {
-  display: none !important;
-}
+/* NOTE: #chatButton (floating Luma button) should remain visible on all pages */
 
 /* Remove bottom padding on events page since navbar is hidden */
 .events-page #page-container {

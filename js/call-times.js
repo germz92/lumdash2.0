@@ -11,7 +11,7 @@
   let isAdmin = false;
   
   // Filter states
-  let statusFilter = localStorage.getItem('callTimes_statusFilter') || 'upcoming';
+  let statusFilter = localStorage.getItem('callTimes_statusFilter') || 'all';
   let dateFilter = localStorage.getItem('callTimes_dateFilter') || 'all';
   let myCallsFilter = localStorage.getItem('callTimes_myCallsFilter') || 'all';
   let searchQuery = '';
@@ -39,27 +39,16 @@
     return date.toLocaleDateString('en-US', options);
   }
   
-  // Format time for display (convert to AM/PM)
+  // Format time for display
   function formatTime(timeStr) {
     if (!timeStr) return '—';
-    
-    // Parse time string (assuming format like "14:30" or "9:00")
-    const match = timeStr.match(/^(\d{1,2}):(\d{2})/);
-    if (!match) return timeStr;
-    
-    let hours = parseInt(match[1]);
-    const minutes = match[2];
-    
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    hours = hours % 12 || 12; // Convert to 12-hour format, 0 becomes 12
-    
-    return `${hours}:${minutes} ${ampm}`;
+    return timeStr;
   }
   
   // Format hours for display
   function formatHours(hours) {
     if (!hours && hours !== 0) return '—';
-    return `${hours}`;
+    return `${hours}h`;
   }
   
   // Format location (city, state)
@@ -112,9 +101,8 @@
       }
       
       // Build query params
-      // NOTE: We don't send status filter to backend anymore - it's handled client-side
-      // to avoid timezone issues between server and user
       const params = new URLSearchParams();
+      params.append('status', statusFilter);
       params.append('dateFilter', dateFilter);
       if (myCallsFilter === 'mine') {
         params.append('myCalls', 'true');
@@ -125,7 +113,7 @@
       }
       
       const response = await fetch(`${API_BASE}/api/calltimes/all?${params.toString()}`, {
-        headers: { 'Authorization': token }
+        headers: { 'Authorization': `Bearer ${token}` }
       });
       
       if (!response.ok) {
@@ -137,19 +125,9 @@
       isAdmin = data.isAdmin || false;
       
       // Show/hide admin-only filter
-      const myCallsFilterWrapper = document.getElementById('myCallsFilterWrapper');
-      if (myCallsFilterWrapper) {
-        myCallsFilterWrapper.style.display = isAdmin ? 'block' : 'none';
-      }
-      
-      // Add class to page for non-admin styling (hide Name column)
-      const callTimesPage = document.querySelector('.call-times-page');
-      if (callTimesPage) {
-        if (isAdmin) {
-          callTimesPage.classList.remove('non-admin');
-        } else {
-          callTimesPage.classList.add('non-admin');
-        }
+      const myCallsFilterGroup = document.getElementById('myCallsFilterGroup');
+      if (myCallsFilterGroup) {
+        myCallsFilterGroup.style.display = isAdmin ? 'block' : 'none';
       }
       
       // Apply client-side search filter
@@ -169,37 +147,10 @@
   
   // Apply filters and render
   function applyFilters() {
-    // Start with all call times
-    filteredCallTimes = [...allCallTimes];
-    
-    // Apply status filter client-side (using user's timezone)
-    if (statusFilter !== 'all') {
-      const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-      const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-      
-      filteredCallTimes = filteredCallTimes.filter(call => {
-        const callDate = parseLocalDate(call.date);
-        if (!callDate) return true; // Include calls without dates
-        
-        if (statusFilter === 'live') {
-          // Live = call date is today (in user's timezone)
-          return callDate >= todayStart && callDate <= todayEnd;
-        } else if (statusFilter === 'upcoming') {
-          // Upcoming = call date is today or in the future (in user's timezone)
-          return callDate >= todayStart;
-        } else if (statusFilter === 'past') {
-          // Past = call date is before today (in user's timezone)
-          return callDate < todayStart;
-        }
-        return true;
-      });
-    }
-    
     // Apply search filter client-side
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
-      filteredCallTimes = filteredCallTimes.filter(call => {
+      filteredCallTimes = allCallTimes.filter(call => {
         return (
           (call.name && call.name.toLowerCase().includes(query)) ||
           (call.role && call.role.toLowerCase().includes(query)) ||
@@ -208,6 +159,8 @@
           (call.date && call.date.includes(query))
         );
       });
+    } else {
+      filteredCallTimes = [...allCallTimes];
     }
     
     // Reset to page 1 when filters change
@@ -225,10 +178,10 @@
   
   // Update stats display
   function updateStats() {
-    const statsEl = document.getElementById('callTimesStats');
-    if (statsEl) {
+    const statsText = document.getElementById('statsText');
+    if (statsText) {
       const total = filteredCallTimes.length;
-      statsEl.textContent = `${total} call time${total !== 1 ? 's' : ''}`;
+      statsText.textContent = `${total} call time${total !== 1 ? 's' : ''}`;
     }
   }
   
@@ -283,7 +236,7 @@
             <span class="notes-text" title="${escapeHtml(call.notes || '')}">${escapeHtml(call.notes || '—')}</span>
           </td>
           <td class="col-event">
-            <a href="#" class="event-link" onclick="window.navigate('crew', '${call.event._id}'); return false;">
+            <a href="#" class="event-link" data-event-id="${call.event._id}" onclick="window.navigateToEvent('${call.event._id}'); return false;">
               ${escapeHtml(call.event.title || 'Untitled Event')}
             </a>
           </td>
@@ -333,6 +286,15 @@
       nextBtn.disabled = currentPage >= totalPages;
     }
   }
+  
+  // Navigate to event's crew page
+  window.navigateToEvent = function(eventId) {
+    if (window.navigate) {
+      window.navigate('crew', eventId);
+    } else {
+      window.location.href = `/dashboard.html#crew?id=${eventId}`;
+    }
+  };
   
   // Setup filter dropdowns
   function setupFilters() {
@@ -400,7 +362,7 @@
   function getStatusFilterLabel(value) {
     const labels = {
       'all': 'All',
-      'live': 'Live (Today)',
+      'live': 'Live',
       'upcoming': 'Upcoming',
       'past': 'Past'
     };
@@ -445,7 +407,7 @@
     const endInput = document.getElementById('customEndDate');
     
     if (modal) {
-      modal.style.display = 'flex';
+      modal.classList.add('show');
       
       // Pre-fill with saved values or defaults
       if (startInput) {
@@ -457,14 +419,14 @@
     }
   }
   
-  function closeCustomDateModal() {
+  window.closeCustomDateModal = function() {
     const modal = document.getElementById('customDateModal');
     if (modal) {
-      modal.style.display = 'none';
+      modal.classList.remove('show');
     }
-  }
+  };
   
-  function applyCustomDateRange() {
+  window.applyCustomDateRange = function() {
     const startInput = document.getElementById('customStartDate');
     const endInput = document.getElementById('customEndDate');
     
@@ -500,9 +462,9 @@
     }
     
     closeAllDropdowns();
-    closeCustomDateModal();
+    window.closeCustomDateModal();
     loadCallTimes(false);
-  }
+  };
   
   // Setup search
   function setupSearch() {
@@ -549,51 +511,29 @@
   }
   
   function scrollToTop() {
-    const container = document.querySelector('.call-times-table-container');
+    const container = document.querySelector('.call-times-list-container');
     if (container) {
       container.scrollTop = 0;
     }
   }
   
-  // Setup modal buttons
-  function setupModalButtons() {
-    const closeBtn = document.getElementById('closeCustomDateModal');
-    const cancelBtn = document.getElementById('cancelCustomDateBtn');
-    const applyBtn = document.getElementById('applyCustomDateBtn');
-    const modal = document.getElementById('customDateModal');
+  // Setup mobile menu
+  function setupMobileMenu() {
+    const menuBtn = document.getElementById('mobileMenuBtn');
+    const sidebar = document.getElementById('dashboardSidebar');
+    const overlay = document.querySelector('.sidebar-overlay');
     
-    if (closeBtn) {
-      closeBtn.onclick = closeCustomDateModal;
-    }
-    
-    if (cancelBtn) {
-      cancelBtn.onclick = closeCustomDateModal;
-    }
-    
-    if (applyBtn) {
-      applyBtn.onclick = applyCustomDateRange;
-    }
-    
-    // Close modal on outside click
-    if (modal) {
-      modal.onclick = (e) => {
-        if (e.target === modal) {
-          closeCustomDateModal();
-        }
+    if (menuBtn && sidebar) {
+      menuBtn.onclick = () => {
+        sidebar.classList.toggle('show');
+        if (overlay) overlay.classList.toggle('show');
       };
     }
-  }
-  
-  // Setup back button
-  function setupBackButton() {
-    const backBtn = document.getElementById('backToEventsBtn');
-    if (backBtn) {
-      backBtn.onclick = () => {
-        if (window.navigate) {
-          window.navigate('events');
-        } else {
-          window.location.href = '/dashboard.html#events';
-        }
+    
+    if (overlay) {
+      overlay.onclick = () => {
+        if (sidebar) sidebar.classList.remove('show');
+        overlay.classList.remove('show');
       };
     }
   }
@@ -601,7 +541,7 @@
   // Close dropdowns on outside click
   function setupOutsideClick() {
     document.addEventListener('click', (e) => {
-      if (!e.target.closest('.filter-dropdown-wrapper')) {
+      if (!e.target.closest('.filter-group')) {
         closeAllDropdowns();
       }
     });
@@ -611,12 +551,24 @@
   async function initPage() {
     console.log('[call-times] Initializing page...');
     
+    // Inject dashboard sidebar
+    const layoutContainer = document.getElementById('callTimesPageLayout');
+    
+    if (layoutContainer && typeof window.injectDashboardSidebar === 'function') {
+      await window.injectDashboardSidebar(layoutContainer, { 
+        position: 'prepend',
+        activePage: 'call-times'
+      });
+    } else if (typeof window.initDashboardSidebar === 'function') {
+      // Fallback: sidebar HTML already exists, just initialize
+      window.initDashboardSidebar();
+    }
+    
     // Setup UI
     setupFilters();
     setupSearch();
     setupPagination();
-    setupModalButtons();
-    setupBackButton();
+    setupMobileMenu();
     setupOutsideClick();
     
     // Load data
@@ -625,11 +577,16 @@
     console.log('[call-times] Page initialized');
   }
   
-  // Auto-init when DOM is ready
+  // Expose initPage for SPA
+  window.initPage = initPage;
+  
+  // Auto-init if loaded directly
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initPage);
   } else {
-    initPage();
+    // Small delay to ensure DOM is ready in SPA context
+    setTimeout(initPage, 0);
   }
   
 })();
+

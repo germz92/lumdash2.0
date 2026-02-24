@@ -6,6 +6,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (authWrapper) authWrapper.style.display = 'none';
   if (splash) splash.style.display = 'flex';
 
+  // Check for returnTo parameter (for external app auth redirects like LumQuote)
+  const urlParams = new URLSearchParams(window.location.search);
+  const returnTo = urlParams.get('returnTo');
+
   const token = localStorage.getItem('token');
 
   // ✅ If token exists, verify it
@@ -16,6 +20,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
 
       if (res.ok) {
+        // If there's a returnTo parameter, redirect there instead of dashboard
+        if (returnTo && returnTo.startsWith('/')) {
+          window.location.href = returnTo;
+          return;
+        }
         // Let the dashboard handle page restoration instead of forcing #events
         window.location.href = 'dashboard.html';
         return;
@@ -94,8 +103,18 @@ window.login = async function () {
       if (payload?.id) localStorage.setItem('userId', payload.id);
 
       console.log('[login.js] Logged in, token:', data.token);
-      // Let the dashboard handle page restoration instead of forcing #events
-      window.location.replace('dashboard.html');
+      
+      // Check for returnTo parameter (for external app auth redirects like LumQuote)
+      const urlParams = new URLSearchParams(window.location.search);
+      const returnTo = urlParams.get('returnTo');
+      
+      if (returnTo && returnTo.startsWith('/')) {
+        // Redirect to the returnTo URL (e.g., /auth-redirect.html?callback=...)
+        window.location.replace(returnTo);
+      } else {
+        // Let the dashboard handle page restoration instead of forcing #events
+        window.location.replace('dashboard.html');
+      }
     } else {
       alert(data.error || 'Login failed');
       if (loginBtn) {

@@ -1,123 +1,667 @@
-<!-- Google Fonts Roboto -->
-<link href="https://fonts.googleapis.com/css?family=Roboto:400,500,700&display=swap" rel="stylesheet">
-<!-- Add Material Symbols -->
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+<!-- Dark Theme General/Event Details Page -->
+<link rel="stylesheet" href="css/theme-dark.css">
+<!-- Quill Rich Text Editor -->
+<link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
 
-
-<div class="general-page">
-  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-    <div id="adminNotesBtnContainer"></div>
-    <div style="display: flex; gap: 12px; align-items: center;">
-    <div id="clockIconContainer">
-      <button id="clockIconBtn" class="clock-icon-btn" title="Show current time" aria-label="Show current time">
-        <!-- Replace SVG with Material Symbol -->
-        <span class="material-symbols-outlined" style="display:block; width: 32px; height: 32px; font-size: 32px;">schedule</span>
-      </button>
+<div class="dark-theme general-page">
+  <div class="general-layout">
+    
+    <!-- Sidebar Navigation -->
+    <aside class="general-sidebar" id="generalSidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">
+          <img src="assets/Logo - Dark BG.png" alt="Lumetry Media" class="sidebar-logo-img">
+        </div>
       </div>
-    </div>
-  </div>
-  <h2 id="eventTitle" style="text-align: center; margin-bottom: 20px;"></h2>
-  <form id="generalForm">
-    <div class="info-section">
-      <div class="info-card">
-        <label for="summary" style="cursor: pointer; user-select: none;" onclick="toggleEventSummary()">
-          <span class="material-symbols-outlined" id="summaryToggleIcon" style="transition: transform 0.3s ease;">expand_more</span>
-          <span class="material-symbols-outlined">description</span> 
-          Event Summary
-        </label>
-        <div id="summaryContent" style="transition: max-height 0.3s ease, opacity 0.3s ease;">
-          <div id="summary" class="read-only"></div>
-          <div id="summaryEditorContainer" style="display: none;">
-            <div id="summaryEditor" class="tinymce-editor">
-              <!-- TinyMCE will initialize here -->
-            </div>
+      
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item" data-page="events" onclick="event.preventDefault(); window.navigate && window.navigate('events');">
+          <span class="material-symbols-outlined">arrow_back</span>
+          <span>Back to Events</span>
+        </a>
+        
+        <!-- Event Info Section -->
+        <div class="sidebar-event-info" id="sidebarEventInfo"></div>
+        
+        <div class="nav-section-label">Event Pages</div>
+        
+        <a href="#" class="nav-item active" data-page="general" onclick="event.preventDefault(); window.navigate && window.navigate('general');">
+          <span class="material-symbols-outlined">home</span>
+          <span>Home</span>
+        </a>
+        <a href="#" class="nav-item" data-page="crew" onclick="event.preventDefault(); window.navigate && window.navigate('crew');">
+          <span class="material-symbols-outlined">group</span>
+          <span>Crew</span>
+        </a>
+        <a href="#" class="nav-item" data-page="schedule" onclick="event.preventDefault(); window.navigate && window.navigate('schedule');">
+          <span class="material-symbols-outlined">calendar_today</span>
+          <span>Schedule</span>
+        </a>
+        <a href="#" class="nav-item" data-page="shotlist" onclick="event.preventDefault(); window.navigate && window.navigate('shotlist');">
+          <span class="material-symbols-outlined">checklist</span>
+          <span>Shotlist</span>
+        </a>
+        <a href="#" class="nav-item" data-page="todos" onclick="event.preventDefault(); window.navigate && window.navigate('todos');">
+          <span class="material-symbols-outlined">task_alt</span>
+          <span>To-Dos</span>
+        </a>
+        <a href="#" class="nav-item" data-page="travel-accommodation" onclick="event.preventDefault(); window.navigate && window.navigate('travel-accommodation');">
+          <span class="material-symbols-outlined">flight_takeoff</span>
+          <span>Travel</span>
+        </a>
+        <a href="#" class="nav-item" data-page="gear" onclick="event.preventDefault(); window.navigate && window.navigate('gear');">
+          <span class="material-symbols-outlined">photo_camera</span>
+          <span>Gear</span>
+        </a>
+        <a href="#" class="nav-item" data-page="card-log" onclick="event.preventDefault(); window.navigate && window.navigate('card-log');">
+          <span class="material-symbols-outlined">sd_card</span>
+          <span>Cards</span>
+        </a>
+        <a href="#" class="nav-item" data-page="documents" onclick="event.preventDefault(); window.navigate && window.navigate('documents');">
+          <span class="material-symbols-outlined">map</span>
+          <span>Map</span>
+        </a>
+        
+        <div class="nav-section-label admin-only-section" id="adminSectionLabel" style="display: none;">Admin</div>
+        <a href="#" class="nav-item admin-only-nav" data-page="admin-notes" onclick="event.preventDefault(); window.navigate && window.navigate('admin-notes');" style="display: none;">
+          <span class="material-symbols-outlined">sticky_note_2</span>
+          <span>Notes</span>
+        </a>
+      </nav>
+      
+      <div class="sidebar-user" id="sidebarUserContainer">
+        <div class="sidebar-user-avatar" id="sidebarUserAvatar">
+          <img src="" alt="User" id="sidebarAvatarImg" style="display: none;">
+          <span class="material-symbols-outlined" id="sidebarAvatarIcon">person</span>
+        </div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name" id="sidebarUserName">Loading...</div>
+        </div>
+        <div class="sidebar-user-dropdown" id="userDropdownBtn">
+          <span class="material-symbols-outlined">expand_more</span>
+        </div>
+      </div>
+    </aside>
+    
+    <!-- Main Content -->
+    <main class="general-main">
+      
+      <!-- Event Header -->
+      <header class="event-header">
+        <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+        <div class="event-header-left">
+          <h1 class="event-title" id="eventTitle">Loading...</h1>
+          <div class="event-meta">
+            <span class="event-client" id="eventClient">Client Name</span>
+            <span class="meta-separator">•</span>
+            <span class="event-dates" id="eventDates">Date Range</span>
+            <span class="meta-separator">•</span>
+            <span class="event-location-header" id="eventLocationHeader">Location</span>
           </div>
         </div>
-      </div>
-      <div class="info-row">
-        <div class="info-card">
-          <label for="location"><span class="material-symbols-outlined">place</span> Location</label>
-          <div id="location" class="read-only"></div>
+        <div class="event-header-right">
+          <div class="event-status-badge live" id="eventStatusBadge">
+            <span class="status-dot"></span>
+            <span>LIVE</span>
+          </div>
+          <button class="header-action-btn" id="shareEventBtn">
+            <span class="material-symbols-outlined">share</span>
+            <span>Share</span>
+          </button>
+          <button class="header-action-btn" id="openGalleryBtn" onclick="window.handleGalleryClick && window.handleGalleryClick()">
+            <span class="material-symbols-outlined">photo_library</span>
+            <span>Open Gallery</span>
+          </button>
         </div>
-        <div class="info-card">
-          <!-- Weather icon will be set by JS -->
-          <label for="weather">Weather</label> 
-          <div id="weather" class="read-only"></div>
+      </header>
+      
+      <!-- Content Grid -->
+      <div class="general-content-grid">
+        
+        <!-- Main Column -->
+        <div class="general-main-column">
+          
+          <!-- Event Summary Card -->
+          <div class="general-card collapsible-card" id="eventSummaryCard" data-card-id="eventSummary">
+            <div class="card-header" onclick="window.toggleCardCollapse(this.parentElement)">
+              <h2>Event Summary</h2>
+              <div class="card-header-actions">
+                <button class="card-edit-btn" id="editSummaryBtn" title="Edit" onclick="event.stopPropagation()">
+                  <span class="material-symbols-outlined">edit</span>
+                </button>
+                <span class="material-symbols-outlined collapse-icon">expand_more</span>
+              </div>
+            </div>
+            <div class="card-content">
+              <div class="summary-notes-section no-border">
+                <div class="summary-notes-label">
+                  <span class="material-symbols-outlined">notes</span>
+                  <span>Notes</span>
+                </div>
+                <div class="summary-notes-content" id="summaryNotes">
+                  <p class="empty-notes">No notes added yet. Click edit to add notes.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Point of Contacts Card -->
+          <div class="general-card collapsible-card" id="pointOfContactsCard" data-card-id="pointOfContacts">
+            <div class="card-header" onclick="window.toggleCardCollapse(this.parentElement)">
+              <h2>Point of Contacts</h2>
+              <div class="card-header-actions">
+                <span class="material-symbols-outlined collapse-icon">expand_more</span>
+              </div>
+            </div>
+            <div class="card-content">
+              <div class="contacts-grid" id="contactsGrid">
+                <!-- Contact cards will be rendered here by JS -->
+                <div class="contact-card-skeleton">
+                  <div class="skeleton-avatar"></div>
+                  <div class="skeleton-lines">
+                    <div class="skeleton-line"></div>
+                    <div class="skeleton-line short"></div>
+                  </div>
+                </div>
+              </div>
+              <button class="add-item-btn" id="addContactBtn">
+                <span class="material-symbols-outlined">add</span>
+                Add Contact
+              </button>
+            </div>
+          </div>
+          
+          <!-- Locations Card -->
+          <div class="general-card collapsible-card" id="locationsCard" data-card-id="locations">
+            <div class="card-header" onclick="window.toggleCardCollapse(this.parentElement)">
+              <h2>Locations</h2>
+              <div class="card-header-actions">
+                <span class="material-symbols-outlined collapse-icon">expand_more</span>
+              </div>
+            </div>
+            <div class="card-content">
+              <div class="locations-list" id="locationsList">
+                <!-- Location items will be rendered here by JS -->
+                <div class="location-item-skeleton">
+                  <div class="skeleton-icon"></div>
+                  <div class="skeleton-lines">
+                    <div class="skeleton-line"></div>
+                    <div class="skeleton-line short"></div>
+                  </div>
+                </div>
+              </div>
+              <button class="add-item-btn" id="addLocationBtn">
+                <span class="material-symbols-outlined">add</span>
+                Add Location
+              </button>
+            </div>
+          </div>
+          
+          <!-- FTP Folder Names Card -->
+          <div class="general-card folder-names-card collapsible-card" id="folderNamesCard" data-card-id="folderNames">
+            <div class="card-header" onclick="window.toggleCardCollapse(this.parentElement)">
+              <h2>
+                <span class="material-symbols-outlined">folder</span>
+                FTP Folder Names
+              </h2>
+              <div class="card-header-actions">
+                <button class="card-edit-btn" id="editFolderNamesBtn" title="Edit" onclick="event.stopPropagation()">
+                  <span class="material-symbols-outlined">edit</span>
+                </button>
+                <span class="material-symbols-outlined collapse-icon">expand_more</span>
+              </div>
+            </div>
+            <div class="card-content">
+              <div class="folder-names-table-wrapper">
+                <table class="folder-names-table" id="folderNamesTable">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Folder Name</th>
+                      <th>Description</th>
+                      <th class="action-col"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="folderNamesTableBody">
+                    <!-- Rows will be rendered here by JS -->
+                  </tbody>
+                </table>
+              </div>
+              <div class="folder-names-empty" id="folderNamesEmpty" style="display: none;">
+                <span class="material-symbols-outlined">folder_off</span>
+                <p>No folder names added yet</p>
+              </div>
+              <div class="folder-names-edit-actions" id="folderNamesEditActions" style="display: none;">
+                <button class="add-folder-row-btn" id="addFolderRowBtn">
+                  <span class="material-symbols-outlined">add</span>
+                  Add Row
+                </button>
+                <div class="folder-names-actions">
+                  <button class="btn-secondary" id="cancelFolderNamesBtn">Cancel</button>
+                  <button class="btn-primary" id="saveFolderNamesBtn">Save</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
         </div>
-      </div>
-      <div class="info-row">
-        <div class="info-card">
-          <label for="start"><span class="material-symbols-outlined">calendar_month</span> Start Date</label>
-          <input type="date" id="start" name="start" placeholder="Select Date">
-        </div>
-        <div class="info-card">
-          <label for="end"><span class="material-symbols-outlined">calendar_month</span> End Date</label>
-          <input type="date" id="end" name="end" placeholder="Select Date">
-        </div>
-      </div>
-      <div class="info-row">
-        <div class="info-card">
-          <label for="attendees"><span class="material-symbols-outlined">groups</span> Attendee Count</label>
-          <div id="attendees" class="read-only"></div>
-        </div>
-        <div class="info-card">
-          <label for="budget"><span class="material-symbols-outlined">payments</span> Budget</label>
-          <div id="budget" class="read-only"></div>
-        </div>
-      </div>
-    </div>      
-
-    <div class="contacts-container">
-      <h2 style="margin-top: 0;"><span class="material-symbols-outlined">contacts</span> Point of Contacts</h2>
-      <div class="contacts-scroll-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Phone</th>
-              <th>Email</th>
-              <th>Role</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="contactRows"></tbody>
-        </table>
-      </div>
-      <button type="button" class="add-row-btn" onclick="addContactRow()">Add Row</button>
+        
+        <!-- Sidebar Column -->
+        <div class="general-sidebar-column">
+          
+          <!-- Combined Event Info Widget -->
+          <div class="general-card info-card collapsible-card" id="eventInfoCard" data-card-id="eventInfo">
+            <div class="card-header" onclick="window.toggleCardCollapse(this.parentElement)">
+              <h2>Event Info</h2>
+              <div class="card-header-actions">
+                <button class="card-edit-btn" id="editInfoBtn" title="Edit" onclick="event.stopPropagation()">
+                  <span class="material-symbols-outlined">edit</span>
+      </button>
+                <span class="material-symbols-outlined collapse-icon">expand_more</span>
+              </div>
+            </div>
+            <div class="card-content">
+              <div class="info-row">
+                <span class="material-symbols-outlined">business</span>
+                <div class="info-text">
+                  <span class="info-label">Client</span>
+                  <span class="info-value" id="summaryClient">Client Name</span>
+                </div>
+              </div>
+              <div class="info-row">
+                <span class="material-symbols-outlined">place</span>
+                <div class="info-text">
+                  <span class="info-label">Location</span>
+                  <div class="info-location">
+                    <span class="info-city" id="summaryCity">City</span><span class="info-separator">, </span><span class="info-state" id="summaryState">State</span>
+                  </div>
+                </div>
+              </div>
+              <div class="info-row">
+                <span class="material-symbols-outlined">calendar_today</span>
+                <div class="info-text">
+                  <span class="info-label">Dates</span>
+                  <div class="info-dates">
+                    <span class="info-value" id="statStartDate">Mar 1, 2026</span>
+                    <span class="info-arrow">→</span>
+                    <span class="info-value" id="statEndDate">Mar 5, 2026</span>
+                  </div>
+                </div>
+              </div>
+              <div class="info-row">
+                <span class="material-symbols-outlined">attach_money</span>
+                <div class="info-text">
+                  <span class="info-label">Budget</span>
+                  <span class="info-value" id="statBudget">$48,000</span>
+                </div>
+              </div>
+              <div class="info-row">
+                <span class="material-symbols-outlined">groups</span>
+                <div class="info-text">
+                  <span class="info-label">Attendees</span>
+                  <span class="info-value" id="statAttendees">2,500</span>
+                </div>
+              </div>
+              
+              <!-- Contract Button (Owner/Admin only) -->
+              <div class="info-row contract-row" id="contractRow" style="display: none;">
+                <button class="contract-btn" id="contractBtn">
+                  <span class="material-symbols-outlined">description</span>
+                  <span>Contract</span>
+                </button>
+              </div>
+              
+              <!-- Invoice Button (Owner/Admin only) -->
+              <div class="info-row invoice-row" id="invoiceRow" style="display: none;">
+                <button class="invoice-btn" id="invoiceBtn">
+                  <span class="material-symbols-outlined">receipt_long</span>
+                  <span>Invoice</span>
+                </button>
+              </div>
     </div>
-
-    <div class="contacts-container">
-      <h2 style="margin-top: 40px;"><span class="material-symbols-outlined">business</span> Locations</h2>
-      <div class="contacts-scroll-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Address</th>
-              <th>Event</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="locationsRows"></tbody>
-        </table>
+  </div>
+          
+          <!-- Weather Widget -->
+          <div class="general-card weather-card collapsible-card" id="weatherCard" data-card-id="weather">
+            <div class="card-header" onclick="window.toggleCardCollapse(this.parentElement)">
+              <h2>Weather</h2>
+              <div class="card-header-actions">
+                <span class="weather-condition" id="weatherCondition">Loading...</span>
+                <span class="material-symbols-outlined collapse-icon">expand_more</span>
+              </div>
+            </div>
+            <div class="weather-forecast" id="weatherForecast">
+              <!-- Weather days will be rendered here -->
+              <div class="weather-day-skeleton">
+                <div class="skeleton-line"></div>
+                <div class="skeleton-icon"></div>
+                <div class="skeleton-line"></div>
+              </div>
+            </div>
+          </div>
+          
+        </div>
+        
       </div>
-      <button type="button" class="add-row-btn" onclick="addLocationRow()">Add Row</button>
-    </div>      
-
-    <div class="save-button-container">
-      <button type="button" class="add-row-btn" onclick="saveGeneralInfo()">Save</button>
-      <button id="editBtn" type="button" class="add-row-btn" onclick="switchToEdit()" style="display: none;">Edit</button>
-    </div>
-  </form>
+      
+    </main>
+    
+  </div>
 </div>
 
-<!-- Lucide icon library for folder/task icons - REMOVE THIS SECTION -->
-<!-- 
-<script src="https://unpkg.com/lucide@latest" defer></script>
+<!-- Edit Event Modal -->
+<div class="dark-modal" id="editEventModal">
+  <div class="dark-modal-content">
+    <div class="modal-header-dark">
+      <h3 id="editModalTitle">Edit Event Details</h3>
+      <button class="modal-close-btn" onclick="hideEditModal()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark">
+      <div class="form-group-dark">
+        <label for="editEventName">Event Name</label>
+        <input type="text" id="editEventName" placeholder="Enter event name" autocomplete="off">
+      </div>
+      <div class="form-group-dark">
+        <label for="editClientName">Client</label>
+        <input type="text" id="editClientName" placeholder="Enter client name" autocomplete="off">
+      </div>
+      <div class="form-row">
+        <div class="form-group-dark">
+          <label for="editStartDate">Start Date</label>
+          <input type="date" id="editStartDate">
+        </div>
+        <div class="form-group-dark">
+          <label for="editEndDate">End Date</label>
+          <input type="date" id="editEndDate">
+        </div>
+      </div>
+      <div class="form-group-dark">
+        <label for="editLocation">Location/Venue</label>
+        <input type="text" id="editLocation" placeholder="Enter venue name" autocomplete="off">
+      </div>
+      <div class="form-row">
+        <div class="form-group-dark">
+          <label for="editCity">City</label>
+          <input type="text" id="editCity" placeholder="City" autocomplete="off">
+        </div>
+        <div class="form-group-dark">
+          <label for="editState">State</label>
+          <input type="text" id="editState" placeholder="State" autocomplete="off">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group-dark">
+          <label for="editAttendees">Attendee Count</label>
+          <input type="number" id="editAttendees" placeholder="0">
+        </div>
+        <div class="form-group-dark">
+          <label for="editBudget">Budget</label>
+          <input type="text" id="editBudget" placeholder="$0" autocomplete="off">
+        </div>
+      </div>
+      <div class="form-group-dark">
+        <label for="editSummary">Event Summary</label>
+        <textarea id="editSummary" rows="4" placeholder="Enter event summary..."></textarea>
+      </div>
+    </div>
+    <div class="modal-footer-dark">
+      <button class="btn-secondary" onclick="hideEditModal()">Cancel</button>
+      <button class="btn-primary" id="saveEventBtn">Save Changes</button>
+        </div>
+      </div>
+    </div>      
+
+<!-- Add Contact Modal -->
+<div class="dark-modal" id="addContactModal">
+  <div class="dark-modal-content">
+    <div class="modal-header-dark">
+      <h3>Add Contact</h3>
+      <button class="modal-close-btn" onclick="hideContactModal()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark">
+      <div class="form-group-dark">
+        <label for="contactName">Name</label>
+        <input type="text" id="contactName" placeholder="Enter name" autocomplete="off">
+      </div>
+      <div class="form-group-dark">
+        <label for="contactRole">Role/Title</label>
+        <input type="text" id="contactRole" placeholder="e.g. Event Director" autocomplete="off">
+      </div>
+      <div class="form-group-dark">
+        <label for="contactPhone">Phone</label>
+        <input type="tel" id="contactPhone" placeholder="Enter phone number" autocomplete="off">
+      </div>
+      <div class="form-group-dark">
+        <label for="contactEmail">Email</label>
+        <input type="email" id="contactEmail" placeholder="Enter email" autocomplete="off">
+      </div>
+    </div>
+    <div class="modal-footer-dark">
+      <button class="btn-secondary" onclick="hideContactModal()">Cancel</button>
+      <button class="btn-primary" id="saveContactBtn">Add Contact</button>
+    </div>
+  </div>
+    </div>
+
+<!-- Add Location Modal -->
+<div class="dark-modal" id="addLocationModal">
+  <div class="dark-modal-content">
+    <div class="modal-header-dark">
+      <h3>Add Location</h3>
+      <button class="modal-close-btn" onclick="hideLocationModal()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark">
+      <div class="form-group-dark">
+        <label for="locationName">Location Name</label>
+        <input type="text" id="locationName" placeholder="e.g. Main Hall" autocomplete="off">
+      </div>
+      <div class="form-group-dark">
+        <label for="locationAddress">Address</label>
+        <input type="text" id="locationAddress" placeholder="Enter full address" autocomplete="off">
+      </div>
+      <div class="form-group-dark">
+        <label for="locationEvent">Event/Purpose</label>
+        <input type="text" id="locationEvent" placeholder="e.g. Keynote, Reception" autocomplete="off">
+      </div>
+    </div>      
+    <div class="modal-footer-dark">
+      <button class="btn-secondary" onclick="hideLocationModal()">Cancel</button>
+      <button class="btn-primary" id="saveLocationBtn">Add Location</button>
+    </div>
+  </div>
+    </div>      
+
+<!-- Gallery URL Modal -->
+<div class="dark-modal" id="galleryUrlModal">
+  <div class="dark-modal-content" style="max-width: 500px;">
+    <div class="modal-header-dark">
+      <h3><span class="material-symbols-outlined">photo_library</span> Gallery Link</h3>
+      <button class="modal-close-btn" onclick="hideGalleryModal()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark">
+      <div class="form-group-dark">
+        <label for="galleryUrlInput">Gallery URL</label>
+        <input type="url" id="galleryUrlInput" placeholder="https://example.com/gallery" class="form-input-dark">
+        <span class="form-hint">Enter the external URL for the LumTags gallery</span>
+      </div>
+    </div>
+    <div class="modal-footer-dark">
+      <button class="btn-secondary" onclick="hideGalleryModal()">Cancel</button>
+      <button class="btn-primary" id="saveGalleryBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Contract URL Modal -->
+<div class="dark-modal" id="contractUrlModal">
+  <div class="dark-modal-content" style="max-width: 500px;">
+    <div class="modal-header-dark">
+      <h3><span class="material-symbols-outlined">description</span> Contract Link</h3>
+      <button class="modal-close-btn" onclick="hideContractModal()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark">
+      <div class="form-group-dark">
+        <label for="contractUrlInput">Contract URL</label>
+        <input type="url" id="contractUrlInput" placeholder="https://example.com/contract" class="form-input-dark">
+        <span class="form-hint">Enter the external URL for the contract</span>
+      </div>
+    </div>
+    <div class="modal-footer-dark">
+      <button class="btn-secondary" onclick="hideContractModal()">Cancel</button>
+      <button class="btn-primary" id="saveContractBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Invoice URL Modal -->
+<div class="dark-modal" id="invoiceUrlModal">
+  <div class="dark-modal-content" style="max-width: 500px;">
+    <div class="modal-header-dark">
+      <h3><span class="material-symbols-outlined">receipt_long</span> Invoice Link</h3>
+      <button class="modal-close-btn" onclick="hideInvoiceModal()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark">
+      <div class="form-group-dark">
+        <label for="invoiceUrlInput">Invoice URL</label>
+        <input type="url" id="invoiceUrlInput" placeholder="https://example.com/invoice" class="form-input-dark">
+        <span class="form-hint">Enter the external URL for the invoice</span>
+      </div>
+    </div>
+    <div class="modal-footer-dark">
+      <button class="btn-secondary" onclick="hideInvoiceModal()">Cancel</button>
+      <button class="btn-primary" id="saveInvoiceBtn">Save</button>
+    </div>
+  </div>
+</div>
+
 <script>
+// Modal functions
+function hideEditModal() {
+  const modal = document.getElementById('editEventModal');
+  if (modal) modal.classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+function showEditModal() {
+  const modal = document.getElementById('editEventModal');
+  if (modal) modal.classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function hideContactModal() {
+  const modal = document.getElementById('addContactModal');
+  if (modal) modal.classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+function showContactModal() {
+  const modal = document.getElementById('addContactModal');
+  if (modal) modal.classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function hideLocationModal() {
+  const modal = document.getElementById('addLocationModal');
+  if (modal) modal.classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+function showLocationModal() {
+  const modal = document.getElementById('addLocationModal');
+  if (modal) modal.classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function hideGalleryModal() {
+  const modal = document.getElementById('galleryUrlModal');
+  if (modal) modal.classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+function showGalleryModal() {
+  const modal = document.getElementById('galleryUrlModal');
+  if (modal) modal.classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function hideContractModal() {
+  const modal = document.getElementById('contractUrlModal');
+  if (modal) modal.classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+function showContractModal() {
+  const modal = document.getElementById('contractUrlModal');
+  if (modal) modal.classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function hideInvoiceModal() {
+  const modal = document.getElementById('invoiceUrlModal');
+  if (modal) modal.classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+function showInvoiceModal() {
+  const modal = document.getElementById('invoiceUrlModal');
+  if (modal) modal.classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+// Make functions globally available
+window.hideEditModal = hideEditModal;
+window.showEditModal = showEditModal;
+window.hideContactModal = hideContactModal;
+window.showContactModal = showContactModal;
+window.hideGalleryModal = hideGalleryModal;
+window.showGalleryModal = showGalleryModal;
+window.hideContractModal = hideContractModal;
+window.showContractModal = showContractModal;
+window.hideInvoiceModal = hideInvoiceModal;
+window.showInvoiceModal = showInvoiceModal;
+window.hideLocationModal = hideLocationModal;
+window.showLocationModal = showLocationModal;
+
+// Mobile sidebar toggle
 document.addEventListener('DOMContentLoaded', function() {
-  if (window.lucide) lucide.createIcons();
+  const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+  const sidebar = document.getElementById('generalSidebar');
+  
+  if (mobileMenuBtn && sidebar) {
+    mobileMenuBtn.addEventListener('click', function() {
+      sidebar.classList.toggle('open');
+    });
+    
+    // Close sidebar when clicking outside
+    document.addEventListener('click', function(e) {
+      if (sidebar.classList.contains('open') && 
+          !sidebar.contains(e.target) && 
+          !mobileMenuBtn.contains(e.target)) {
+        sidebar.classList.remove('open');
+      }
+    });
+    
+    // Close sidebar when navigating
+    sidebar.querySelectorAll('.nav-item').forEach(item => {
+      item.addEventListener('click', function() {
+        sidebar.classList.remove('open');
+      });
+    });
+  }
 });
 </script>
--->
-

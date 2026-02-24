@@ -33,9 +33,10 @@
   let currentWeekStart = null; // Will be set to the start of current week (Sunday)
   let crewData = null;
   let eventColors = {}; // Map of event IDs to colors
+  let searchQuery = ''; // Search filter for crew names
 
   // Generate a consistent color from a string (event ID)
-  // Uses HSL color space for better color distribution
+  // Uses HSL color space for better color distribution - optimized for dark mode
   function generateColorFromId(id) {
     // Simple hash function
     let hash = 0;
@@ -47,14 +48,15 @@
     // Convert hash to hue (0-360)
     const hue = Math.abs(hash % 360);
     
-    // Use varying saturation and lightness for better distinction
-    const saturation = 65 + (Math.abs(hash >> 8) % 20); // 65-85%
-    const lightness = 88 + (Math.abs(hash >> 16) % 8); // 88-96% (light backgrounds)
+    // Dark mode optimized: darker backgrounds with vibrant accents
+    const saturation = 50 + (Math.abs(hash >> 8) % 20); // 50-70% saturation
+    const bgLightness = 15 + (Math.abs(hash >> 16) % 8); // 15-23% (dark backgrounds)
+    const borderLightness = 45 + (Math.abs(hash >> 16) % 15); // 45-60% (vibrant borders)
     
-    // Generate colors
-    const bgColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
-    const borderColor = `hsl(${hue}, ${saturation}%, ${lightness - 35}%)`; // Darker for border
-    const textColor = `hsl(${hue}, ${Math.min(saturation + 10, 100)}%, ${Math.max(lightness - 70, 15)}%)`; // Much darker for text
+    // Generate colors for dark mode
+    const bgColor = `hsl(${hue}, ${saturation}%, ${bgLightness}%)`;
+    const borderColor = `hsl(${hue}, ${saturation + 15}%, ${borderLightness}%)`; // Brighter, more saturated border
+    const textColor = `hsl(${hue}, ${saturation + 10}%, 75%)`; // Light text with slight color tint
     
     return {
       bg: bgColor,
@@ -181,6 +183,15 @@
         renderCalendar();
       }
     });
+
+    // Search functionality
+    const searchInput = document.getElementById('searchCrewInput');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        searchQuery = e.target.value.toLowerCase().trim();
+        renderCalendar();
+      });
+    }
   }
 
   // Load crew data from API
@@ -262,12 +273,22 @@
       const dayColumn = document.createElement('div');
       dayColumn.className = 'day-column';
       
+      // Count unique crew names for this day
+      const uniqueNames = new Set();
+      crewForDay.forEach(eventGroup => {
+        eventGroup.crew.forEach(crew => {
+          uniqueNames.add(crew.name.trim().toLowerCase());
+        });
+      });
+      const uniqueCrewCount = uniqueNames.size;
+
       // Day header
       const dayHeader = document.createElement('div');
       dayHeader.className = `day-header${isToday ? ' today' : ''}`;
       dayHeader.innerHTML = `
         <div class="day-name">${dayName}</div>
         <div class="day-date">${dayNumber}</div>
+        ${uniqueCrewCount > 0 ? `<div class="crew-count-badge"><span class="material-symbols-outlined">group</span> ${uniqueCrewCount}</div>` : ''}
       `;
       dayColumn.appendChild(dayHeader);
       
@@ -305,7 +326,16 @@
     const result = [];
     
     crewData.forEach(event => {
-      const crewMembers = event.crew.filter(crew => crew.date === dateStr);
+      let crewMembers = event.crew.filter(crew => crew.date === dateStr);
+      
+      // Apply search filter if there's a query
+      if (searchQuery) {
+        crewMembers = crewMembers.filter(crew => 
+          crew.name.toLowerCase().includes(searchQuery) ||
+          (crew.role && crew.role.toLowerCase().includes(searchQuery)) ||
+          event.title.toLowerCase().includes(searchQuery)
+        );
+      }
       
       if (crewMembers.length > 0) {
         result.push({

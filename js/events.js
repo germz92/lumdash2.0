@@ -1,16 +1,30 @@
 (function() {
 const token = localStorage.getItem('token');
 if (!token && !window.location.pathname.endsWith('index.html')) {
-  alert('Not logged in');
+  // Redirect without alert - toast not available yet
   window.location.href = 'index.html';
 }
 
 let currentTableId = null;
 let showArchived = false;
+let statusFilter = localStorage.getItem('eventsStatusFilter') || 'active'; // 'active', 'archived', or 'all'
+let ownerFilter = localStorage.getItem('eventsOwnerFilter') || 'all'; // 'all', 'mine', or a specific owner ID
+let clientFilter = null; // null means no filter, otherwise it's the client name
 let searchEventsValue = '';
-let timeFilter = 'upcoming'; // 'all', 'upcoming', or 'past' - default to upcoming
+let dateFilterStart = null;
+let dateFilterEnd = null;
+let sortField = localStorage.getItem('eventsSortField') || 'date'; // 'name' or 'date'
+let sortOrder = localStorage.getItem('eventsSortOrder') || 'asc'; // 'asc' or 'desc'
+let allOwners = []; // Store unique owners for the dropdown
+let allClients = []; // Store unique client names for the dropdown
 let allUsers = [];
 let selectedUsers = [];
+let isInitialLoad = true; // Track if this is the first load to auto-switch to Live tab
+
+// Pagination state
+let currentPage = 1;
+const EVENTS_PER_PAGE = 50;
+let totalFilteredEvents = 0;
 
 function getUserIdFromToken() {
   const token = localStorage.getItem('token');
@@ -19,47 +33,342 @@ function getUserIdFromToken() {
   return payload.id;
 }
 
+// ========================================
+// BADGE NOT-REQUIRED HELPERS
+// ========================================
+
+// Determine badge CSS class based on condition met and not-required status
+function getBadgeClass(badgeType, conditionMet, badgesNotRequired) {
+  const notRequired = badgesNotRequired && badgesNotRequired[badgeType];
+  if (notRequired) return 'badge-not-required';
+  if (!conditionMet) return 'badge-inactive';
+  return '';
+}
+
+// Build title/tooltip for badges
+function getBadgeTitle(badgeType, conditionMet, badgesNotRequired, count) {
+  const notRequired = badgesNotRequired && badgesNotRequired[badgeType];
+  const labels = {
+    flight: { active: `${count || 0} passenger${count !== 1 ? 's' : ''} with flights`, inactive: 'No flights', notRequired: 'Flights — Not required' },
+    hotel: { active: `${count || 0} hotel booking${count !== 1 ? 's' : ''}`, inactive: 'No accommodations', notRequired: 'Hotels — Not required' },
+    share: { active: `Shared with ${count || 0} ${count === 1 ? 'person' : 'people'}`, inactive: 'Not shared', notRequired: 'Sharing — Not required' },
+    schedule: { active: 'Has program schedule', inactive: 'No schedule', notRequired: 'Schedule — Not required' },
+    gear: { active: 'Has gear reserved', inactive: 'No gear reserved', notRequired: 'Gear — Not required' }
+  };
+  const l = labels[badgeType] || {};
+  if (notRequired) return l.notRequired || 'Not required';
+  return conditionMet ? (l.active || '') : (l.inactive || '');
+}
+
+// Show right-click context menu on a badge
+function showBadgeContextMenu(e, eventId, badgeType, isCurrentlyNotRequired) {
+  // Remove any existing context menu
+  const existing = document.querySelector('.badge-context-menu');
+  if (existing) existing.remove();
+
+  const badgeLabels = {
+    flight: 'Flights',
+    hotel: 'Hotels',
+    share: 'Sharing',
+    schedule: 'Schedule',
+    gear: 'Gear'
+  };
+  const label = badgeLabels[badgeType] || badgeType;
+
+  const menu = document.createElement('div');
+  menu.className = 'badge-context-menu';
+  
+  if (isCurrentlyNotRequired) {
+    menu.innerHTML = `
+      <div class="menu-item mark-required" onclick="toggleBadgeRequired('${eventId}', '${badgeType}'); this.closest('.badge-context-menu').remove();">
+        <span class="material-symbols-outlined">check_circle</span>
+        Mark ${label} as required
+      </div>
+    `;
+  } else {
+    menu.innerHTML = `
+      <div class="menu-item" onclick="toggleBadgeRequired('${eventId}', '${badgeType}'); this.closest('.badge-context-menu').remove();">
+        <span class="material-symbols-outlined">block</span>
+        Mark ${label} as not required
+      </div>
+    `;
+  }
+
+  document.body.appendChild(menu);
+
+  // Position the menu at cursor, keep within viewport
+  const menuRect = menu.getBoundingClientRect();
+  let left = e.clientX;
+  let top = e.clientY;
+  if (left + menuRect.width > window.innerWidth - 8) left = window.innerWidth - menuRect.width - 8;
+  if (top + menuRect.height > window.innerHeight - 8) top = window.innerHeight - menuRect.height - 8;
+  menu.style.left = left + 'px';
+  menu.style.top = top + 'px';
+
+  // Close on click outside
+  setTimeout(() => {
+    const closeHandler = (evt) => {
+      if (!menu.contains(evt.target)) {
+        menu.remove();
+        document.removeEventListener('click', closeHandler);
+        document.removeEventListener('contextmenu', closeHandler);
+      }
+    };
+    document.addEventListener('click', closeHandler);
+    document.addEventListener('contextmenu', closeHandler);
+  }, 10);
+}
+
+// Toggle badge not-required status via API
+async function toggleBadgeRequired(eventId, badgeType) {
+  try {
+    const res = await fetch(`${API_BASE}/api/tables/${eventId}/badge-required`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ badge: badgeType })
+    });
+    
+    if (!res.ok) {
+      const err = await res.json();
+      showToast(err.error || 'Failed to update badge', 'error');
+      return;
+    }
+    
+    const data = await res.json();
+    const statusLabel = data.notRequired ? 'not required' : 'required';
+    const badgeLabels = { flight: 'Flights', hotel: 'Hotels', share: 'Sharing', schedule: 'Schedule', gear: 'Gear' };
+    showToast(`${badgeLabels[badgeType] || badgeType} marked as ${statusLabel}`, 'success');
+    
+    // Update the cached data and re-render
+    if (cachedTables) {
+      const tableIdx = cachedTables.findIndex(t => t._id === eventId);
+      if (tableIdx !== -1) {
+        if (!cachedTables[tableIdx].badgesNotRequired) {
+          cachedTables[tableIdx].badgesNotRequired = {};
+        }
+        cachedTables[tableIdx].badgesNotRequired[badgeType] = data.notRequired;
+      }
+    }
+    
+    // Re-render
+    loadTables(false);
+  } catch (error) {
+    console.error('Error toggling badge requirement:', error);
+    showToast('Failed to update badge requirement', 'error');
+  }
+}
+
+// ========================================
+// TOAST NOTIFICATION SYSTEM
+// ========================================
+
+function showToast(message, type = 'info', duration = 4000) {
+  const container = document.getElementById('toastContainer');
+  if (!container) {
+    console.warn('Toast container not found');
+    return;
+  }
+  
+  const icons = {
+    success: 'check_circle',
+    error: 'error',
+    warning: 'warning',
+    info: 'info'
+  };
+  
+  const titles = {
+    success: 'Success',
+    error: 'Error',
+    warning: 'Warning',
+    info: 'Notice'
+  };
+  
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  toast.innerHTML = `
+    <div class="toast-icon">
+      <span class="material-symbols-outlined">${icons[type] || icons.info}</span>
+    </div>
+    <div class="toast-content">
+      <div class="toast-title">${titles[type] || titles.info}</div>
+      <div class="toast-message">${message}</div>
+    </div>
+    <button class="toast-close" onclick="this.parentElement.remove()">
+      <span class="material-symbols-outlined">close</span>
+    </button>
+    <div class="toast-progress" style="animation-duration: ${duration}ms;"></div>
+  `;
+  
+  container.appendChild(toast);
+    
+  // Auto remove after duration
+    setTimeout(() => {
+    if (toast.parentElement) {
+      toast.classList.add('toast-exit');
+      setTimeout(() => toast.remove(), 300);
+    }
+  }, duration);
+  
+  return toast;
+}
+
+// ========================================
+// CONFIRMATION MODAL SYSTEM
+// ========================================
+
+let confirmResolve = null;
+
+function showConfirm(title, message, options = {}) {
+  return new Promise((resolve) => {
+    confirmResolve = resolve;
+    
+    const modal = document.getElementById('confirmModal');
+    const modalIcon = document.getElementById('confirmModalIcon');
+    const modalTitle = document.getElementById('confirmModalTitle');
+    const modalMessage = document.getElementById('confirmModalMessage');
+    const confirmBtn = document.getElementById('confirmModalConfirm');
+    const cancelBtn = document.getElementById('confirmModalCancel');
+    
+    if (!modal) {
+      // Fallback to native confirm if modal not found
+      resolve(confirm(message));
+      return;
+    }
+    
+    // Set content
+    modalTitle.textContent = title || 'Confirm Action';
+    modalMessage.textContent = message || 'Are you sure you want to proceed?';
+    
+    // Set icon type
+    const iconType = options.type || 'danger';
+    const icons = {
+      danger: 'warning',
+      warning: 'error',
+      info: 'help'
+    };
+    modalIcon.className = `confirm-modal-icon ${iconType === 'danger' ? '' : iconType}`;
+    modalIcon.innerHTML = `<span class="material-symbols-outlined">${icons[iconType] || 'help'}</span>`;
+    
+    // Set button text
+    confirmBtn.textContent = options.confirmText || 'Confirm';
+    cancelBtn.textContent = options.cancelText || 'Cancel';
+    
+    // Set button style
+    confirmBtn.className = options.type === 'info' ? 'btn-primary' : 'btn-danger';
+    
+    // Show modal
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
+    
+    // Setup handlers
+    const handleConfirm = () => {
+      cleanup();
+      resolve(true);
+    };
+    
+    const handleCancel = () => {
+      cleanup();
+      resolve(false);
+    };
+    
+    const handleBackdrop = (e) => {
+      if (e.target === modal) {
+        cleanup();
+        resolve(false);
+      }
+    };
+    
+    const cleanup = () => {
+      modal.classList.remove('show');
+      document.body.style.overflow = '';
+      confirmBtn.removeEventListener('click', handleConfirm);
+      cancelBtn.removeEventListener('click', handleCancel);
+      modal.removeEventListener('click', handleBackdrop);
+    };
+    
+    confirmBtn.addEventListener('click', handleConfirm);
+    cancelBtn.addEventListener('click', handleCancel);
+    modal.addEventListener('click', handleBackdrop);
+  });
+}
+
+// Make toast globally available
+window.showToast = showToast;
+window.showConfirm = showConfirm;
+
 function showCreateModal() {
   const modal = document.getElementById('createModal');
   if (modal) {
-    // Move modal to body to escape page-container stacking context
-    if (modal.parentElement && modal.parentElement.id === 'page-container') {
-      console.log('[CREATE_MODAL] Moving modal from page-container to body');
-      document.body.appendChild(modal);
-    }
+    // Populate client datalist with existing clients
+    populateClientDatalist();
     
-    // Force display and ensure visibility
-    modal.style.display = 'flex';
-    modal.style.visibility = 'visible';
-    modal.style.opacity = '1';
-    modal.style.zIndex = '10000';
-    modal.style.position = 'fixed';
-    modal.style.inset = '0';
-    
-    // Add click-outside functionality
-    setTimeout(() => {
-      modal.addEventListener('click', handleCreateModalClick);
-    }, 0);
+    modal.classList.add('show');
+    document.body.style.overflow = 'hidden';
   }
+}
+
+function populateClientDatalist() {
+  const datalist = document.getElementById('clientDatalist');
+  if (!datalist) return;
+  
+  // Clear existing options
+  datalist.innerHTML = '';
+  
+  // Add each unique client
+  allClients.forEach(client => {
+    if (client && client.trim()) {
+      const option = document.createElement('option');
+      option.value = client;
+      datalist.appendChild(option);
+    }
+  });
 }
 
 function hideCreateModal() {
   const modal = document.getElementById('createModal');
   if (modal) {
-    modal.style.display = 'none';
-    // Remove click-outside event listener
-    modal.removeEventListener('click', handleCreateModalClick);
+    modal.classList.remove('show');
+    document.body.style.overflow = '';
+    
+    // Reset form fields
+    const editEventId = document.getElementById('editEventId');
+    const newTitle = document.getElementById('newTitle');
+    const newClient = document.getElementById('newClient');
+    const newCity = document.getElementById('newCity');
+    const newState = document.getElementById('newState');
+    const newStart = document.getElementById('newStart');
+    const newEnd = document.getElementById('newEnd');
+    
+    if (editEventId) editEventId.value = '';
+    if (newTitle) newTitle.value = '';
+    if (newClient) newClient.value = '';
+    if (newCity) newCity.value = '';
+    if (newState) newState.value = '';
+    if (newStart) newStart.value = '';
+    if (newEnd) newEnd.value = '';
+    
+    // Reset modal title and button to create mode
+    const modalTitle = document.getElementById('eventModalTitle');
+    const submitBtn = document.getElementById('eventModalSubmitBtn');
+    if (modalTitle) modalTitle.textContent = 'Create New Event';
+    if (submitBtn) submitBtn.textContent = 'Create Event';
   }
 }
 
 async function submitCreate() {
+  const editEventId = document.getElementById('editEventId')?.value;
   const title = document.getElementById('newTitle')?.value;
   const client = document.getElementById('newClient')?.value;
+  const city = document.getElementById('newCity')?.value;
+  const state = document.getElementById('newState')?.value;
   const startDate = document.getElementById('newStart')?.value;
   const endDate = document.getElementById('newEnd')?.value;
 
   if (!title || !startDate || !endDate) {
-    alert("Please fill out all fields.");
+    showToast("Please fill out all fields.", "warning");
     return;
   }
 
@@ -75,6 +384,22 @@ async function submitCreate() {
   const start = formatDateToISO(startDate);
   const end = formatDateToISO(endDate);
 
+  if (editEventId) {
+    // Update existing event
+    const res = await fetch(`${API_BASE}/api/tables/${editEventId}/general`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: token
+      },
+      body: JSON.stringify({
+        title,
+        general: { client, city, state, start, end }
+      })
+    });
+    await res.json();
+  } else {
+    // Create new event
   const res = await fetch(`${API_BASE}/api/tables`, {
     method: 'POST',
     headers: {
@@ -83,55 +408,1060 @@ async function submitCreate() {
     },
     body: JSON.stringify({
       title,
-      general: { client, start, end }
+        general: { client, city, state, start, end }
     })
   });
-
   await res.json();
+  }
+
   hideCreateModal();
-  loadTables();
+  loadTables(true); // Force refresh after create/edit
 }
 
-async function loadTables() {
+// Invalidate cache function
+function invalidateEventsCache() {
+  cachedTables = null;
+  cacheTimestamp = 0;
+}
+
+window.invalidateEventsCache = invalidateEventsCache;
+
+// Open edit modal with event data
+async function openEditEventModal(eventId, clickedElement) {
+  // Show immediate visual feedback on the edit icon
+  if (clickedElement) {
+    clickedElement.textContent = 'hourglass_empty';
+    clickedElement.classList.add('loading');
+  }
+  
+  try {
+    // Show modal immediately with loading state
+    document.getElementById('eventModalTitle').textContent = 'Edit Event';
+    document.getElementById('eventModalSubmitBtn').textContent = 'Save Changes';
+    document.getElementById('eventModalSubmitBtn').disabled = true;
+    document.getElementById('editEventId').value = eventId;
+    
+    // Clear form fields while loading
+    document.getElementById('newTitle').value = '';
+    document.getElementById('newTitle').placeholder = 'Loading...';
+    document.getElementById('newClient').value = '';
+    document.getElementById('newCity').value = '';
+    document.getElementById('newState').value = '';
+    document.getElementById('newStart').value = '';
+    document.getElementById('newEnd').value = '';
+    
+    // Show modal
+    showCreateModal();
+    
+    // Fetch event data
+    const res = await fetch(`${API_BASE}/api/tables/${eventId}`, {
+      headers: { Authorization: token }
+    });
+    const event = await res.json();
+    
+    // Populate form fields
+    document.getElementById('newTitle').value = event.title || '';
+    document.getElementById('newTitle').placeholder = 'Enter event name';
+    document.getElementById('newClient').value = event.general?.client || '';
+    document.getElementById('newCity').value = event.general?.city || '';
+    document.getElementById('newState').value = event.general?.state || '';
+    
+    // Format dates for input fields (YYYY-MM-DD)
+    if (event.general?.start) {
+      const startDate = new Date(event.general.start);
+      document.getElementById('newStart').value = startDate.toISOString().split('T')[0];
+    }
+    if (event.general?.end) {
+      const endDate = new Date(event.general.end);
+      document.getElementById('newEnd').value = endDate.toISOString().split('T')[0];
+    }
+    
+    // Enable submit button
+    document.getElementById('eventModalSubmitBtn').disabled = false;
+    
+  } catch (error) {
+    console.error('Error loading event for edit:', error);
+    hideCreateModal();
+    showToast('Failed to load event details', 'error');
+  } finally {
+    // Reset edit icon
+    if (clickedElement) {
+      clickedElement.textContent = 'edit';
+      clickedElement.classList.remove('loading');
+    }
+  }
+}
+
+window.openEditEventModal = openEditEventModal;
+window.openShareModal = openShareModal;
+window.showBadgeContextMenu = showBadgeContextMenu;
+window.toggleBadgeRequired = toggleBadgeRequired;
+
+// Row accent colors for dark theme table view
+const rowAccentColors = [
+  'var(--accent-blue)',
+  'var(--accent-red)', 
+  'var(--accent-green)',
+  'var(--accent-orange)',
+  'var(--accent-purple)',
+  'var(--accent-cyan)'
+];
+
+// Dark theme is always active
+function isDarkThemeActive() {
+  return true;
+}
+
+// Parse date string as local date (ignoring timezone)
+function parseLocalDate(dateStr) {
+  if (!dateStr) return null;
+  // Handle ISO date strings like "2026-01-15" or "2026-01-15T00:00:00.000Z"
+  const str = String(dateStr);
+  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const [, year, month, day] = match;
+    // Create date in local timezone at midnight
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0);
+  }
+  // Fallback to regular parsing
+  return new Date(dateStr);
+}
+
+// Get event status using device's local time
+function getEventStatus(table) {
+  const now = new Date();
+  const general = table.general || {};
+  
+  // Parse dates as local dates for accurate comparison
+  const start = general.start ? parseLocalDate(general.start) : null;
+  const end = general.end ? parseLocalDate(general.end) : null;
+  
+  // Get today's date at midnight (local time) for comparison
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  
+  // Check if event is live (start date <= today <= end date)
+  const isCurrentlyLive = table.isLive || (start && end && start <= todayEnd && end >= todayStart);
+  
+  if (isCurrentlyLive) {
+    return { label: 'LIVE', class: 'live' };
+  } else if (start && start > todayEnd) {
+    return { label: 'Upcoming', class: 'upcoming' };
+  } else {
+    return { label: 'Past', class: 'past' };
+  }
+}
+
+// Format date range for dark theme table (using local time)
+function formatDateRangeDark(start, end) {
+  if (!start) return '—';
+  
+  // Parse as local date
+  const startDate = parseLocalDate(start);
+  const options = { weekday: 'short', month: 'short', day: 'numeric' };
+  const startStr = startDate.toLocaleDateString('en-US', options);
+  
+  if (!end || start === end) {
+    return startStr;
+  }
+  
+  // Parse as local date
+  const endDate = parseLocalDate(end);
+  const endStr = endDate.toLocaleDateString('en-US', options);
+  
+  return `${startStr} – ${endStr}`;
+}
+
+// Render crew avatars for dark theme
+// Get initials from a name
+function getInitials(name) {
+  if (!name || typeof name !== 'string') return '?';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) {
+    return parts[0].charAt(0).toUpperCase();
+  }
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+}
+
+function renderCrewAvatarsDark(crewMembers, totalCount, eventId = null, unassignedCount = 0) {
+  const maxVisible = 4;
+  const crewArray = Array.isArray(crewMembers) ? crewMembers : [];
+  
+  // Calculate total items to show (assigned crew + unassigned positions)
+  const totalItems = crewArray.length + unassignedCount;
+  const hasOverflow = totalItems > maxVisible;
+  
+  // Determine how many slots we have for avatars (leave room for +N if overflow)
+  const maxAvatarSlots = hasOverflow ? maxVisible - 1 : maxVisible;
+  
+  // Show assigned crew first, then fill remaining slots with unassigned
+  const assignedToShow = Math.min(crewArray.length, maxAvatarSlots);
+  const remainingSlots = maxAvatarSlots - assignedToShow;
+  const unassignedToShow = Math.min(unassignedCount, remainingSlots);
+  
+  const overflow = totalItems - assignedToShow - unassignedToShow;
+  
+  let html = '<div class="avatar-stack">';
+  
+  // Show assigned crew members first
+  for (let i = 0; i < assignedToShow; i++) {
+    const member = crewArray[i];
+    const name = member?.name || member?.fullName || member?.email || 'Crew';
+    const photo = member?.photo || member?.avatar || member?.profileImage;
+    const initials = getInitials(name);
+    
+    if (photo) {
+      html += `
+        <div class="crew-avatar" title="${name}" onclick="event.stopPropagation(); navigateToCrew('${eventId}')" style="cursor: pointer;">
+          <img src="${photo}" alt="${name}" onerror="this.parentElement.innerHTML='<span class=\\'initials\\'>${initials}</span>'">
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="crew-avatar initials-avatar" title="${name}" onclick="event.stopPropagation(); navigateToCrew('${eventId}')" style="cursor: pointer;">
+          <span class="initials">${initials}</span>
+        </div>
+      `;
+    }
+  }
+  
+  // Show unassigned position placeholders (red avatars)
+  for (let i = 0; i < unassignedToShow; i++) {
+    html += `
+      <div class="crew-avatar unassigned-avatar" title="Unassigned position" onclick="event.stopPropagation(); navigateToCrew('${eventId}')" style="cursor: pointer;">
+        <span class="material-symbols-outlined avatar-icon">person</span>
+      </div>
+    `;
+  }
+  
+  // Show +N overflow indicator as part of the avatar stack
+  if (hasOverflow && overflow > 0) {
+    // Build crew list for the expanded view (including unassigned)
+    const crewListItems = crewArray.map(member => {
+      const name = member?.name || member?.fullName || member?.email || 'Crew';
+      const initials = getInitials(name);
+      const photo = member?.photo || member?.avatar || member?.profileImage;
+      const avatarHtml = photo 
+        ? `<img src="${photo}" alt="${name}" class="crew-list-avatar-img">`
+        : `<span class="crew-list-initials">${initials}</span>`;
+      return `<div class="crew-list-item"><div class="crew-list-avatar">${avatarHtml}</div><span class="crew-list-name">${name}</span></div>`;
+    }).join('');
+    
+    // Add unassigned to the list
+    let unassignedListItems = '';
+    for (let i = 0; i < unassignedCount; i++) {
+      unassignedListItems += `<div class="crew-list-item unassigned-list-item"><div class="crew-list-avatar unassigned"><span class="material-symbols-outlined">person</span></div><span class="crew-list-name">Unassigned</span></div>`;
+    }
+    
+    // Check if any hidden items in overflow are unassigned
+    const hiddenUnassigned = unassignedCount - unassignedToShow;
+    const overflowHasUnassigned = hiddenUnassigned > 0;
+    
+    html += `
+      <div class="crew-avatar overflow-count crew-expand-trigger${overflowHasUnassigned ? ' overflow-unassigned' : ''}" data-crew-count="${totalItems}">
+        +${overflow}
+        <div class="crew-expanded-view">
+          <div class="crew-expanded-header">Crew Members (${totalCount})${unassignedCount > 0 ? ` <span class="unassigned-header-count">+ ${unassignedCount} unassigned</span>` : ''}</div>
+          <div class="crew-expanded-list-wrapper ${totalItems > 5 ? 'has-scroll' : ''}">
+            <div class="crew-expanded-list">${crewListItems}${unassignedListItems}</div>
+          </div>
+          <button class="crew-view-all-btn" onclick="event.stopPropagation(); ${eventId ? `window.navigate && window.navigate('crew', '${eventId}');` : `window.location.href = '/pages/crew-planner.html';`}">
+            <span class="material-symbols-outlined">group</span>
+            View Crew Page
+          </button>
+        </div>
+      </div>
+    `;
+  }
+  
+  html += '</div>';
+  
+  // Always show total crew count (assigned + unassigned)
+  const displayCount = totalCount + unassignedCount;
+  if (displayCount > 0) {
+    html += `
+      <span class="crew-total-count">${displayCount}</span>
+    `;
+  }
+  
+  return html;
+}
+
+// Render event row for dark theme table
+// Calculate task status for an event
+function getTaskStatus(todos) {
+  if (!todos || todos.length === 0) {
+    return { label: 'No Tasks', class: 'no-tasks', icon: 'check_box_outline_blank' };
+  }
+  
+  // Get today's date in user's local timezone (midnight)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayStr = today.toISOString().split('T')[0]; // YYYY-MM-DD
+  
+  // Helper to parse due date in timezone-agnostic way
+  function parseDueDate(dueDate) {
+    if (!dueDate) return null;
+    let dateStr = dueDate;
+    if (typeof dueDate === 'string' && dueDate.includes('T')) {
+      dateStr = dueDate.split('T')[0]; // Get just YYYY-MM-DD
+    }
+    const [year, month, day] = dateStr.split('-').map(Number);
+    return new Date(year, month - 1, day); // Local date
+  }
+  
+  const completed = todos.filter(t => t.status === 'done');
+  const inProgress = todos.filter(t => t.status === 'in-progress');
+  const pending = todos.filter(t => t.status === 'todo');
+  
+  // Check if all tasks are completed
+  if (completed.length === todos.length) {
+    return { label: 'Completed', class: 'completed', icon: 'check_circle' };
+  }
+  
+  // Check for overdue tasks FIRST (pending or in-progress with PAST due date - before today)
+  // Overdue takes priority over everything else
+  const hasOverdue = todos.some(t => {
+    if (t.status === 'done') return false;
+    if (!t.dueDate) return false;
+    const dueDate = parseDueDate(t.dueDate);
+    if (!dueDate) return false;
+    dueDate.setHours(0, 0, 0, 0);
+    return dueDate < today;
+  });
+  
+  if (hasOverdue) {
+    return { label: 'Overdue', class: 'overdue', icon: 'warning' };
+  }
+  
+  // Check for tasks due today (not yet complete) - "Needs Action"
+  const hasDueToday = todos.some(t => {
+    if (t.status === 'done') return false;
+    if (!t.dueDate) return false;
+    const dueDate = parseDueDate(t.dueDate);
+    if (!dueDate) return false;
+    const dueDateStr = dueDate.toISOString().split('T')[0];
+    return dueDateStr === todayStr;
+  });
+  
+  if (hasDueToday) {
+    return { label: 'Due Today', class: 'due-today', icon: 'today' };
+  }
+  
+  // Check if there's any progress
+  if (inProgress.length > 0 || completed.length > 0) {
+    return { label: 'In Progress', class: 'in-progress', icon: 'pending' };
+  }
+  
+  // Check if there are upcoming tasks with due dates
+  const hasFutureTasks = todos.some(t => {
+    if (!t.dueDate) return false;
+    const dueDate = parseDueDate(t.dueDate);
+    if (!dueDate) return false;
+    dueDate.setHours(0, 0, 0, 0);
+    return dueDate > today;
+  });
+  
+  if (hasFutureTasks) {
+    return { label: 'Up to Date', class: 'up-to-date', icon: 'schedule' };
+  }
+  
+  // No completed tasks and no due dates set
+  return { label: 'Not Started', class: 'not-started', icon: 'radio_button_unchecked' };
+}
+
+// Navigate to the todos page for a specific event
+function navigateToTodos(eventId) {
+  if (!eventId) return;
+  localStorage.setItem('eventId', eventId);
+  if (typeof window.navigate === 'function') {
+    window.navigate('todos', eventId);
+  } else {
+    window.location.hash = `todos?id=${eventId}`;
+  }
+}
+
+// Navigate to the crew page for a specific event
+function navigateToCrew(eventId) {
+  if (!eventId) return;
+  localStorage.setItem('eventId', eventId);
+  if (typeof window.navigate === 'function') {
+    window.navigate('crew', eventId);
+  } else {
+    window.location.hash = `crew?id=${eventId}`;
+  }
+}
+
+// Make them globally available
+window.navigateToTodos = navigateToTodos;
+window.navigateToCrew = navigateToCrew;
+
+/**
+ * Fetch passenger counts for all events (unique passengers per event)
+ */
+async function fetchFlightCounts() {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_BASE}/api/flights/booked`, {
+      headers: {
+        'Authorization': token,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      console.warn('Failed to fetch flight counts');
+      return {};
+    }
+    
+    const flights = await response.json();
+    
+    // Group flights by event name and count unique passengers
+    const passengerCounts = {};
+    flights.forEach(flight => {
+      const eventName = flight.eventName || 'Flight';
+      if (!passengerCounts[eventName]) {
+        passengerCounts[eventName] = new Set();
+      }
+      // Add all passenger IDs to the set for this event
+      if (flight.passengers && Array.isArray(flight.passengers)) {
+        flight.passengers.forEach(passenger => {
+          if (passenger.passengerId) {
+            passengerCounts[eventName].add(passenger.passengerId);
+          }
+        });
+      }
+    });
+    
+    // Convert Sets to counts
+    const counts = {};
+    Object.keys(passengerCounts).forEach(eventName => {
+      counts[eventName] = passengerCounts[eventName].size;
+    });
+    
+    return counts;
+  } catch (error) {
+    console.error('Error fetching flight counts:', error);
+    return {};
+  }
+}
+
+/**
+ * Check which events have schedule content
+ * Returns object with eventId as key and boolean as value
+ */
+function checkScheduleContent(tables) {
+  const scheduleStatus = {};
+  tables.forEach(table => {
+    // Check if programSchedule exists and has content
+    const hasSchedule = table.programSchedule && 
+                       Array.isArray(table.programSchedule) && 
+                       table.programSchedule.length > 0;
+    scheduleStatus[table._id] = hasSchedule;
+  });
+  return scheduleStatus;
+}
+
+/**
+ * Fetch events that have gear reserved
+ * Returns Set of eventIds that have gear
+ */
+async function fetchEventsWithGear() {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_BASE}/api/gear-packages/events-with-gear`, {
+      headers: {
+        'Authorization': token,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      console.error('Failed to fetch events with gear');
+      return new Set();
+    }
+    
+    const data = await response.json();
+    // Convert ObjectIds to strings for comparison
+    const eventIdStrings = (data.eventIds || []).map(id => id.toString());
+    console.log('[GEAR DEBUG] Events with gear:', eventIdStrings);
+    return new Set(eventIdStrings);
+  } catch (error) {
+    console.error('Error fetching events with gear:', error);
+    return new Set();
+  }
+}
+
+function renderEventRowDark(table, index, userId) {
+  const general = table.general || {};
+  const accentColor = rowAccentColors[index % rowAccentColors.length];
+  
+  // Get unique crew member names from rows
+  const rows = table.rows || [];
+  const uniqueCrewNames = [...new Set(rows.map(r => r.name).filter(n => n && n.trim()))];
+  const crewMembers = uniqueCrewNames.map(name => ({ name }));
+  const crewCount = crewMembers.length;
+  
+  // Count unassigned positions (rows with a real role but no name assigned)
+  // Exclude placeholder rows (role === '__placeholder__') and empty roles
+  const unassignedCount = rows.filter(r => {
+    const role = r.role && r.role.trim();
+    const hasRealRole = role && role !== '__placeholder__';
+    const hasName = r.name && r.name.trim();
+    return hasRealRole && !hasName;
+  }).length;
+  
+  const dateStr = formatDateRangeDark(general.start, general.end);
+  
+  // Check if current user is owner (handle both populated and unpopulated owners)
+  const isOwner = Array.isArray(table.owners) && table.owners.some(owner => 
+    (typeof owner === 'string' && owner === userId) || 
+    (owner && owner._id && owner._id.toString() === userId)
+  );
+  
+  // Get owner names for display
+  const ownerNames = table.ownerNames || [];
+  const ownerDisplay = ownerNames.length > 0 ? ownerNames[0] : '—';
+  const hasMultipleOwners = ownerNames.length > 1;
+  const ownerListHtml = ownerNames.map(name => `<div class="owner-dropdown-item">${name}</div>`).join('');
+  
+  // Get task status
+  const todos = table.todos || [];
+  const taskStatus = getTaskStatus(todos);
+  
+  const row = document.createElement('tr');
+  row.className = 'event-row';
+  row.dataset.eventId = table._id;
+  
+  // Get city and state from general
+  const cityState = [general.city, general.state].filter(Boolean).join(', ');
+  
+  row.innerHTML = `
+    <td style="--row-accent: ${accentColor};">
+      <div class="event-name-cell">
+        <div class="event-name">
+          <a href="#" class="event-name-link" onclick="window.navigate('general', '${table._id}'); return false;">
+            ${table.title || 'Untitled Event'}
+          </a>
+          <span class="material-symbols-outlined edit-icon" onclick="event.stopPropagation(); openEditEventModal('${table._id}', this)">edit</span>
+        </div>
+        ${cityState ? `
+          <div class="event-location-info">
+            <span class="material-symbols-outlined" style="font-size: 14px;">location_on</span>
+            ${cityState}
+          </div>
+          ` : ''}
+      </div>
+    </td>
+    <td class="badges-cell">
+      <div class="event-badges">
+          <span class="flight-badge ${getBadgeClass('flight', table.flightCount > 0, table.badgesNotRequired)}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'flight', ${!!(table.badgesNotRequired && table.badgesNotRequired.flight)});" title="${getBadgeTitle('flight', table.flightCount > 0, table.badgesNotRequired, table.flightCount)}">
+              <span class="material-symbols-outlined">flight</span>
+              ${table.flightCount > 0 && !table.badgesNotRequired?.flight ? `<span class="flight-count">${table.flightCount}</span>` : ''}
+            </span>
+          <span class="hotel-badge ${getBadgeClass('hotel', table.hotelCount > 0, table.badgesNotRequired)}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'hotel', ${!!(table.badgesNotRequired && table.badgesNotRequired.hotel)});" title="${getBadgeTitle('hotel', table.hotelCount > 0, table.badgesNotRequired, table.hotelCount)}">
+              <span class="material-symbols-outlined">hotel</span>
+              ${table.hotelCount > 0 && !table.badgesNotRequired?.hotel ? `<span class="hotel-count">${table.hotelCount}</span>` : ''}
+            </span>
+          <span class="share-badge ${getBadgeClass('share', table.shareCount > 0, table.badgesNotRequired)}" onclick="event.stopPropagation(); openShareModal('${table._id}');" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'share', ${!!(table.badgesNotRequired && table.badgesNotRequired.share)});" title="${getBadgeTitle('share', table.shareCount > 0, table.badgesNotRequired, table.shareCount)}">
+              <span class="material-symbols-outlined">send</span>
+              ${table.shareCount > 0 && !table.badgesNotRequired?.share ? `<span class="share-count">${table.shareCount}</span>` : ''}
+            </span>
+          <span class="schedule-badge ${getBadgeClass('schedule', table.hasSchedule, table.badgesNotRequired)}" onclick="event.stopPropagation(); window.navigate('schedule', '${table._id}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'schedule', ${!!(table.badgesNotRequired && table.badgesNotRequired.schedule)});" title="${getBadgeTitle('schedule', table.hasSchedule, table.badgesNotRequired)}">
+              <span class="material-symbols-outlined">calendar_month</span>
+            </span>
+          <span class="gear-badge ${getBadgeClass('gear', table.hasGear, table.badgesNotRequired)}" onclick="event.stopPropagation(); window.navigate('gear', '${table._id}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'gear', ${!!(table.badgesNotRequired && table.badgesNotRequired.gear)});" title="${getBadgeTitle('gear', table.hasGear, table.badgesNotRequired)}">
+              <span class="material-symbols-outlined">photo_camera</span>
+            </span>
+      </div>
+    </td>
+    <td>
+      <span class="event-client">${general.client || '—'}</span>
+    </td>
+    <td>
+      <span class="event-date">${dateStr}</span>
+    </td>
+    <td>
+      <div class="crew-avatars">
+        ${renderCrewAvatarsDark(crewMembers, crewCount, table._id, unassignedCount)}
+      </div>
+    </td>
+    <td>
+      <div class="task-status-badge ${taskStatus.class}" onclick="event.stopPropagation(); navigateToTodos('${table._id}')" style="cursor: pointer;" title="View tasks">
+        <span class="material-symbols-outlined">${taskStatus.icon}</span>
+        <span class="task-status-label">${taskStatus.label}</span>
+      </div>
+    </td>
+    <td>
+      <div class="event-owner ${hasMultipleOwners ? 'has-dropdown' : ''}" onclick="${hasMultipleOwners ? 'event.stopPropagation(); toggleOwnerDropdown(this)' : ''}">
+        <span class="owner-name">${ownerDisplay}</span>
+        ${hasMultipleOwners ? `<span class="owner-more">+${ownerNames.length - 1}</span>` : ''}
+        ${hasMultipleOwners ? `<div class="owner-dropdown">${ownerListHtml}</div>` : ''}
+      </div>
+    </td>
+    <td>
+      <div class="event-actions">
+        <button class="action-menu-btn">
+          <span class="material-symbols-outlined">more_horiz</span>
+        </button>
+        <div class="action-dropdown" id="menu-${table._id}">
+          <button class="action-item open-action">
+            <span class="material-symbols-outlined">open_in_new</span>
+            Open Event
+          </button>
+          <div class="dropdown-divider"></div>
+          <button class="action-item calendar-action">
+            <span class="material-symbols-outlined">event</span>
+            Add to Calendar
+          </button>
+          <button class="action-item archive-action">
+            <span class="material-symbols-outlined">${table.userArchived ? 'unarchive' : 'inventory_2'}</span>
+            ${table.userArchived ? 'Unarchive' : 'Archive'}
+          </button>
+          ${!isOwner ? (() => {
+            try {
+              const tkn = localStorage.getItem('token');
+              const p = JSON.parse(atob(tkn.split('.')[1]));
+              if (p.role === 'admin') {
+                return `
+                  <button class="action-item add-me-owner-action">
+                    <span class="material-symbols-outlined">person_add</span>
+                    Add Me as Owner
+                  </button>
+                `;
+              } else if (p.role === 'planner') {
+                const hasPending = Array.isArray(table.ownerRequests) && 
+                  table.ownerRequests.some(r => r.userId === userId && r.status === 'pending');
+                return `
+                  <button class="action-item request-owner-action" ${hasPending ? 'disabled style="opacity:0.6;cursor:default;"' : ''}>
+                    <span class="material-symbols-outlined">${hasPending ? 'hourglass_top' : 'admin_panel_settings'}</span>
+                    ${hasPending ? 'Request Pending...' : 'Request Owner Access'}
+                  </button>
+                `;
+              }
+            } catch(e) { console.error('Error rendering owner request button:', e); }
+            return '';
+          })() : ''}
+          ${isOwner ? `
+            <button class="action-item share-action">
+              <span class="material-symbols-outlined">person_add</span>
+              Share
+            </button>
+            <div class="dropdown-divider"></div>
+            <button class="action-item danger delete-action">
+              <span class="material-symbols-outlined">delete_forever</span>
+              Delete
+            </button>
+          ` : ''}
+        </div>
+      </div>
+    </td>
+  `;
+  
+  // Add event listeners
+  const menuBtn = row.querySelector('.action-menu-btn');
+  const menu = row.querySelector('.action-dropdown');
+  
+  menuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    // Close all other menus
+    document.querySelectorAll('.action-dropdown.show').forEach(m => {
+      if (m !== menu) {
+        m.classList.remove('show');
+        m.classList.remove('flip-up');
+      }
+    });
+    
+    const isOpen = menu.classList.toggle('show');
+    
+    if (isOpen) {
+      // Use fixed positioning for proper placement
+      const btnRect = menuBtn.getBoundingClientRect();
+      const menuHeight = 220; // Approximate menu height
+      const viewportHeight = window.innerHeight;
+      const spaceBelow = viewportHeight - btnRect.bottom;
+      
+      menu.style.position = 'fixed';
+      menu.style.right = (window.innerWidth - btnRect.right) + 'px';
+      menu.style.left = 'auto';
+      
+      // Check if there's enough space below, otherwise flip up
+      if (spaceBelow < menuHeight && btnRect.top > menuHeight) {
+        menu.style.top = 'auto';
+        menu.style.bottom = (viewportHeight - btnRect.top + 8) + 'px';
+        menu.classList.add('flip-up');
+      } else {
+        menu.style.top = (btnRect.bottom + 8) + 'px';
+        menu.style.bottom = 'auto';
+        menu.classList.remove('flip-up');
+      }
+    }
+  });
+  
+  // Crew expand trigger - click to show crew list
+  const crewExpandTrigger = row.querySelector('.crew-expand-trigger');
+  if (crewExpandTrigger) {
+    const expandedView = crewExpandTrigger.querySelector('.crew-expanded-view');
+    
+    if (expandedView) {
+      // Move expanded view to body for proper z-index stacking
+      document.body.appendChild(expandedView);
+      
+      // Prevent clicks inside expanded view from closing it
+      expandedView.addEventListener('click', (e) => {
+        e.stopPropagation();
+      });
+      
+      crewExpandTrigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        
+        // Close other expanded views
+        document.querySelectorAll('.crew-expanded-view.show').forEach(v => {
+          if (v !== expandedView) v.classList.remove('show');
+        });
+        document.querySelectorAll('.crew-expand-trigger.show-expanded').forEach(t => {
+          if (t !== crewExpandTrigger) t.classList.remove('show-expanded');
+        });
+        
+        // Toggle this one
+        const isOpen = expandedView.classList.toggle('show');
+        crewExpandTrigger.classList.toggle('show-expanded', isOpen);
+        
+        if (isOpen) {
+          // Position the expanded view
+          const triggerRect = crewExpandTrigger.getBoundingClientRect();
+          const viewportHeight = window.innerHeight;
+          const viewportWidth = window.innerWidth;
+          const expandedHeight = 300;
+          const expandedWidth = 260;
+          
+          // Calculate left position (don't go off screen)
+          let leftPos = triggerRect.left - (expandedWidth / 2) + (triggerRect.width / 2);
+          leftPos = Math.max(10, Math.min(leftPos, viewportWidth - expandedWidth - 10));
+          
+          // Position above if near bottom, otherwise below
+          if (triggerRect.bottom + expandedHeight > viewportHeight && triggerRect.top > expandedHeight) {
+            expandedView.style.bottom = (viewportHeight - triggerRect.top + 12) + 'px';
+            expandedView.style.top = 'auto';
+          } else {
+            expandedView.style.top = (triggerRect.bottom + 12) + 'px';
+            expandedView.style.bottom = 'auto';
+          }
+          expandedView.style.left = leftPos + 'px';
+        }
+      });
+    }
+  }
+  
+  // Action buttons
+  row.querySelector('.open-action').addEventListener('click', (e) => {
+    e.stopPropagation();
+    menu.classList.remove('show');
+    window.navigate('general', table._id);
+  });
+  
+  row.querySelector('.calendar-action').addEventListener('click', (e) => {
+    e.stopPropagation();
+    menu.classList.remove('show');
+    showAddToCalendarModal(table);
+  });
+  
+  row.querySelector('.archive-action').addEventListener('click', async (e) => {
+    e.stopPropagation();
+    menu.classList.remove('show');
+    const action = table.userArchived ? 'unarchive' : 'archive';
+    const confirmTitle = table.userArchived ? 'Unarchive Event' : 'Archive Event';
+    const confirmMessage = table.userArchived 
+      ? 'Are you sure you want to unarchive this event?' 
+      : 'Are you sure you want to archive this event?';
+    
+    const confirmed = await showConfirm(confirmTitle, confirmMessage, { 
+      confirmText: table.userArchived ? 'Unarchive' : 'Archive', 
+      type: 'warning' 
+    });
+    if (confirmed) {
+      await fetch(`${API_BASE}/api/tables/${table._id}/user-archive`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token
+        },
+        body: JSON.stringify({ archive: !table.userArchived })
+      });
+      showToast(`Event ${action}d successfully`, 'success');
+      loadTables();
+    }
+  });
+  
+  const addMeOwnerBtn = row.querySelector('.add-me-owner-action');
+  if (addMeOwnerBtn) {
+    addMeOwnerBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      menu.classList.remove('show');
+      
+      const confirmed = await showConfirm(
+        'Add Yourself as Owner',
+        `Add yourself as an owner of "${table.title}"?`,
+        { confirmText: 'Add Me', type: 'warning' }
+      );
+      if (!confirmed) return;
+      
+      try {
+        const res = await fetch(`${API_BASE}/api/tables/${table._id}/add-me-as-owner`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: token
+          }
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast('You are now an owner of this event!', 'success');
+          loadTables();
+        } else {
+          showToast(data.error || 'Failed to add as owner', 'error');
+        }
+      } catch (err) {
+        console.error('Error adding self as owner:', err);
+        showToast('Failed to add as owner. Please try again.', 'error');
+      }
+    });
+  }
+
+  const requestOwnerBtn = row.querySelector('.request-owner-action');
+  if (requestOwnerBtn && !requestOwnerBtn.disabled) {
+    requestOwnerBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      menu.classList.remove('show');
+      
+      const confirmed = await showConfirm(
+        'Request Owner Access',
+        `Request owner access to "${table.title}"? The event owner will be notified and can approve your request.`,
+        { confirmText: 'Request', type: 'warning' }
+      );
+      if (!confirmed) return;
+      
+      try {
+        const res = await fetch(`${API_BASE}/api/tables/${table._id}/request-owner`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: token
+          }
+        });
+        const data = await res.json();
+        if (res.ok) {
+          showToast('Owner access request sent!', 'success');
+        } else {
+          showToast(data.error || 'Failed to send request', 'error');
+        }
+      } catch (err) {
+        console.error('Error requesting owner access:', err);
+        showToast('Failed to send request. Please try again.', 'error');
+      }
+    });
+  }
+
+  const shareBtn = row.querySelector('.share-action');
+  if (shareBtn) {
+    shareBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      menu.classList.remove('show');
+      openShareModal(table._id);
+    });
+  }
+  
+  const deleteBtn = row.querySelector('.delete-action');
+  if (deleteBtn) {
+    deleteBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      menu.classList.remove('show');
+      const confirmed = await showConfirm(
+        'Delete Event',
+        'Are you sure you want to delete this event? This will also release all gear items reserved for this event.',
+        { confirmText: 'Delete', type: 'danger' }
+      );
+      if (confirmed) {
+        try {
+          const response = await fetch(`${API_BASE}/api/tables/${table._id}`, {
+            method: 'DELETE',
+            headers: { Authorization: token }
+          });
+          
+          if (response.ok) {
+            const result = await response.json();
+            showToast(result.message || 'Event deleted successfully!', 'success');
+          } else {
+            const error = await response.json();
+            showToast(`Error deleting event: ${error.error || 'Unknown error'}`, 'error');
+          }
+        } catch (err) {
+          console.error('Error deleting event:', err);
+          showToast('Error deleting event. Please try again.', 'error');
+        }
+        loadTables();
+      }
+    });
+  }
+  
+  return row;
+}
+
+// Cache for events data
+let cachedTables = null;
+let cacheTimestamp = 0;
+const CACHE_DURATION = 30000; // 30 seconds
+
+// Generate skeleton loading rows
+function generateSkeletonRows(count) {
+  let html = '';
+  for (let i = 0; i < count; i++) {
+    html += `
+      <tr class="event-row skeleton-row">
+        <td>
+          <div class="skeleton-content">
+            <div class="skeleton" style="width: 180px; height: 18px; margin-bottom: 8px;"></div>
+            <div class="skeleton" style="width: 100px; height: 14px;"></div>
+          </div>
+        </td>
+        <td><div class="skeleton" style="width: 120px; height: 16px;"></div></td>
+        <td><div class="skeleton" style="width: 140px; height: 16px;"></div></td>
+        <td>
+          <div style="display: flex; gap: -8px;">
+            <div class="skeleton" style="width: 32px; height: 32px; border-radius: 50%;"></div>
+            <div class="skeleton" style="width: 32px; height: 32px; border-radius: 50%; margin-left: -8px;"></div>
+            <div class="skeleton" style="width: 32px; height: 32px; border-radius: 50%; margin-left: -8px;"></div>
+          </div>
+        </td>
+        <td><div class="skeleton" style="width: 80px; height: 24px; border-radius: 12px;"></div></td>
+        <td><div class="skeleton" style="width: 32px; height: 32px; border-radius: 8px;"></div></td>
+      </tr>
+    `;
+  }
+  return html;
+}
+
+async function loadTables(forceRefresh = false) {
+  const loadingEl = document.getElementById('eventsLoading');
+  const tableBody = document.getElementById('eventsTableBody');
+  const emptyEl = document.getElementById('eventsEmpty');
+  
+  // Show loading state with skeleton rows
+  if (loadingEl) loadingEl.style.display = 'flex';
+  if (emptyEl) emptyEl.style.display = 'none';
+  
+  // Show skeleton rows if table is empty
+  if (tableBody && tableBody.children.length === 0) {
+    tableBody.innerHTML = generateSkeletonRows(5);
+  } else if (tableBody) {
+    tableBody.style.opacity = '0.6';
+  }
+  
+  let tables;
+  const now = Date.now();
+  
+  // Use cache if available and not expired
+  if (!forceRefresh && cachedTables && (now - cacheTimestamp) < CACHE_DURATION) {
+    tables = cachedTables;
+  } else {
   const res = await fetch(`${API_BASE}/api/tables`, {
     headers: { Authorization: token }
   });
-
-  const tables = await res.json();
-  const userId = getUserIdFromToken();
-
-  // Filter tables based on user-specific archived status
-  let filteredTables = tables.filter(table => !!table.userArchived === showArchived);
-
-  // Apply time filter (All, Upcoming, Past)
-  if (timeFilter !== 'all') {
-    // Get today's date in local timezone (without time component)
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
-    const todayStr = `${year}-${month}-${day}`;
+    tables = await res.json();
     
+    // Update cache
+    cachedTables = tables;
+    cacheTimestamp = now;
+  }
+  
+  // Always fetch passenger counts to ensure they're up to date
+  const passengerCounts = await fetchFlightCounts();
+  tables.forEach(table => {
+    const eventTitle = table.title || 'Untitled Event';
+    table.flightCount = passengerCounts[eventTitle] || 0; // flightCount stores unique passenger count
+  });
+  
+  // Check which events have schedule content
+  const scheduleStatus = checkScheduleContent(tables);
+  tables.forEach(table => {
+    table.hasSchedule = scheduleStatus[table._id] || false;
+  });
+  
+  // Check which events have gear reserved
+  const eventsWithGear = await fetchEventsWithGear();
+  tables.forEach(table => {
+    const tableId = table._id.toString();
+    table.hasGear = eventsWithGear.has(tableId);
+    if (eventsWithGear.size > 0) {
+      console.log('[GEAR DEBUG] Checking table:', tableId, 'hasGear:', table.hasGear);
+    }
+  });
+  
+  // Calculate share count for each table (leads + sharedWith, excluding owners)
+  tables.forEach(table => {
+    const leadsCount = Array.isArray(table.leads) ? table.leads.length : 0;
+    const sharedWithCount = Array.isArray(table.sharedWith) ? table.sharedWith.length : 0;
+    table.shareCount = leadsCount + sharedWithCount;
+  });
+  
+  // Calculate hotel count for each table (accommodation entries with hotel info)
+  tables.forEach(table => {
+    const accommodations = Array.isArray(table.accommodation) ? table.accommodation : [];
+    table.hotelCount = accommodations.filter(a => a.hotel && a.hotel.trim()).length;
+  });
+  
+  // Hide loading
+  if (loadingEl) loadingEl.style.display = 'none';
+  if (tableBody) tableBody.style.opacity = '1';
+
+  const userId = getUserIdFromToken();
+  const isDarkTheme = isDarkThemeActive();
+
+  // Filter tables based on status filter
+  let filteredTables = tables;
+  if (statusFilter === 'active') {
+    filteredTables = tables.filter(table => !table.userArchived);
+  } else if (statusFilter === 'archived') {
+    filteredTables = tables.filter(table => !!table.userArchived);
+  }
+  // 'all' shows everything
+
+  // Extract unique clients for the dropdown (before filtering)
+  const clientSet = new Set();
+  tables.forEach(table => {
+    const client = table.general?.client;
+    if (client && client.trim()) {
+      clientSet.add(client.trim());
+    }
+  });
+  allClients = Array.from(clientSet).sort();
+
+  // Filter by owner selection
+  if (ownerFilter === 'mine') {
+    const userId = getUserIdFromToken();
     filteredTables = filteredTables.filter(table => {
-      const general = table.general || {};
-      
-      // Handle events without dates
-      if (!general.start && !general.end) return timeFilter === 'upcoming';
-      if (!general.end) return timeFilter === 'upcoming';
-      
-      // Extract date strings (YYYY-MM-DD) to avoid timezone issues
-      const startDateStr = general.start ? general.start.split('T')[0] : null;
-      const endDateStr = general.end.split('T')[0];
-      
-      if (timeFilter === 'upcoming') {
-        // Upcoming: includes active events (start <= today <= end) OR future events (start > today)
-        // This means: end date must be >= today (event is still ongoing or in the future)
-        return endDateStr >= todayStr;
-      } else if (timeFilter === 'past') {
-        // Past: end date is before today
-        return endDateStr < todayStr;
-      }
-      return true;
+      // Check if user is in owners array (handle both populated and unpopulated)
+      return Array.isArray(table.owners) && table.owners.some(owner => 
+        (typeof owner === 'string' && owner === userId) || 
+        (owner && owner._id && owner._id.toString() === userId)
+      );
+    });
+  } else if (ownerFilter !== 'all') {
+    // Filter by specific owner ID
+    filteredTables = filteredTables.filter(table => {
+      return Array.isArray(table.owners) && table.owners.some(owner => 
+        (typeof owner === 'string' && owner === ownerFilter) || 
+        (owner && owner._id && owner._id.toString() === ownerFilter)
+      );
+    });
+  }
+
+  // Filter by client selection
+  if (clientFilter) {
+    filteredTables = filteredTables.filter(table => {
+      const client = table.general?.client || '';
+      return client === clientFilter;
     });
   }
 
@@ -141,28 +1471,171 @@ async function loadTables() {
     filteredTables = filteredTables.filter(table => {
       const title = (table.title || '').toLowerCase();
       const client = (table.general?.client || '').toLowerCase();
-      return title.includes(q) || client.includes(q);
+      const city = (table.general?.city || '').toLowerCase();
+      const state = (table.general?.state || '').toLowerCase();
+      const location = (table.general?.location || '').toLowerCase();
+      return title.includes(q) || client.includes(q) || city.includes(q) || state.includes(q) || location.includes(q);
     });
   }
 
-  const sortValue = document.getElementById('sortDropdown')?.value || 'newest';
+  // Filter by date range
+  if (dateFilterStart || dateFilterEnd) {
+    filteredTables = filteredTables.filter(table => {
+      const eventStart = table.general?.start ? new Date(table.general.start) : null;
+      const eventEnd = table.general?.end ? new Date(table.general.end) : null;
+      
+      // If event has no dates, exclude from date-filtered results
+      if (!eventStart && !eventEnd) return false;
+      
+      const filterStart = dateFilterStart ? new Date(dateFilterStart) : null;
+      const filterEnd = dateFilterEnd ? new Date(dateFilterEnd) : null;
+      
+      // Check if event overlaps with the filter date range
+      if (filterStart && filterEnd) {
+        // Event overlaps if it starts before filter ends AND ends after filter starts
+        const eventEndDate = eventEnd || eventStart;
+        const eventStartDate = eventStart || eventEnd;
+        return eventStartDate <= filterEnd && eventEndDate >= filterStart;
+      } else if (filterStart) {
+        // Only start date set - show events that end on or after this date
+        const eventEndDate = eventEnd || eventStart;
+        return eventEndDate >= filterStart;
+      } else if (filterEnd) {
+        // Only end date set - show events that start on or before this date
+        const eventStartDate = eventStart || eventEnd;
+        return eventStartDate <= filterEnd;
+      }
+      
+      return true;
+    });
+  }
+
+  // Sort based on column header clicks
   filteredTables.sort((a, b) => {
-    // Create UTC dates for consistent sorting regardless of timezone
+    let comparison = 0;
+    
+    if (sortField === 'name') {
+      comparison = (a.title || '').localeCompare(b.title || '');
+    } else if (sortField === 'date') {
     const parseDateUTC = (dateStr) => {
       if (!dateStr) return new Date(0);
-      const date = new Date(dateStr);
-      // Create a UTC date to prevent timezone issues
-      return date;
+        return new Date(dateStr);
     };
-    
     const dateA = parseDateUTC(a.general?.start || a.createdAt || 0);
     const dateB = parseDateUTC(b.general?.start || b.createdAt || 0);
+      comparison = dateA - dateB;
+    }
     
-    if (sortValue === 'newest') return dateB - dateA;
-    if (sortValue === 'oldest') return dateA - dateB;
-    if (sortValue === 'title') return (a.title || '').localeCompare(b.title || '');
-    return 0;
+    // Apply sort order
+    return sortOrder === 'desc' ? -comparison : comparison;
   });
+
+  // Check if using dark theme table layout
+  if (isDarkTheme) {
+    const tableBody = document.getElementById('eventsTableBody');
+    const eventsCount = document.getElementById('eventsCount');
+    
+    if (tableBody) {
+      tableBody.innerHTML = '';
+      
+      // Determine current filter tab
+      const activeTab = document.querySelector('.events-tab.active');
+      const filter = activeTab ? activeTab.dataset.filter : 'upcoming';
+      
+      // Filter by tab
+      let tabFilteredTables = filteredTables;
+      if (filter !== 'all') {
+        tabFilteredTables = filteredTables.filter(table => {
+          const status = getEventStatus(table);
+          return status.class === filter;
+        });
+      }
+      
+      // Store total for pagination
+      totalFilteredEvents = tabFilteredTables.length;
+      const totalPages = Math.ceil(totalFilteredEvents / EVENTS_PER_PAGE);
+      
+      // Ensure current page is valid
+      if (currentPage > totalPages) currentPage = Math.max(1, totalPages);
+      
+      // Paginate the results
+      const startIndex = (currentPage - 1) * EVENTS_PER_PAGE;
+      const endIndex = startIndex + EVENTS_PER_PAGE;
+      const paginatedTables = tabFilteredTables.slice(startIndex, endIndex);
+      
+      // Populate owner dropdown with owners from currently visible events only
+      populateOwnerDropdown(paginatedTables);
+      
+      paginatedTables.forEach((table, index) => {
+        const row = renderEventRowDark(table, startIndex + index, userId);
+        tableBody.appendChild(row);
+      });
+      
+      if (eventsCount) {
+        const showingStart = totalFilteredEvents > 0 ? startIndex + 1 : 0;
+        const showingEnd = Math.min(endIndex, totalFilteredEvents);
+        eventsCount.textContent = `Showing ${showingStart}-${showingEnd} of ${totalFilteredEvents} events`;
+      }
+      
+      // Render pagination controls
+      renderPagination(totalPages);
+      
+      // On initial load, check if there are live events and switch to Live tab
+      if (isInitialLoad) {
+        isInitialLoad = false;
+        
+        // Count live events from the full filtered list (not tab-filtered)
+        const liveEvents = filteredTables.filter(table => {
+          const status = getEventStatus(table);
+          return status.class === 'live';
+        });
+        
+        console.log(`[Events] Initial load - Found ${liveEvents.length} live events`);
+        
+        // If there are live events, switch to the Live tab
+        if (liveEvents.length > 0) {
+          const liveTab = document.querySelector('.events-tab[data-filter="live"]');
+          if (liveTab && !liveTab.classList.contains('active')) {
+            console.log('[Events] Switching to Live tab (has live events)');
+            // Remove active from all tabs
+            document.querySelectorAll('.events-tab').forEach(t => t.classList.remove('active'));
+            // Activate live tab
+            liveTab.classList.add('active');
+            // Re-render with live filter (paginated)
+            currentPage = 1;
+            totalFilteredEvents = liveEvents.length;
+            const liveTotalPages = Math.ceil(totalFilteredEvents / EVENTS_PER_PAGE);
+            const livePaginated = liveEvents.slice(0, EVENTS_PER_PAGE);
+            tableBody.innerHTML = '';
+            livePaginated.forEach((table, index) => {
+              const row = renderEventRowDark(table, index, userId);
+              tableBody.appendChild(row);
+            });
+            if (eventsCount) {
+              const showingEnd = Math.min(EVENTS_PER_PAGE, liveEvents.length);
+              eventsCount.textContent = `Showing 1-${showingEnd} of ${liveEvents.length} events`;
+            }
+            renderPagination(liveTotalPages);
+          }
+        }
+      }
+    }
+    
+    // Close menus and crew expanded views when clicking outside
+    document.addEventListener('click', () => {
+      document.querySelectorAll('.action-dropdown.show').forEach(menu => {
+        menu.classList.remove('show');
+      });
+      document.querySelectorAll('.crew-expanded-view.show').forEach(view => {
+        view.classList.remove('show');
+      });
+      document.querySelectorAll('.crew-expand-trigger.show-expanded').forEach(trigger => {
+        trigger.classList.remove('show-expanded');
+      });
+    });
+    
+    return; // Skip the old card rendering
+  }
 
   const list = document.getElementById('tableList');
   if (list) list.innerHTML = '';
@@ -273,36 +1746,12 @@ async function loadTables() {
       list.appendChild(allEventsSection);
     }
   }
-
-  renderCalendar(filteredTables);
-
-  // Ensure only the correct view is visible
-  const cal = document.getElementById('calendarViewContainer');
-  if (list && cal) {
-    if (cal.style.display === 'block') {
-      list.style.display = 'none';
-      cal.style.display = 'block';
-    } else {
-      list.style.display = 'flex';
-      cal.style.display = 'none';
-    }
-  }
 }
 
 // Helper function to render a single event card
 function renderEventCard(table, container, userId) {
   const general = table.general || {};
   const client = general.client || 'N/A';
-  
-  // Build location from city and state
-  let location = null;
-  if (general.city && general.state) {
-    location = `${general.city}, ${general.state}`;
-  } else if (general.city) {
-    location = general.city;
-  } else if (general.state) {
-    location = general.state;
-  }
   
   // Format dates consistently with UTC to prevent timezone shifts
   const formatDate = (dateStr) => {
@@ -335,13 +1784,7 @@ function renderEventCard(table, container, userId) {
 
   const details = document.createElement('div');
   details.className = 'event-details';
-  // Build details HTML with location if available
-  let detailsHTML = `Client: ${client}`;
-  if (location) {
-    detailsHTML += ` <br> 📍 ${location}`;
-  }
-  detailsHTML += ` <br> ${start} - ${end}`;
-  details.innerHTML = detailsHTML;
+  details.innerHTML = `Client: ${client} <br> ${start} - ${end}`;
   
   titleContainer.appendChild(title);
   titleContainer.appendChild(details);
@@ -394,11 +1837,16 @@ function renderEventCard(table, container, userId) {
     e.stopPropagation();
     menuDropdown.classList.remove('show');
     const action = table.userArchived ? 'unarchive' : 'archive';
+    const confirmTitle = table.userArchived ? 'Unarchive Event' : 'Archive Event';
     const confirmMessage = table.userArchived 
       ? 'Are you sure you want to unarchive this event for yourself?' 
       : 'Are you sure you want to archive this event for yourself?';
     
-    if (confirm(confirmMessage)) {
+    const confirmed = await showConfirm(confirmTitle, confirmMessage, { 
+      confirmText: table.userArchived ? 'Unarchive' : 'Archive', 
+      type: 'warning' 
+    });
+    if (confirmed) {
       await fetch(`${API_BASE}/api/tables/${table._id}/user-archive`, {
         method: 'PATCH',
         headers: {
@@ -407,6 +1855,7 @@ function renderEventCard(table, container, userId) {
         },
         body: JSON.stringify({ archive: !table.userArchived })
       });
+      showToast(`Event ${action}d successfully`, 'success');
       loadTables();
     }
   };
@@ -426,7 +1875,12 @@ function renderEventCard(table, container, userId) {
   deleteMenuItem.onclick = async (e) => {
     e.stopPropagation();
     menuDropdown.classList.remove('show');
-    if (confirm('Are you sure you want to delete this event?\n\nThis will also release all gear items reserved for this event back to inventory.')) {
+    const confirmed = await showConfirm(
+      'Delete Event',
+      'Are you sure you want to delete this event? This will also release all gear items reserved for this event back to inventory.',
+      { confirmText: 'Delete', type: 'danger' }
+    );
+    if (confirmed) {
       try {
         const response = await fetch(`${API_BASE}/api/tables/${table._id}`, {
           method: 'DELETE',
@@ -435,23 +1889,76 @@ function renderEventCard(table, container, userId) {
         
         if (response.ok) {
           const result = await response.json();
-          if (result.message) {
-            alert(`Event deleted successfully!\n${result.message}`);
-          }
+          showToast(result.message || 'Event deleted successfully!', 'success');
         } else {
           const error = await response.json();
-          alert(`Error deleting event: ${error.error || 'Unknown error'}`);
+          showToast(`Error deleting event: ${error.error || 'Unknown error'}`, 'error');
         }
       } catch (err) {
         console.error('Error deleting event:', err);
-        alert('Error deleting event. Please try again.');
+        showToast('Error deleting event. Please try again.', 'error');
       }
       loadTables();
     }
   };
 
+  // "Request Owner Access" menu item (for planners/admins who are NOT already owners)
+  const requestOwnerMenuItem = document.createElement('button');
+  requestOwnerMenuItem.className = 'menu-item';
+  requestOwnerMenuItem.innerHTML = '<span class="material-symbols-outlined">admin_panel_settings</span> Request Owner Access';
+  requestOwnerMenuItem.onclick = async (e) => {
+    e.stopPropagation();
+    menuDropdown.classList.remove('show');
+    
+    const confirmed = await showConfirm(
+      'Request Owner Access',
+      `Request owner access to "${table.title}"? The event owner will be notified and can approve your request.`,
+      { confirmText: 'Request', type: 'warning' }
+    );
+    if (!confirmed) return;
+    
+    try {
+      const res = await fetch(`${API_BASE}/api/tables/${table._id}/request-owner`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token
+        }
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showToast('Owner access request sent!', 'success');
+      } else {
+        showToast(data.error || 'Failed to send request', 'error');
+      }
+    } catch (err) {
+      console.error('Error requesting owner access:', err);
+      showToast('Failed to send request. Please try again.', 'error');
+    }
+  };
+
   // Add menu items to dropdown
   menuDropdown.appendChild(archiveMenuItem);
+  
+  // Show "Request Owner Access" for planners/admins who are NOT already owners
+  if (!isOwner) {
+    try {
+      const tokenPayload = JSON.parse(atob(token.split('.')[1]));
+      if (['planner', 'admin'].includes(tokenPayload.role)) {
+        // Check if there's already a pending request
+        const hasPendingRequest = Array.isArray(table.ownerRequests) && 
+          table.ownerRequests.some(r => r.userId === getUserIdFromToken() && r.status === 'pending');
+        if (hasPendingRequest) {
+          requestOwnerMenuItem.disabled = true;
+          requestOwnerMenuItem.innerHTML = '<span class="material-symbols-outlined">hourglass_top</span> Request Pending...';
+          requestOwnerMenuItem.style.opacity = '0.6';
+          requestOwnerMenuItem.style.cursor = 'default';
+        }
+        menuDropdown.appendChild(requestOwnerMenuItem);
+      }
+    } catch (e) { console.error('Error rendering owner request button:', e); }
+  }
+
   if (isOwner) {
     menuDropdown.appendChild(shareMenuItem);
     menuDropdown.appendChild(deleteMenuItem);
@@ -482,236 +1989,10 @@ function renderEventCard(table, container, userId) {
   if (container) container.appendChild(card);
 }
 
-function renderCalendar(events) {
-  const container = document.getElementById('calendarViewContainer');
-  if (!container) return;
-  container.innerHTML = '';
-
-  // Get all event date ranges - fix timezone issues by parsing dates as UTC
-  const eventObjs = events.map(table => {
-    const general = table.general || {};
-    
-    // Build location from city and state
-    let location = null;
-    if (general.city && general.state) {
-      location = `${general.city}, ${general.state}`;
-    } else if (general.city) {
-      location = general.city;
-    } else if (general.state) {
-      location = general.state;
-    }
-    
-    // Parse dates as UTC to prevent timezone shifts
-    const parseUTCDate = (dateStr) => {
-      if (!dateStr) return null;
-      const date = new Date(dateStr);
-      // Create a new date using UTC components to prevent timezone shifts
-      return new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
-    };
-    
-    return {
-      id: table._id,
-      title: table.title,
-      location: location,
-      start: parseUTCDate(general.start),
-      end: parseUTCDate(general.end),
-      color: '#CC0007', // main accent
-    };
-  }).filter(e => e.start && e.end);
-
-  // Find min and max dates
-  let minDate = null, maxDate = null;
-  eventObjs.forEach(e => {
-    if (!minDate || e.start < minDate) minDate = e.start;
-    if (!maxDate || e.end > maxDate) maxDate = e.end;
-  });
-  if (!minDate || !maxDate) {
-    container.innerHTML = '<div style="text-align:center; color:#888;">No events to display in calendar.</div>';
-    return;
-  }
-
-  // Show current month by default
-  let currentMonth = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
-
-  function renderMonth(monthDate) {
-    container.innerHTML = '';
-    const year = monthDate.getFullYear();
-    const month = monthDate.getMonth();
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
-    const daysInMonth = lastDay.getDate();
-    const startWeekDay = firstDay.getDay();
-    const gap = 8; // matches grid gap in CSS
-
-    // Header
-    const header = document.createElement('div');
-    header.style.display = 'flex';
-    header.style.justifyContent = 'space-between';
-    header.style.alignItems = 'center';
-    header.style.marginBottom = '18px';
-    header.innerHTML = `
-      <button id="prevMonthBtn" style="background:none;border:none;color:#CC0007;font-size:22px;cursor:pointer;">&#8592;</button>
-      <span style="font-size:1.3em;font-weight:600;color:#CC0007;">${firstDay.toLocaleString('default', { month: 'long', year: 'numeric' })}</span>
-      <button id="nextMonthBtn" style="background:none;border:none;color:#CC0007;font-size:22px;cursor:pointer;">&#8594;</button>
-    `;
-    container.appendChild(header);
-
-    // Days of week
-    const daysRow = document.createElement('div');
-    daysRow.style.display = 'grid';
-    daysRow.style.gridTemplateColumns = 'repeat(7, 1fr)';
-    daysRow.style.gap = '4px';
-    daysRow.style.marginBottom = '6px';
-    ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].forEach(d => {
-      const el = document.createElement('div');
-      el.textContent = d;
-      el.style.textAlign = 'center';
-      el.style.fontWeight = 'bold';
-      el.style.color = '#a1a1a1';
-      daysRow.appendChild(el);
-    });
-    container.appendChild(daysRow);
-
-    // Calendar grid
-    const grid = document.createElement('div');
-    grid.style.display = 'grid';
-    grid.style.gridTemplateColumns = 'repeat(7, 1fr)';
-    grid.style.gap = '8px';
-    grid.style.background = 'linear-gradient(135deg, #fff 60%, #f8fafd 100%)';
-    grid.style.borderRadius = '18px';
-    grid.style.boxShadow = '0 8px 24px rgba(0,0,0,0.09)';
-    grid.style.padding = '18px';
-    grid.style.marginBottom = '18px';
-
-    // Fill blanks for first week
-    for (let i = 0; i < startWeekDay; i++) {
-      const blank = document.createElement('div');
-      grid.appendChild(blank);
-    }
-    // Fill days
-    const dayCells = [];
-    // For stacking: track max stack per week
-    const weekStacks = [];
-    for (let day = 1; day <= daysInMonth; day++) {
-      const date = new Date(year, month, day);
-      const cell = document.createElement('div');
-      cell.style.minHeight = '60px';
-      cell.style.borderRadius = '10px';
-      cell.style.background = '#fff';
-      cell.style.boxShadow = '0 2px 8px rgba(204,0,7,0.04)';
-      cell.style.padding = '4px 4px 2px 4px';
-      cell.style.position = 'relative';
-      cell.style.display = 'flex';
-      cell.style.flexDirection = 'column';
-      cell.style.alignItems = 'flex-start';
-      cell.style.justifyContent = 'flex-start';
-      cell.style.cursor = 'pointer';
-      cell.style.transition = 'background 0.15s, box-shadow 0.15s';
-      cell.classList.add('calendar-day');
-      // Day number
-      const dayNum = document.createElement('div');
-      dayNum.textContent = day;
-      dayNum.className = 'calendar-day-num';
-      cell.appendChild(dayNum);
-      grid.appendChild(cell);
-      dayCells.push(cell);
-      // For stacking: initialize weekStacks
-      const weekIdx = Math.floor((day + startWeekDay - 1) / 7);
-      if (!weekStacks[weekIdx]) weekStacks[weekIdx] = [];
-      weekStacks[weekIdx][(day + startWeekDay - 1) % 7] = [];
-    }
-    // Multi-day event rendering (after grid is built)
-    eventObjs.forEach(ev => {
-      // Find the first and last day in this month for the event
-      const eventStart = new Date(Math.max(ev.start, firstDay));
-      const eventEnd = new Date(Math.min(ev.end, lastDay));
-      if (eventStart > lastDay || eventEnd < firstDay) return;
-      // Calculate the start and end day index (0-based)
-      let startIdx = eventStart.getDate() - 1;
-      let endIdx = eventEnd.getDate() - 1;
-      // For each week the event spans, render a pill in the first day of that week
-      let idx = startIdx;
-      while (idx <= endIdx) {
-        // Find the week boundary
-        const weekDay = (idx + startWeekDay) % 7;
-        const weekIdx = Math.floor((idx + startWeekDay) / 7);
-        const daysLeftInWeek = 7 - weekDay;
-        const span = Math.min(endIdx - idx + 1, daysLeftInWeek);
-        // Find the max stack index for this week segment
-        let maxStack = 0;
-        for (let d = 0; d < span; d++) {
-          const cellStack = weekStacks[weekIdx][weekDay + d] || [];
-          if (cellStack.length > maxStack) maxStack = cellStack.length;
-        }
-        // Assign this event to the next available stack index for all spanned days
-        for (let d = 0; d < span; d++) {
-          if (!weekStacks[weekIdx][weekDay + d]) weekStacks[weekIdx][weekDay + d] = [];
-          weekStacks[weekIdx][weekDay + d][maxStack] = true;
-        }
-        // Render the pill at the correct stack index
-        const pill = document.createElement('div');
-        pill.textContent = ev.title;
-        pill.className = 'calendar-event-pill';
-        // Add location to tooltip if available
-        pill.title = ev.location ? `${ev.title}\n📍 ${ev.location}` : ev.title;
-        pill.style.background = ev.color;
-        pill.style.color = '#fff';
-        pill.style.position = 'absolute';
-        pill.style.left = '0';
-        pill.style.top = `${28 + maxStack * 28}px`;
-        pill.style.height = '24px';
-        pill.style.display = 'flex';
-        pill.style.alignItems = 'center';
-        pill.style.fontSize = '0.95em';
-        pill.style.fontWeight = '600';
-        pill.style.cursor = 'pointer';
-        pill.style.boxShadow = '0 2px 8px rgba(204,0,7,0.08)';
-        pill.style.zIndex = '2';
-        pill.style.border = '2px solid #fff';
-        pill.style.opacity = '0.96';
-        pill.style.pointerEvents = 'auto';
-        pill.onclick = (e) => {
-          e.stopPropagation();
-          window.navigate('general', ev.id);
-        };
-        // Calculate width: span * 100% + (span-1)*gap, but subtract 8px for the last pill in a week or for the event
-        let pillWidth = `calc(${span * 100}% + ${(span - 1) * gap}px)`;
-        if (idx + span - 1 === endIdx || ((idx + span + startWeekDay - 1) % 7 === 6)) {
-          pillWidth = `calc(${span * 100}% + ${(span - 1) * gap}px - 8px)`;
-        }
-        pill.style.width = pillWidth;
-        pill.style.maxWidth = pillWidth;
-        pill.style.minWidth = pillWidth;
-        // Append pill to the first cell of the span
-        dayCells[idx].appendChild(pill);
-        // Adjust minHeight of all spanned cells to fit stacked pills
-        for (let d = 0; d < span; d++) {
-          const cell = dayCells[idx + d];
-          const minHeight = 60 + (maxStack * 28);
-          if (cell) cell.style.minHeight = `${minHeight}px`;
-        }
-        idx += span;
-      }
-    });
-    container.appendChild(grid);
-
-    // Navigation
-    document.getElementById('prevMonthBtn').onclick = () => {
-      currentMonth = new Date(year, month - 1, 1);
-      renderMonth(currentMonth);
-    };
-    document.getElementById('nextMonthBtn').onclick = () => {
-      currentMonth = new Date(year, month + 1, 1);
-      renderMonth(currentMonth);
-    };
-  }
-  renderMonth(currentMonth);
-}
+// Calendar view removed - using dedicated calendar page (/pages/event-calendar.html) instead
 
 async function openShareModal(tableId) {
   try {
-    console.log('[SHARE_MODAL] Opening share modal for table:', tableId);
-    
     // First fetch the table to check ownership
     const res = await fetch(`${API_BASE}/api/tables/${tableId}`, {
       headers: { Authorization: token }
@@ -729,41 +2010,22 @@ async function openShareModal(tableId) {
     
     // If not owner, show not authorized message and return early
     if (!isOwner) {
-      alert('Not authorized. Only owners can share events.');
+      showToast('Not authorized. Only owners can share events.', 'error');
       return;
     }
     
     // If owner, proceed with opening the share modal
     currentTableId = tableId;
     const shareModal = document.getElementById('shareModal');
-    console.log('[SHARE_MODAL] Found shareModal element:', !!shareModal);
-    
     if (!shareModal) {
       console.error('[SHARE_MODAL] shareModal element not found in DOM!');
-      alert('Error: Share modal not found. Please refresh the page.');
+      showToast('Error: Share modal not found. Please refresh the page.', 'error');
       return;
     }
     
     if (shareModal) {
-      // Move modal to body to escape page-container stacking context
-      if (shareModal.parentElement && shareModal.parentElement.id === 'page-container') {
-        console.log('[SHARE_MODAL] Moving modal from page-container to body');
-        document.body.appendChild(shareModal);
-      }
-      
-      // Force display and ensure visibility
-      shareModal.style.display = 'flex';
-      shareModal.style.visibility = 'visible';
-      shareModal.style.opacity = '1';
-      shareModal.style.zIndex = '10000';
-      shareModal.style.position = 'fixed';
-      shareModal.style.inset = '0';
-      console.log('[SHARE_MODAL] Modal display set to flex and moved to body');
-      
-      // Add click-outside functionality
-      setTimeout(() => {
-        shareModal.addEventListener('click', handleModalClick);
-      }, 0);
+      shareModal.classList.add('show');
+      document.body.style.overflow = 'hidden';
     }
 
     // Fetch users for the lists
@@ -780,65 +2042,116 @@ async function openShareModal(tableId) {
     const shared = users.filter(u => table.sharedWith.includes(u._id) && !table.leads.includes(u._id) && !table.owners.includes(u._id));
 
     // Render into <ul> elements
-    const ownerList = document.getElementById('ownerList')?.querySelector('ul');
-    const leadList = document.getElementById('leadList')?.querySelector('ul');
-    const sharedList = document.getElementById('sharedList')?.querySelector('ul');
+    const ownerListContainer = document.getElementById('ownerList');
+    const leadListContainer = document.getElementById('leadList');
+    const sharedListContainer = document.getElementById('sharedList');
+    
+    let ownerList = ownerListContainer?.querySelector('ul');
+    let leadList = leadListContainer?.querySelector('ul');
+    let sharedList = sharedListContainer?.querySelector('ul');
+    
+    // If UL elements are missing, recreate them
+    if (ownerListContainer && !ownerList) {
+      ownerListContainer.innerHTML = '<ul></ul>';
+      ownerList = ownerListContainer.querySelector('ul');
+    }
+    if (leadListContainer && !leadList) {
+      leadListContainer.innerHTML = '<ul></ul>';
+      leadList = leadListContainer.querySelector('ul');
+    }
+    if (sharedListContainer && !sharedList) {
+      sharedListContainer.innerHTML = '<ul></ul>';
+      sharedList = sharedListContainer.querySelector('ul');
+    }
 
     // Helper to check if user is a lead
     const isLead = (user) => Array.isArray(table.leads) && table.leads.includes(user._id);
     // Helper to check if user is an owner
     const isOwnerUser = (user) => Array.isArray(table.owners) && table.owners.includes(user._id);
 
-    // Helper to render user with action buttons (no badges)
+    // Helper to get user initials for avatar
+    function getInitials(name) {
+      if (!name) return '?';
+      const parts = name.trim().split(' ');
+      if (parts.length >= 2) {
+        return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+      }
+      return name.substring(0, 2).toUpperCase();
+    }
+
+    // Helper to render user with styled layout
     function renderUser(user, isOwnerList) {
       const name = user.name || user.fullName || user.email;
       const email = user.email;
-      // Action buttons (only if current user is owner and not self)
-      let actions = '';
+      const initials = getInitials(name);
       const currentUserId = getUserIdFromToken && getUserIdFromToken();
       const isSelf = user._id === currentUserId;
+      
+      // Build action buttons
+      let actions = '';
       if (isOwner) {
         if (!isOwnerUser(user)) {
-          actions += `<button class=\"make-owner-btn\" data-email=\"${email}\" style=\"width:60px;min-width:60px;max-width:60px;margin-left:6px;padding:1px 0;font-size:12px;border-radius:4px;background:#CC0007;color:#fff;border:none;cursor:pointer;line-height:1.1;vertical-align:middle;\">Owner</button>`;
+          actions += `<button class="share-role-btn owner-btn make-owner-btn" data-email="${email}">Owner</button>`;
         }
         if (!isLead(user)) {
-          actions += `<button class=\"make-lead-btn\" data-email=\"${email}\" style=\"width:60px;min-width:60px;max-width:60px;margin-left:3px;padding:1px 0;font-size:12px;border-radius:4px;background:#ff9800;color:#fff;border:none;cursor:pointer;line-height:1.1;vertical-align:middle;\">Lead</button>`;
+          actions += `<button class="share-role-btn lead-btn make-lead-btn" data-email="${email}">Lead</button>`;
         }
-        // Add Unshare button (not for self, and not for owners in owner list)
+        // Add remove button (not for self, and not for owners in owner list)
         if (!isSelf && (!isOwnerList || !isOwnerUser(user))) {
-          actions += `<button class=\"unshare-btn\" data-email=\"${email}\" title=\"Remove from event\" style=\"width:28px;min-width:28px;max-width:28px;height:28px;display:inline-flex;align-items:center;justify-content:center;margin-left:3px;padding:0;font-size:18px;border-radius:50%;background:#eee;color:#CC0007;border:none;cursor:pointer;line-height:1;vertical-align:middle;transition:background 0.15s;\">&#10005;</button>`;
+          actions += `<button class="share-remove-btn unshare-btn" data-email="${email}" title="Remove from event"><span class="material-symbols-outlined">close</span></button>`;
         }
       }
-      return `<li style=\"display:flex;align-items:center;justify-content:space-between;min-height:28px;width:100%;padding:2px 0;word-break:break-all;\"><span style=\"display:block;overflow-wrap:break-word;word-break:break-all;flex:1 1 0;\">${name} (${email})</span> <span style=\"display:flex;gap:3px;min-width:190px;justify-content:flex-end;\">${actions}</span></li>`;
+      
+      return `
+        <li>
+          <div class="share-user-avatar">${initials}</div>
+          <div class="share-user-info">
+            <div class="share-user-name">${name}${isSelf ? ' (you)' : ''}</div>
+            <div class="share-user-email">${email}</div>
+          </div>
+          <div class="share-user-actions">${actions}</div>
+        </li>
+      `;
     }
 
-    if (ownerList) ownerList.innerHTML = owners.map(u => renderUser(u, true)).join('');
-    if (leadList) leadList.innerHTML = leads.map(u => renderUser(u, false)).join('');
-    if (sharedList) sharedList.innerHTML = shared.map(u => renderUser(u, false)).join('');
+    // Render empty state if no users
+    function renderEmptyState(message) {
+      return `<li class="share-empty-item"><div class="share-empty">${message}</div></li>`;
+    }
 
-    // Make the lists scrollable if long, no horizontal scroll
+    // Populate lists and update counts
+    const ownerCount = document.getElementById('ownerCount');
+    const leadCount = document.getElementById('leadCount');
+    const sharedCount = document.getElementById('sharedCount');
+    
     if (ownerList) {
-      ownerList.parentElement.style.maxHeight = '220px';
-      ownerList.parentElement.style.overflowY = 'auto';
-      ownerList.parentElement.style.overflowX = 'hidden';
+      ownerList.innerHTML = owners.length > 0 
+        ? owners.map(u => renderUser(u, true)).join('') 
+        : renderEmptyState('No owners');
     }
     if (leadList) {
-      leadList.parentElement.style.maxHeight = '220px';
-      leadList.parentElement.style.overflowY = 'auto';
-      leadList.parentElement.style.overflowX = 'hidden';
+      leadList.innerHTML = leads.length > 0 
+        ? leads.map(u => renderUser(u, false)).join('') 
+        : renderEmptyState('No leads assigned');
     }
     if (sharedList) {
-      sharedList.parentElement.style.maxHeight = '220px';
-      sharedList.parentElement.style.overflowY = 'auto';
-      sharedList.parentElement.style.overflowX = 'hidden';
+      sharedList.innerHTML = shared.length > 0 
+        ? shared.map(u => renderUser(u, false)).join('') 
+        : renderEmptyState('No users shared with');
     }
+    
+    // Update counts
+    if (ownerCount) ownerCount.textContent = owners.length;
+    if (leadCount) leadCount.textContent = leads.length;
+    if (sharedCount) sharedCount.textContent = shared.length;
 
     // Add event listeners for the new buttons
     function addRoleButtonListeners() {
       document.querySelectorAll('.make-lead-btn').forEach(btn => {
         btn.onclick = async function() {
           const email = btn.getAttribute('data-email');
-          if (confirm('Are you sure you want to make this user a lead?')) {
+          const confirmed = await showConfirm('Make Lead', 'Are you sure you want to make this user a lead?', { confirmText: 'Make Lead', type: 'info' });
+          if (confirmed) {
             await submitRoleChange(email, false, true);
           }
         };
@@ -846,7 +2159,8 @@ async function openShareModal(tableId) {
       document.querySelectorAll('.make-owner-btn').forEach(btn => {
         btn.onclick = async function() {
           const email = btn.getAttribute('data-email');
-          if (confirm('Are you sure you want to make this user an owner? This will give them full control of the event, including deletion.')) {
+          const confirmed = await showConfirm('Make Owner', 'Are you sure you want to make this user an owner? This will give them full control of the event, including deletion.', { confirmText: 'Make Owner', type: 'warning' });
+          if (confirmed) {
             await submitRoleChange(email, true, false);
           }
         };
@@ -854,7 +2168,8 @@ async function openShareModal(tableId) {
       document.querySelectorAll('.unshare-btn').forEach(btn => {
         btn.onclick = async function() {
           const email = btn.getAttribute('data-email');
-          if (confirm('Are you sure you want to remove this user from the event?')) {
+          const confirmed = await showConfirm('Remove User', 'Are you sure you want to remove this user from the event?', { confirmText: 'Remove', type: 'danger' });
+          if (confirmed) {
             await submitUnshare(email);
           }
         };
@@ -865,11 +2180,6 @@ async function openShareModal(tableId) {
     // Initialize autofill functionality
     setupUserAutofill();
     
-    console.log('[SHARE_MODAL] Modal setup complete. Lists populated:', {
-      owners: owners.length,
-      leads: leads.length,
-      shared: shared.length
-    });
 
     // Helper to submit role change and refresh modal
     async function submitRoleChange(email, makeOwner, makeLead) {
@@ -885,13 +2195,14 @@ async function openShareModal(tableId) {
         });
         const result = await res.json();
         if (res.ok) {
+          showToast('Role updated successfully', 'success');
           // Refresh the modal
           await openShareModal(currentTableId);
         } else {
-          alert(result.error || 'Error updating role');
+          showToast(result.error || 'Error updating role', 'error');
         }
       } catch (err) {
-        alert('Failed to update role. Please try again.');
+        showToast('Failed to update role. Please try again.', 'error');
       }
     }
 
@@ -909,156 +2220,157 @@ async function openShareModal(tableId) {
         });
         const result = await res.json();
         if (res.ok) {
+          showToast('User removed from event', 'success');
           await openShareModal(currentTableId);
         } else {
-          alert(result.error || 'Error removing user');
+          showToast(result.error || 'Error removing user', 'error');
         }
       } catch (err) {
-        alert('Failed to remove user. Please try again.');
+        showToast('Failed to remove user. Please try again.', 'error');
       }
     }
   } catch (err) {
     console.error('Error in share modal:', err);
-    alert('Error opening share options. Please try again.');
+    showToast('Error opening share options. Please try again.', 'error');
   }
 }
 
 function setupUserAutofill() {
-  const shareEmailInput = document.getElementById('shareEmail');
-  const suggestionsContainer = document.getElementById('userSuggestions');
+  const dropdownContainer = document.getElementById('userDropdownContainer');
+  const trigger = document.getElementById('userDropdownTrigger');
+  const menu = document.getElementById('userDropdownMenu');
+  const searchInput = document.getElementById('userSearchInput');
+  const optionsContainer = document.getElementById('userDropdownOptions');
   const selectedUsersContainer = document.getElementById('selectedUsersList');
   
-  if (!shareEmailInput || !suggestionsContainer || !selectedUsersContainer) return;
-  
-  // Clear any existing event listeners
-  shareEmailInput.removeEventListener('input', handleUserInput);
-  shareEmailInput.removeEventListener('keydown', handleKeyDown);
-  shareEmailInput.removeEventListener('blur', hideSuggestions);
+  if (!dropdownContainer || !trigger || !menu || !searchInput || !optionsContainer) {
+    console.error('[SHARE_DROPDOWN] Missing dropdown elements');
+    return;
+  }
   
   // Reset selectedUsers array
   selectedUsers = [];
   renderSelectedUsers();
   
-  function handleUserInput(e) {
-    const query = e.target.value.toLowerCase().trim();
-    
-    if (query.length < 1) {
-      hideSuggestions();
-      return;
+  let isOpen = false;
+  
+  // Helper to get initials
+  function getInitials(name) {
+    if (!name) return '?';
+    const parts = name.trim().split(' ');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name.substring(0, 2).toUpperCase();
     }
     
-    // Filter users based on name or email
+  // Render user options
+  function renderOptions(filter = '') {
     const filteredUsers = allUsers.filter(user => {
       const name = (user.name || user.fullName || '').toLowerCase();
       const email = (user.email || '').toLowerCase();
-      
-      // Don't show already selected users
-      const isAlreadySelected = selectedUsers.some(selected => selected._id === user._id);
-      
-      return !isAlreadySelected && (name.includes(query) || email.includes(query));
+      const isAlreadySelected = selectedUsers.some(s => s._id === user._id);
+      const matchesFilter = !filter || name.includes(filter.toLowerCase()) || email.includes(filter.toLowerCase());
+      return !isAlreadySelected && matchesFilter;
     });
     
-    showSuggestions(filteredUsers.slice(0, 8)); // Limit to 8 suggestions
-  }
-  
-  function handleKeyDown(e) {
-    if (e.key === 'Enter') {
+    if (filteredUsers.length === 0) {
+      optionsContainer.innerHTML = `<div class="share-dropdown-empty">No users found</div>`;
+    } else {
+      optionsContainer.innerHTML = filteredUsers.map(user => {
+        const name = user.name || user.fullName || user.email;
+        const email = user.email;
+        const initials = getInitials(name);
+        return `
+          <button type="button" class="share-dropdown-option" data-user-id="${user._id}">
+            <div class="option-avatar">${initials}</div>
+            <div class="option-info">
+              <span class="option-name">${name}</span>
+              <span class="option-email">${email}</span>
+            </div>
+          </button>
+        `;
+      }).join('');
+      
+      // Add click handlers
+      optionsContainer.querySelectorAll('.share-dropdown-option').forEach(option => {
+        option.onclick = (e) => {
       e.preventDefault();
-      const activeSuggestion = suggestionsContainer.querySelector('.suggestion-active');
-      if (activeSuggestion) {
-        activeSuggestion.click();
-      }
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      navigateSuggestions(1);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      navigateSuggestions(-1);
-    } else if (e.key === 'Escape') {
-      hideSuggestions();
-    }
-  }
-  
-  function navigateSuggestions(direction) {
-    const suggestions = suggestionsContainer.querySelectorAll('.user-suggestion');
-    const active = suggestionsContainer.querySelector('.suggestion-active');
-    
-    let newIndex = 0;
-    if (active) {
-      const currentIndex = Array.from(suggestions).indexOf(active);
-      newIndex = currentIndex + direction;
-    }
-    
-    if (newIndex < 0) newIndex = suggestions.length - 1;
-    if (newIndex >= suggestions.length) newIndex = 0;
-    
-    suggestions.forEach(s => {
-      s.classList.remove('suggestion-active');
-      s.style.backgroundColor = 'white';
-    });
-    if (suggestions[newIndex]) {
-      suggestions[newIndex].classList.add('suggestion-active');
-      suggestions[newIndex].style.backgroundColor = '#e3f2fd';
-    }
-  }
-  
-  function showSuggestions(users) {
-    if (users.length === 0) {
-      hideSuggestions();
-      return;
-    }
-    
-    suggestionsContainer.innerHTML = users.map(user => {
-      const name = user.name || user.fullName || user.email;
-      const email = user.email;
-      return `
-        <div class="user-suggestion" data-user-id="${user._id}" style="
-          padding: 8px 12px; 
-          cursor: pointer; 
-          border-bottom: 1px solid #eee; 
-          display: flex; 
-          justify-content: space-between; 
-          align-items: center;
-          transition: background-color 0.15s;
-        ">
-          <div>
-            <div style="font-weight: 500;">${name}</div>
-            <div style="font-size: 0.85em; color: #666;">${email}</div>
-          </div>
-        </div>
-      `;
-    }).join('');
-    
-    // Add click handlers for suggestions
-    suggestionsContainer.querySelectorAll('.user-suggestion').forEach(suggestion => {
-      suggestion.addEventListener('mouseenter', () => {
-        suggestionsContainer.querySelectorAll('.user-suggestion').forEach(s => {
-          s.classList.remove('suggestion-active');
-          s.style.backgroundColor = 'white';
-        });
-        suggestion.classList.add('suggestion-active');
-        suggestion.style.backgroundColor = '#e3f2fd';
+          e.stopPropagation();
+          const userId = option.dataset.userId;
+          const user = allUsers.find(u => u._id === userId);
+          if (user) {
+            addSelectedUser(user);
+            searchInput.value = '';
+            renderOptions('');
+            closeDropdown();
+          }
+        };
       });
-      
-      suggestion.addEventListener('click', () => {
-        const userId = suggestion.getAttribute('data-user-id');
-        const user = allUsers.find(u => u._id === userId);
-        if (user) {
-          addSelectedUser(user);
-          shareEmailInput.value = '';
-          hideSuggestions();
+    }
+  }
+  
+  function openDropdown() {
+    console.log('[SHARE_DROPDOWN] Opening dropdown');
+    isOpen = true;
+    dropdownContainer.classList.add('open');
+    
+    // Calculate available space above trigger
+    const triggerRect = trigger.getBoundingClientRect();
+    const availableHeight = Math.min(280, triggerRect.top - 20);
+    
+    // Use CSS positioning within container
+    menu.style.cssText = `
+      display: block !important;
+      position: absolute !important;
+      bottom: calc(100% + 4px) !important;
+      left: 0 !important;
+      right: 0 !important;
+      max-height: ${availableHeight}px !important;
+      z-index: 999999 !important;
+      background: #1a1a1a !important;
+      border: 1px solid #333 !important;
+      border-radius: 8px !important;
+      box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.6) !important;
+      overflow: hidden !important;
+    `;
+    
+    renderOptions(searchInput.value);
+    setTimeout(() => searchInput.focus(), 50);
+  }
+  
+  function closeDropdown() {
+    console.log('[SHARE_DROPDOWN] Closing dropdown');
+    isOpen = false;
+    dropdownContainer.classList.remove('open');
+    menu.style.cssText = 'display: none !important;';
+  }
+  
+  // Trigger click
+  trigger.onclick = (e) => {
+    console.log('[SHARE_DROPDOWN] Trigger clicked, isOpen:', isOpen);
+    e.preventDefault();
+    e.stopPropagation();
+    if (isOpen) {
+      closeDropdown();
+    } else {
+      openDropdown();
         }
-      });
-    });
-    
-    suggestionsContainer.style.display = 'block';
-  }
+  };
   
-  function hideSuggestions() {
-    setTimeout(() => {
-      suggestionsContainer.style.display = 'none';
-    }, 200);
+  // Search input
+  searchInput.oninput = (e) => {
+    renderOptions(e.target.value);
+  };
+  
+  searchInput.onclick = (e) => e.stopPropagation();
+  
+  // Close on outside click
+  document.addEventListener('click', (e) => {
+    if (isOpen && !dropdownContainer.contains(e.target) && !menu.contains(e.target)) {
+      closeDropdown();
   }
+  });
   
   function addSelectedUser(user) {
     if (!selectedUsers.some(selected => selected._id === user._id)) {
@@ -1070,60 +2382,45 @@ function setupUserAutofill() {
   function removeSelectedUser(userId) {
     selectedUsers = selectedUsers.filter(user => user._id !== userId);
     renderSelectedUsers();
+    // Re-render options to show the user again
+    if (isOpen) renderOptions(searchInput.value);
   }
   
   function renderSelectedUsers() {
+    if (!selectedUsersContainer) return;
+    
     if (selectedUsers.length === 0) {
       selectedUsersContainer.innerHTML = '';
+      trigger.querySelector('.dropdown-value').textContent = 'Select a person...';
+      trigger.querySelector('.dropdown-value').classList.add('placeholder');
       return;
     }
     
     selectedUsersContainer.innerHTML = selectedUsers.map(user => {
       const name = user.name || user.fullName || user.email;
+      const initials = getInitials(name);
       return `
-        <div class="selected-user-tag" style="
-          background: #f0f0f0; 
-          border: 1px solid #ccc; 
-          border-radius: 16px; 
-          padding: 4px 8px; 
-          display: flex; 
-          align-items: center; 
-          gap: 6px;
-          font-size: 0.9em;
-        ">
-          <span>${name}</span>
-          <button type="button" onclick="removeSelectedUserById('${user._id}')" style="
-            background: none; 
-            border: none; 
-            color: #666; 
-            cursor: pointer; 
-            font-size: 16px; 
-            line-height: 1; 
-            padding: 0; 
-            width: 18px; 
-            height: 18px; 
-            display: flex; 
-            align-items: center; 
-            justify-content: center;
-            border-radius: 50%;
-          ">&times;</button>
+        <div class="selected-user-chip">
+          <div class="chip-avatar">${initials}</div>
+          <span class="chip-name">${name}</span>
+          <button type="button" class="chip-remove" onclick="window.removeSelectedUserById('${user._id}')">
+            <span class="material-symbols-outlined">close</span>
+          </button>
         </div>
       `;
     }).join('');
+    
+    trigger.querySelector('.dropdown-value').textContent = `${selectedUsers.length} selected`;
+    trigger.querySelector('.dropdown-value').classList.remove('placeholder');
   }
   
-  // Make removeSelectedUser available globally for onclick handlers
+  // Make removeSelectedUser available globally
   window.removeSelectedUserById = removeSelectedUser;
-  
-  // Add event listeners
-  shareEmailInput.addEventListener('input', handleUserInput);
-  shareEmailInput.addEventListener('keydown', handleKeyDown);
-  shareEmailInput.addEventListener('blur', hideSuggestions);
 }
 
 function handleModalClick(e) {
   const shareModal = document.getElementById('shareModal');
-  const modalContent = shareModal?.querySelector('.modal-content');
+  const modalContent = shareModal?.querySelector('.dark-modal-content');
   
   // If click is on the modal backdrop (not the content), close the modal
   if (e.target === shareModal && !modalContent?.contains(e.target)) {
@@ -1131,22 +2428,11 @@ function handleModalClick(e) {
   }
 }
 
-function handleCreateModalClick(e) {
-  const createModal = document.getElementById('createModal');
-  const modalContent = createModal?.querySelector('.modal-content');
-  
-  // If click is on the modal backdrop (not the content), close the modal
-  if (e.target === createModal && !modalContent?.contains(e.target)) {
-    hideCreateModal();
-  }
-}
-
 function closeModal() {
   const shareModal = document.getElementById('shareModal');
   if (shareModal) {
-    shareModal.style.display = 'none';
-    // Remove click-outside event listener
-    shareModal.removeEventListener('click', handleModalClick);
+    shareModal.classList.remove('show');
+    document.body.style.overflow = '';
   }
   const shareEmail = document.getElementById('shareEmail');
   if (shareEmail) shareEmail.value = '';
@@ -1156,24 +2442,43 @@ function closeModal() {
   const selectedUsersContainer = document.getElementById('selectedUsersList');
   if (selectedUsersContainer) selectedUsersContainer.innerHTML = '';
   
-  // Hide suggestions
-  const suggestionsContainer = document.getElementById('userSuggestions');
-  if (suggestionsContainer) suggestionsContainer.style.display = 'none';
+  // Hide and reset dropdown
+  const dropdownContainer = document.getElementById('userDropdownContainer');
+  const dropdownMenu = document.getElementById('userDropdownMenu');
+  if (dropdownContainer) dropdownContainer.classList.remove('open');
+  if (dropdownMenu) {
+    dropdownMenu.style.cssText = 'display: none !important;';
+  }
+  
+  // Reset trigger text
+  const trigger = document.getElementById('userDropdownTrigger');
+  if (trigger) {
+    const valueSpan = trigger.querySelector('.dropdown-value');
+    if (valueSpan) {
+      valueSpan.textContent = 'Select a person...';
+      valueSpan.classList.add('placeholder');
+    }
+  }
 
-  const ownerList = document.getElementById('ownerList')?.querySelector('ul');
-  const leadList = document.getElementById('leadList')?.querySelector('ul');
-  const sharedList = document.getElementById('sharedList')?.querySelector('ul');
+  // Clear lists
+  const ownerList = document.getElementById('ownerList');
+  const leadList = document.getElementById('leadList');
+  const sharedList = document.getElementById('sharedList');
   if (ownerList) ownerList.innerHTML = '';
   if (leadList) leadList.innerHTML = '';
   if (sharedList) sharedList.innerHTML = '';
 }
 
 async function submitShare() {
-  if (!currentTableId) return alert('Missing event information');
+  if (!currentTableId) {
+    showToast('Missing event information', 'error');
+    return;
+  }
   
   // Check if any users are selected
   if (selectedUsers.length === 0) {
-    return alert('Please select at least one user to share with.');
+    showToast('Please select at least one user to share with.', 'warning');
+    return;
   }
 
   try {
@@ -1207,20 +2512,14 @@ async function submitShare() {
     const successCount = results.filter(r => r.success).length;
     const failureCount = results.filter(r => !r.success).length;
     
-    let message = `Successfully shared with ${successCount} user(s).`;
+    if (successCount > 0) {
+      showToast(`Successfully shared with ${successCount} user(s). Email notifications sent.`, 'success', 5000);
+    }
     
     if (failureCount > 0) {
-      message += `\n\nFailed to share with ${failureCount} user(s):`;
-      results.filter(r => !r.success).forEach(r => {
-        message += `\n- ${r.user}: ${r.error}`;
-      });
+      const failedUsers = results.filter(r => !r.success).map(r => r.user).join(', ');
+      showToast(`Failed to share with: ${failedUsers}`, 'error', 5000);
     }
-    
-    if (successCount > 0) {
-      message += '\n\nEmail notifications have been sent to successfully shared users.';
-    }
-    
-    alert(message);
     
     // Refresh the modal if any were successful
     if (successCount > 0) {
@@ -1231,8 +2530,179 @@ async function submitShare() {
     
   } catch (err) {
     console.error('Error sharing event:', err);
-    alert('Failed to share event. Please try again.');
+    showToast('Failed to share event. Please try again.', 'error');
     closeModal();
+  }
+}
+
+// Share with all crew members on the event
+async function shareWithCrew() {
+  if (!currentTableId) {
+    showToast('Missing event information', 'error');
+    return;
+  }
+  
+  const shareBtn = document.getElementById('shareWithCrewBtn');
+  if (shareBtn) {
+    shareBtn.disabled = true;
+    shareBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px; margin-right: 6px;">hourglass_empty</span> Sharing...';
+  }
+  
+  try {
+    // Fetch table data to get crew and current sharing info
+    const tableRes = await fetch(`${API_BASE}/api/tables/${currentTableId}`, {
+      headers: { Authorization: token }
+    });
+    
+    if (!tableRes.ok) {
+      throw new Error('Failed to fetch event data');
+    }
+    
+    const table = await tableRes.json();
+    const crewRows = table.rows || [];
+    
+    // Get current user ID
+    const currentUserId = getUserIdFromToken();
+    
+    // Get list of users already on the event (owners, leads, sharedWith)
+    const existingUserIds = new Set([
+      ...(table.owners || []),
+      ...(table.leads || []),
+      ...(table.sharedWith || [])
+    ]);
+    
+    // Get unique crew member names (excluding placeholders and empty names)
+    const crewNames = [...new Set(
+      crewRows
+        .filter(row => row.name && row.name.trim() && row.role !== '__placeholder__')
+        .map(row => row.name.trim())
+    )];
+    
+    if (crewNames.length === 0) {
+      showToast('No crew members found on this event.', 'warning');
+      resetShareWithCrewBtn();
+      return;
+    }
+    
+    // Find users that match crew names
+    const usersToShare = allUsers.filter(user => {
+      const userName = user.name || user.fullName || '';
+      
+      // Skip if user is already on the event
+      if (existingUserIds.has(user._id)) return false;
+      
+      // Skip if user is the current user
+      if (user._id === currentUserId) return false;
+      
+      // Check if user's name matches any crew name
+      return crewNames.some(crewName => 
+        userName.toLowerCase() === crewName.toLowerCase()
+      );
+    });
+    
+    if (usersToShare.length === 0) {
+      showToast('All crew members are already shared with this event.', 'info');
+      resetShareWithCrewBtn();
+      return;
+    }
+    
+    // Confirm before sharing
+    const confirmed = await showConfirm(
+      'Share with Crew',
+      `Share this event with ${usersToShare.length} crew member(s)?`,
+      { confirmText: 'Share', type: 'info' }
+    );
+    
+    if (!confirmed) {
+      resetShareWithCrewBtn();
+      return;
+    }
+    
+    // Share with each crew member
+    const results = [];
+    for (const user of usersToShare) {
+      const res = await fetch(`${API_BASE}/api/tables/${currentTableId}/share`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token
+        },
+        body: JSON.stringify({ 
+          email: user.email, 
+          makeOwner: false, 
+          makeLead: false 
+        })
+      });
+      
+      const result = await res.json();
+      
+      if (res.ok) {
+        results.push({ success: true, user: user.name || user.fullName || user.email });
+      } else {
+        results.push({ success: false, user: user.name || user.fullName || user.email, error: result.error });
+      }
+    }
+    
+    // Show summary
+    const successCount = results.filter(r => r.success).length;
+    const failureCount = results.filter(r => !r.success).length;
+    
+    if (successCount > 0) {
+      showToast(`Successfully shared with ${successCount} crew member(s).`, 'success', 5000);
+    }
+    
+    if (failureCount > 0) {
+      showToast(`Failed to share with ${failureCount} member(s).`, 'error', 5000);
+    }
+    
+    // Refresh modal
+    if (successCount > 0) {
+      await openShareModal(currentTableId);
+    }
+    
+  } catch (err) {
+    console.error('Error sharing with crew:', err);
+    showToast('Failed to share with crew. Please try again.', 'error');
+  }
+  
+  resetShareWithCrewBtn();
+}
+
+function resetShareWithCrewBtn() {
+  const shareBtn = document.getElementById('shareWithCrewBtn');
+  if (shareBtn) {
+    shareBtn.disabled = false;
+    shareBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size: 18px; margin-right: 6px;">groups</span> Share with Crew';
+  }
+}
+
+async function fetchUserPhotoForSidebar() {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    const userId = payload.id;
+    
+    if (!userId) return;
+    
+    const res = await fetch(`${API_BASE}/api/users/${userId}`, {
+      headers: { Authorization: token }
+    });
+    
+    if (res.ok) {
+      const user = await res.json();
+      const avatarImg = document.getElementById('sidebarAvatarImg');
+      const avatarIcon = document.getElementById('sidebarAvatarIcon');
+      
+      if (user.photo && avatarImg) {
+        avatarImg.src = user.photo;
+        avatarImg.style.display = 'block';
+        if (avatarIcon) avatarIcon.style.display = 'none';
+      }
+    }
+  } catch (e) {
+    console.error('Error fetching user photo:', e);
   }
 }
 
@@ -1252,10 +2722,34 @@ function logout() {
 
 window.initPage = function(id) {
   console.log('initPage called for events');
+  
+  // Reset initial load flag so we check for live events each time page loads
+  isInitialLoad = true;
+  
+  // Check if dark theme is active and initialize accordingly
+  if (isDarkThemeActive()) {
+    initDarkTheme();
+  }
+  
   // Set username display
   const fullName = localStorage.getItem('fullName') || 'User';
   const usernameDisplayEl = document.getElementById('usernameDisplay');
   if (usernameDisplayEl) usernameDisplayEl.textContent = `Welcome, ${fullName}`;
+  
+  // Update welcome title for dark theme
+  const welcomeTitle = document.getElementById('welcomeTitle');
+  if (welcomeTitle) {
+    welcomeTitle.textContent = `Welcome, ${fullName.split(' ')[0]}`;
+  }
+  
+  // Update sidebar user name
+  const sidebarUserName = document.getElementById('sidebarUserName');
+  if (sidebarUserName) {
+    sidebarUserName.textContent = fullName;
+  }
+  
+  // Fetch and display user photo in sidebar
+  fetchUserPhotoForSidebar();
 
   // Add Admin Console button if user is admin
   try {
@@ -1270,182 +2764,131 @@ window.initPage = function(id) {
         
         try {
           const payload = JSON.parse(atob(token.split('.')[1]));
-        return { 
-          isAdmin: payload.role === 'admin',
-          role: payload.role,
-          fullName: payload.fullName,
-          id: payload.id,
-          tokenExpiry: new Date(payload.exp * 1000).toLocaleString()
-        };
-      } catch (err) {
-        return { error: 'Invalid token', details: err.message };
-      }
-    };
-    
-    // Add admin-user class to body for CSS targeting
-    if (payload.role === 'admin') {
-      document.body.classList.add('admin-user');
-    } else {
-      document.body.classList.remove('admin-user');
-    }
-    
-    // Restructure top bar into two rows for ALL users
-    const topBar = document.querySelector('.top-bar');
-      const usernameDisplay = document.getElementById('usernameDisplay');
-      const topBarIcons = document.querySelector('.top-bar-icons');
+          return { 
+            isAdmin: payload.role === 'admin',
+            role: payload.role,
+            fullName: payload.fullName,
+            id: payload.id,
+            tokenExpiry: new Date(payload.exp * 1000).toLocaleString()
+          };
+        } catch (err) {
+          return { error: 'Invalid token', details: err.message };
+        }
+      };
       
-      if (topBar && usernameDisplay && topBarIcons) {
-        // Check if rows already exist
-        let topRow = topBar.querySelector('.top-bar-row.welcome-row');
-        let buttonsRow = topBar.querySelector('.top-bar-row.admin-row');
+      if (payload.role === 'admin') {
+        // Restructure top bar into two rows
+        const topBar = document.querySelector('.top-bar');
+        const usernameDisplay = document.getElementById('usernameDisplay');
+        const logoutBtn = document.getElementById('logoutBtn');
         
-        if (!topRow) {
-          // Create top row for welcome + icons (timesheet, logout)
-          topRow = document.createElement('div');
-          topRow.className = 'top-bar-row welcome-row';
+        if (topBar && usernameDisplay && logoutBtn) {
+          // Check if rows already exist
+          let topRow = topBar.querySelector('.top-bar-row.welcome-row');
+          let adminRow = topBar.querySelector('.top-bar-row.admin-row');
           
-          // Move username and icons container to top row
-          topBar.appendChild(topRow);
-          topRow.appendChild(usernameDisplay);
-          topRow.appendChild(topBarIcons);
+          if (!topRow) {
+            // Create top row for welcome + logout
+            topRow = document.createElement('div');
+            topRow.className = 'top-bar-row welcome-row';
+            
+            // Move username and logout to top row
+            topBar.appendChild(topRow);
+            topRow.appendChild(usernameDisplay);
+            topRow.appendChild(logoutBtn);
+          }
+          
+          if (!adminRow) {
+            // Create admin row for all admin buttons
+            adminRow = document.createElement('div');
+            adminRow.className = 'top-bar-row admin-row';
+            adminRow.style.justifyContent = 'center';
+            topBar.appendChild(adminRow);
+          }
+          
+          // Create admin buttons container if it doesn't exist
+          let adminButtonsContainer = document.getElementById('adminButtonsContainer');
+          if (!adminButtonsContainer) {
+            adminButtonsContainer = document.createElement('div');
+            adminButtonsContainer.id = 'adminButtonsContainer';
+            adminButtonsContainer.style.display = 'flex';
+            adminButtonsContainer.style.gap = '8px';
+            adminButtonsContainer.style.alignItems = 'center';
+            adminButtonsContainer.style.flexWrap = 'wrap';
+            adminButtonsContainer.style.justifyContent = 'center';
+            adminRow.appendChild(adminButtonsContainer);
         }
-        
-        if (!buttonsRow) {
-          // Create buttons row for all utility buttons (available to all users)
-          buttonsRow = document.createElement('div');
-          buttonsRow.className = 'top-bar-row admin-row';
-          buttonsRow.style.justifyContent = 'center';
-          topBar.appendChild(buttonsRow);
-        }
-        
-        // Create buttons container if it doesn't exist
-        let adminButtonsContainer = document.getElementById('adminButtonsContainer');
-        if (!adminButtonsContainer) {
-          adminButtonsContainer = document.createElement('div');
-          adminButtonsContainer.id = 'adminButtonsContainer';
-          adminButtonsContainer.style.display = 'flex';
-          adminButtonsContainer.style.gap = '8px';
-          adminButtonsContainer.style.alignItems = 'center';
-          adminButtonsContainer.style.flexWrap = 'wrap';
-          adminButtonsContainer.style.justifyContent = 'center';
-          buttonsRow.appendChild(adminButtonsContainer);
-        }
-        
-        // Add Call Times button (available to ALL users)
-        let callTimesBtn = document.getElementById('callTimesBtn');
-        if (!callTimesBtn) {
-          callTimesBtn = document.createElement('button');
-          callTimesBtn.id = 'callTimesBtn';
-          callTimesBtn.className = 'btn-call-times btn-outlined';
-          callTimesBtn.style.display = 'flex';
-          callTimesBtn.style.alignItems = 'center';
-          callTimesBtn.style.gap = '8px';
-          callTimesBtn.innerHTML = `
-            <span class="material-symbols-outlined">schedule</span>
-            Call Times
-          `;
-          callTimesBtn.onclick = () => {
-            if (window.navigate) {
-              window.navigate('call-times');
-            }
+
+        // Add admin console button
+        let adminBtn = document.getElementById('adminConsoleBtn');
+          if (!adminBtn && adminButtonsContainer) {
+          adminBtn = document.createElement('button');
+          adminBtn.id = 'adminConsoleBtn';
+          adminBtn.className = 'btn-admin btn-outlined';
+          adminBtn.textContent = 'Admin Console';
+          adminBtn.onclick = () => {
+            window.location.href = '/pages/users.html';
           };
-          adminButtonsContainer.appendChild(callTimesBtn);
+          adminButtonsContainer.appendChild(adminBtn);
         }
-        
-        // Add Flights button (available to ALL users)
-        let flightsBtn = document.getElementById('flightsBtn');
-        if (!flightsBtn) {
-          flightsBtn = document.createElement('button');
-          flightsBtn.id = 'flightsBtn';
-          flightsBtn.className = 'btn-flights btn-outlined';
-          flightsBtn.style.display = 'flex';
-          flightsBtn.style.alignItems = 'center';
-          flightsBtn.style.gap = '8px';
-          flightsBtn.innerHTML = `
-            <span class="material-symbols-outlined">flight_takeoff</span>
-            Flights
+
+        // Add inventory management button
+        let inventoryBtn = document.getElementById('inventoryManagementBtn');
+          if (!inventoryBtn && adminButtonsContainer) {
+          inventoryBtn = document.createElement('button');
+          inventoryBtn.id = 'inventoryManagementBtn';
+          inventoryBtn.className = 'btn-inventory btn-outlined';
+          inventoryBtn.style.display = 'flex';
+          inventoryBtn.style.alignItems = 'center';
+          inventoryBtn.style.gap = '8px';
+          inventoryBtn.innerHTML = `
+            <span class="material-symbols-outlined">inventory</span>
+            Inventory
           `;
-          flightsBtn.onclick = () => {
-            if (window.navigate) {
-              window.navigate('flights');
-            }
+          inventoryBtn.onclick = () => {
+            window.location.href = '/pages/inventory-management.html';
           };
-          adminButtonsContainer.appendChild(flightsBtn);
+          adminButtonsContainer.appendChild(inventoryBtn);
         }
-        
-        // Add admin-only buttons if user is admin
-        if (payload.role === 'admin') {
-          // Add admin console button
-          let adminBtn = document.getElementById('adminConsoleBtn');
-          if (!adminBtn) {
-            adminBtn = document.createElement('button');
-            adminBtn.id = 'adminConsoleBtn';
-            adminBtn.className = 'btn-admin btn-outlined';
-            adminBtn.textContent = 'Admin Console';
-            adminBtn.onclick = () => {
-              window.location.href = '/pages/users.html';
-            };
-            adminButtonsContainer.appendChild(adminBtn);
-          }
 
-          // Add inventory management button
-          let inventoryBtn = document.getElementById('inventoryManagementBtn');
-          if (!inventoryBtn) {
-            inventoryBtn = document.createElement('button');
-            inventoryBtn.id = 'inventoryManagementBtn';
-            inventoryBtn.className = 'btn-inventory btn-outlined';
-            inventoryBtn.style.display = 'flex';
-            inventoryBtn.style.alignItems = 'center';
-            inventoryBtn.style.gap = '8px';
-            inventoryBtn.innerHTML = `
-              <span class="material-symbols-outlined">inventory</span>
-              Inventory
-            `;
-            inventoryBtn.onclick = () => {
-              window.location.href = '/pages/inventory-management.html';
-            };
-            adminButtonsContainer.appendChild(inventoryBtn);
-          }
+        // Add crew planner button
+        let crewPlannerBtn = document.getElementById('crewPlannerBtn');
+          if (!crewPlannerBtn && adminButtonsContainer) {
+          crewPlannerBtn = document.createElement('button');
+          crewPlannerBtn.id = 'crewPlannerBtn';
+          crewPlannerBtn.className = 'btn-crew-planner btn-outlined';
+          crewPlannerBtn.style.display = 'flex';
+          crewPlannerBtn.style.alignItems = 'center';
+          crewPlannerBtn.style.gap = '8px';
+          crewPlannerBtn.innerHTML = `
+            <span class="material-symbols-outlined">groups</span>
+            Crew Planner
+          `;
+          crewPlannerBtn.onclick = () => {
+            window.location.href = '/pages/crew-planner.html';
+          };
+          adminButtonsContainer.appendChild(crewPlannerBtn);
+        }
 
-          // Add crew planner button
-          let crewPlannerBtn = document.getElementById('crewPlannerBtn');
-          if (!crewPlannerBtn) {
-            crewPlannerBtn = document.createElement('button');
-            crewPlannerBtn.id = 'crewPlannerBtn';
-            crewPlannerBtn.className = 'btn-crew-planner btn-outlined';
-            crewPlannerBtn.style.display = 'flex';
-            crewPlannerBtn.style.alignItems = 'center';
-            crewPlannerBtn.style.gap = '8px';
-            crewPlannerBtn.innerHTML = `
-              <span class="material-symbols-outlined">groups</span>
-              Crew Planner
-            `;
-            crewPlannerBtn.onclick = () => {
-              window.location.href = '/pages/crew-planner.html';
-            };
-            adminButtonsContainer.appendChild(crewPlannerBtn);
-          }
-
-          // Add crew calendar button
-          let crewCalendarBtn = document.getElementById('crewCalendarBtn');
-          if (!crewCalendarBtn) {
-            crewCalendarBtn = document.createElement('button');
-            crewCalendarBtn.id = 'crewCalendarBtn';
-            crewCalendarBtn.className = 'btn-crew-calendar btn-outlined';
-            crewCalendarBtn.style.display = 'flex';
-            crewCalendarBtn.style.alignItems = 'center';
-            crewCalendarBtn.style.gap = '8px';
-            crewCalendarBtn.innerHTML = `
-              <span class="material-symbols-outlined">calendar_month</span>
-              Crew Calendar
-            `;
-            crewCalendarBtn.onclick = () => {
-              window.location.href = '/pages/crew-calendar.html';
-            };
-            adminButtonsContainer.appendChild(crewCalendarBtn);
+        // Add crew calendar button
+        let crewCalendarBtn = document.getElementById('crewCalendarBtn');
+          if (!crewCalendarBtn && adminButtonsContainer) {
+          crewCalendarBtn = document.createElement('button');
+          crewCalendarBtn.id = 'crewCalendarBtn';
+          crewCalendarBtn.className = 'btn-crew-calendar btn-outlined';
+          crewCalendarBtn.style.display = 'flex';
+          crewCalendarBtn.style.alignItems = 'center';
+          crewCalendarBtn.style.gap = '8px';
+          crewCalendarBtn.innerHTML = `
+            <span class="material-symbols-outlined">calendar_month</span>
+            Crew Calendar
+          `;
+          crewCalendarBtn.onclick = () => {
+            window.location.href = '/pages/crew-calendar.html';
+          };
+          adminButtonsContainer.appendChild(crewCalendarBtn);
           }
         }
-        
       }
     }
   } catch (e) { console.error('Error adding admin button:', e); }
@@ -1454,30 +2897,9 @@ window.initPage = function(id) {
   const sortDropdown = document.getElementById('sortDropdown');
   if (sortDropdown) sortDropdown.addEventListener('change', loadTables);
 
-  // Set up time filter dropdown
-  const timeFilterDropdown = document.getElementById('timeFilterDropdown');
-  if (timeFilterDropdown) {
-    // Set to current value (default is 'upcoming')
-    timeFilterDropdown.value = timeFilter;
-    timeFilterDropdown.addEventListener('change', () => {
-      timeFilter = timeFilterDropdown.value;
-      loadTables();
-    });
-  }
-
   // Set up logout button
   const logoutBtn = document.getElementById('logoutBtn');
   if (logoutBtn) logoutBtn.onclick = logout;
-
-  // Set up timesheet button
-  const timesheetBtn = document.getElementById('timesheetBtn');
-  if (timesheetBtn) {
-    timesheetBtn.onclick = () => {
-      if (window.navigate) {
-        window.navigate('timesheet');
-      }
-    };
-  }
 
   // Set up Create Event button
   const createBtn = document.querySelector('.btn-create');
@@ -1494,31 +2916,6 @@ window.initPage = function(id) {
     toggleBtn.textContent = showArchived ? 'Show Active Events' : 'Archived Events';
   }
 
-  // Set up Calendar View button
-  const calendarBtn = document.getElementById('calendarViewBtn');
-  if (calendarBtn) {
-    calendarBtn.onclick = () => {
-      const list = document.getElementById('tableList');
-      const cal = document.getElementById('calendarViewContainer');
-      if (!list || !cal) return;
-      if (cal.style.display === 'none' || cal.style.display === '') {
-        list.style.display = 'none';
-        cal.style.display = 'block';
-        // Use the same filtered tables as in loadTables
-        fetch(`${API_BASE}/api/tables`, { headers: { Authorization: token } })
-          .then(r => r.json())
-          .then(tables => {
-            const showArchived = !!document.getElementById('toggleArchivedBtn')?.classList.contains('active');
-            const filteredTables = tables.filter(table => !!table.userArchived === showArchived);
-            renderCalendar(filteredTables);
-          });
-      } else {
-        cal.style.display = 'none';
-        list.style.display = 'flex';
-      }
-    };
-  }
-
   // Attach search box event listener (SPA-safe)
   const searchInput = document.getElementById('searchEventsInput');
   if (searchInput && !searchInput._listenerAttached) {
@@ -1533,18 +2930,781 @@ window.initPage = function(id) {
   loadTables();
 };
 
+// Calendar modal removed - using dedicated calendar page instead
+
+// Initialize dark theme specific features
+async function initDarkTheme() {
+  console.log('Initializing dark theme for events page');
+  
+  // Inject the shared dashboard sidebar
+  const layoutContainer = document.getElementById('eventsPageLayout');
+  if (layoutContainer && typeof window.injectDashboardSidebar === 'function') {
+    await window.injectDashboardSidebar(layoutContainer, { 
+      position: 'prepend',
+      activePage: 'events'
+    });
+  } else if (typeof window.initDashboardSidebar === 'function') {
+    // Fallback: sidebar HTML already exists, just initialize
+    window.initDashboardSidebar();
+  }
+  
+  // Setup tab filtering
+  const tabs = document.querySelectorAll('.events-tab');
+  tabs.forEach(tab => {
+    tab.onclick = function() {
+      tabs.forEach(t => t.classList.remove('active'));
+      this.classList.add('active');
+      resetPagination(); // Reset to page 1 when switching tabs
+      loadTables(); // Reload with new filter
+    };
+  });
+  
+  // Setup create event button
+  const createBtn = document.getElementById('createEventBtn');
+  if (createBtn) {
+    createBtn.onclick = showCreateModal;
+  }
+  
+  // Logout and dropdown close handlers are managed by sidebar-dashboard.js
+  
+  // Check admin access and show nav item
+  try {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const adminNavItem = document.getElementById('adminNavItem');
+      
+      if (adminNavItem && payload.role === 'admin') {
+        adminNavItem.style.display = 'flex';
+      }
+    }
+  } catch (e) {
+    console.error('Error checking admin access:', e);
+  }
+  
+  // Setup search input
+  const searchInput = document.getElementById('searchEventsInput');
+  if (searchInput && !searchInput._listenerAttached) {
+    searchInput.addEventListener('input', e => {
+      searchEventsValue = e.target.value;
+      loadTables();
+    });
+    searchInput._listenerAttached = true;
+  }
+  
+  // Setup date filter inputs
+  setupDateFilters();
+  
+  // Setup status filter
+  setupStatusFilter();
+  
+  // Setup owner filter dropdown
+  setupOwnerFilter();
+  
+  // Setup column header sorting
+  setupSorting();
+}
+
+// Date filter dropdown functionality
+let currentDatePreset = 'all';
+
+function setupDateFilters() {
+  const dateFilterBtn = document.getElementById('dateFilterBtn');
+  const dateFilterDropdown = document.getElementById('dateFilterDropdown');
+  const dateOptions = document.querySelectorAll('.date-option');
+  const customRangeContainer = document.getElementById('customDateRange');
+  
+  // Open dropdown on button click
+  if (dateFilterBtn && dateFilterDropdown && !dateFilterBtn._listenerAttached) {
+    dateFilterBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      
+      // Close other dropdowns
+      document.querySelectorAll('.action-dropdown.show').forEach(d => {
+        if (d !== dateFilterDropdown) d.classList.remove('show');
+      });
+      
+      // Toggle this dropdown
+      dateFilterDropdown.classList.toggle('show');
+      
+      // Position dropdown below button
+      if (dateFilterDropdown.classList.contains('show')) {
+        const rect = dateFilterBtn.getBoundingClientRect();
+        dateFilterDropdown.style.position = 'fixed';
+        dateFilterDropdown.style.top = (rect.bottom + 8) + 'px';
+        dateFilterDropdown.style.left = rect.left + 'px';
+      }
+    });
+    dateFilterBtn._listenerAttached = true;
+  }
+  
+  // Date option clicks
+  dateOptions.forEach(option => {
+    if (!option._listenerAttached) {
+      option.addEventListener('click', function(e) {
+        const preset = this.dataset.preset;
+        
+        // If clicking custom, just toggle the inputs
+        if (preset === 'custom') {
+          e.stopPropagation();
+          if (customRangeContainer) {
+            const isVisible = customRangeContainer.style.display === 'block';
+            customRangeContainer.style.display = isVisible ? 'none' : 'block';
+          }
+          return;
+        }
+        
+        // Update active state
+        dateOptions.forEach(o => o.classList.remove('active'));
+        this.classList.add('active');
+        currentDatePreset = preset;
+        
+        // Hide custom range if not custom
+        if (customRangeContainer) {
+          customRangeContainer.style.display = 'none';
+        }
+        
+        // Apply the filter immediately
+        applyDateFilter();
+        
+        // Close dropdown
+        if (dateFilterDropdown) {
+          dateFilterDropdown.classList.remove('show');
+        }
+      });
+      option._listenerAttached = true;
+    }
+  });
+}
+
+function hideDateFilterDropdown() {
+  const dropdown = document.getElementById('dateFilterDropdown');
+  if (dropdown) {
+    dropdown.classList.remove('show');
+  }
+}
+
+function applyDateFilter() {
+  const startInput = document.getElementById('dateFilterStart');
+  const endInput = document.getElementById('dateFilterEnd');
+  const filterBtn = document.getElementById('dateFilterBtn');
+  const filterLabel = document.getElementById('dateFilterLabel');
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  switch (currentDatePreset) {
+    case 'all':
+      dateFilterStart = null;
+      dateFilterEnd = null;
+      if (filterLabel) filterLabel.textContent = 'All Dates';
+      if (filterBtn) filterBtn.classList.remove('active');
+      break;
+      
+    case 'today':
+      dateFilterStart = today.toISOString().split('T')[0];
+      dateFilterEnd = today.toISOString().split('T')[0];
+      if (filterLabel) filterLabel.textContent = 'Today';
+      if (filterBtn) filterBtn.classList.add('active');
+      break;
+      
+    case 'week':
+      const weekStart = new Date(today);
+      weekStart.setDate(today.getDate() - today.getDay());
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      dateFilterStart = weekStart.toISOString().split('T')[0];
+      dateFilterEnd = weekEnd.toISOString().split('T')[0];
+      if (filterLabel) filterLabel.textContent = 'This Week';
+      if (filterBtn) filterBtn.classList.add('active');
+      break;
+      
+    case 'month':
+      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+      const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      dateFilterStart = monthStart.toISOString().split('T')[0];
+      dateFilterEnd = monthEnd.toISOString().split('T')[0];
+      if (filterLabel) filterLabel.textContent = 'This Month';
+      if (filterBtn) filterBtn.classList.add('active');
+      break;
+      
+    case 'custom':
+      dateFilterStart = startInput?.value || null;
+      dateFilterEnd = endInput?.value || null;
+      if (dateFilterStart && dateFilterEnd) {
+        const start = new Date(dateFilterStart);
+        const end = new Date(dateFilterEnd);
+        const formatDate = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        if (filterLabel) filterLabel.textContent = `${formatDate(start)} - ${formatDate(end)}`;
+        if (filterBtn) filterBtn.classList.add('active');
+      } else if (dateFilterStart) {
+        const start = new Date(dateFilterStart);
+        if (filterLabel) filterLabel.textContent = `From ${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+        if (filterBtn) filterBtn.classList.add('active');
+      } else if (dateFilterEnd) {
+        const end = new Date(dateFilterEnd);
+        if (filterLabel) filterLabel.textContent = `Until ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+        if (filterBtn) filterBtn.classList.add('active');
+      } else {
+        if (filterLabel) filterLabel.textContent = 'All Dates';
+        if (filterBtn) filterBtn.classList.remove('active');
+      }
+      break;
+  }
+  
+  loadTables();
+}
+
+// Apply custom date range
+function applyCustomDateFilter() {
+  const startInput = document.getElementById('dateFilterStart');
+  const endInput = document.getElementById('dateFilterEnd');
+  const filterBtn = document.getElementById('dateFilterBtn');
+  const filterLabel = document.getElementById('dateFilterLabel');
+  const dateOptions = document.querySelectorAll('.date-option');
+  
+  dateFilterStart = startInput?.value || null;
+  dateFilterEnd = endInput?.value || null;
+  currentDatePreset = 'custom';
+  
+  // Update active state
+  dateOptions.forEach(o => o.classList.remove('active'));
+  const customOption = document.getElementById('customDateToggle');
+  if (customOption) customOption.classList.add('active');
+  
+  if (dateFilterStart && dateFilterEnd) {
+    const start = new Date(dateFilterStart);
+    const end = new Date(dateFilterEnd);
+    const formatDate = (d) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    if (filterLabel) filterLabel.textContent = `${formatDate(start)} - ${formatDate(end)}`;
+    if (filterBtn) filterBtn.classList.add('active');
+  } else if (dateFilterStart) {
+    const start = new Date(dateFilterStart);
+    if (filterLabel) filterLabel.textContent = `From ${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    if (filterBtn) filterBtn.classList.add('active');
+  } else if (dateFilterEnd) {
+    const end = new Date(dateFilterEnd);
+    if (filterLabel) filterLabel.textContent = `Until ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    if (filterBtn) filterBtn.classList.add('active');
+  } else {
+    if (filterLabel) filterLabel.textContent = 'All Dates';
+    if (filterBtn) filterBtn.classList.remove('active');
+  }
+  
+  // Close dropdown
+  hideDateFilterDropdown();
+  loadTables();
+}
+
+window.applyCustomDateFilter = applyCustomDateFilter;
+
+function clearDateFilter() {
+  dateFilterStart = null;
+  dateFilterEnd = null;
+  currentDatePreset = 'all';
+  
+  const startInput = document.getElementById('dateFilterStart');
+  const endInput = document.getElementById('dateFilterEnd');
+  const filterBtn = document.getElementById('dateFilterBtn');
+  const filterLabel = document.getElementById('dateFilterLabel');
+  
+  if (startInput) startInput.value = '';
+  if (endInput) endInput.value = '';
+  if (filterLabel) filterLabel.textContent = 'All Dates';
+  if (filterBtn) filterBtn.classList.remove('active');
+  
+  // Reset date options
+  const dateOptions = document.querySelectorAll('.date-option');
+  dateOptions.forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.preset === 'all');
+  });
+  
+  const customRangeContainer = document.getElementById('customDateRange');
+  if (customRangeContainer) customRangeContainer.style.display = 'none';
+  
+  hideDateFilterDropdown();
+  loadTables();
+}
+
+// Status filter functionality
+function setupStatusFilter() {
+  const statusFilterBtn = document.getElementById('statusFilterBtn');
+  const statusFilterDropdown = document.getElementById('statusFilterDropdown');
+  const statusOptions = document.querySelectorAll('.status-option');
+  
+  // Restore saved status filter state
+  const savedStatus = localStorage.getItem('eventsStatusFilter') || 'active';
+  statusFilter = savedStatus;
+  
+  // Update UI to match saved state
+  const label = document.getElementById('statusFilterLabel');
+  if (label) {
+    if (savedStatus === 'active') label.textContent = 'Active';
+    else if (savedStatus === 'archived') label.textContent = 'Archived';
+    else label.textContent = 'All';
+  }
+  
+  // Update active option
+  statusOptions.forEach(o => {
+    o.classList.toggle('active', o.dataset.status === savedStatus);
+  });
+  
+  // Highlight button if not default
+  if (statusFilterBtn) {
+    statusFilterBtn.classList.toggle('active', savedStatus !== 'active');
+  }
+  
+  if (statusFilterBtn && statusFilterDropdown && !statusFilterBtn._listenerAttached) {
+    statusFilterBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      
+      // Close other dropdowns
+      document.querySelectorAll('.action-dropdown.show').forEach(d => {
+        if (d !== statusFilterDropdown) d.classList.remove('show');
+      });
+      
+      // Toggle this dropdown
+      statusFilterDropdown.classList.toggle('show');
+      
+      // Position dropdown below button
+      if (statusFilterDropdown.classList.contains('show')) {
+        const rect = statusFilterBtn.getBoundingClientRect();
+        statusFilterDropdown.style.position = 'fixed';
+        statusFilterDropdown.style.top = (rect.bottom + 8) + 'px';
+        statusFilterDropdown.style.left = rect.left + 'px';
+      }
+    });
+    statusFilterBtn._listenerAttached = true;
+  }
+  
+  statusOptions.forEach(option => {
+    if (!option._listenerAttached) {
+      option.addEventListener('click', function() {
+        const newStatus = this.dataset.status;
+        statusFilter = newStatus;
+        
+        // Save to localStorage
+        localStorage.setItem('eventsStatusFilter', newStatus);
+        
+        // Update active state
+        statusOptions.forEach(o => o.classList.remove('active'));
+        this.classList.add('active');
+        
+        // Update button label
+        const label = document.getElementById('statusFilterLabel');
+        const btn = document.getElementById('statusFilterBtn');
+        if (label) {
+          if (newStatus === 'active') label.textContent = 'Active';
+          else if (newStatus === 'archived') label.textContent = 'Archived';
+          else label.textContent = 'All';
+        }
+        
+        // Highlight button if not default
+        if (btn) {
+          btn.classList.toggle('active', newStatus !== 'active');
+        }
+        
+        // Close dropdown
+        statusFilterDropdown.classList.remove('show');
+        
+        // Reset pagination and reload tables
+        resetPagination();
+        loadTables(true);
+      });
+      option._listenerAttached = true;
+    }
+  });
+}
+
+// Owner filter functionality
+function setupOwnerFilter() {
+  const ownerFilterBtn = document.getElementById('ownerFilterBtn');
+  const ownerFilterDropdown = document.getElementById('ownerFilterDropdown');
+  const ownerFilterLabel = document.getElementById('ownerFilterLabel');
+  
+  if (!ownerFilterBtn || !ownerFilterDropdown) return;
+  
+  // Only show for admins
+  try {
+    const token = localStorage.getItem('token');
+    if (token) {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      if (payload.role === 'admin') {
+        ownerFilterBtn.style.display = '';
+      } else {
+        ownerFilterBtn.style.display = 'none';
+        ownerFilter = 'all'; // Reset to all for non-admins
+        return;
+      }
+    }
+  } catch (e) {
+    console.error('Error checking admin role for owner filter:', e);
+    return;
+  }
+  
+  // Restore saved state
+  ownerFilter = localStorage.getItem('eventsOwnerFilter') || 'all';
+  updateOwnerFilterLabel();
+  updateActiveOwnerOption();
+  
+  // Toggle dropdown on button click
+  if (!ownerFilterBtn._listenerAttached) {
+    ownerFilterBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const isVisible = ownerFilterDropdown.classList.contains('show');
+      
+      // Hide all other dropdowns
+      document.querySelectorAll('.action-dropdown').forEach(d => d.classList.remove('show'));
+      
+      if (!isVisible) {
+        ownerFilterDropdown.classList.add('show');
+        // Position dropdown below button
+        const rect = ownerFilterBtn.getBoundingClientRect();
+        ownerFilterDropdown.style.position = 'fixed';
+        ownerFilterDropdown.style.top = (rect.bottom + 8) + 'px';
+        ownerFilterDropdown.style.left = rect.left + 'px';
+      }
+    });
+    ownerFilterBtn._listenerAttached = true;
+  }
+  
+  // Handle static option clicks (All Owners, My Events)
+  const staticOptions = ownerFilterDropdown.querySelectorAll('.owner-option');
+  staticOptions.forEach(option => {
+    if (option._listenerAttached) return;
+    
+    option.addEventListener('click', function(e) {
+      e.stopPropagation();
+      const value = this.dataset.owner;
+      
+      ownerFilter = value;
+      localStorage.setItem('eventsOwnerFilter', ownerFilter);
+      
+      updateOwnerFilterLabel();
+      updateActiveOwnerOption();
+      ownerFilterDropdown.classList.remove('show');
+      
+      resetPagination();
+      loadTables(true);
+    });
+    option._listenerAttached = true;
+  });
+  
+  // Close on outside click
+  document.addEventListener('click', function(e) {
+    if (!ownerFilterBtn.contains(e.target) && !ownerFilterDropdown.contains(e.target)) {
+      ownerFilterDropdown.classList.remove('show');
+    }
+  });
+  
+  function updateOwnerFilterLabel() {
+    if (!ownerFilterLabel) return;
+    if (ownerFilter === 'all') {
+      ownerFilterLabel.textContent = 'All Owners';
+    } else if (ownerFilter === 'mine') {
+      ownerFilterLabel.textContent = 'My Events';
+    } else {
+      // Find owner name from allOwners
+      const owner = allOwners.find(o => o.id === ownerFilter);
+      ownerFilterLabel.textContent = owner ? owner.name : 'Owner';
+    }
+  }
+  
+  function updateActiveOwnerOption() {
+    // Update active state on all options
+    ownerFilterDropdown.querySelectorAll('.owner-option, .dynamic-owner-option').forEach(opt => {
+      opt.classList.toggle('active', opt.dataset.owner === ownerFilter);
+    });
+  }
+}
+
+// Populate owner dropdown with unique owners from loaded events
+function populateOwnerDropdown(tables) {
+  const ownerOptionsList = document.getElementById('ownerOptionsList');
+  if (!ownerOptionsList) return;
+  
+  // Extract unique owners from all tables
+  const ownersMap = new Map();
+  
+  tables.forEach(table => {
+    if (Array.isArray(table.owners)) {
+      table.owners.forEach(owner => {
+        const id = typeof owner === 'string' ? owner : (owner._id || owner.id);
+        const name = owner.fullName || owner.name || owner.email || 'Unknown';
+        if (id && !ownersMap.has(id)) {
+          ownersMap.set(id, { id, name });
+        }
+      });
+    }
+    // Also check ownerNames if populated
+    if (Array.isArray(table.ownerNames) && Array.isArray(table.owners)) {
+      table.owners.forEach((ownerId, index) => {
+        const id = typeof ownerId === 'string' ? ownerId : (ownerId._id || ownerId.id);
+        const name = table.ownerNames[index] || 'Unknown';
+        if (id && !ownersMap.has(id)) {
+          ownersMap.set(id, { id, name });
+        }
+      });
+    }
+  });
+  
+  // Convert to array and sort by name
+  allOwners = Array.from(ownersMap.values()).sort((a, b) => a.name.localeCompare(b.name));
+  
+  // Clear existing dynamic options
+  ownerOptionsList.innerHTML = '';
+  
+  // Add owner options
+  allOwners.forEach(owner => {
+    const option = document.createElement('button');
+    option.className = 'action-item dynamic-owner-option';
+    option.dataset.owner = owner.id;
+    if (owner.id === ownerFilter) {
+      option.classList.add('active');
+    }
+    option.innerHTML = `
+      <span class="material-symbols-outlined">account_circle</span>
+      ${owner.name}
+    `;
+    
+    option.addEventListener('click', function(e) {
+      e.stopPropagation();
+      ownerFilter = owner.id;
+      localStorage.setItem('eventsOwnerFilter', ownerFilter);
+      
+      const ownerFilterLabel = document.getElementById('ownerFilterLabel');
+      if (ownerFilterLabel) ownerFilterLabel.textContent = owner.name;
+      
+      // Update active states
+      const ownerFilterDropdown = document.getElementById('ownerFilterDropdown');
+      if (ownerFilterDropdown) {
+        ownerFilterDropdown.querySelectorAll('.owner-option, .dynamic-owner-option').forEach(opt => {
+          opt.classList.toggle('active', opt.dataset.owner === ownerFilter);
+        });
+        ownerFilterDropdown.classList.remove('show');
+      }
+      
+      resetPagination();
+      loadTables(true);
+    });
+    
+    ownerOptionsList.appendChild(option);
+  });
+}
+
+window.setupOwnerFilter = setupOwnerFilter;
+window.populateOwnerDropdown = populateOwnerDropdown;
+
+// Column header sorting functionality
+function setupSorting() {
+  const sortableHeaders = document.querySelectorAll('.events-table th.sortable');
+  
+  sortableHeaders.forEach(header => {
+    if (header._sortListenerAttached) return;
+    
+    header.addEventListener('click', function() {
+      const field = this.dataset.sort;
+      
+      // Toggle order if same field, otherwise default to ascending
+      if (sortField === field) {
+        sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+      } else {
+        sortField = field;
+        sortOrder = 'asc';
+      }
+      
+      // Save to localStorage
+      localStorage.setItem('eventsSortField', sortField);
+      localStorage.setItem('eventsSortOrder', sortOrder);
+      
+      // Update sort icons
+      updateSortIcons();
+      
+      // Reload tables with new sort
+      loadTables(true);
+    });
+    
+    header._sortListenerAttached = true;
+  });
+  
+  // Initialize sort icons on page load
+  updateSortIcons();
+}
+
+function updateSortIcons() {
+  const sortableHeaders = document.querySelectorAll('.events-table th.sortable');
+  
+  sortableHeaders.forEach(header => {
+    const field = header.dataset.sort;
+    const icon = header.querySelector('.sort-icon');
+    
+    if (!icon) return;
+    
+    // Reset all headers
+    header.classList.remove('sorted-asc', 'sorted-desc');
+    
+    if (field === sortField) {
+      // Active sort column
+      header.classList.add(sortOrder === 'asc' ? 'sorted-asc' : 'sorted-desc');
+      icon.textContent = sortOrder === 'asc' ? 'arrow_upward' : 'arrow_downward';
+    } else {
+      // Inactive - show default expand_more
+      icon.textContent = 'expand_more';
+    }
+  });
+}
+
+window.setupSorting = setupSorting;
+
+window.setupStatusFilter = setupStatusFilter;
+window.setupDateFilters = setupDateFilters;
+window.hideDateFilterDropdown = hideDateFilterDropdown;
+window.applyDateFilter = applyDateFilter;
+window.clearDateFilter = clearDateFilter;
 window.submitShare = submitShare;
 window.closeModal = closeModal;
+window.shareWithCrew = shareWithCrew;
 window.submitCreate = submitCreate;
 window.hideCreateModal = hideCreateModal;
+
+// Toggle owner dropdown
+function toggleOwnerDropdown(element) {
+  // Close any other open dropdowns
+  document.querySelectorAll('.event-owner.show-dropdown').forEach(el => {
+    if (el !== element) el.classList.remove('show-dropdown');
+  });
+  
+  // Toggle this dropdown
+  element.classList.toggle('show-dropdown');
+}
+
+// Close owner dropdowns when clicking outside
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.event-owner')) {
+    document.querySelectorAll('.event-owner.show-dropdown').forEach(el => {
+      el.classList.remove('show-dropdown');
+    });
+  }
+});
+
+window.toggleOwnerDropdown = toggleOwnerDropdown;
+
+// Pagination functions
+function renderPagination(totalPages) {
+  // Find or create pagination container
+  let paginationContainer = document.getElementById('eventsPagination');
+  
+  if (!paginationContainer) {
+    // Create pagination container if it doesn't exist
+    const eventsFooter = document.querySelector('.events-footer');
+    if (eventsFooter) {
+      paginationContainer = document.createElement('div');
+      paginationContainer.id = 'eventsPagination';
+      paginationContainer.className = 'events-pagination';
+      eventsFooter.appendChild(paginationContainer);
+    } else {
+      return; // No footer to attach to
+    }
+  }
+  
+  // Don't show pagination if only 1 page
+  if (totalPages <= 1) {
+    paginationContainer.innerHTML = '';
+    paginationContainer.style.display = 'none';
+    return;
+  }
+  
+  paginationContainer.style.display = 'flex';
+  
+  // Build pagination HTML
+  let html = '';
+  
+  // Previous button
+  html += `<button class="pagination-btn pagination-prev ${currentPage === 1 ? 'disabled' : ''}" ${currentPage === 1 ? 'disabled' : ''} onclick="goToPage(${currentPage - 1})">
+    <span class="material-symbols-outlined">chevron_left</span>
+  </button>`;
+  
+  // Page numbers
+  html += '<div class="pagination-pages">';
+  
+  // Determine which pages to show
+  const maxVisiblePages = 5;
+  let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
+  let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
+  
+  // Adjust start if we're near the end
+  if (endPage - startPage < maxVisiblePages - 1) {
+    startPage = Math.max(1, endPage - maxVisiblePages + 1);
+  }
+  
+  // First page + ellipsis
+  if (startPage > 1) {
+    html += `<button class="pagination-btn pagination-page" onclick="goToPage(1)">1</button>`;
+    if (startPage > 2) {
+      html += `<span class="pagination-ellipsis">...</span>`;
+    }
+  }
+  
+  // Page numbers
+  for (let i = startPage; i <= endPage; i++) {
+    html += `<button class="pagination-btn pagination-page ${i === currentPage ? 'active' : ''}" onclick="goToPage(${i})">${i}</button>`;
+  }
+  
+  // Last page + ellipsis
+  if (endPage < totalPages) {
+    if (endPage < totalPages - 1) {
+      html += `<span class="pagination-ellipsis">...</span>`;
+    }
+    html += `<button class="pagination-btn pagination-page" onclick="goToPage(${totalPages})">${totalPages}</button>`;
+  }
+  
+  html += '</div>';
+  
+  // Next button
+  html += `<button class="pagination-btn pagination-next ${currentPage === totalPages ? 'disabled' : ''}" ${currentPage === totalPages ? 'disabled' : ''} onclick="goToPage(${currentPage + 1})">
+    <span class="material-symbols-outlined">chevron_right</span>
+  </button>`;
+  
+  paginationContainer.innerHTML = html;
+}
+
+function goToPage(page) {
+  const totalPages = Math.ceil(totalFilteredEvents / EVENTS_PER_PAGE);
+  if (page < 1 || page > totalPages) return;
+  
+  currentPage = page;
+  loadTables(true);
+  
+  // Scroll to top of table
+  const tableWrapper = document.querySelector('.events-table-wrapper');
+  if (tableWrapper) {
+    tableWrapper.scrollTop = 0;
+  }
+}
+
+// Reset page when filters change
+function resetPagination() {
+  currentPage = 1;
+}
+
+window.goToPage = goToPage;
+window.renderPagination = renderPagination;
+window.resetPagination = resetPagination;
 
 // Exposing the loadTables function to the global scope for Socket.IO updates
 window.loadTables = loadTables;
 
 // Setup Socket.IO event listeners for real-time updates
-function setupSocketListeners() {
+function setupSocketListeners(retryCount = 0) {
+  const maxRetries = 10;
+  
   if (!window.socket) {
-    console.warn('Socket.IO not available, real-time updates disabled');
+    if (retryCount < maxRetries) {
+      // Retry after a short delay - Socket.IO may still be loading
+      setTimeout(() => setupSocketListeners(retryCount + 1), 200);
+      return;
+    }
+    console.warn('Socket.IO not available after retries, real-time updates disabled');
     return;
   }
   
@@ -1563,8 +3723,9 @@ function setupSocketListeners() {
   // Setup listeners for each event
   eventsToMonitor.forEach(eventName => {
     window.socket.on(eventName, (data) => {
-      console.log(`${eventName} event received, reloading tables`);
-      loadTables();
+      console.log(`${eventName} event received, invalidating cache and reloading tables`);
+      invalidateEventsCache();
+      loadTables(true);
     });
   });
 }
@@ -2015,4 +4176,69 @@ function showMessage(message, type = 'info') {
 
 // ========= END ADD TO CALENDAR FUNCTIONALITY =========
 
+// ========================================
+// CLIENT FILTERING FUNCTIONALITY
+// ========================================
+
+function filterByClient(clientName) {
+  console.log('Filtering by client:', clientName);
+  
+  if (!clientName) {
+    // Clear filter if no client name provided
+    clientFilter = null;
+  } else {
+    clientFilter = clientName;
+  }
+  
+  // Update UI to show active filter
+  updateClientFilterDisplay();
+  
+  // Reload events with filter applied
+  loadTables();
+}
+
+function clearClientFilter() {
+  clientFilter = null;
+  updateClientFilterDisplay();
+  loadTables();
+}
+
+function updateClientFilterDisplay() {
+  const headerFilters = document.querySelector('.events-filters');
+  if (!headerFilters) return;
+  
+  // Remove existing client filter badge if any
+  const existingBadge = document.getElementById('clientFilterBadge');
+  if (existingBadge) {
+    existingBadge.remove();
+  }
+  
+  // Add new badge if filter is active
+  if (clientFilter) {
+    const badge = document.createElement('div');
+    badge.id = 'clientFilterBadge';
+    badge.className = 'filter-badge';
+    badge.innerHTML = `
+      <span class="material-symbols-outlined">business</span>
+      <span>${clientFilter}</span>
+      <button onclick="clearClientFilter(); event.stopPropagation();" title="Clear client filter">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    `;
+    
+    // Insert before the create event button
+    const createBtn = document.getElementById('createEventBtn');
+    if (createBtn) {
+      headerFilters.insertBefore(badge, createBtn);
+    } else {
+      headerFilters.appendChild(badge);
+    }
+  }
+}
+
+// Make functions globally available
+window.filterByClient = filterByClient;
+window.clearClientFilter = clearClientFilter;
+
 })();
+

@@ -81,55 +81,6 @@
     border-color: #b0101e;
 }
 
-/* Top bar icon buttons container */
-.top-bar-icons {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-/* Icon buttons (timesheet, logout) */
-.top-bar .icon-btn {
-    width: 40px !important;
-    height: 40px !important;
-    min-width: 40px !important;
-    max-width: 40px !important;
-    border-radius: 50% !important;
-    border: 1.5px solid #e0e0e0;
-    background: #fff;
-    color: #666;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    padding: 0 !important;
-    text-transform: none !important;
-}
-
-.top-bar .icon-btn:hover {
-    background: #f5f5f5;
-    border-color: #ccc;
-    color: #333;
-}
-
-.top-bar .icon-btn .material-symbols-outlined {
-    font-size: 22px;
-}
-
-/* Logout icon button special styling */
-.top-bar .icon-btn.logout-btn {
-    background: #fff0f0;
-    color: #d11a2a;
-    border-color: #ffcdd2;
-}
-
-.top-bar .icon-btn.logout-btn:hover {
-    background: #d11a2a;
-    color: #fff;
-    border-color: #d11a2a;
-}
-
 /* Top bar rows */
 .top-bar .welcome-row {
     padding-bottom: 8px;
@@ -154,13 +105,11 @@
     justify-content: center;
 }
 
-/* Admin buttons and utility buttons in top bar */
+/* Admin buttons in top bar */
 .top-bar .btn-admin.btn-outlined,
 .top-bar .btn-inventory.btn-outlined,
 .top-bar .btn-crew-planner.btn-outlined,
-.top-bar .btn-crew-calendar.btn-outlined,
-.top-bar .btn-call-times.btn-outlined,
-.top-bar .btn-flights.btn-outlined {
+.top-bar .btn-crew-calendar.btn-outlined {
     font-size: 14px;
     padding: 8px 16px;
     white-space: nowrap;
@@ -189,14 +138,6 @@
     align-items: center;
     justify-content: center;
     width: 100%;
-}
-
-.events-header-row2 .create-filter-group {
-    display: flex;
-    flex-direction: row;
-    gap: 10px;
-    align-items: center;
-    justify-content: center;
 }
 
 .events-header-row2 .sort-search-group {
@@ -781,119 +722,7 @@
   /* Add any button styles here that were previously global */
 }
 
-/* Calendar View Styles */
-#calendarViewContainer {
-  background: #fff;
-  border-radius: 22px;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.10);
-  padding: 32px 18px 32px 18px;
-  max-width: 900px;
-  margin: 0 auto 32px auto;
-  min-height: 320px;
-  animation: modalPopIn 0.28s cubic-bezier(.4,1.4,.6,1) both;
-}
-
-.btn-calendar-toggle {
-  background: transparent !important;
-  border: none !important;
-  color: #CC0007 !important;
-  border-radius: 10px;
-  padding: 10px !important;
-  display: flex;
-  align-items: center;
-  gap: 0;
-  font-weight: 600;
-  font-size: 22px !important;
-  box-shadow: none !important;
-  cursor: pointer;
-  transition: color 0.2s;
-}
-.btn-calendar-toggle i[data-lucide] {
-  font-size: 1.5em;
-  color: inherit;
-}
-.btn-calendar-toggle:hover,
-.btn-calendar-toggle:focus {
-  background: transparent !important;
-  color: #a30006 !important;
-  box-shadow: none !important;
-}
-
-#calendarViewContainer .calendar-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 18px;
-}
-
-#calendarViewContainer .calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 8px;
-  background: linear-gradient(135deg, #fff 60%, #f8fafd 100%);
-  border-radius: 18px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.09);
-  padding: 18px;
-  margin-bottom: 18px;
-}
-
-#calendarViewContainer .calendar-day {
-  position: relative;
-  min-height: 60px;
-  border-radius: 10px;
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(204,0,7,0.04);
-  padding: 4px 4px 2px 4px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: flex-start;
-  cursor: pointer;
-  transition: background 0.15s, box-shadow 0.15s;
-}
-#calendarViewContainer .calendar-day:hover {
-  background: #f8fafd;
-}
-#calendarViewContainer .calendar-day-num {
-  position: relative;
-  z-index: 3;
-  font-weight: bold;
-  color: #CC0007;
-  margin-bottom: 2px;
-}
-#calendarViewContainer .calendar-event-pill {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 100%;
-  min-width: 0;
-  z-index: 2;
-  background: #CC0007;
-  color: #fff;
-  border-radius: 6px;
-  padding: 2px 6px;
-  margin: 2px 0;
-  font-size: 0.95em;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 2px 8px rgba(204,0,7,0.08);
-  transition: background 0.15s;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  position: relative;
-  border: 2px solid #fff;
-  opacity: 0.96;
-  pointer-events: auto;
-  grid-row: auto;
-}
-#calendarViewContainer .calendar-event-pill:hover {
-  background: #a30006;
-  opacity: 1;
-}
-#calendarViewContainer .calendar-event-pill[title] {
-  cursor: pointer;
-}
+/* Calendar View Styles - Now handled by theme-dark.css */
 
 @media (max-width: 600px) {
   .top-bar {
@@ -920,17 +749,11 @@
     flex: 1;
     min-width: 0;
   }
-  .top-bar-icons {
-    gap: 6px !important;
-  }
-  
-  .top-bar .icon-btn {
-    width: 36px !important;
-    height: 36px !important;
-  }
-  
-  .top-bar .icon-btn .material-symbols-outlined {
-    font-size: 20px !important;
+  .top-bar button.logout-btn {
+    font-size: 11px !important;
+    padding: 6px 10px !important;
+    border-radius: 6px !important;
+    flex-shrink: 0;
   }
   
   /* Admin buttons container on mobile */
@@ -939,21 +762,11 @@
     flex-shrink: 0;
   }
   
-  /* Admin buttons container - 3 column grid on mobile for admins */
-  body.admin-user .top-bar #adminButtonsContainer {
-    display: grid !important;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 6px;
-    width: 100%;
-  }
-  
-  /* Admin buttons and utility buttons on mobile - make them more compact */
+  /* Admin buttons on mobile - make them more compact */
   .top-bar .btn-admin.btn-outlined,
   .top-bar .btn-inventory.btn-outlined,
   .top-bar .btn-crew-planner.btn-outlined,
-  .top-bar .btn-crew-calendar.btn-outlined,
-  .top-bar .btn-call-times.btn-outlined,
-  .top-bar .btn-flights.btn-outlined {
+  .top-bar .btn-crew-calendar.btn-outlined {
     font-size: 10px !important;
     padding: 6px 8px !important;
     border-radius: 6px !important;
@@ -965,20 +778,6 @@
     flex-direction: column;
     align-items: stretch;
     gap: 8px;
-  }
-  .events-header-row2 .create-filter-group {
-    flex-direction: row;
-    gap: 8px;
-    width: 100%;
-    order: -1; /* Put this group first on mobile */
-  }
-  .events-header-row2 .create-filter-group #timeFilterDropdown {
-    flex: 1 1 0;
-    min-width: 0;
-  }
-  .events-header-row2 .create-filter-group .btn-create {
-    flex: 1 1 0;
-    min-width: 0;
   }
   .events-header-row2 .sort-search-group {
     flex-direction: row;
@@ -1014,9 +813,7 @@
   .top-bar .btn-admin.btn-outlined,
   .top-bar .btn-inventory.btn-outlined,
   .top-bar .btn-crew-planner.btn-outlined,
-  .top-bar .btn-crew-calendar.btn-outlined,
-  .top-bar .btn-call-times.btn-outlined,
-  .top-bar .btn-flights.btn-outlined {
+  .top-bar .btn-crew-calendar.btn-outlined {
     padding: 6px !important;
     font-size: 0 !important;
   }
@@ -1028,37 +825,15 @@
   
   .top-bar .btn-inventory.btn-outlined .material-symbols-outlined,
   .top-bar .btn-crew-planner.btn-outlined .material-symbols-outlined,
-  .top-bar .btn-crew-calendar.btn-outlined .material-symbols-outlined,
-  .top-bar .btn-call-times.btn-outlined .material-symbols-outlined,
-  .top-bar .btn-flights.btn-outlined .material-symbols-outlined {
+  .top-bar .btn-crew-calendar.btn-outlined .material-symbols-outlined {
     font-size: 16px !important;
     margin: 0 !important;
   }
   
   .top-bar .btn-inventory.btn-outlined span:not(.material-symbols-outlined),
   .top-bar .btn-crew-planner.btn-outlined span:not(.material-symbols-outlined),
-  .top-bar .btn-crew-calendar.btn-outlined span:not(.material-symbols-outlined),
-  .top-bar .btn-call-times.btn-outlined span:not(.material-symbols-outlined),
-  .top-bar .btn-flights.btn-outlined span:not(.material-symbols-outlined) {
+  .top-bar .btn-crew-calendar.btn-outlined span:not(.material-symbols-outlined) {
     display: none;
-  }
-  
-  /* For non-admin users, show full text on Call Times and Flights buttons (they have plenty of space) */
-  body:not(.admin-user) .top-bar .btn-call-times.btn-outlined,
-  body:not(.admin-user) .top-bar .btn-flights.btn-outlined {
-    padding: 6px 12px !important;
-    font-size: 13px !important;
-  }
-  
-  body:not(.admin-user) .top-bar .btn-call-times.btn-outlined .material-symbols-outlined,
-  body:not(.admin-user) .top-bar .btn-flights.btn-outlined .material-symbols-outlined {
-    font-size: 18px !important;
-    margin-right: 4px !important;
-  }
-  
-  body:not(.admin-user) .top-bar .btn-call-times.btn-outlined span:not(.material-symbols-outlined),
-  body:not(.admin-user) .top-bar .btn-flights.btn-outlined span:not(.material-symbols-outlined) {
-    display: inline !important;
   }
 }
 

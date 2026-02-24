@@ -50,6 +50,20 @@
     });
     connected = true;
     
+    // Join user-specific room for targeted notifications
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (payload.id) {
+          socket.emit('joinUserRoom', payload.id);
+          console.log('🔔 Joined user notification room:', payload.id);
+        }
+      } catch (e) {
+        console.warn('🔔 Could not parse token for notification room:', e.message);
+      }
+    }
+    
     // Notify the UI if needed
     if (window.updateConnectionStatus) {
       window.updateConnectionStatus(true);
@@ -152,7 +166,10 @@
     TASK_ADDED: 'taskAdded',
     TASK_UPDATED: 'taskUpdated',
     TASK_DELETED: 'taskDeleted',
-    TASKS_CHANGED: 'tasksChanged'
+    TASKS_CHANGED: 'tasksChanged',
+    
+    // Notification events
+    NEW_NOTIFICATION: 'new-notification'
   };
   
   // Attach common Socket.IO event listeners that can be used by many pages
@@ -177,12 +194,9 @@
     
     // Each page script should implement its own handler for this event
     // if this page is displaying the schedule
-    // Only call loadPrograms if we're on the schedule page
-    if (window.loadPrograms && currentEventId && window.currentPage === 'schedule') {
+    if (window.loadPrograms && currentEventId) {
       console.log('Reloading schedule for current event');
       window.loadPrograms(currentEventId);
-    } else if (window.loadPrograms && currentEventId) {
-      console.log('loadPrograms exists but not on schedule page, skipping reload');
     }
   });
   

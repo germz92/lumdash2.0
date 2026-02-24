@@ -1,22 +1,76 @@
+// Detect when Material Symbols font is loaded to prevent FOUT
+(function detectFontLoaded() {
+  // If already has the class, don't re-run
+  if (document.documentElement.classList.contains('fonts-loaded')) {
+    return;
+  }
+  
+  // Check if fonts are already loaded
+  if (document.fonts && document.fonts.check('24px "Material Symbols Outlined"')) {
+    document.documentElement.classList.add('fonts-loaded');
+    return;
+  }
+  
+  // Use Font Loading API if available
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(function() {
+      document.documentElement.classList.add('fonts-loaded');
+    });
+    
+    // Also check periodically as a backup
+    let checkCount = 0;
+    const checkInterval = setInterval(function() {
+      checkCount++;
+      if (document.fonts.check('24px "Material Symbols Outlined"') || checkCount > 20) {
+        document.documentElement.classList.add('fonts-loaded');
+        clearInterval(checkInterval);
+      }
+    }, 50);
+  } else {
+    // Fallback: add class after a short delay
+    setTimeout(function() {
+      document.documentElement.classList.add('fonts-loaded');
+    }, 300);
+  }
+})();
+
 // Environment config
 const ENVIRONMENTS = {
   development: {
     API_BASE: 'http://localhost:3000',
   },
+  beta: {
+    // Beta backend on Render
+    API_BASE: 'https://lumdash2-0.onrender.com', 
+  },
   production: {
-    // Make sure to include www if that's how the site is accessed
+    // Production backend on Render
     API_BASE: 'https://spa-lumdash-backend.onrender.com', 
   }
 };
 
-// Detect environment
-const isProduction = window.location.hostname !== 'localhost' && 
-                     !window.location.hostname.includes('127.0.0.1');
+// Detect environment based on hostname
+function detectEnvironment() {
+  const hostname = window.location.hostname.toLowerCase();
+  
+  // Development: localhost or 127.0.0.1
+  if (hostname === 'localhost' || hostname.includes('127.0.0.1')) {
+    return 'development';
+  }
+  
+  // Beta: beta.lumdash.app or any beta subdomain
+  if (hostname.startsWith('beta.') || hostname.includes('beta')) {
+    return 'beta';
+  }
+  
+  // Production: everything else (lumdash.app, www.lumdash.app, etc.)
+  return 'production';
+}
 
-// Set the API base URL
-const API_BASE = isProduction ? ENVIRONMENTS.production.API_BASE : ENVIRONMENTS.development.API_BASE;
+const CURRENT_ENV = detectEnvironment();
+const API_BASE = ENVIRONMENTS[CURRENT_ENV].API_BASE;
 
-console.log(`[config.js] Running in ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'} mode`);
+console.log(`[config.js] Running in ${CURRENT_ENV.toUpperCase()} mode`);
 console.log(`[config.js] Hostname: ${window.location.hostname}`);
 console.log(`[config.js] API_BASE set to: ${API_BASE}`);
 
@@ -43,8 +97,8 @@ function checkAndUpdateVersion() {
       // Clear caches and update version
       localStorage.setItem('appVersion', CURRENT_VERSION);
       
-      // Force hard refresh for new version
-      if (window.location.hostname !== 'localhost') {
+      // Force hard refresh for new version (skip in development)
+      if (CURRENT_ENV !== 'development') {
         console.log('🔄 Forcing hard refresh for version update...');
         window.location.reload(true);
         return false;
@@ -88,7 +142,11 @@ console.log('✅ Config loaded - Version:', window.LUMDASH_VERSION);
     pathname.endsWith('/register.html') || // ✅ Allow registration page
     pathname.endsWith('/reset-password.html') || // ✅ Allow reset password page
     pathname.endsWith('/dashboard.html') || // ✅ Allow dashboard to load SPA
-    pathname.endsWith('/shared-schedule.html') || // ✅ Allow public shared schedule page
+    pathname.endsWith('/inventory-management.html') || // ✅ Allow inventory page
+    pathname.endsWith('/crew-planner.html') || // ✅ Allow crew planner page
+    pathname.endsWith('/crew-calendar.html') || // ✅ Allow crew calendar page
+    pathname.endsWith('/event-calendar.html') || // ✅ Allow event calendar page
+    pathname.endsWith('/users.html') || // ✅ Allow users/admin page
     pathname === '/' ||
     pathname === '' ||
     window.location.href.toLowerCase().endsWith('/');
@@ -126,9 +184,11 @@ console.log('✅ Config loaded - Version:', window.LUMDASH_VERSION);
 })();
 
 window.API_BASE = API_BASE;
+window.CURRENT_ENV = CURRENT_ENV;
 
 // TinyMCE Configuration
 const TINYMCE_API_KEY = 'fas4afhgpg6cpjqy95m2culn60eo1xzhsk3riraqhhlrk8pv';
 
 // Make TinyMCE API key globally accessible
 window.TINYMCE_API_KEY = TINYMCE_API_KEY;
+window.OPENWEATHER_API_KEY = 'bb0782c87e76343d9c02574bec1333a3';

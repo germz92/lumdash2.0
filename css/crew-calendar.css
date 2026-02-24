@@ -270,6 +270,24 @@ body.crew-calendar-page {
   background: linear-gradient(135deg, #28a745, #1e7e34);
 }
 
+.crew-count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 3px 10px;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1;
+}
+
+.crew-count-badge .material-symbols-outlined {
+  font-size: 14px;
+}
+
 .day-content {
   padding: 12px;
   min-height: 200px;

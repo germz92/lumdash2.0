@@ -331,11 +331,7 @@
 }
 
 /* ====== Buttons ====== */
-/* Only apply to light theme general page (not dark theme) */
-.general-page:not(.dark-theme) .add-row-btn, 
-.general-page:not(.dark-theme) .save-button-container button, 
-.general-page:not(.dark-theme) > form button,
-.general-page:not(.dark-theme) > form .add-row-btn {
+.general-page .add-row-btn, .general-page .save-button-container button, .general-page button {
   margin-top: 0.5rem;
   padding: 0.4rem 0.8rem;
   background-color: #CC0007;
@@ -349,9 +345,7 @@
   font-size: 0.95rem;
 }
 
-.general-page:not(.dark-theme) .add-row-btn:hover, 
-.general-page:not(.dark-theme) .save-button-container button:hover, 
-.general-page:not(.dark-theme) > form button:hover {
+.general-page .add-row-btn:hover, .general-page .save-button-container button:hover, .general-page button:hover {
   background: rgb(170, 3, 8);
 }
 
@@ -408,19 +402,17 @@
     font-size: 1.1rem;
     margin-bottom: 0.7rem;
   }
-  .general-page:not(.dark-theme) .add-row-btn, 
-  .general-page:not(.dark-theme) .save-button-container button, 
-  .general-page:not(.dark-theme) > form button {
+  .general-page .add-row-btn, .general-page .save-button-container button, .general-page button {
     padding: 0.5rem 0.8rem;
     font-size: 16px;
   }
   .general-page .contacts-container table {
     min-width: 650px !important;
   }
-  .general-page:not(.dark-theme) input,
-  .general-page:not(.dark-theme) textarea,
-  .general-page:not(.dark-theme) select,
-  .general-page:not(.dark-theme) > form button {
+  .general-page input,
+  .general-page textarea,
+  .general-page select,
+  .general-page button {
     font-size: 16px !important;
   }
   .general-page .info-section textarea,

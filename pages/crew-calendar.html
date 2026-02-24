@@ -5,654 +5,72 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Crew Calendar - LumDash</title>
     <link rel="icon" href="../assets/favicon.png" type="image/png">
-    <!-- Preconnect for faster font loading -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:400,500,600,700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="../css/general.css">
-    <link rel="stylesheet" href="../css/theme-dark.css">
+    <link rel="stylesheet" href="../css/crew-calendar.css">
     <script src="../js/config.js"></script>
     <script src="../js/api.js"></script>
-    <script src="../js/sidebar-dashboard.js"></script>
-    <style>
-      /* Crew Calendar Dark Theme Styles */
-      .crew-calendar-dark {
-        font-family: var(--font-family);
-        background: var(--bg-primary);
-        color: var(--text-primary);
-        min-height: 100vh;
-        display: flex;
-        overflow-x: hidden;
-      }
-
-      /* Sidebar - uses global styles from theme-dark.css */
-
-      /* Main Content */
-      .crew-calendar-dark .main-content {
-        flex: 1;
-        margin-left: var(--sidebar-width);
-        padding: 32px;
-        overflow-y: auto;
-        min-height: 100vh;
-      }
-
-      /* Page Header - Dashboard Style */
-      .crew-calendar-dark .page-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 20px 24px;
-        background: #111111;
-        border-bottom: 1px solid var(--border-subtle);
-        margin: -32px -32px 24px -32px;
-        flex-wrap: wrap;
-        gap: 16px;
-      }
-
-      .crew-calendar-dark .page-header-left {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      }
-
-      .crew-calendar-dark .page-header h1 {
-        font-size: var(--font-size-lg);
-        font-weight: var(--font-weight-semibold);
-        color: var(--text-primary);
-        margin: 0;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-
-      .crew-calendar-dark .page-header h1 .material-symbols-outlined {
-        font-size: 22px;
-        color: var(--brand-red);
-      }
-
-      .crew-calendar-dark .page-header p {
-        color: var(--text-tertiary);
-        font-size: var(--font-size-sm);
-        margin: 0;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-      }
-
-      .crew-calendar-dark .page-header-right {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-
-      .crew-calendar-dark .header-search {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        background: var(--bg-tertiary);
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-md);
-        padding: 8px 12px;
-        min-width: 200px;
-        transition: var(--transition-base);
-      }
-
-      .crew-calendar-dark .header-search:focus-within {
-        border-color: var(--brand-red);
-        box-shadow: 0 0 0 3px var(--brand-red-muted);
-      }
-
-      .crew-calendar-dark .header-search .material-symbols-outlined {
-        color: var(--text-tertiary);
-        font-size: 20px;
-      }
-
-      .crew-calendar-dark .header-search input {
-        background: transparent;
-        border: none;
-        color: var(--text-primary);
-        font-size: var(--font-size-sm);
-        width: 100%;
-        outline: none;
-      }
-
-      .crew-calendar-dark .header-search input::placeholder {
-        color: var(--text-tertiary);
-      }
-
-      /* Calendar Controls */
-      .crew-calendar-dark .calendar-controls {
-        background: var(--surface-card);
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-lg);
-        padding: 20px;
-        margin-bottom: 24px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 20px;
-      }
-
-      .crew-calendar-dark .week-navigation {
-        display: flex;
-        align-items: center;
-        gap: 20px;
-        flex: 1;
-      }
-
-      .crew-calendar-dark .btn-nav {
-        background: var(--bg-tertiary);
-        color: var(--text-primary);
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-md);
-        padding: 10px 20px;
-        font-size: var(--font-size-base);
-        font-weight: var(--font-weight-semibold);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        transition: var(--transition-base);
-      }
-
-      .crew-calendar-dark .btn-nav:hover {
-        background: var(--bg-elevated);
-        border-color: var(--border-strong);
-        transform: translateY(-1px);
-      }
-
-      .crew-calendar-dark .current-week-display {
-        flex: 1;
-        text-align: center;
-        font-size: var(--font-size-lg);
-        font-weight: var(--font-weight-semibold);
-        color: var(--text-primary);
-        min-width: 0;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-
-      .crew-calendar-dark .calendar-actions {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-      }
-
-      .crew-calendar-dark .btn-today {
-        background: var(--bg-tertiary);
-        color: var(--text-primary);
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-md);
-        padding: 10px 18px;
-        font-size: var(--font-size-base);
-        font-weight: var(--font-weight-semibold);
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        transition: var(--transition-base);
-      }
-
-      .crew-calendar-dark .btn-today:hover {
-        background: var(--bg-elevated);
-        border-color: var(--border-strong);
-      }
-
-      .crew-calendar-dark .week-picker {
-        padding: 10px 15px;
-        font-size: var(--font-size-base);
-        background: var(--surface-input);
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-md);
-        color: var(--text-primary);
-        cursor: pointer;
-        transition: var(--transition-base);
-      }
-
-      .crew-calendar-dark .week-picker:focus {
-        outline: none;
-        border-color: var(--brand-red);
-        box-shadow: 0 0 0 3px var(--brand-red-muted);
-      }
-
-      .crew-calendar-dark .week-picker::-webkit-calendar-picker-indicator {
-        filter: invert(1);
-        cursor: pointer;
-      }
-
-      /* Loading Indicator */
-      .crew-calendar-dark .loading-indicator {
-        text-align: center;
-        padding: 80px 20px;
-      }
-
-      .crew-calendar-dark .spinner {
-        border: 4px solid var(--border-default);
-        border-top: 4px solid var(--brand-red);
-        border-radius: 50%;
-        width: 50px;
-        height: 50px;
-        animation: spin 1s linear infinite;
-        margin: 0 auto 20px;
-      }
-
-      @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-      }
-
-      .crew-calendar-dark .loading-indicator p {
-        color: var(--text-tertiary);
-        font-size: var(--font-size-md);
-      }
-
-      /* Calendar Grid */
-      .crew-calendar-dark .calendar-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-        gap: 16px;
-        margin-bottom: 40px;
-      }
-
-      .crew-calendar-dark .day-column {
-        background: var(--surface-card);
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-lg);
-        overflow: hidden;
-        transition: var(--transition-base);
-      }
-
-      .crew-calendar-dark .day-column:hover {
-        transform: translateY(-4px);
-        box-shadow: var(--shadow-lg);
-        border-color: var(--border-strong);
-      }
-
-      .crew-calendar-dark .day-header {
-        background: var(--bg-elevated);
-        color: var(--text-secondary);
-        padding: 16px;
-        text-align: center;
-        border-bottom: 1px solid var(--border-default);
-      }
-
-      .crew-calendar-dark .day-header.today {
-        background: var(--bg-tertiary);
-        color: var(--text-primary);
-        border-bottom: 2px solid var(--status-live);
-      }
-
-      .crew-calendar-dark .day-name {
-        font-size: var(--font-size-sm);
-        font-weight: var(--font-weight-semibold);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        margin-bottom: 4px;
-        opacity: 0.9;
-      }
-
-      .crew-calendar-dark .day-date {
-        font-size: var(--font-size-xl);
-        font-weight: var(--font-weight-bold);
-      }
-
-      .crew-calendar-dark .crew-count-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        margin-top: 6px;
-        padding: 3px 10px;
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 999px;
-        font-size: var(--font-size-xs);
-        font-weight: var(--font-weight-semibold);
-        color: var(--text-secondary);
-        line-height: 1;
-      }
-
-      .crew-calendar-dark .crew-count-badge .material-symbols-outlined {
-        font-size: 14px;
-      }
-
-      .crew-calendar-dark .day-header.today .crew-count-badge {
-        background: rgba(255, 255, 255, 0.15);
-        color: var(--text-primary);
-      }
-
-      .crew-calendar-dark .day-content {
-        padding: 12px;
-        min-height: 200px;
-        max-height: 600px;
-        overflow-y: auto;
-      }
-
-      .crew-calendar-dark .day-content::-webkit-scrollbar {
-        width: 6px;
-      }
-
-      .crew-calendar-dark .day-content::-webkit-scrollbar-track {
-        background: var(--bg-tertiary);
-        border-radius: 10px;
-      }
-
-      .crew-calendar-dark .day-content::-webkit-scrollbar-thumb {
-        background: var(--border-strong);
-        border-radius: 10px;
-      }
-
-      .crew-calendar-dark .day-content::-webkit-scrollbar-thumb:hover {
-        background: var(--text-tertiary);
-      }
-
-      .crew-calendar-dark .event-group {
-        margin-bottom: 12px;
-        padding: 12px;
-        border-radius: var(--radius-md);
-        border-left: 4px solid;
-        background: var(--bg-elevated);
-        transition: var(--transition-base);
-        cursor: pointer;
-      }
-
-      .crew-calendar-dark .event-group:hover {
-        transform: translateX(4px);
-        box-shadow: var(--shadow-md);
-      }
-
-      .crew-calendar-dark .event-title {
-        font-weight: var(--font-weight-semibold);
-        font-size: var(--font-size-sm);
-        margin-bottom: 8px;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        color: var(--text-primary);
-        word-break: break-word;
-        flex-wrap: wrap;
-      }
-
-      .crew-calendar-dark .event-title .material-symbols-outlined {
-        font-size: 18px;
-      }
-
-      .crew-calendar-dark .archived-badge {
-        background: var(--bg-active);
-        color: var(--text-secondary);
-        font-size: var(--font-size-xs);
-        padding: 2px 6px;
-        border-radius: var(--radius-xs);
-        font-weight: var(--font-weight-medium);
-      }
-
-      .crew-calendar-dark .crew-member {
-        padding: 8px 10px;
-        margin-bottom: 6px;
-        background: var(--bg-tertiary);
-        border-radius: var(--radius-sm);
-        font-size: var(--font-size-sm);
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-      }
-
-      .crew-calendar-dark .crew-member:last-child {
-        margin-bottom: 0;
-      }
-
-      .crew-calendar-dark .crew-name {
-        font-weight: var(--font-weight-semibold);
-        color: var(--text-primary);
-        word-break: break-word;
-      }
-
-      .crew-calendar-dark .crew-role {
-        color: var(--text-tertiary);
-        font-size: var(--font-size-xs);
-        word-break: break-word;
-      }
-
-      .crew-calendar-dark .crew-member .material-symbols-outlined {
-        font-size: 16px;
-        color: var(--text-tertiary);
-      }
-
-      .crew-calendar-dark .no-crew {
-        text-align: center;
-        color: var(--text-muted);
-        font-style: italic;
-        padding: 40px 10px;
-      }
-
-      /* Empty State */
-      .crew-calendar-dark .empty-state {
-        text-align: center;
-        padding: 80px 20px;
-      }
-
-      .crew-calendar-dark .empty-state .material-symbols-outlined {
-        font-size: 80px;
-        color: var(--text-muted);
-        margin-bottom: 20px;
-      }
-
-      .crew-calendar-dark .empty-state p {
-        color: var(--text-tertiary);
-        font-size: var(--font-size-lg);
-      }
-
-      /* User Menu Dropdown */
-      .crew-calendar-dark .user-menu-dropdown {
-        position: fixed;
-        background: var(--surface-modal);
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-lg);
-        min-width: 200px;
-        box-shadow: var(--shadow-xl);
-        z-index: 1000;
-        display: none;
-        overflow: hidden;
-      }
-
-      .crew-calendar-dark .user-menu-dropdown.show {
-        display: block;
-      }
-
-      .crew-calendar-dark .user-menu-item {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        padding: 12px 16px;
-        color: var(--text-secondary);
-        text-decoration: none;
-        font-size: var(--font-size-sm);
-        transition: var(--transition-base);
-        cursor: pointer;
-        border: none;
-        background: none;
-        width: 100%;
-        text-align: left;
-      }
-
-      .crew-calendar-dark .user-menu-item:hover {
-        background: var(--bg-hover);
-        color: var(--text-primary);
-      }
-
-      .crew-calendar-dark .user-menu-item.danger {
-        color: var(--accent-red);
-      }
-
-      .crew-calendar-dark .user-menu-item.danger:hover {
-        background: rgba(239, 68, 68, 0.1);
-      }
-
-      /* Mobile Responsive */
-      @media (max-width: 768px) {
-        .crew-calendar-dark .dashboard-sidebar {
-          display: none;
-        }
-
-        .crew-calendar-dark .main-content {
-          margin-left: 0;
-          padding: 20px;
-        }
-
-        .crew-calendar-dark .calendar-controls {
-          flex-direction: column;
-          align-items: stretch;
-        }
-
-        .crew-calendar-dark .week-navigation {
-          flex-direction: column;
-          width: 100%;
-          gap: 12px;
-        }
-
-        .crew-calendar-dark .btn-nav {
-          width: 100%;
-          justify-content: center;
-        }
-
-        .crew-calendar-dark .current-week-display {
-          white-space: normal;
-          word-break: break-word;
-        }
-
-        .crew-calendar-dark .calendar-actions {
-          width: 100%;
-          justify-content: space-between;
-        }
-
-        .crew-calendar-dark .calendar-grid {
-          grid-template-columns: 1fr;
-        }
-
-        .crew-calendar-dark .page-header {
-          padding: 16px 20px;
-          margin: -20px -20px 20px -20px;
-          flex-direction: column;
-          align-items: stretch;
-        }
-
-        .crew-calendar-dark .page-header h1 {
-          font-size: var(--font-size-base);
-        }
-
-        .crew-calendar-dark .page-header h1 .material-symbols-outlined {
-          font-size: 20px;
-        }
-
-        .crew-calendar-dark .header-search {
-          min-width: 100%;
-        }
-      }
-    </style>
 </head>
-<body class="crew-calendar-dark">
-    <!-- Sidebar Container - will be populated by sidebar-dashboard.js -->
-    <div id="sidebarContainer"></div>
+<body class="crew-calendar-page">
+    <!-- Back button -->
+    <button class="back-btn" onclick="window.location.href='../dashboard.html#events'">
+        <span class="material-symbols-outlined">arrow_back</span>
+        Back to Events
+    </button>
 
-    <!-- Main Content -->
-    <main class="main-content">
-      <div class="page-header">
-        <div class="page-header-left">
-          <h1>
+    <div class="container">
+        <div class="header">
+            <h1>Crew Calendar</h1>
+            <p>Weekly view of crew assignments across all events</p>
+        </div>
+
+        <!-- Navigation Controls -->
+        <div class="calendar-controls">
+            <div class="week-navigation">
+                <button id="prevWeekBtn" class="btn-nav">
+                    <span class="material-symbols-outlined">chevron_left</span>
+                    Previous Week
+                </button>
+                
+                <div class="current-week-display">
+                    <span id="currentWeekRange">Loading...</span>
+                </div>
+                
+                <button id="nextWeekBtn" class="btn-nav">
+                    Next Week
+                    <span class="material-symbols-outlined">chevron_right</span>
+                </button>
+            </div>
+            
+            <div class="calendar-actions">
+                <button id="todayBtn" class="btn-today">
+                    <span class="material-symbols-outlined">today</span>
+                    Today
+                </button>
+                <input type="date" id="weekPicker" class="week-picker" title="Jump to specific week">
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loadingIndicator" class="loading-indicator">
+            <div class="spinner"></div>
+            <p>Loading crew assignments...</p>
+        </div>
+
+        <!-- Calendar Grid -->
+        <div id="calendarGrid" class="calendar-grid" style="display: none;">
+            <!-- Days will be dynamically generated -->
+        </div>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="empty-state" style="display: none;">
             <span class="material-symbols-outlined">calendar_month</span>
-            Crew Calendar
-          </h1>
-          <p>Weekly crew assignments</p>
+            <p>No crew assignments found for this week</p>
         </div>
-        <div class="page-header-right">
-          <div class="header-search">
-            <span class="material-symbols-outlined">search</span>
-            <input type="text" id="searchCrewInput" placeholder="Search crew...">
-          </div>
-        </div>
-      </div>
-
-      <!-- Navigation Controls -->
-      <div class="calendar-controls">
-        <div class="week-navigation">
-          <button id="prevWeekBtn" class="btn-nav">
-            <span class="material-symbols-outlined">chevron_left</span>
-            Previous Week
-          </button>
-          
-          <div class="current-week-display">
-            <span id="currentWeekRange">Loading...</span>
-          </div>
-          
-          <button id="nextWeekBtn" class="btn-nav">
-            Next Week
-            <span class="material-symbols-outlined">chevron_right</span>
-          </button>
-        </div>
-        
-        <div class="calendar-actions">
-          <button id="todayBtn" class="btn-today">
-            <span class="material-symbols-outlined">today</span>
-            Today
-          </button>
-          <input type="date" id="weekPicker" class="week-picker" title="Jump to specific week">
-        </div>
-      </div>
-
-      <!-- Loading State -->
-      <div id="loadingIndicator" class="loading-indicator">
-        <div class="spinner"></div>
-        <p>Loading crew assignments...</p>
-      </div>
-
-      <!-- Calendar Grid -->
-      <div id="calendarGrid" class="calendar-grid" style="display: none;">
-        <!-- Days will be dynamically generated -->
-      </div>
-
-      <!-- Empty State -->
-      <div id="emptyState" class="empty-state" style="display: none;">
-        <span class="material-symbols-outlined">calendar_month</span>
-        <p>No crew assignments found for this week</p>
-      </div>
-    </main>
+    </div>
 
     <script src="../js/crew-calendar.js"></script>
-    <script src="../js/chat.js"></script>
-    <script>
-      // Initialize sidebar functionality
-      document.addEventListener('DOMContentLoaded', async function() {
-        // Check admin access first - redirect non-admins
-        const token = localStorage.getItem('token');
-        if (!token) {
-          window.location.href = '/index.html';
-          return;
-        }
-        
-        try {
-          const payload = JSON.parse(atob(token.split('.')[1]));
-          if (payload.role !== 'admin' && payload.role !== 'owner') {
-            alert('Access denied. Admin privileges required.');
-            window.location.href = '/dashboard.html#events';
-            return;
-          }
-        } catch (e) {
-          console.error('Error checking admin access:', e);
-          window.location.href = '/index.html';
-          return;
-        }
-        
-        // Inject the shared sidebar
-        const sidebarContainer = document.getElementById('sidebarContainer');
-        if (sidebarContainer && window.injectDashboardSidebar) {
-          await window.injectDashboardSidebar(sidebarContainer, { 
-            position: 'replace',
-            activePage: 'crew-calendar'
-          });
-        } else if (window.initDashboardSidebar) {
-          window.initDashboardSidebar();
-        }
-      });
-    </script>
 </body>
 </html>
+

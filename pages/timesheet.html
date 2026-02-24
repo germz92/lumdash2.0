@@ -1,0 +1,178 @@
+<!-- Google Fonts Roboto -->
+<link href="https://fonts.googleapis.com/css?family=Roboto:400,500,700&display=swap" rel="stylesheet">
+<!-- Add Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+
+<div class="timesheet-page">
+  <!-- Header with title only -->
+  <div class="timesheet-header">
+    <div class="header-top">
+      <button id="backBtn" class="btn-back" title="Back to Events">
+        <span class="material-symbols-outlined">arrow_back</span>
+      </button>
+      <h1>My Timesheet</h1>
+      <button id="editModeBtn" class="btn-edit-mode">
+        <span class="material-symbols-outlined">edit</span>
+        Edit
+      </button>
+    </div>
+    
+    <div class="timesheet-summary-inline">
+      <div class="summary-info">
+        <span class="summary-label">Hours:</span>
+        <span class="summary-value" id="monthlyHours">0</span>
+      </div>
+      <div class="filter-dropdown">
+        <select id="periodFilter">
+          <option value="this_month">This Month</option>
+          <option value="last_month">Last Month</option>
+          <option value="past_3_months">Past 3 Months</option>
+          <option value="this_year">This Year</option>
+          <option value="custom">Custom...</option>
+        </select>
+      </div>
+    </div>
+    
+    <!-- Custom Date Range (hidden by default) -->
+    <div id="customDateRange" class="custom-date-range" style="display: none;">
+      <input type="date" id="customStartDate" placeholder="Start Date">
+      <span class="date-separator">to</span>
+      <input type="date" id="customEndDate" placeholder="End Date">
+      <button id="applyCustomRange" class="btn-apply-range">Apply</button>
+    </div>
+  </div>
+  
+  <!-- Table/Cards Content Area -->
+  <div class="timesheet-table-container">
+    <!-- Desktop Table View -->
+    <table class="timesheet-table" id="timesheetTable">
+      <thead>
+        <tr>
+          <th></th>
+          <th>Date</th>
+          <th>Time</th>
+          <th>Hours</th>
+          <th>Notes</th>
+          <th class="edit-col"></th>
+        </tr>
+      </thead>
+      <tbody id="timesheetBody">
+        <!-- Entries will be populated by JavaScript -->
+      </tbody>
+    </table>
+    
+    <!-- Mobile Card View Container -->
+    <div id="mobileCardsContainer" class="mobile-cards-container"></div>
+    
+    <div id="emptyState" class="empty-state" style="display: none;">
+      <span class="material-symbols-outlined empty-icon">schedule</span>
+      <h3>No Time Entries</h3>
+      <p>Use the buttons below to clock in/out or log travel time</p>
+    </div>
+  </div>
+  
+  <!-- Action Buttons -->
+  <div class="timesheet-actions-footer">
+    <div class="action-group">
+      <button id="clockInBtn" class="btn-action btn-clock-in">
+        <span class="material-symbols-outlined">login</span>
+        Clock In
+      </button>
+      
+      <button id="clockOutBtn" class="btn-action btn-clock-out">
+        <span class="material-symbols-outlined">logout</span>
+        Clock Out
+      </button>
+      
+      <button id="travelBtn" class="btn-action btn-travel">
+        <span class="material-symbols-outlined">flight</span>
+        Travel
+      </button>
+      
+      <button id="manualEntryBtn" class="btn-action btn-manual">
+        <span class="material-symbols-outlined">edit_calendar</span>
+        Manual Entry
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Manual Entry Modal -->
+<div id="manualEntryModal" class="modal" style="display: none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Manual Entry</h3>
+      <button class="close-btn" onclick="closeManualEntryModal()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="manualType">Type</label>
+        <select id="manualType" class="form-select">
+          <option value="clock_in">Clock In</option>
+          <option value="clock_out">Clock Out</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="manualDate">Date</label>
+        <input type="date" id="manualDate" required>
+      </div>
+      <div class="form-group">
+        <label for="manualTime">Time</label>
+        <input type="time" id="manualTime" required>
+      </div>
+      <div class="form-group">
+        <label for="manualNotes">Notes (optional)</label>
+        <input type="text" id="manualNotes" placeholder="Enter notes...">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-outlined" onclick="closeManualEntryModal()">Cancel</button>
+      <button class="btn-primary" id="submitManualEntry">Submit</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Entry Modal (for mobile) -->
+<div id="editEntryModal" class="modal" style="display: none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Edit Entry</h3>
+      <button class="close-btn" onclick="closeEditModal()">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="editType">Type</label>
+        <select id="editType" class="form-select">
+          <option value="clock_in">Clock In</option>
+          <option value="clock_out">Clock Out</option>
+          <option value="travel">Travel</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="editDate">Date</label>
+        <input type="date" id="editDate" required>
+      </div>
+      <div class="form-group" id="editTimeGroup">
+        <label for="editTime">Time</label>
+        <input type="time" id="editTime">
+      </div>
+      <div class="form-group" id="editHoursGroup" style="display: none;">
+        <label for="editHours">Hours</label>
+        <input type="number" id="editHours" step="0.25" min="0" value="4">
+      </div>
+      <div class="form-group">
+        <label for="editNotes">Notes</label>
+        <input type="text" id="editNotes" placeholder="Enter notes...">
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-danger" id="deleteEditEntry">Delete</button>
+      <button class="btn-outlined" onclick="closeEditModal()">Cancel</button>
+      <button class="btn-primary" id="saveEditEntry">Save</button>
+    </div>
+  </div>
+</div>

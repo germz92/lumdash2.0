@@ -10,7 +10,7 @@ window.__cardLogJsLoaded = true;
 
 // 🔥 Global variables
 let users = [];
-let cameras = ["A7IV-A", "A7IV-B", "A7IV-C", "A7IV-D", "A7IV-E", "A7RV-A", "FX3-A", "A7IV", "A7RV", "A7III"];
+let cameras = ["A7IV-A", "A7IV-B", "A7IV-C", "A7IV-D", "A7IV-E", "A7IV-F", "A7IV-G", "A7IV-H", "A7RV-A", "A7RV-B", "A7SIII", "FX3-A", "A7IV", "A7RV", "A7III"];
 let customCameras = []; // Track custom cameras separately
 let isOwner = false;
 let saveTimeout;
@@ -448,23 +448,15 @@ function openDateModal() {
     if (modal.parentElement !== document.body) {
       document.body.appendChild(modal);
     }
-    modal.classList.add('show');
-    document.body.style.overflow = 'hidden';
-    
-    // Set default date to today
-    const dateInput = document.getElementById('new-date-input');
-    if (dateInput && !dateInput.value) {
-      dateInput.value = new Date().toISOString().split('T')[0];
-    }
+    // Remove generic 'modal' class that conflicts with other CSS files
+    modal.classList.remove('modal');
+    modal.classList.add('card-log-modal');
+    modal.style.display = 'flex';
   }
 }
 
 function closeDateModal() {
-  const modal = document.getElementById('date-modal');
-  if (modal) {
-    modal.classList.remove('show');
-    document.body.style.overflow = '';
-  }
+  document.getElementById('date-modal').style.display = 'none';
 }
 
 function createNewDay() {
@@ -494,26 +486,18 @@ function setupEventListeners() {
   const cancelCardModalBtn = document.getElementById('cancel-card-modal');
   const saveCardEntryBtn = document.getElementById('save-card-entry');
   
-  // Close modal buttons
-  const closeDateModalBtn = document.getElementById('close-date-modal');
-  const closeCardModalBtn = document.getElementById('close-card-modal');
-  
   if (addDayBtn) addDayBtn.addEventListener('click', openDateModal);
   if (cancelModalBtn) cancelModalBtn.addEventListener('click', closeDateModal);
   if (submitDateBtn) submitDateBtn.addEventListener('click', createNewDay);
-  if (closeDateModalBtn) closeDateModalBtn.addEventListener('click', closeDateModal);
   
   // Card entry modal listeners
   if (cancelCardModalBtn) cancelCardModalBtn.addEventListener('click', closeCardEntryModal);
   if (saveCardEntryBtn) saveCardEntryBtn.addEventListener('click', saveCardEntry);
-  if (closeCardModalBtn) closeCardModalBtn.addEventListener('click', closeCardEntryModal);
   
   if (tableContainer) {
     tableContainer.addEventListener('click', async (e) => {
-      // Handle add card button clicks (check for button or its children)
-      const addCardBtn = e.target.closest('.add-card-btn');
-      if (addCardBtn) {
-        const date = addCardBtn.getAttribute('data-date');
+      if (e.target.classList.contains('add-card-btn')) {
+        const date = e.target.getAttribute('data-date');
         console.log(`[CARD-LOG] User clicked "Add Card" for date: ${date}`);
         
         // Extra validation to ensure date is valid
@@ -563,79 +547,8 @@ function setupEventListeners() {
           alert('Not authorized - You can only edit card entries you created');
         }
       }
-      // Handle row action toggle (three-dot menu)
-      if (e.target.classList.contains('row-action-toggle') || e.target.closest('.row-action-toggle')) {
-        e.stopPropagation();
-        console.log('[CARD-LOG] Row action toggle clicked');
-        const toggleBtn = e.target.closest('.row-action-toggle');
-        const row = toggleBtn.closest('tr');
-        
-        if (!row) return;
-        
-        // Store reference to current row for delete action
-        window.currentCardLogRow = row;
-        console.log('[CARD-LOG] Stored current row:', row);
-        
-        // Show row action dropdown
-        const dropdown = document.getElementById('cardLogRowActionDropdown');
-        console.log('[CARD-LOG] Row dropdown element:', dropdown);
-        if (dropdown) {
-          // Close any other open dropdowns first
-          closeAllCardLogActionDropdowns();
-          
-          // Position the dropdown
-          const rect = toggleBtn.getBoundingClientRect();
-          dropdown.style.top = `${rect.bottom + 4}px`;
-          dropdown.style.left = `${rect.right - dropdown.offsetWidth}px`;
-          dropdown.classList.add('show');
-          console.log('[CARD-LOG] Row dropdown shown at:', { top: dropdown.style.top, left: dropdown.style.left });
-        }
-      }
-      
-      // Handle day action toggle (three-dot menu)
-      if (e.target.classList.contains('day-action-toggle') || e.target.closest('.day-action-toggle')) {
-        e.stopPropagation();
-        console.log('[CARD-LOG] Day action toggle clicked');
-        const toggleBtn = e.target.closest('.day-action-toggle');
-        const dayDiv = toggleBtn.closest('.day-table');
-        
-        if (!dayDiv) return;
-        
-        // Store reference to current day for delete action
-        window.currentCardLogDay = dayDiv;
-        console.log('[CARD-LOG] Stored current day:', dayDiv);
-        
-        // Show day action dropdown
-        const dropdown = document.getElementById('cardLogDayActionDropdown');
-        console.log('[CARD-LOG] Day dropdown element:', dropdown);
-        if (dropdown) {
-          // Close any other open dropdowns first
-          closeAllCardLogActionDropdowns();
-          
-          // Position the dropdown
-          const rect = toggleBtn.getBoundingClientRect();
-          dropdown.style.top = `${rect.bottom + 4}px`;
-          dropdown.style.left = `${rect.right - dropdown.offsetWidth}px`;
-          dropdown.classList.add('show');
-          console.log('[CARD-LOG] Day dropdown shown at:', { top: dropdown.style.top, left: dropdown.style.left });
-        }
-      }
-    });
-    
-    // Handle row delete action from dropdown
-    const deleteRowAction = document.getElementById('deleteCardRowAction');
-    console.log('[CARD-LOG] Setting up deleteRowAction listener:', deleteRowAction);
-    if (deleteRowAction) {
-      deleteRowAction.addEventListener('click', function() {
-        console.log('[CARD-LOG] Delete row action clicked');
-        closeAllCardLogActionDropdowns();
-        
-        const row = window.currentCardLogRow;
-        if (!row) {
-          console.log('[CARD-LOG] No current row found');
-          return;
-        }
-        
+      if (e.target.classList.contains('delete-row-btn')) {
+        const row = e.target.closest('tr');
         const entryCreatedBy = row.getAttribute('data-created-by');
         const currentUserId = getUserIdFromToken();
         
@@ -646,31 +559,30 @@ function setupEventListeners() {
         }
         
         // Extract row data for confirmation message
-        const camera = row.querySelector('[data-field="camera"]')?.textContent || '';
-        const user = row.querySelector('[data-field="user"]')?.textContent || '';
+        const camera = row.querySelector('[data-field="camera"]').textContent;
+        const card1 = row.querySelector('[data-field="card1"]').textContent;
+        const card2 = row.querySelector('[data-field="card2"]').textContent;
+        const user = row.querySelector('[data-field="user"]').textContent;
         
         // Create confirmation message with row details
         let confirmMessage = 'Are you sure you want to delete this entry?';
-        if (camera) {
-          confirmMessage = `Delete entry for camera "${camera}"${user ? ` (${user})` : ''}?`;
+        const details = [];
+        
+        if (camera) details.push(`Camera: ${camera}`);
+        if (card1) details.push(`Card 1: ${card1}`);
+        if (card2) details.push(`Card 2: ${card2}`);
+        if (user) details.push(`User: ${user}`);
+        
+        if (details.length > 0) {
+          confirmMessage = `Are you sure you want to delete this entry?\n\n${details.join('\n')}`;
         }
         
-        // Use custom modal instead of confirm
-        showCardLogDeleteModal(confirmMessage, async function() {
-          // Get the date before removing the row
-          const tbody = row.closest('tbody');
-          const date = tbody ? tbody.id.replace('tbody-', '') : null;
+        if (!confirm(confirmMessage)) {
+          return;
+        }
         
         // Remove from DOM and save
         row.remove();
-          
-          // Update entry count for this day
-          if (date) {
-            updateDayEntryCount(date);
-          }
-          
-          // Update date filter options
-          updateDateFilterOptions();
         
         // Get current data and save
         try {
@@ -680,80 +592,21 @@ function setupEventListeners() {
           console.error('[CARD-LOG] Error deleting entry:', error);
           alert('Error deleting entry. Please refresh the page.');
         }
-        });
-      });
-    }
-    
-    // Handle row edit action from dropdown
-    const editRowAction = document.getElementById('editCardRowAction');
-    if (editRowAction) {
-      editRowAction.addEventListener('click', function() {
-        closeAllCardLogActionDropdowns();
-        
-        const row = window.currentCardLogRow;
-        if (!row) return;
-        
-        // Get the date from the tbody
-        const tbody = row.closest('tbody');
-        if (!tbody) return;
-        
-        const date = tbody.id.replace('tbody-', '');
-        
-        // Extract existing entry data from the row
-        const existingEntry = {
-          _id: row.getAttribute('data-id'),
-          camera: row.querySelector('[data-field="camera"]')?.textContent || '',
-          card1: row.querySelector('[data-field="card1"]')?.textContent || '',
-          card2: row.querySelector('[data-field="card2"]')?.textContent || '',
-          user: row.querySelector('[data-field="user"]')?.textContent || '',
-          createdBy: row.getAttribute('data-created-by')
-        };
-        
-        // Check if user can edit this entry
-        const currentUserId = getUserIdFromToken();
-        const canEdit = isOwner || (existingEntry.createdBy === currentUserId);
-        
-        if (!canEdit) {
-          alert('Not authorized - You can only edit card entries you created');
-          return;
-        }
-        
-        // Open the modal with existing data
-        openCardEntryModal(date, existingEntry);
-      });
-    }
-    
-    // Handle day delete action from dropdown
-    const deleteDayAction = document.getElementById('deleteCardDayAction');
-    console.log('[CARD-LOG] Setting up deleteDayAction listener:', deleteDayAction);
-    if (deleteDayAction) {
-      deleteDayAction.addEventListener('click', function() {
-        console.log('[CARD-LOG] Delete day action clicked');
-        closeAllCardLogActionDropdowns();
-        
-        const dayDiv = window.currentCardLogDay;
-        if (!dayDiv) {
-          console.log('[CARD-LOG] No current day found');
-          return;
-        }
-        
+      }
+      if (e.target.classList.contains('delete-day-btn')) {
         // Check if user is authorized to delete days
         if (!isOwner) {
           alert('Not authorized - Only event owners can delete entire days');
           return;
         }
-        
-        const date = dayDiv.querySelector('h3')?.textContent || 'Unknown';
-        
-        // Use custom modal instead of confirm
-        showCardLogDeleteModal(`Delete entire day "${date}" and all its entries?`, async function() {
+        const dayDiv = e.target.closest('.day-table');
+        if (dayDiv && confirm('Delete this entire day?')) {
+          // Store the day information before removing it
+          const date = dayDiv.querySelector('h3').textContent;
           const dayId = dayDiv.getAttribute('data-id');
           
           // Remove from DOM
           dayDiv.remove();
-          
-          // Update date filter options
-          updateDateFilterOptions();
           
           // Try to save
           const success = await saveToMongoDB();
@@ -765,16 +618,7 @@ function setupEventListeners() {
             await loadCardLog();
             alert(`The day could not be deleted due for an error. The page has been refreshed.`);
           }
-        });
-      });
-    }
-    
-    // Close dropdowns when clicking outside
-    document.addEventListener('click', function(e) {
-      if (!e.target.closest('.row-action-dropdown') && 
-          !e.target.closest('.row-action-toggle') && 
-          !e.target.closest('.day-action-toggle')) {
-        closeAllCardLogActionDropdowns();
+        }
       }
     });
 
@@ -967,179 +811,6 @@ function cleanupCardLogPage() {
   console.log('[CARD-LOG] ✅ Card log page cleaned up');
 }
 
-// Load sidebar user info
-function loadSidebarUser() {
-  const userNameEl = document.getElementById('sidebarUserName');
-  const avatarImg = document.getElementById('sidebarAvatarImg');
-  const avatarIcon = document.getElementById('sidebarAvatarIcon');
-  
-  const userName = localStorage.getItem('fullName') || localStorage.getItem('userName') || 'User';
-  if (userNameEl) userNameEl.textContent = userName;
-  
-  // Try to fetch user photo
-  const token = localStorage.getItem('token');
-  const userId = getUserIdFromToken();
-  if (userId && token) {
-    fetch(`${API_BASE}/api/users/${userId}`, {
-      headers: { Authorization: token }
-    })
-      .then(res => {
-        if (res.ok) return res.json();
-        throw new Error('User not found');
-      })
-      .then(user => {
-        if (user.profilePhoto) {
-          if (avatarImg) {
-            avatarImg.src = user.profilePhoto;
-            avatarImg.style.display = 'block';
-          }
-          if (avatarIcon) avatarIcon.style.display = 'none';
-        }
-      })
-      .catch(err => {
-        console.log('Could not load user photo:', err);
-      });
-  }
-}
-
-// Setup sidebar navigation
-function setupSidebarNav() {
-  const sidebar = document.getElementById('cardLogSidebar');
-  const overlay = document.getElementById('cardLogSidebarOverlay');
-  const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-
-  if (mobileMenuBtn) {
-    mobileMenuBtn.onclick = function() {
-      if (sidebar) sidebar.classList.add('open');
-      if (overlay) overlay.classList.add('visible');
-      document.body.style.overflow = 'hidden';
-    };
-  }
-
-  if (overlay) {
-    overlay.onclick = function() {
-      if (sidebar) sidebar.classList.remove('open');
-      overlay.classList.remove('visible');
-      document.body.style.overflow = '';
-    };
-  }
-
-  // Close sidebar when clicking nav items on mobile
-  const navItems = sidebar?.querySelectorAll('.nav-item');
-  navItems?.forEach(item => {
-    item.addEventListener('click', function() {
-      if (window.innerWidth <= 1024) {
-        if (sidebar) sidebar.classList.remove('open');
-        if (overlay) overlay.classList.remove('visible');
-        document.body.style.overflow = '';
-      }
-    });
-  });
-}
-
-// Setup search functionality
-function setupSearchFilter() {
-  const searchInput = document.getElementById('searchInput');
-  if (searchInput) {
-    searchInput.addEventListener('input', function() {
-      const query = this.value.toLowerCase();
-      const dayTables = document.querySelectorAll('.day-table');
-      
-      dayTables.forEach(dayTable => {
-        const rows = dayTable.querySelectorAll('tbody tr');
-        let hasVisibleRows = false;
-        
-        rows.forEach(row => {
-          const text = row.textContent.toLowerCase();
-          if (text.includes(query) || query === '') {
-            row.style.display = '';
-            hasVisibleRows = true;
-          } else {
-            row.style.display = 'none';
-          }
-        });
-        
-        // Show/hide entire day based on whether it has visible rows
-        if (query !== '') {
-          dayTable.style.display = hasVisibleRows ? '' : 'none';
-        } else {
-          dayTable.style.display = '';
-        }
-      });
-    });
-  }
-}
-
-// Setup date filter dropdown
-function setupDateFilter() {
-  const dateFilterBtn = document.getElementById('dateFilterBtn');
-  const dateFilterMenu = document.getElementById('dateFilterMenu');
-  const dateFilterLabel = document.getElementById('dateFilterLabel');
-  
-  if (dateFilterBtn && dateFilterMenu) {
-    dateFilterBtn.onclick = function(e) {
-      e.stopPropagation();
-      dateFilterMenu.classList.toggle('show');
-    };
-    
-    // Close on outside click
-    document.addEventListener('click', function() {
-      dateFilterMenu.classList.remove('show');
-    });
-  }
-}
-
-// Update date filter options based on available days
-function updateDateFilterOptions() {
-  const dateFilterMenu = document.getElementById('dateFilterMenu');
-  const dateFilterLabel = document.getElementById('dateFilterLabel');
-  
-  if (!dateFilterMenu) return;
-  
-  const dayTables = document.querySelectorAll('.day-table');
-  const dates = Array.from(dayTables).map(dt => {
-    const h3 = dt.querySelector('h3');
-    return h3 ? h3.textContent : '';
-  }).filter(Boolean);
-  
-  dateFilterMenu.innerHTML = `
-    <button class="date-filter-option active" data-date="">All Dates</button>
-    ${dates.map(date => `<button class="date-filter-option" data-date="${date}">${date}</button>`).join('')}
-  `;
-  
-  // Add click handlers
-  dateFilterMenu.querySelectorAll('.date-filter-option').forEach(option => {
-    option.onclick = function(e) {
-      e.stopPropagation();
-      const selectedDate = this.getAttribute('data-date');
-      
-      // Update active state
-      dateFilterMenu.querySelectorAll('.date-filter-option').forEach(o => o.classList.remove('active'));
-      this.classList.add('active');
-      
-      // Update label
-      if (dateFilterLabel) {
-        dateFilterLabel.textContent = selectedDate || 'All Dates';
-      }
-      
-      // Filter day tables
-      dayTables.forEach(dayTable => {
-        const h3 = dayTable.querySelector('h3');
-        const tableDate = h3 ? h3.textContent : '';
-        
-        if (selectedDate === '' || tableDate === selectedDate) {
-          dayTable.style.display = '';
-        } else {
-          dayTable.style.display = 'none';
-        }
-      });
-      
-      // Close menu
-      dateFilterMenu.classList.remove('show');
-    };
-  });
-}
-
 window.initPage = async function(id) {
   const tableId = id || localStorage.getItem('eventId');
     if (!tableId) {
@@ -1154,12 +825,6 @@ window.initPage = async function(id) {
     console.log('[CARD-LOG INIT] window.socket exists:', !!window.socket);
     console.log('[CARD-LOG INIT] Socket connected:', window.socket?.connected);
     console.log('[CARD-LOG INIT] Current event ID:', tableId);
-
-    // Setup sidebar and navigation
-    loadSidebarUser();
-    setupSidebarNav();
-    setupSearchFilter();
-    setupDateFilter();
 
     // Load event name
     try {
@@ -1177,9 +842,6 @@ window.initPage = async function(id) {
 
   await loadUsers();
   await loadCardLog();
-  
-  // Update date filter options after loading
-  updateDateFilterOptions();
 
   // Join Socket.IO rooms for both table and event-specific features
   if (window.socket && window.socket.connected) {
@@ -1225,8 +887,10 @@ window.initPage = async function(id) {
   navContainer.innerHTML = navContent;
 
   // Set up navigation using the centralized function from app.js
-  if (window.setupBottomNavigation) {
+  if (window.setupBottomNavigation && navContainer) {
     window.setupBottomNavigation(navContainer, tableId, 'card-log');
+  } else if (!navContainer) {
+    console.error('[CARD-LOG] Navigation container not found');
   }
 
     // Inject hrefs with ?id=...
@@ -1245,44 +909,8 @@ window.initPage = async function(id) {
 
     if (window.lucide) lucide.createIcons();
   
-  // Ensure modals are moved to body element BEFORE setting up event listeners
-  // This fixes visibility issues in SPA setup
-  const dateModal = document.getElementById('date-modal');
-  const cardEntryModal = document.getElementById('card-entry-modal');
-  const deleteModal = document.getElementById('cardLogDeleteModal');
-  
-  if (dateModal && dateModal.parentElement !== document.body) {
-    console.log('[CARD-LOG] Moving date-modal to body element');
-    document.body.appendChild(dateModal);
-  }
-  
-  if (cardEntryModal && cardEntryModal.parentElement !== document.body) {
-    console.log('[CARD-LOG] Moving card-entry-modal to body element');
-    document.body.appendChild(cardEntryModal);
-  }
-  
-  if (deleteModal && deleteModal.parentElement !== document.body) {
-    console.log('[CARD-LOG] Moving delete-modal to body element');
-    document.body.appendChild(deleteModal);
-  }
-  
-  // Also move the action dropdowns to body
-  const rowDropdown = document.getElementById('cardLogRowActionDropdown');
-  const dayDropdown = document.getElementById('cardLogDayActionDropdown');
-  
-  if (rowDropdown && rowDropdown.parentElement !== document.body) {
-    document.body.appendChild(rowDropdown);
-  }
-  
-  if (dayDropdown && dayDropdown.parentElement !== document.body) {
-    document.body.appendChild(dayDropdown);
-  }
-  
-  // Set up event listeners AFTER modals are in place
+  // Set up event listeners
   setupEventListeners();
-  
-  // Set up calculator modal
-  setupCalculatorModal();
   
   // Load collaborative system
   await loadCardLogCollaborativeSystem();
@@ -1292,6 +920,27 @@ window.initPage = async function(id) {
   
   // Refresh access control for all rows to ensure owners can edit everything
   refreshAllRowAccessControl();
+  
+  // Ensure modals are moved to body element to escape #page-container overflow
+  // This fixes visibility issues in SPA setup
+  const dateModal = document.getElementById('date-modal');
+  const cardEntryModal = document.getElementById('card-entry-modal');
+  
+  if (dateModal && dateModal.parentElement !== document.body) {
+    console.log('[CARD-LOG] Moving date-modal to body element');
+    document.body.appendChild(dateModal);
+    // Remove generic 'modal' class that conflicts with other page CSS
+    dateModal.classList.remove('modal');
+    dateModal.classList.add('card-log-modal');
+  }
+  
+  if (cardEntryModal && cardEntryModal.parentElement !== document.body) {
+    console.log('[CARD-LOG] Moving card-entry-modal to body element');
+    document.body.appendChild(cardEntryModal);
+    // Remove generic 'modal' class that conflicts with other page CSS
+    cardEntryModal.classList.remove('modal');
+    cardEntryModal.classList.add('card-log-modal');
+  }
 };
 
 async function loadUsers() {
@@ -1339,26 +988,9 @@ async function loadCardLog() {
     }
   }
   
+  if (!table.cardLog || table.cardLog.length === 0) return;
+  
   const container = document.getElementById('table-container');
-  
-  // Remove loading skeleton
-  const skeleton = container.querySelector('.loading-skeleton');
-  if (skeleton) skeleton.remove();
-  
-  // Show empty state if no data
-  if (!table.cardLog || table.cardLog.length === 0) {
-    // Only add empty state if not already present
-    if (!container.querySelector('.empty-state')) {
-      container.innerHTML = `
-        <div class="empty-state">
-          <span class="material-symbols-outlined">sd_card</span>
-          <h3>No Card Log Entries</h3>
-          <p>Click "Add New Day" to start tracking your SD cards</p>
-        </div>
-      `;
-    }
-    return;
-  }
   
   // Get existing days
   const existingDays = new Set(Array.from(document.querySelectorAll('.day-table')).map(div => {
@@ -1484,15 +1116,6 @@ function getCurrentUserName() {
 
 function addDaySection(date, entries = []) {
   const container = document.getElementById('table-container');
-  
-  // Remove loading skeleton if present
-  const skeleton = container.querySelector('.loading-skeleton');
-  if (skeleton) skeleton.remove();
-  
-  // Remove empty state if present
-  const emptyState = container.querySelector('.empty-state');
-  if (emptyState) emptyState.remove();
-  
   const dayDiv = document.createElement('div');
   
   // Generate a unique ID for this day if not already present
@@ -1503,23 +1126,17 @@ function addDaySection(date, entries = []) {
   dayDiv.setAttribute('data-id', dayId);
   dayDiv.setAttribute('data-date', date);
   
-  // Count entries for display
-  const entryCount = Array.isArray(entries) ? entries.length : 0;
-  
   dayDiv.innerHTML = `
-    <div class="day-header">
-      <div class="day-header-left">
-        <h3>${date}</h3>
-        <span class="day-count">(${entryCount})</span>
-      </div>
-      ${isOwner ? `<button class="day-action-toggle" data-date="${date}" title="Day Options"><span class="material-symbols-outlined">more_vert</span></button>` : ''}
+    <div style="display: flex; align-items: center; justify-content: center;">
+      <h3 style="margin: 0;">${date}</h3>
+      ${isOwner ? `<button class="delete-day-btn" data-date="${date}" title="Delete Day (Owner Only)"><span class="material-symbols-outlined">delete</span></button>` : ''}
     </div>
     <table>
       <colgroup>
-        <col style="width: 20%;">
+        <col style="width: 25%;">
         <col style="width: 15%;">
         <col style="width: 15%;">
-        <col style="width: 40%;">
+        <col style="width: 35%;">
         <col style="width: 10%;">
       </colgroup>
       <thead>
@@ -1533,7 +1150,7 @@ function addDaySection(date, entries = []) {
       </thead>
       <tbody id="tbody-${date}"></tbody>
     </table>
-    <button class="add-card-btn" data-date="${date}"><span class="material-symbols-outlined">add</span> ADD CARD</button>
+    <button class="add-card-btn" data-date="${date}">Add Card</button>
   `;
   
   // Insert in the correct position to maintain date order
@@ -1598,23 +1215,14 @@ function addRow(date, entry = {}) {
   row.setAttribute('data-created-by', entryCreatedBy || '');
   row.setAttribute('data-created-at', entry.createdAt || '');
 
-  // Create non-editable display cells with dark theme styling
+  // Create non-editable display cells
   row.innerHTML = `
-    <td>
-      <span class="display-value" data-field="camera">${entry.camera || ''}</span>
-    </td>
+    <td><span class="display-value" data-field="camera">${entry.camera || ''}</span></td>
     <td><span class="display-value" data-field="card1">${entry.card1 || ''}</span></td>
     <td><span class="display-value" data-field="card2">${entry.card2 || ''}</span></td>
-    <td>
-      <div class="user-cell">
-        <div class="user-avatar">
-          <span class="material-symbols-outlined">person</span>
-        </div>
-        <span class="display-value" data-field="user">${entry.user || ''}</span>
-      </div>
-    </td>
+    <td><span class="display-value" data-field="user">${entry.user || ''}</span></td>
     <td style="text-align:center;">
-      ${canDelete ? '<button class="row-action-toggle" title="Entry Options"><span class="material-symbols-outlined">more_vert</span></button>' : ''}
+      ${canDelete ? '<button class="delete-row-btn" title="Delete Entry"><span class="material-symbols-outlined">delete</span></button>' : ''}
     </td>
   `;
   
@@ -1639,117 +1247,67 @@ function openCardEntryModal(date, existingEntry = null) {
   
   const modal = document.getElementById('card-entry-modal');
   
-  if (!modal) {
-    console.error('[CARD-LOG] Card entry modal not found');
-    return;
-  }
-  
   // Ensure modal is appended to body (not trapped in #page-container)
-  if (modal.parentElement !== document.body) {
+  if (modal && modal.parentElement !== document.body) {
     document.body.appendChild(modal);
   }
   
+  // Store date as data attribute on modal as a backup
+  modal.setAttribute('data-editing-date', date);
+  
+  // Remove generic 'modal' class that conflicts with other CSS files
+  if (modal) {
+    modal.classList.remove('modal');
+    modal.classList.add('card-log-modal');
+  }
+  
   const title = document.getElementById('card-modal-title');
-  const cameraHiddenInput = document.getElementById('card-camera-select');
+  const cameraSelect = document.getElementById('card-camera-select');
   const card1Input = document.getElementById('card-card1-input');
   const card2Input = document.getElementById('card-card2-input');
-  const userHiddenInput = document.getElementById('card-user-select');
+  const userSelect = document.getElementById('card-user-select');
   const saveButton = document.getElementById('save-card-entry');
-  
-  // Custom dropdown elements
-  const cameraDropdownWrapper = document.getElementById('cameraDropdownWrapper');
-  const cameraDropdownTrigger = document.getElementById('cameraDropdownTrigger');
-  const cameraDropdownValue = document.getElementById('cameraDropdownValue');
-  const cameraDropdownMenu = document.getElementById('cameraDropdownMenu');
-  
-  const userDropdownWrapper = document.getElementById('userDropdownWrapper');
-  const userDropdownTrigger = document.getElementById('userDropdownTrigger');
-  const userDropdownValue = document.getElementById('userDropdownValue');
-  const userDropdownMenu = document.getElementById('userDropdownMenu');
   
   // Update modal title
   title.textContent = existingEntry ? 'Edit Card Entry' : 'Add Card Entry';
   saveButton.textContent = existingEntry ? 'Update Entry' : 'Save Entry';
   
-  // Populate camera custom dropdown
-  cameraDropdownMenu.innerHTML = '';
+  // Populate camera dropdown
+  cameraSelect.innerHTML = '<option value="">Select Camera</option>';
   cameras.forEach(camera => {
-    const option = document.createElement('button');
-    option.type = 'button';
-    option.className = 'custom-dropdown-option';
+    const option = document.createElement('option');
+    option.value = camera;
     option.textContent = camera;
-    option.setAttribute('data-value', camera);
     if (existingEntry && existingEntry.camera === camera) {
-      option.classList.add('selected');
-      cameraDropdownValue.textContent = camera;
-      cameraDropdownValue.classList.remove('placeholder');
-      cameraHiddenInput.value = camera;
+      option.selected = true;
     }
-    option.onclick = function() {
-      selectDropdownOption('camera', camera, camera);
-    };
-    cameraDropdownMenu.appendChild(option);
+    cameraSelect.appendChild(option);
   });
   
   // Add "Add New Camera" option
-  const addCameraBtn = document.createElement('button');
-  addCameraBtn.type = 'button';
-  addCameraBtn.className = 'custom-dropdown-option add-new';
-  addCameraBtn.textContent = '➕ Add New Camera';
-  addCameraBtn.onclick = function() {
-    closeAllCardLogDropdowns();
-    const newCamera = prompt('Enter new camera name:');
-    if (newCamera && newCamera.trim()) {
-      const trimmedCamera = newCamera.trim();
-      if (!cameras.includes(trimmedCamera)) {
-        cameras.push(trimmedCamera);
-        customCameras.push(trimmedCamera);
-        saveCustomCameras();
-      }
-      selectDropdownOption('camera', trimmedCamera, trimmedCamera);
-    }
-  };
-  cameraDropdownMenu.appendChild(addCameraBtn);
+  const addCameraOption = document.createElement('option');
+  addCameraOption.value = 'add-new-camera';
+  addCameraOption.textContent = '➕ Add New Camera';
+  cameraSelect.appendChild(addCameraOption);
   
-  // Populate user custom dropdown
-  userDropdownMenu.innerHTML = '';
+  // Populate user dropdown
+  userSelect.innerHTML = '<option value="">Select User</option>';
   users.forEach(user => {
-    const option = document.createElement('button');
-    option.type = 'button';
-    option.className = 'custom-dropdown-option';
+    const option = document.createElement('option');
+    option.value = user;
     option.textContent = user;
-    option.setAttribute('data-value', user);
     if (existingEntry && existingEntry.user === user) {
-      option.classList.add('selected');
-      userDropdownValue.textContent = user;
-      userDropdownValue.classList.remove('placeholder');
-      userHiddenInput.value = user;
+      option.selected = true;
     }
-    option.onclick = function() {
-      selectDropdownOption('user', user, user);
-    };
-    userDropdownMenu.appendChild(option);
+    userSelect.appendChild(option);
   });
   
   // Add "Add New User" option for owners
   if (isOwner) {
-    const addUserBtn = document.createElement('button');
-    addUserBtn.type = 'button';
-    addUserBtn.className = 'custom-dropdown-option add-new';
-    addUserBtn.textContent = '➕ Add New User';
-    addUserBtn.onclick = function() {
-      closeAllCardLogDropdowns();
-      const newUser = prompt('Enter new user name:');
-      if (newUser && newUser.trim()) {
-        const trimmedUser = newUser.trim();
-        if (!users.includes(trimmedUser)) {
-          users.push(trimmedUser);
-          users.sort((a, b) => a.localeCompare(b));
-        }
-        selectDropdownOption('user', trimmedUser, trimmedUser);
-      }
-    };
-    userDropdownMenu.appendChild(addUserBtn);
+    const addUserOption = document.createElement('option');
+    addUserOption.value = 'add-new-user';
+    addUserOption.textContent = '➕ Add New User';
+    userSelect.appendChild(addUserOption);
   }
   
   // Pre-populate fields for editing or set defaults for new entries
@@ -1758,628 +1316,130 @@ function openCardEntryModal(date, existingEntry = null) {
   if (existingEntry) {
     card1Input.value = existingEntry.card1 || '';
     card2Input.value = existingEntry.card2 || '';
-    
-    if (existingEntry.camera) {
-      cameraDropdownValue.textContent = existingEntry.camera;
-      cameraDropdownValue.classList.remove('placeholder');
-      cameraHiddenInput.value = existingEntry.camera;
   } else {
-      cameraDropdownValue.textContent = 'Select Camera';
-      cameraDropdownValue.classList.add('placeholder');
-      cameraHiddenInput.value = '';
-    }
-    
-    if (existingEntry.user) {
-      userDropdownValue.textContent = existingEntry.user;
-      userDropdownValue.classList.remove('placeholder');
-      userHiddenInput.value = existingEntry.user;
-    } else {
-      userDropdownValue.textContent = 'Select User';
-      userDropdownValue.classList.add('placeholder');
-      userHiddenInput.value = '';
-    }
-  } else {
-    card1Input.value = '';
-    card2Input.value = '';
-    cameraDropdownValue.textContent = 'Select Camera';
-    cameraDropdownValue.classList.add('placeholder');
-    cameraHiddenInput.value = '';
-    
     // For new entries, always auto-select current user
     if (currentUser && users.includes(currentUser)) {
-      userDropdownValue.textContent = currentUser;
-      userDropdownValue.classList.remove('placeholder');
-      userHiddenInput.value = currentUser;
-    } else {
-      userDropdownValue.textContent = 'Select User';
-      userDropdownValue.classList.add('placeholder');
-      userHiddenInput.value = '';
+      userSelect.value = currentUser;
     }
+    card1Input.value = '';
+    card2Input.value = '';
   }
   
   // User selection permissions:
   // - Owners: Can always change user
   // - Non-owners: Can never change user (always locked to themselves)
   if (isOwner) {
-    userDropdownTrigger.classList.remove('disabled');
-    userDropdownTrigger.title = '';
+    userSelect.disabled = false;
+    userSelect.title = '';
   } else {
-    userDropdownTrigger.classList.add('disabled');
-    userDropdownTrigger.title = 'Non-owners can only log entries for themselves';
+    userSelect.disabled = true;
+    userSelect.title = 'Non-owners can only log entries for themselves';
     // For non-owners, always set to current user regardless of existing entry
     if (currentUser && users.includes(currentUser)) {
-      userDropdownValue.textContent = currentUser;
-      userDropdownValue.classList.remove('placeholder');
-      userHiddenInput.value = currentUser;
+      userSelect.value = currentUser;
     }
   }
   
-  // Setup dropdown toggle handlers
-  setupCardLogDropdowns();
-  
-  modal.classList.add('show');
-  document.body.style.overflow = 'hidden';
+  modal.style.display = 'flex';
 }
-
-// Custom dropdown helper functions for card log modal
-function setupCardLogDropdowns() {
-  const cameraDropdownTrigger = document.getElementById('cameraDropdownTrigger');
-  const userDropdownTrigger = document.getElementById('userDropdownTrigger');
-  
-  if (!cameraDropdownTrigger || !userDropdownTrigger) {
-    console.error('[CARD-LOG] Dropdown triggers not found');
-    return;
-  }
-  
-  // Move dropdown menus to body to escape overflow:hidden
-  const cameraMenu = document.getElementById('cameraDropdownMenu');
-  const userMenu = document.getElementById('userDropdownMenu');
-  
-  if (cameraMenu && cameraMenu.parentElement !== document.body) {
-    document.body.appendChild(cameraMenu);
-}
-  if (userMenu && userMenu.parentElement !== document.body) {
-    document.body.appendChild(userMenu);
-  }
-  
-  // Remove any existing click handlers and add new ones
-  cameraDropdownTrigger.onclick = function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    console.log('[CARD-LOG] Camera dropdown clicked');
-    const wrapper = document.getElementById('cameraDropdownWrapper');
-    const menu = document.getElementById('cameraDropdownMenu');
-    const isOpen = wrapper.classList.contains('open');
-    closeAllCardLogDropdowns();
-    if (!isOpen) {
-      wrapper.classList.add('open');
-      openDropdownMenu(cameraDropdownTrigger, menu);
-    }
-  };
-  
-  userDropdownTrigger.onclick = function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    console.log('[CARD-LOG] User dropdown clicked');
-    if (userDropdownTrigger.classList.contains('disabled')) return;
-    
-    const wrapper = document.getElementById('userDropdownWrapper');
-    const menu = document.getElementById('userDropdownMenu');
-    const isOpen = wrapper.classList.contains('open');
-    closeAllCardLogDropdowns();
-    if (!isOpen) {
-      wrapper.classList.add('open');
-      openDropdownMenu(userDropdownTrigger, menu);
-    }
-  };
-  
-  // Close dropdowns when clicking anywhere
-  document.addEventListener('click', function(e) {
-    if (!e.target.closest('.custom-dropdown-wrapper') && 
-        !e.target.closest('.custom-dropdown-menu')) {
-      closeAllCardLogDropdowns();
-    }
-  });
-}
-
-// Open and position dropdown menu
-function openDropdownMenu(trigger, menu) {
-  if (!trigger || !menu) {
-    console.error('[CARD-LOG] openDropdownMenu: missing trigger or menu');
-    return;
-  }
-  
-  const rect = trigger.getBoundingClientRect();
-  
-  // Show the menu
-  menu.style.display = 'block';
-  menu.style.position = 'fixed';
-  menu.style.zIndex = '999999';
-  menu.style.width = rect.width + 'px';
-  menu.style.left = rect.left + 'px';
-  menu.style.top = (rect.bottom + 4) + 'px';
-  
-  console.log('[CARD-LOG] Dropdown menu opened:', {
-    menuId: menu.id,
-    children: menu.children.length,
-    position: { left: menu.style.left, top: menu.style.top, width: menu.style.width }
-  });
-}
-
-// Position the fixed dropdown menu relative to the trigger
-function positionDropdownMenu(trigger, menu) {
-  if (!trigger || !menu) {
-    console.error('[CARD-LOG] positionDropdownMenu: missing trigger or menu', {trigger, menu});
-    return;
-  }
-  
-  const rect = trigger.getBoundingClientRect();
-  const menuHeight = 250; // max-height from CSS
-  const viewportHeight = window.innerHeight;
-  
-  console.log('[CARD-LOG] Positioning dropdown:', {
-    triggerRect: rect,
-    menuChildren: menu.children.length,
-    menuDisplay: getComputedStyle(menu).display
-  });
-        
-  // Check if there's room below
-  const spaceBelow = viewportHeight - rect.bottom;
-  const spaceAbove = rect.top;
-  
-  menu.style.width = rect.width + 'px';
-  menu.style.left = rect.left + 'px';
-  
-  if (spaceBelow >= menuHeight || spaceBelow >= spaceAbove) {
-    // Position below
-    menu.style.top = (rect.bottom + 4) + 'px';
-    menu.style.bottom = 'auto';
-      } else {
-    // Position above
-    menu.style.bottom = (viewportHeight - rect.top + 4) + 'px';
-    menu.style.top = 'auto';
-  }
-  
-  console.log('[CARD-LOG] Menu positioned:', {
-    width: menu.style.width,
-    left: menu.style.left,
-    top: menu.style.top,
-    bottom: menu.style.bottom
-  });
-}
-
-function closeAllCardLogDropdowns() {
-  document.getElementById('cameraDropdownWrapper')?.classList.remove('open');
-  document.getElementById('userDropdownWrapper')?.classList.remove('open');
-  
-  // Hide the menus
-  const cameraMenu = document.getElementById('cameraDropdownMenu');
-  const userMenu = document.getElementById('userDropdownMenu');
-  if (cameraMenu) cameraMenu.style.display = 'none';
-  if (userMenu) userMenu.style.display = 'none';
-}
-
-// Close all action dropdowns (row and day three-dot menus)
-function closeAllCardLogActionDropdowns() {
-  const rowDropdown = document.getElementById('cardLogRowActionDropdown');
-  const dayDropdown = document.getElementById('cardLogDayActionDropdown');
-  
-  if (rowDropdown) rowDropdown.classList.remove('show');
-  if (dayDropdown) dayDropdown.classList.remove('show');
-}
-
-// Delete confirmation modal functions
-function showCardLogDeleteModal(message, onConfirm) {
-  const modal = document.getElementById('cardLogDeleteModal');
-  const messageEl = document.getElementById('cardLogDeleteModalMessage');
-  const confirmBtn = document.getElementById('confirmCardLogDeleteBtn');
-  
-  if (messageEl) messageEl.textContent = message || 'Are you sure you want to delete this entry?';
-  
-  if (confirmBtn) {
-    confirmBtn.onclick = function() {
-      if (onConfirm) onConfirm();
-      hideCardLogDeleteModal();
-    };
-  }
-  
-  if (modal) {
-    // Ensure modal is in body
-    if (modal.parentElement !== document.body) {
-      document.body.appendChild(modal);
-    }
-    modal.classList.add('show');
-  }
-  document.body.style.overflow = 'hidden';
-}
-
-function hideCardLogDeleteModal() {
-  const modal = document.getElementById('cardLogDeleteModal');
-  if (modal) modal.classList.remove('show');
-  document.body.style.overflow = '';
-}
-
-// Expose to window for onclick handlers in HTML
-window.showCardLogDeleteModal = showCardLogDeleteModal;
-window.hideCardLogDeleteModal = hideCardLogDeleteModal;
-
-// ========================================
-// SD CARD CALCULATOR MODAL
-// ========================================
-
-async function openCalculatorModal() {
-  const modal = document.getElementById('sdCardCalculatorModal');
-  if (!modal) return;
-  
-  // Ensure modal is in body
-  if (modal.parentElement !== document.body) {
-    document.body.appendChild(modal);
-  }
-  
-  modal.classList.add('show');
-  document.body.style.overflow = 'hidden';
-  
-  // Load saved calculator data
-  await loadCalculatorData();
-}
-
-function closeCalculatorModal() {
-  const modal = document.getElementById('sdCardCalculatorModal');
-  if (modal) {
-    modal.classList.remove('show');
-    document.body.style.overflow = '';
-  }
-}
-
-async function loadCalculatorData() {
-  try {
-    const eventId = localStorage.getItem('eventId');
-    if (!eventId) {
-      generateCamerasPerDay();
-      return;
-    }
-    
-    const response = await fetch(`${API_BASE}/api/tables/${eventId}/sd-calculator`, {
-      headers: { Authorization: localStorage.getItem('token') }
-    });
-    
-    if (!response.ok) {
-      console.log('[SD-CALC] No saved data found, using defaults');
-      generateCamerasPerDay();
-      return;
-    }
-    
-    const data = await response.json();
-    const calcData = data.sdCardCalculator;
-      
-    if (calcData && calcData.numDays) {
-      // Set the number of days
-      const numDaysInput = document.getElementById('calcNumDays');
-      if (numDaysInput) {
-        numDaysInput.value = calcData.numDays;
-      }
-      
-      // Generate the day inputs
-      generateCamerasPerDay();
-      
-      // Set the cameras per day values
-      if (Array.isArray(calcData.camerasPerDay)) {
-        calcData.camerasPerDay.forEach((cameras, index) => {
-          const input = document.getElementById(`dayCamera${index + 1}`);
-          if (input) {
-            input.value = cameras;
-          }
-        });
-      }
-      
-      console.log('[SD-CALC] Loaded saved calculator data:', calcData);
-      } else {
-      generateCamerasPerDay();
-    }
-  } catch (err) {
-    console.error('[SD-CALC] Error loading calculator data:', err);
-    generateCamerasPerDay();
-  }
-}
-
-async function saveCalculatorData() {
-  try {
-    const eventId = localStorage.getItem('eventId');
-    if (!eventId) return;
-    
-    const numDays = parseInt(document.getElementById('calcNumDays')?.value || 1);
-    const camerasPerDay = [];
-    
-    for (let i = 1; i <= numDays; i++) {
-      const cameras = parseInt(document.getElementById(`dayCamera${i}`)?.value || 0);
-      camerasPerDay.push(cameras);
-      }
-    
-    const response = await fetch(`${API_BASE}/api/tables/${eventId}/sd-calculator`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: localStorage.getItem('token')
-      },
-      body: JSON.stringify({ numDays, camerasPerDay })
-    });
-    
-    if (response.ok) {
-      console.log('[SD-CALC] Calculator data saved successfully');
-    } else {
-      console.error('[SD-CALC] Failed to save calculator data');
-    }
-  } catch (err) {
-    console.error('[SD-CALC] Error saving calculator data:', err);
-  }
-}
-
-function generateCamerasPerDay() {
-  const numDays = parseInt(document.getElementById('calcNumDays')?.value || 1);
-  const container = document.getElementById('camerasPerDayContainer');
-  if (!container) return;
-  
-  container.innerHTML = '';
-  
-  for (let i = 1; i <= numDays; i++) {
-    const dayInput = document.createElement('div');
-    dayInput.className = 'day-camera-input';
-    dayInput.innerHTML = `
-      <label>Day ${i}</label>
-      <div class="day-stepper">
-        <button type="button" class="day-stepper-btn" onclick="decrementDayCameras(${i})">
-          <span class="material-symbols-outlined">chevron_left</span>
-        </button>
-        <input type="number" id="dayCamera${i}" value="2" min="0" readonly>
-        <button type="button" class="day-stepper-btn" onclick="incrementDayCameras(${i})">
-          <span class="material-symbols-outlined">chevron_right</span>
-        </button>
-      </div>
-    `;
-    container.appendChild(dayInput);
-  }
-}
-
-function incrementDayCameras(dayNum) {
-  const input = document.getElementById(`dayCamera${dayNum}`);
-  if (input) {
-    input.value = parseInt(input.value || 0) + 1;
-  }
-}
-
-function decrementDayCameras(dayNum) {
-  const input = document.getElementById(`dayCamera${dayNum}`);
-  if (input) {
-    input.value = Math.max(0, parseInt(input.value || 0) - 1);
-  }
-}
-
-function incrementCalcDays() {
-  const input = document.getElementById('calcNumDays');
-  if (input) {
-    input.value = parseInt(input.value || 1) + 1;
-    generateCamerasPerDay();
-  }
-}
-
-function decrementCalcDays() {
-  const input = document.getElementById('calcNumDays');
-  if (input) {
-    input.value = Math.max(1, parseInt(input.value || 1) - 1);
-    generateCamerasPerDay();
-  }
-}
-
-function calculateSDCards() {
-  const numDays = parseInt(document.getElementById('calcNumDays')?.value || 1);
-  const resultsContainer = document.getElementById('calculatorResults');
-  if (!resultsContainer) return;
-  
-  let tableRows = '';
-  let prevCameras = 0;
-  let prevExtraCards = 0;
-  let totalNewCards = 0;
-  
-  for (let i = 1; i <= numDays; i++) {
-    const cameras = parseInt(document.getElementById(`dayCamera${i}`)?.value || 0);
-    const cardsNeeded = cameras * 2;
-    
-    // For the first day, reuseAvailable is 0. For subsequent days, it's prevCameras + prevExtraCards
-    const reuseAvailable = i === 1 ? 0 : prevCameras + prevExtraCards;
-    const newCards = Math.max(0, cardsNeeded - reuseAvailable);
-    const extraCards = reuseAvailable + newCards - cardsNeeded;
-    totalNewCards += newCards;
-    
-    tableRows += `
-      <tr>
-        <td>${i}</td>
-        <td>${cameras}</td>
-        <td>${cardsNeeded}</td>
-        <td>${reuseAvailable}</td>
-        <td>${newCards}</td>
-        <td>${extraCards}</td>
-      </tr>
-    `;
-    
-    prevCameras = cameras;
-    prevExtraCards = extraCards;
-  }
-  
-  const backupsNeeded = numDays * 2;
-  const totalWithBackups = totalNewCards + backupsNeeded;
-  
-  resultsContainer.innerHTML = `
-    <table class="calculator-results-table">
-      <thead>
-        <tr>
-          <th>Day</th>
-          <th>Cameras</th>
-          <th>Cards Needed</th>
-          <th>Reuse</th>
-          <th>New Cards</th>
-          <th>Extra EOD</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${tableRows}
-      </tbody>
-    </table>
-    
-    <div class="calculator-summary">
-      <div class="summary-row">
-        <span class="summary-label">Cards Needed</span>
-        <span class="summary-value">${totalNewCards}</span>
-      </div>
-      <div class="summary-row">
-        <span class="summary-label">Backups (2/day)</span>
-        <span class="summary-value">${backupsNeeded}</span>
-      </div>
-      <div class="summary-row total">
-        <span class="summary-label">Cards Total</span>
-        <span class="summary-value">${totalWithBackups}</span>
-      </div>
-    </div>
-  `;
-  
-  // Save the calculator data for this event
-  saveCalculatorData();
-}
-
-function clearCalculator() {
-  document.getElementById('calcNumDays').value = 1;
-  generateCamerasPerDay();
-  document.getElementById('calculatorResults').innerHTML = '';
-  // Save the cleared state
-  saveCalculatorData();
-}
-
-function setupCalculatorModal() {
-  // Open button
-  const openBtn = document.getElementById('openCalculatorBtn');
-  if (openBtn) {
-    openBtn.addEventListener('click', openCalculatorModal);
-  }
-  
-  // Close button
-  const closeBtn = document.getElementById('closeCalculatorModal');
-  if (closeBtn) {
-    closeBtn.addEventListener('click', closeCalculatorModal);
-  }
-  
-  // Increment/Decrement days
-  const incrementDaysBtn = document.getElementById('incrementDaysBtn');
-  const decrementDaysBtn = document.getElementById('decrementDaysBtn');
-  
-  if (incrementDaysBtn) {
-    incrementDaysBtn.addEventListener('click', incrementCalcDays);
-  }
-  if (decrementDaysBtn) {
-    decrementDaysBtn.addEventListener('click', decrementCalcDays);
-  }
-  
-  // Calculate button
-  const calculateBtn = document.getElementById('calculateBtn');
-  if (calculateBtn) {
-    calculateBtn.addEventListener('click', calculateSDCards);
-  }
-  
-  // Clear button
-  const clearBtn = document.getElementById('clearCalculatorBtn');
-  if (clearBtn) {
-    clearBtn.addEventListener('click', clearCalculator);
-  }
-  
-  // Close on backdrop click
-  const modal = document.getElementById('sdCardCalculatorModal');
-  if (modal) {
-    modal.addEventListener('click', function(e) {
-      if (e.target === modal) {
-        closeCalculatorModal();
-      }
-    });
-  }
-}
-
-// Expose calculator functions to window for onclick handlers
-window.incrementDayCameras = incrementDayCameras;
-window.decrementDayCameras = decrementDayCameras;
-
-function selectDropdownOption(type, value, displayText) {
-  if (type === 'camera') {
-    const hiddenInput = document.getElementById('card-camera-select');
-    const displayValue = document.getElementById('cameraDropdownValue');
-    const menu = document.getElementById('cameraDropdownMenu');
-    
-    hiddenInput.value = value;
-    displayValue.textContent = displayText;
-    displayValue.classList.remove('placeholder');
-    
-    // Update selected state
-    menu.querySelectorAll('.custom-dropdown-option').forEach(opt => {
-      opt.classList.remove('selected');
-      if (opt.getAttribute('data-value') === value) {
-        opt.classList.add('selected');
-      }
-    });
-  } else if (type === 'user') {
-    const hiddenInput = document.getElementById('card-user-select');
-    const displayValue = document.getElementById('userDropdownValue');
-    const menu = document.getElementById('userDropdownMenu');
-    
-    hiddenInput.value = value;
-    displayValue.textContent = displayText;
-    displayValue.classList.remove('placeholder');
-    
-    // Update selected state
-    menu.querySelectorAll('.custom-dropdown-option').forEach(opt => {
-      opt.classList.remove('selected');
-      if (opt.getAttribute('data-value') === value) {
-        opt.classList.add('selected');
-      }
-    });
-  }
-  
-  closeAllCardLogDropdowns();
-    }
 
 function closeCardEntryModal() {
   const modal = document.getElementById('card-entry-modal');
-  if (modal) {
-    modal.classList.remove('show');
-    document.body.style.overflow = '';
-  }
-  closeAllCardLogDropdowns();
+  modal.style.display = 'none';
   currentEditingEntry = null;
   currentEditingDate = null;
 }
 
 async function saveCardEntry() {
+  // Try to get date from currentEditingDate first, then fall back to modal data attribute
+  const modal = document.getElementById('card-entry-modal');
+  let dateToUse = currentEditingDate || modal?.getAttribute('data-editing-date');
+  
   // Validate that we have a valid date before saving
-  if (!currentEditingDate || currentEditingDate === 'null' || currentEditingDate === 'undefined') {
-    console.error('[CARD-LOG] Cannot save entry - invalid currentEditingDate:', currentEditingDate);
+  if (!dateToUse || dateToUse === 'null' || dateToUse === 'undefined') {
+    console.error('[CARD-LOG] Cannot save entry - invalid date. currentEditingDate:', currentEditingDate, 'modal data-editing-date:', modal?.getAttribute('data-editing-date'));
     alert('Error: No date selected. Please close the modal and try again.');
     return;
   }
   
-  console.log('[CARD-LOG] Saving card entry for date:', currentEditingDate);
+  console.log('[CARD-LOG] Saving card entry for date:', dateToUse);
   
-  const cameraValue = document.getElementById('card-camera-select').value;
+  const cameraSelect = document.getElementById('card-camera-select');
   const card1Input = document.getElementById('card-card1-input');
   const card2Input = document.getElementById('card-card2-input');
-  const userValue = document.getElementById('card-user-select').value;
+  const userSelect = document.getElementById('card-user-select');
+  
+  // Handle "Add New Camera" selection
+  if (cameraSelect.value === 'add-new-camera') {
+    const newCamera = prompt('Enter new camera name:');
+    if (newCamera && newCamera.trim()) {
+      const trimmedCamera = newCamera.trim();
+      
+      // Check if camera already exists
+      if (!cameras.includes(trimmedCamera) && !customCameras.includes(trimmedCamera)) {
+        customCameras.push(trimmedCamera);
+        cameras.push(trimmedCamera);
+        
+        // Save custom cameras to localStorage for persistence
+        localStorage.setItem(`customCameras_${localStorage.getItem('eventId')}`, JSON.stringify(customCameras));
+        
+        // Update camera select with new camera
+        const option = document.createElement('option');
+        option.value = trimmedCamera;
+        option.textContent = trimmedCamera;
+        option.selected = true;
+        cameraSelect.insertBefore(option, cameraSelect.querySelector('[value="add-new-camera"]'));
+        
+        console.log(`[CARD-LOG] Added new camera: ${trimmedCamera}`);
+      } else {
+        alert('Camera already exists!');
+        return; // Don't save, let user fix the selection
+      }
+    } else {
+      alert('Camera name is required');
+      return;
+    }
+  }
+  
+  // Handle "Add New User" selection
+  if (userSelect.value === 'add-new-user' && isOwner) {
+    const newUser = prompt('Enter new user name:');
+    if (newUser && newUser.trim()) {
+      const trimmedUser = newUser.trim();
+      
+      if (!users.includes(trimmedUser)) {
+        users.push(trimmedUser);
+        
+        // Update user select with new user
+        const option = document.createElement('option');
+        option.value = trimmedUser;
+        option.textContent = trimmedUser;
+        option.selected = true;
+        userSelect.insertBefore(option, userSelect.querySelector('[value="add-new-user"]'));
+        
+        console.log(`[CARD-LOG] Added new user: ${trimmedUser}`);
+      } else {
+        alert('User already exists!');
+        return;
+      }
+    } else {
+      alert('User name is required');
+      return;
+    }
+  }
   
   // Validate required fields
-  if (!userValue) {
+  if (!userSelect.value) {
     alert('Please select a user');
     return;
   }
   
   // Create entry object
   const entryData = {
-    camera: cameraValue,
+    camera: cameraSelect.value,
     card1: card1Input.value.trim(),
     card2: card2Input.value.trim(),
-    user: userValue,
+    user: userSelect.value,
     createdBy: getUserIdFromToken(),
     createdAt: currentEditingEntry ? currentEditingEntry.createdAt : new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -2394,7 +1454,7 @@ async function saveCardEntry() {
   
   try {
     // Update the data structure and save
-    await addOrUpdateCardEntry(currentEditingDate, entryData);
+    await addOrUpdateCardEntry(dateToUse, entryData);
     
     // Close modal
     closeCardEntryModal();
@@ -2565,10 +1625,6 @@ window.canEditRow = canEditRow;
 window.openCardEntryModal = openCardEntryModal;
 window.closeCardEntryModal = closeCardEntryModal;
 window.saveCardEntry = saveCardEntry;
-window.setupCardLogDropdowns = setupCardLogDropdowns;
-window.closeAllCardLogDropdowns = closeAllCardLogDropdowns;
-window.selectDropdownOption = selectDropdownOption;
-window.positionDropdownMenu = positionDropdownMenu;
 
 // Add CSS for readonly rows
 const style = document.createElement('style');
@@ -3073,13 +2129,13 @@ function updateRowAccessControl(row, rowUser) {
     select.setAttribute('data-original-value', select.value);
   });
   
-  // Update action toggle button - owners can delete any row, others can only delete their own rows
-  const actionToggle = row.querySelector('.row-action-toggle');
-  if (!actionToggle && (isOwner || canEdit)) {
-    // Add action toggle button if it doesn't exist
+  // Update delete button - owners can delete any row, others can only delete their own rows
+  const deleteBtn = row.querySelector('.delete-row-btn');
+  if (!deleteBtn) {
+    // Add delete button if it doesn't exist
     const lastCell = row.querySelector('td:last-child');
     if (lastCell) {
-      lastCell.innerHTML = '<button class="row-action-toggle" title="Entry Options"><span class="material-symbols-outlined">more_vert</span></button>';
+      lastCell.innerHTML = '<button class="delete-row-btn" title="Delete Row"><span class="material-symbols-outlined">delete</span></button>';
     }
   }
   
@@ -3139,15 +2195,6 @@ function updateRowIndices(date) {
   rows.forEach((row, index) => {
     row.setAttribute('data-row-index', index);
   });
-  
-  // Also update the day count display
-  const dayTable = tbody.closest('.day-table');
-  if (dayTable) {
-    const countSpan = dayTable.querySelector('.day-count');
-    if (countSpan) {
-      countSpan.textContent = `(${rows.length})`;
-    }
-  }
 }
 
 // Debug helper to test field identification

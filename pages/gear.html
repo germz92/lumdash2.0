@@ -1,1094 +1,1074 @@
-<!-- Dark Theme Gear Page - SPA Partial -->
-<link rel="stylesheet" href="css/theme-dark.css">
-<style>
-    /* Dark theme overrides - MUST use .gear-page.dark-theme for specificity */
-    
-    /* Base overrides */
-    html, body {
-        margin: 0;
-        padding: 0;
-        height: 100%;
-        overflow: hidden;
-        background: #080808 !important;
-    }
-
-    /* Categories Grid Layout */
-    .gear-page.dark-theme .categories-grid {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 24px;
-        margin-bottom: 24px;
-    }
-
-    /* Category Cards - Dark Theme */
-    .gear-page.dark-theme .category-card {
-        background: #1a1a1a !important;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        border: 1px solid #333 !important;
-        transition: all 0.2s ease;
-    }
-
-    .gear-page.dark-theme .category-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
-        border-color: #cc0007 !important;
-    }
-
-    .gear-page.dark-theme .category-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 16px;
-        padding-bottom: 12px;
-        border-bottom: 2px solid #333 !important;
-    }
-
-    .gear-page.dark-theme .category-title {
-        font-size: 18px;
-        font-weight: 600;
-        color: #ffffff !important;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .gear-page.dark-theme .category-icon {
-        color: #cc0007;
-        font-size: 24px;
-    }
-
-    .gear-page.dark-theme .category-count {
-        background: #2a2a2a !important;
-        color: #aaa !important;
-        padding: 4px 12px;
-        border-radius: 12px;
-        font-size: 12px;
-        font-weight: 600;
-    }
-
-    /* Gear List Items - Dark Theme */
-    .gear-page.dark-theme .gear-list {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-    }
-
-    .gear-page.dark-theme .gear-item {
-        display: flex;
-        align-items: center;
-        padding: 12px 16px;
-        background: #0f0f0f !important;
-        border: 1px solid #333 !important;
-        border-radius: 8px;
-        transition: all 0.2s ease;
-        gap: 12px;
-    }
-
-    .gear-page.dark-theme .gear-item:hover {
-        background: #1a1a1a !important;
-        border-color: #cc0007 !important;
-    }
-
-    .gear-page.dark-theme .gear-item.packed {
-        background: rgba(40, 167, 69, 0.15) !important;
-        border-color: #28a745 !important;
-    }
-
-    .gear-page.dark-theme .gear-info {
-        flex: 1;
-    }
-
-    .gear-page.dark-theme .gear-name {
-        font-weight: 500;
-        color: #ffffff !important;
-        margin-bottom: 4px;
-    }
-
-    .gear-page.dark-theme .gear-details {
-        font-size: 13px;
-        color: #888 !important;
-        display: flex;
-        gap: 12px;
-        flex-wrap: wrap;
-    }
-
-    .gear-page.dark-theme .serial-code {
-        font-family: 'Courier New', monospace;
-        background: #2a2a2a !important;
-        color: #aaa !important;
-        padding: 2px 6px;
-        border-radius: 4px;
-        font-size: 12px;
-    }
-
-    .gear-page.dark-theme .gear-controls {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        flex-shrink: 0;
-    }
-
-    .gear-page.dark-theme .packed-checkbox {
-        width: 20px;
-        height: 20px;
-        cursor: pointer;
-        accent-color: #28a745;
-        transform: scale(1.2);
-    }
-
-    .gear-page.dark-theme .delete-btn {
-        background: #dc3545;
-        color: white;
-        border: none;
-        padding: 6px 8px;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 12px;
-        opacity: 0.7;
-        transition: all 0.2s ease;
-    }
-
-    .gear-page.dark-theme .delete-btn:hover {
-        opacity: 1;
-        transform: scale(1.1);
-    }
-
-    /* Empty Category - Dark Theme */
-    .gear-page.dark-theme .empty-category {
-        text-align: center;
-        padding: 40px 20px;
-        color: #666 !important;
-    }
-
-    .gear-page.dark-theme .empty-category .material-symbols-outlined {
-        font-size: 48px;
-        color: #444 !important;
-        margin-bottom: 12px;
-    }
-
-    .gear-page.dark-theme .empty-category p {
-        margin: 0 0 8px 0;
-        font-size: 16px;
-        font-weight: 500;
-        color: #888 !important;
-    }
-
-    .gear-page.dark-theme .empty-category small {
-        font-size: 14px;
-        color: #666 !important;
-    }
-
-    /* Progress Section - Dark Theme */
-    .gear-page.dark-theme .progress-section {
-        background: #1a1a1a !important;
-        padding: 20px;
-        border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-        margin-bottom: 24px;
-        border: 1px solid #333;
-    }
-
-    .gear-page.dark-theme .progress-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 16px;
-    }
-
-    .gear-page.dark-theme .progress-title {
-        font-size: 18px;
-        font-weight: 600;
-        color: #ffffff !important;
-    }
-
-    .gear-page.dark-theme .progress-stats {
-        font-size: 14px;
-        color: #888 !important;
-    }
-
-    .gear-page.dark-theme .progress-bar {
-        width: 100%;
-        height: 12px;
-        background: #333 !important;
-        border-radius: 6px;
-        overflow: hidden;
-    }
-
-    .gear-page.dark-theme .progress-fill {
-        height: 100%;
-        background: linear-gradient(90deg, #28a745, #20c997);
-        transition: width 0.3s ease;
-    }
-
-    /* Loading State - Dark Theme */
-    .gear-page.dark-theme .loading {
-        text-align: center;
-        padding: 60px 20px;
-        color: #888 !important;
-    }
-
-    .gear-page.dark-theme .loading-spinner {
-        width: 40px;
-        height: 40px;
-        border: 4px solid #333 !important;
-        border-top: 4px solid #cc0007 !important;
-        border-radius: 50%;
-        animation: spin 1s linear infinite;
-        margin: 0 auto 16px;
-    }
-
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-
-    @keyframes slideIn {
-        from { transform: translateX(100%); opacity: 0; }
-        to { transform: translateX(0); opacity: 1; }
-    }
-
-    /* Modal Styles - Dark Theme */
-    .gear-page.dark-theme .modal {
-        display: none;
-        position: fixed;
-        z-index: 2000;
-        left: 0;
-        top: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.7);
-        backdrop-filter: blur(4px);
-    }
-
-    .gear-page.dark-theme .modal-content {
-        background: #1a1a1a !important;
-        margin: 5% auto;
-        padding: 0;
-        border-radius: 16px;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-        width: 90%;
-        max-width: 500px;
-        max-height: 80vh;
-        overflow: hidden;
-        border: 1px solid #333;
-    }
-
-    .gear-page.dark-theme .modal-header {
-        padding: 24px;
-        border-bottom: 1px solid #333 !important;
-        background: #0f0f0f !important;
-    }
-
-    .gear-page.dark-theme .modal-header h3 {
-        margin: 0;
-        color: #ffffff !important;
-        font-size: 20px;
-        font-weight: 600;
-    }
-
-    .gear-page.dark-theme .modal-body {
-        padding: 24px;
-        max-height: 400px;
-        overflow-y: auto;
-        background: #1a1a1a;
-    }
-
-    .gear-page.dark-theme .modal-footer {
-        padding: 20px 24px;
-        border-top: 1px solid #333 !important;
-        background: #0f0f0f !important;
-        display: flex;
-        gap: 12px;
-        justify-content: flex-end;
-    }
-
-    /* Form Controls - Dark Theme */
-    .gear-page.dark-theme .form-group {
-        margin-bottom: 16px;
-    }
-
-    .gear-page.dark-theme .form-group label {
-        display: block;
-        margin-bottom: 4px;
-        font-weight: 500;
-        color: #ffffff !important;
-    }
-
-    .gear-page.dark-theme .form-group input {
-        width: 100%;
-        padding: 12px;
-        border: 2px solid #333 !important;
-        border-radius: 6px;
-        font-size: 14px;
-        background: #0f0f0f !important;
-        color: #ffffff !important;
-    }
-
-    .gear-page.dark-theme .form-group input:focus {
-        outline: none;
-        border-color: #cc0007 !important;
-    }
-
-    /* Package Items - Dark Theme */
-    .gear-page.dark-theme .package-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 16px;
-        border: 2px solid #333 !important;
-        border-radius: 8px;
-        margin-bottom: 12px;
-        transition: all 0.2s ease;
-        background: #0f0f0f !important;
-    }
-
-    .gear-page.dark-theme .package-item.available {
-        border-color: #28a745 !important;
-        background: rgba(40, 167, 69, 0.1) !important;
-    }
-
-    .gear-page.dark-theme .package-item.unavailable {
-        border-color: #dc3545 !important;
-        background: rgba(220, 53, 69, 0.1) !important;
-        opacity: 0.7;
-    }
-
-    .gear-page.dark-theme .package-item-info {
-        flex: 1;
-    }
-
-    .gear-page.dark-theme .package-item-name {
-        font-weight: 600;
-        color: #ffffff !important;
-        margin-bottom: 4px;
-    }
-
-    .gear-page.dark-theme .package-item-details {
-        font-size: 14px;
-        color: #888 !important;
-        display: flex;
-        gap: 16px;
-        flex-wrap: wrap;
-    }
-
-    .gear-page.dark-theme .status-text.available {
-        color: #28a745 !important;
-        font-weight: 600;
-    }
-
-    .gear-page.dark-theme .status-text.unavailable {
-        color: #dc3545 !important;
-        font-weight: 600;
-    }
-
-    /* Serial Options - Dark Theme */
-    .gear-page.dark-theme .serial-option {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 12px 16px;
-        border: 2px solid #333 !important;
-        border-radius: 8px;
-        margin-bottom: 8px;
-        cursor: pointer;
-        transition: all 0.2s ease;
-        background: #0f0f0f !important;
-    }
-
-    .gear-page.dark-theme .serial-option:hover {
-        border-color: #cc0007 !important;
-        background: #1a1a1a !important;
-    }
-
-    .gear-page.dark-theme .serial-option.selected {
-        border-color: #cc0007 !important;
-        background: rgba(204, 0, 7, 0.1) !important;
-    }
-
-    .gear-page.dark-theme .serial-info {
-        flex: 1;
-        color: #ffffff;
-    }
-
-    /* Manual Items - Dark Theme */
-    .gear-page.dark-theme .manual-items-category {
-        margin-top: 20px;
-    }
-
-    .gear-page.dark-theme .manual-items-category .gear-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        width: 100%;
-        padding: 16px 20px;
-        background: #0f0f0f !important;
-        border-bottom: 1px solid #333 !important;
-    }
-
-    .gear-page.dark-theme .manual-items-category .gear-item:last-child {
-        border-bottom: none;
-    }
-
-    .gear-page.dark-theme .manual-items-category .item-content {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        flex: 1;
-    }
-
-    .gear-page.dark-theme .manual-items-category .item-name {
-        font-size: 16px;
-        font-weight: 600;
-        color: #ffffff !important;
-        margin-bottom: 4px;
-    }
-
-    .gear-page.dark-theme .manual-items-category .item-meta {
-        font-size: 12px;
-        color: #888 !important;
-    }
-
-    /* Responsive Styles */
-    @media (max-width: 768px) {
-        .gear-page.dark-theme .categories-grid {
-            grid-template-columns: 1fr;
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gear - LumDash</title>
+    <link rel="icon" href="../assets/favicon.png" type="image/png">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+    <link rel="stylesheet" href="../css/styles.css">
+    <link rel="stylesheet" href="../css/general.css">
+    <style>
+        body {
+            font-family: 'Roboto', Arial, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e9ecf3 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
         }
 
-        .gear-page.dark-theme .date-controls label {
-            color: #888 !important;
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            padding-bottom: 200px; /* Space for action buttons */
         }
-    }
 
-    @media (max-width: 480px) {
-        .gear-page.dark-theme .categories-grid {
-            grid-template-columns: 1fr;
+        .header {
+            background: white;
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            margin-bottom: 24px;
+            border-left: 4px solid #cc0007;
         }
-        
-        .gear-page.dark-theme .gear-details {
-            flex-direction: column;
-            gap: 4px;
+
+        .header h1 {
+            margin: 0 0 8px 0;
+            color: #333;
+            font-size: 28px;
+            font-weight: 700;
         }
-        
-        .gear-page.dark-theme .modal-footer {
-            flex-direction: column;
+
+        .header-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .header p {
+            margin: 0;
+            color: #666;
+            font-size: 16px;
+        }
+
+        .date-controls {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            flex-wrap: wrap;
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .date-input {
+            padding: 8px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+        }
+
+        .date-input:focus {
+            outline: none;
+            border-color: #cc0007;
+        }
+
+        .save-dates-btn {
+            background: #28a745;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.2s ease;
+        }
+
+        .save-dates-btn:hover {
+            background: #218838;
+        }
+
+        .package-section {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 24px;
+        }
+
+        /* Horizontal layout for desktop */
+        .sections-container {
+            display: flex;
+            gap: 24px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .sections-container .package-section,
+        .sections-container .progress-section {
+            flex: 1;
+            min-width: 280px;
+            margin-bottom: 0;
+        }
+
+        /* Mobile responsiveness */
+        @media (max-width: 768px) {
+            .sections-container {
+                flex-direction: column;
+                gap: 16px;
+                margin-bottom: 16px;
+            }
+            
+            .sections-container .package-section,
+            .sections-container .progress-section {
+                margin-bottom: 0;
+                padding: 16px;
+            }
+            
+            .package-header {
+                margin-bottom: 12px;
+                gap: 8px;
+            }
+            
+            .package-title {
+                font-size: 18px;
+            }
+            
+            .package-title .material-symbols-outlined {
+                font-size: 20px;
+            }
+            
+            .package-controls {
+                gap: 6px;
+            }
+            
+            .package-btn {
+                padding: 6px 12px;
+                font-size: 13px;
+            }
+            
+            .package-select {
+                padding: 6px 10px;
+                font-size: 13px;
+                min-width: 120px;
+            }
+            
+            .progress-header {
+                margin-bottom: 12px;
+            }
+            
+            .progress-title {
+                font-size: 16px;
+            }
+            
+            .progress-stats {
+                font-size: 13px;
+            }
+            
+            .progress-bar {
+                height: 10px;
+            }
+        }
+
+        .package-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .package-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #333;
+            display: flex;
+            align-items: center;
             gap: 8px;
         }
-    }
 
-    /* Package Table Styles */
-    .pkg-table {
-        border-collapse: collapse;
-    }
-    .pkg-table th {
-        font-size: 13px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    .pkg-table td {
-        font-size: 14px;
-    }
-    .pkg-table tr:hover {
-        background-color: rgba(0,0,0,0.02);
-    }
+        .package-controls {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
 
-    /* Serial checkbox styles */
-    .serial-checkbox {
-        accent-color: #cc0007;
-    }
-    .serial-checkbox:checked {
-        accent-color: #cc0007;
-    }
+        .package-select {
+            padding: 8px 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            background: white;
+            min-width: 150px;
+        }
 
-    /* Add Items / Add Available button styles in table */
-    .pkg-table .package-btn {
-        white-space: nowrap;
-        text-transform: none;
-        font-weight: 500;
-        border-radius: 6px;
-        min-width: unset;
-        height: auto;
-        box-shadow: none;
-    }
-    .pkg-table .package-btn.primary {
-        background: #cc0007;
-        color: white;
-        border: none;
-    }
-    .pkg-table .package-btn.primary:hover {
-        background: #a30006;
-    }
+        .package-btn {
+            padding: 8px 16px;
+            border: 2px solid #cc0007;
+            background: white;
+            color: #cc0007;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
 
-    /* Dark theme overrides for package modals */
-    .gear-page.dark-theme .pkg-table th {
-        color: #aaa;
-    }
-    .gear-page.dark-theme .pkg-table td {
-        color: #ddd;
-    }
-    .gear-page.dark-theme .pkg-table tr {
-        border-bottom-color: #333 !important;
-    }
-    .gear-page.dark-theme .pkg-table tr:hover {
-        background-color: rgba(255,255,255,0.03);
-    }
-    .gear-page.dark-theme .pkg-table thead tr {
-        border-bottom-color: #444 !important;
-    }
+        .package-btn:hover {
+            background: #cc0007;
+            color: white;
+        }
 
-    /* ============================================
-       GEAR MODALS - Dark Theme (flights-style)
-       Modals live outside .gear-page so we target by ID.
-       Uses CSS variables from theme-dark.css.
-       ============================================ */
+        .package-btn.primary {
+            background: #cc0007;
+            color: white;
+        }
 
-    /* --- Backdrop --- */
-    #newPackageModal,
-    #packageContentsModal,
-    #packageSerialModal,
-    #templatesModal,
-    #templateDetailsModal,
-    #createTemplateModal {
-        position: fixed;
-        inset: 0;
-        z-index: 10000;
-        background: var(--surface-overlay);
-        backdrop-filter: blur(8px);
-        -webkit-backdrop-filter: blur(8px);
-        display: none;
-        align-items: center;
-        justify-content: center;
-        padding: 24px;
-        opacity: 1 !important;
-        transition: none !important;
-    }
-    /* When JS sets display:block, force flex for centering */
-    #newPackageModal[style*="display: block"],
-    #packageContentsModal[style*="display: block"],
-    #packageSerialModal[style*="display: block"],
-    #templatesModal[style*="display: block"],
-    #templateDetailsModal[style*="display: block"],
-    #createTemplateModal[style*="display: block"] {
-        display: flex !important;
-    }
+        .package-btn.primary:hover {
+            background: #a30006;
+        }
 
-    /* --- Modal Content Card --- */
-    #newPackageModal .modal-content,
-    #packageContentsModal .modal-content,
-    #packageSerialModal .modal-content,
-    #templatesModal .modal-content,
-    #templateDetailsModal .modal-content,
-    #createTemplateModal .modal-content {
-        background: var(--surface-modal);
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-xl);
-        color: var(--text-primary);
-        width: 100%;
-        max-height: 90vh;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        animation: modalSlideUp 0.2s ease-out;
-        box-shadow: var(--shadow-xl);
-        transform: none !important;
-        margin: 0;
-        padding: 0;
-    }
-    #newPackageModal .modal-content { max-width: 500px; }
-    #packageContentsModal .modal-content { max-width: 900px; }
-    #packageSerialModal .modal-content { max-width: 650px; }
-    #templatesModal .modal-content { max-width: 700px; }
-    #templateDetailsModal .modal-content { max-width: 600px; }
-    #createTemplateModal .modal-content { max-width: 560px; }
+        .categories-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 24px;
+            margin-bottom: 24px;
+        }
 
-    /* --- Header --- */
-    #newPackageModal .modal-header,
-    #packageContentsModal .modal-header,
-    #packageSerialModal .modal-header,
-    #templatesModal .modal-header,
-    #templateDetailsModal .modal-header,
-    #createTemplateModal .modal-header {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 20px 24px;
-        border-bottom: 1px solid var(--border-subtle);
-        background: transparent;
-        flex-shrink: 0;
-    }
-    #newPackageModal .modal-header h3,
-    #packageContentsModal .modal-header h3,
-    #packageSerialModal .modal-header h3,
-    #templatesModal .modal-header h3,
-    #templateDetailsModal .modal-header h3,
-    #createTemplateModal .modal-header h3 {
-        font-size: var(--font-size-lg);
-        font-weight: var(--font-weight-semibold);
-        color: var(--text-primary);
-        margin: 0;
-    }
+        .category-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border: 1px solid #e0e0e0;
+            transition: all 0.2s ease;
+        }
 
-    /* --- Close button (material icon style) --- */
-    #newPackageModal .modal-close-btn,
-    #packageContentsModal .modal-close-btn,
-    #packageSerialModal .modal-close-btn,
-    #templatesModal .modal-close-btn,
-    #templateDetailsModal .modal-close-btn,
-    #createTemplateModal .modal-close-btn {
-        background: none;
-        border: none;
-        padding: 8px;
-        cursor: pointer;
-        color: var(--text-tertiary);
-        border-radius: var(--radius-md);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        transition: var(--transition-base);
-        width: 36px;
-        height: 36px;
-    }
-    #newPackageModal .modal-close-btn:hover,
-    #packageContentsModal .modal-close-btn:hover,
-    #packageSerialModal .modal-close-btn:hover,
-    #templatesModal .modal-close-btn:hover,
-    #templateDetailsModal .modal-close-btn:hover,
-    #createTemplateModal .modal-close-btn:hover {
-        background: var(--bg-hover);
-        color: var(--text-primary);
-    }
+        .category-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
 
-    /* --- Body --- */
-    #newPackageModal .modal-body,
-    #packageContentsModal .modal-body,
-    #packageSerialModal .modal-body,
-    #templatesModal .modal-body,
-    #templateDetailsModal .modal-body,
-    #createTemplateModal .modal-body {
-        padding: 24px;
-        overflow-y: auto;
-        flex: 1;
-        min-height: 0;
-        color: var(--text-secondary);
-    }
+        .category-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #f0f2f5;
+        }
 
-    /* --- Footer --- */
-    #newPackageModal .modal-footer,
-    #packageContentsModal .modal-footer,
-    #packageSerialModal .modal-footer,
-    #templatesModal .modal-footer,
-    #templateDetailsModal .modal-footer,
-    #createTemplateModal .modal-footer {
-        padding: 16px 24px;
-        border-top: 1px solid var(--border-subtle);
-        background: var(--bg-secondary);
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
-        gap: 12px;
-        flex-shrink: 0;
-        border-radius: 0 0 var(--radius-xl) var(--radius-xl);
-    }
+        .category-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
 
-    /* --- Buttons inside modals (package-btn) --- */
-    #newPackageModal .package-btn,
-    #packageContentsModal .package-btn,
-    #packageSerialModal .package-btn,
-    #templatesModal .package-btn,
-    #templateDetailsModal .package-btn,
-    #createTemplateModal .package-btn {
-        padding: 10px 20px;
-        border: 1px solid var(--border-default);
-        background: var(--bg-tertiary);
-        color: var(--text-primary);
-        border-radius: var(--radius-md);
-        cursor: pointer;
-        font-size: var(--font-size-sm);
-        font-weight: var(--font-weight-medium);
-        transition: all var(--transition-fast);
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        white-space: nowrap;
-        text-transform: none;
-        box-shadow: none;
-        min-width: unset;
-        height: auto;
-    }
-    #newPackageModal .package-btn:hover,
-    #packageContentsModal .package-btn:hover,
-    #packageSerialModal .package-btn:hover,
-    #templatesModal .package-btn:hover,
-    #templateDetailsModal .package-btn:hover,
-    #createTemplateModal .package-btn:hover {
-        background: var(--bg-hover);
-        border-color: var(--border-strong);
-    }
-    #newPackageModal .package-btn.primary,
-    #packageContentsModal .package-btn.primary,
-    #packageSerialModal .package-btn.primary,
-    #templatesModal .package-btn.primary,
-    #templateDetailsModal .package-btn.primary,
-    #createTemplateModal .package-btn.primary {
-        background: var(--brand-red);
-        color: #fff;
-        border-color: var(--brand-red);
-    }
-    #newPackageModal .package-btn.primary:hover,
-    #packageContentsModal .package-btn.primary:hover,
-    #packageSerialModal .package-btn.primary:hover,
-    #templatesModal .package-btn.primary:hover,
-    #templateDetailsModal .package-btn.primary:hover,
-    #createTemplateModal .package-btn.primary:hover {
-        background: var(--brand-red-hover);
-        border-color: var(--brand-red-hover);
-    }
-    /* Danger button */
-    .package-btn.danger {
-        background: transparent !important;
-        color: #ef4444 !important;
-        border-color: #ef4444 !important;
-    }
-    .package-btn.danger:hover {
-        background: rgba(239, 68, 68, 0.12) !important;
-    }
+        .category-icon {
+            color: #cc0007;
+            font-size: 24px;
+        }
 
-    /* --- Form inputs in modals --- */
-    #newPackageModal input[type="text"],
-    #newPackageModal textarea,
-    #createTemplateModal input[type="text"],
-    #createTemplateModal textarea {
-        width: 100%;
-        padding: 12px 16px;
-        background: var(--surface-input);
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-md);
-        color: var(--text-primary);
-        font-size: var(--font-size-base);
-        font-family: var(--font-family);
-        box-sizing: border-box;
-        transition: border-color var(--transition-fast);
-    }
-    #newPackageModal input[type="text"]::placeholder,
-    #newPackageModal textarea::placeholder,
-    #createTemplateModal input[type="text"]::placeholder,
-    #createTemplateModal textarea::placeholder {
-        color: var(--text-muted);
-    }
-    #newPackageModal input[type="text"]:focus,
-    #newPackageModal textarea:focus,
-    #createTemplateModal input[type="text"]:focus,
-    #createTemplateModal textarea:focus {
-        border-color: var(--brand-red);
-        outline: none;
-        box-shadow: 0 0 0 3px var(--brand-red-muted);
-    }
-    #newPackageModal .form-group label,
-    #createTemplateModal .form-group label {
-        display: block;
-        font-size: var(--font-size-sm);
-        font-weight: var(--font-weight-medium);
-        color: var(--text-secondary);
-        margin-bottom: 8px;
-    }
+        .category-count {
+            background: #f8f9fa;
+            color: #495057;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
 
-    /* --- Items preview section in create template --- */
-    .items-preview-box {
-        padding: 16px;
-        background: var(--bg-tertiary);
-        border-radius: var(--radius-lg);
-        border: 1px solid var(--border-subtle);
-    }
-    .items-preview-box h4 {
-        margin: 0 0 12px 0;
-        color: var(--text-primary);
-        font-size: var(--font-size-base);
-        font-weight: var(--font-weight-semibold);
-    }
-    #createTemplateModal #templateItemsPreview {
-        color: var(--text-secondary);
-    }
-    #createTemplateModal #templateItemsPreview strong {
-        color: var(--text-primary);
-    }
+        .gear-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
 
-    /* --- Template list items --- */
-    #templatesContainer .template-item {
-        background: var(--bg-tertiary) !important;
-        border: 1px solid var(--border-subtle) !important;
-        border-radius: var(--radius-lg) !important;
-        padding: 16px !important;
-        margin-bottom: 12px;
-        transition: border-color var(--transition-fast);
-    }
-    #templatesContainer .template-item:hover {
-        border-color: var(--border-strong) !important;
-    }
-    #templatesContainer .template-item h4 {
-        color: var(--text-primary) !important;
-        font-weight: var(--font-weight-semibold) !important;
-        margin: 0 0 4px 0 !important;
-    }
-    #templatesContainer .template-item p {
-        color: var(--text-tertiary) !important;
-        margin: 0 0 12px 0 !important;
-        font-size: var(--font-size-sm) !important;
-    }
+        .gear-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            background: #fafbfc;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            transition: all 0.2s ease;
+            gap: 12px;
+        }
 
-    /* --- Package / details tables --- */
-    #packageContentsModal .pkg-table,
-    #packageSerialModal .pkg-table,
-    #templateDetailsModal .pkg-table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-    #packageContentsModal .pkg-table th,
-    #packageSerialModal .pkg-table th,
-    #templateDetailsModal .pkg-table th {
-        text-align: left;
-        padding: 10px 12px;
-        border-bottom: 1px solid var(--border-default) !important;
-        color: var(--text-tertiary);
-        font-size: var(--font-size-sm);
-        font-weight: var(--font-weight-semibold);
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-    #packageContentsModal .pkg-table td,
-    #packageSerialModal .pkg-table td,
-    #templateDetailsModal .pkg-table td {
-        padding: 12px;
-        color: var(--text-secondary);
-        border-bottom: 1px solid var(--border-subtle) !important;
-    }
-    #packageContentsModal .pkg-table tr:last-child td,
-    #packageSerialModal .pkg-table tr:last-child td,
-    #templateDetailsModal .pkg-table tr:last-child td {
-        border-bottom: none !important;
-    }
-    #packageContentsModal .pkg-table tbody tr:hover,
-    #templateDetailsModal .pkg-table tbody tr:hover {
-        background: var(--bg-hover);
-    }
+        .gear-item:hover {
+            background: #f1f3f4;
+            border-color: #cc0007;
+        }
 
-    /* --- Serial selection --- */
-    #packageSerialModal input[type="number"] {
-        background: var(--surface-input);
-        border: 1px solid var(--border-default);
-        border-radius: var(--radius-md);
-        color: var(--text-primary);
-        padding: 8px 12px;
-        font-size: var(--font-size-base);
-    }
-    #packageSerialModal input[type="number"]:focus {
-        border-color: var(--brand-red);
-        outline: none;
-        box-shadow: 0 0 0 3px var(--brand-red-muted);
-    }
-    #packageSerialModal input[type="checkbox"] {
-        accent-color: var(--brand-red);
-        width: 16px;
-        height: 16px;
-        cursor: pointer;
-    }
-    #packageSerialModal tr[style*="background: var(--bg-tertiary)"],
-    #packageSerialModal tr[style*="background: #f8f9fa"],
-    #packageSerialModal tr[style*="background:#f8f9fa"] {
-        background: var(--bg-tertiary) !important;
-    }
+        .gear-item.packed {
+            background: #e8f5e8;
+            border-color: #28a745;
+        }
 
-    /* --- Status badges (pill style) --- */
-    .status-available {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        color: #10b981;
-        background: rgba(16, 185, 129, 0.12);
-        border: 1px solid rgba(16, 185, 129, 0.25);
-        padding: 4px 12px;
-        border-radius: var(--radius-full, 9999px);
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.02em;
-        white-space: nowrap;
-    }
-    .status-partial {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        color: #f59e0b;
-        background: rgba(245, 158, 11, 0.12);
-        border: 1px solid rgba(245, 158, 11, 0.25);
-        padding: 4px 12px;
-        border-radius: var(--radius-full, 9999px);
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.02em;
-        white-space: nowrap;
-    }
-    .status-unavailable {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        color: var(--text-muted, #6b7280);
-        background: rgba(107, 114, 128, 0.12);
-        border: 1px solid rgba(107, 114, 128, 0.2);
-        padding: 4px 12px;
-        border-radius: var(--radius-full, 9999px);
-        font-size: 12px;
-        font-weight: 600;
-        letter-spacing: 0.02em;
-        white-space: nowrap;
-    }
+        .gear-info {
+            flex: 1;
+        }
 
-    /* --- Quantity pill --- */
-    .qty-badge {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 28px;
-        padding: 4px 10px;
-        background: var(--bg-tertiary, rgba(255,255,255,0.06));
-        border: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
-        border-radius: var(--radius-md, 8px);
-        font-size: 13px;
-        font-weight: 600;
-        color: var(--text-primary, #e5e7eb);
-    }
+        .gear-name {
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 4px;
+        }
 
-    /* --- Description text in detail modals --- */
-    .modal-description {
-        color: var(--text-tertiary);
-        font-size: var(--font-size-sm);
-        margin-bottom: 16px;
-    }
+        .gear-details {
+            font-size: 13px;
+            color: #666;
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
 
-    /* --- Cart badge --- */
-    .cart-badge {
-        position: absolute;
-        top: -6px;
-        right: -6px;
-        min-width: 20px;
-        height: 20px;
-        padding: 0 6px;
-        background: var(--brand-red, #e53e3e);
-        color: #fff;
-        font-size: 11px;
-        font-weight: 700;
-        line-height: 20px;
-        text-align: center;
-        border-radius: 10px;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
-        pointer-events: none;
-    }
-</style>
+        .serial-code {
+            font-family: 'Courier New', monospace;
+            background: #f1f3f4;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .gear-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-shrink: 0;
+        }
+
+        .packed-checkbox {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            accent-color: #28a745;
+            transform: scale(1.2);
+        }
+
+        .delete-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 6px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            opacity: 0.7;
+            transition: all 0.2s ease;
+        }
+
+        .delete-btn:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+
+        .empty-category {
+            text-align: center;
+            padding: 40px 20px;
+            color: #666;
+        }
+
+        .empty-icon {
+            font-size: 48px;
+            color: #ccc;
+            margin-bottom: 12px;
+        }
 
 
-<div class="gear-page dark-theme">
-  <div class="gear-layout">
-    
-    <!-- Sidebar Navigation -->
-    <aside class="general-sidebar" id="gearSidebar">
-      <div class="sidebar-header">
-        <div class="sidebar-logo">
-          <img src="assets/Logo - Dark BG.png" alt="Lumetry Media" class="sidebar-logo-img">
+
+        .action-buttons {
+            position: fixed;
+            bottom: 80px; /* Adjusted to be above bottom nav */
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 20px;
+            box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
+            border-top: 1px solid #e0e0e0;
+            z-index: 999; /* Below bottom nav which is 1000 */
+        }
+
+        .action-buttons-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 16px 32px;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.2s ease;
+            text-decoration: none;
+            flex: 1;
+            justify-content: center;
+            max-width: 250px;
+        }
+
+        .btn-primary {
+            background: #cc0007;
+            color: white;
+            box-shadow: 0 4px 12px rgba(204, 0, 7, 0.3);
+        }
+
+        .btn-primary:hover {
+            background: #a30006;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(204, 0, 7, 0.4);
+        }
+
+        .progress-section {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 24px;
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+
+        .progress-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .progress-stats {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 12px;
+            background: #e0e0e0;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745, #20c997);
+            transition: width 0.3s ease;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #cc0007;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Desktop specific styles */
+        @media (min-width: 769px) {
+            /* Ensure action buttons work well with desktop navigation */
+            .action-buttons {
+                bottom: 100px; /* More space on desktop */
+            }
+            
+            .action-buttons-content {
+                max-width: 800px; /* Limit width on desktop */
+            }
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 12px;
+            }
+
+            .categories-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .header-info {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 16px;
+            }
+
+            .package-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .date-controls {
+                flex-direction: row;
+                width: 100%;
+                gap: 8px;
+                align-items: center;
+                flex-wrap: wrap;
+                padding: 8px;
+                margin-bottom: 12px;
+            }
+
+            .date-controls label {
+                font-size: 12px;
+                font-weight: 600;
+                color: #666;
+                white-space: nowrap;
+                margin: 0;
+            }
+
+            .date-input {
+                flex: 1;
+                min-width: 120px;
+                font-size: 13px;
+                padding: 6px 8px;
+            }
+
+            .save-dates-btn {
+                padding: 6px 12px;
+                font-size: 12px;
+                white-space: nowrap;
+            }
+
+            .action-buttons {
+                padding: 12px 16px; /* Reduced padding */
+            }
+
+            .action-buttons-content {
+                flex-direction: row; /* Keep horizontal on mobile */
+                gap: 8px; /* Smaller gap */
+                flex-wrap: wrap;
+            }
+
+            .btn {
+                max-width: none;
+                padding: 14px 16px; /* Increased padding for taller buttons */
+                font-size: 14px; /* Smaller font */
+                flex: 1;
+                min-width: 100px; /* Minimum width for readability */
+                min-height: 48px; /* Ensure minimum height */
+            }
+
+            .btn .material-symbols-outlined {
+                font-size: 18px; /* Smaller icons */
+            }
+
+            /* Compact layout for very small screens */
+            @media (max-width: 480px) {
+                .date-controls {
+                    gap: 6px;
+                }
+
+                .date-controls label {
+                    font-size: 11px;
+                }
+
+                .date-input {
+                    min-width: 100px;
+                    font-size: 12px;
+                    padding: 5px 6px;
+                }
+
+                .save-dates-btn {
+                    padding: 5px 8px;
+                    font-size: 11px;
+                }
+
+                .btn {
+                    flex-direction: column;
+                    gap: 2px;
+                    padding: 10px 12px; /* Increased padding to prevent cutoff */
+                    min-width: 80px;
+                    min-height: 54px; /* Taller to accommodate icon + text */
+                }
+                
+                .btn span:not(.material-symbols-outlined) {
+                    font-size: 11px;
+                    line-height: 1.2;
+                }
+            }
+
+            .gear-item {
+                flex-direction: row;
+                align-items: flex-start;
+                gap: 12px;
+                padding: 16px;
+            }
+
+            .gear-info {
+                margin-top: 2px; /* Align with checkbox */
+            }
+
+            .gear-controls {
+                align-self: flex-start;
+                margin-top: 2px; /* Align with checkbox */
+            }
+            
+            /* Ensure action buttons don't overlap bottom nav on mobile */
+            .action-buttons {
+                bottom: 100px; /* More space from bottom nav to avoid overlap */
+            }
+            
+            .container {
+                padding-bottom: 200px; /* Adjusted space for repositioned action buttons */
+            }
+        }
+
+        /* Modal styles for package management */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 2000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(2px);
+        }
+
+        .modal-content {
+            background: white;
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 16px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            width: 90%;
+            max-width: 500px;
+            max-height: 80vh;
+            overflow: hidden;
+        }
+
+        .modal-header {
+            padding: 24px;
+            border-bottom: 1px solid #e0e0e0;
+            background: #f8f9fa;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            color: #333;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .modal-body {
+            padding: 24px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .modal-footer {
+            padding: 20px 24px;
+            border-top: 1px solid #e0e0e0;
+            background: #f8f9fa;
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #cc0007;
+        }
+
+        /* Package modal styles */
+        .package-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .package-item.available {
+            border-color: #28a745;
+            background: #f8fff8;
+        }
+
+        .package-item.unavailable {
+            border-color: #dc3545;
+            background: #fff8f8;
+            opacity: 0.7;
+        }
+
+        .package-item-info {
+            flex: 1;
+        }
+
+        .package-item-name {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+
+        .package-item-details {
+            font-size: 14px;
+            color: #666;
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .status-text.available {
+            color: #28a745;
+            font-weight: 600;
+        }
+
+        .status-text.unavailable {
+            color: #dc3545;
+            font-weight: 600;
+        }
+
+        .package-item-controls {
+            flex-shrink: 0;
+        }
+
+        .serial-option {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .serial-option:hover {
+            border-color: #cc0007;
+            background: #f8f9fa;
+        }
+
+        .serial-option.selected {
+            border-color: #cc0007;
+            background: #fff3f3;
+        }
+
+        .serial-info {
+            flex: 1;
+        }
+
+        /* Button styles for secondary buttons */
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+            box-shadow: 0 4px 12px rgba(108, 117, 125, 0.3);
+        }
+
+        .btn-secondary:hover {
+            background: #545b62;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(108, 117, 125, 0.4);
+        }
+
+        @media (max-width: 480px) {
+            .categories-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .gear-details {
+                flex-direction: column;
+                gap: 4px;
+            }
+            
+            .action-buttons {
+                padding: 16px;
+                bottom: 120px; /* Move higher to avoid Luma button */
+            }
+            
+            .action-buttons-content {
+                flex-direction: row; /* Keep buttons on same line */
+                gap: 8px; /* Smaller gap for mobile */
+                justify-content: center;
+            }
+            
+            .btn {
+                flex: 1; /* Equal width buttons */
+                max-width: none; /* Remove max-width constraint */
+                padding: 14px 16px; /* Slightly smaller padding for mobile */
+                font-size: 14px; /* Smaller font for mobile */
+            }
+            
+            /* Make package button taller on mobile to prevent text cutoff */
+            .package-btn {
+                padding: 12px 16px;
+                line-height: 1.4;
+                min-height: 44px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+                white-space: nowrap;
+                overflow: visible;
+            }
+            
+            /* Special handling for modal footers on mobile */
+            .modal-footer {
+                flex-direction: column;
+                gap: 8px;
+            }
+            
+            .modal-footer .package-btn {
+                width: 100%;
+                min-height: 48px;
+                font-size: 14px;
+                font-weight: 600;
+                white-space: normal;
+                word-wrap: break-word;
+                line-height: 1.3;
+            }
+        }
+
+        /* Manual Items Styles - Match Regular Categories */
+        .manual-items-category {
+            margin-top: 20px;
+            /* Use same styling as regular gear categories */
+        }
+
+        .add-manual-item-section {
+            margin-top: 16px;
+            padding: 16px;
+            border-top: 1px solid #e0e4e7;
+            background: #f8f9fa;
+        }
+
+        .add-manual-btn {
+            width: 100%;
+            padding: 12px 16px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .add-manual-btn:hover {
+            background: #0056b3;
+            transform: translateY(-1px);
+        }
+
+        .add-manual-form {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .add-manual-form input {
+            padding: 12px 16px;
+            border: 2px solid #e0e4e7;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s ease;
+            margin-bottom: 8px;
+        }
+
+        .add-manual-form input:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+        }
+
+        .form-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .form-actions .action-btn {
+            flex: 1;
+            padding: 10px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .add-btn {
+            background: #22c55e;
+            color: white;
+        }
+
+        .add-btn:hover {
+            background: #16a34a;
+        }
+
+        .cancel-btn {
+            background: #6b7280;
+            color: white;
+        }
+
+        .cancel-btn:hover {
+            background: #4b5563;
+        }
+
+        .empty-category {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6b7280;
+        }
+
+        .empty-category .material-symbols-outlined {
+            font-size: 48px;
+            color: #d1d5db;
+            margin-bottom: 12px;
+        }
+
+        .empty-category p {
+            margin: 0 0 8px 0;
+            font-size: 16px;
+            font-weight: 500;
+        }
+
+        .empty-category small {
+            font-size: 14px;
+            color: #9ca3af;
+        }
+
+        /* Manual Items Layout Fixes */
+        .manual-items-category .gear-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            padding: 16px 20px;
+            background: white;
+            border-bottom: 1px solid #e0e4e7;
+        }
+
+        .manual-items-category .gear-item:last-child {
+            border-bottom: none;
+        }
+
+        .manual-items-category .item-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+        }
+
+        .manual-items-category .item-details {
+            flex: 1;
+        }
+
+        .manual-items-category .item-name {
+            font-size: 16px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 4px;
+        }
+
+        .manual-items-category .item-info {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .manual-items-category .item-meta {
+            font-size: 12px;
+            color: #6b7280;
+        }
+
+        .manual-items-category .item-actions {
+            flex-shrink: 0;
+        }
+
+        .manual-items-category .delete-btn {
+            padding: 8px;
+            background: #ef4444;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .manual-items-category .delete-btn:hover {
+            background: #dc2626;
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-info">
+                <div>
+                    <h1>Gear List</h1>
+                    <p>Manage your gear reservations and packing checklist</p>
                 </div>
-      </div>
-      
-      <nav class="sidebar-nav">
-        <a href="#" class="nav-item" data-page="events" onclick="event.preventDefault(); window.navigate && window.navigate('events');">
-          <span class="material-symbols-outlined">arrow_back</span>
-          <span>Back to Events</span>
-        </a>
-        
-        <!-- Event Info Section -->
-        <div class="sidebar-event-info" id="sidebarEventInfo"></div>
-        
-        <div class="nav-section-label">Event Pages</div>
-        
-        <a href="#" class="nav-item" data-page="general" onclick="event.preventDefault(); window.navigate && window.navigate('general');">
-          <span class="material-symbols-outlined">home</span>
-          <span>Home</span>
-        </a>
-        <a href="#" class="nav-item" data-page="crew" onclick="event.preventDefault(); window.navigate && window.navigate('crew');">
-          <span class="material-symbols-outlined">group</span>
-          <span>Crew</span>
-        </a>
-        <a href="#" class="nav-item" data-page="schedule" onclick="event.preventDefault(); window.navigate && window.navigate('schedule');">
-          <span class="material-symbols-outlined">calendar_today</span>
-          <span>Schedule</span>
-        </a>
-        <a href="#" class="nav-item" data-page="shotlist" onclick="event.preventDefault(); window.navigate && window.navigate('shotlist');">
-          <span class="material-symbols-outlined">checklist</span>
-          <span>Shotlist</span>
-        </a>
-        <a href="#" class="nav-item" data-page="todos" onclick="event.preventDefault(); window.navigate && window.navigate('todos');">
-          <span class="material-symbols-outlined">task_alt</span>
-          <span>To-Dos</span>
-        </a>
-        <a href="#" class="nav-item" data-page="travel-accommodation" onclick="event.preventDefault(); window.navigate && window.navigate('travel-accommodation');">
-          <span class="material-symbols-outlined">flight_takeoff</span>
-          <span>Travel</span>
-        </a>
-        <a href="#" class="nav-item active" data-page="gear" onclick="event.preventDefault(); window.navigate && window.navigate('gear');">
-          <span class="material-symbols-outlined">photo_camera</span>
-          <span>Gear</span>
-        </a>
-        <a href="#" class="nav-item" data-page="card-log" onclick="event.preventDefault(); window.navigate && window.navigate('card-log');">
-          <span class="material-symbols-outlined">sd_card</span>
-          <span>Cards</span>
-        </a>
-        <a href="#" class="nav-item" data-page="documents" onclick="event.preventDefault(); window.navigate && window.navigate('documents');">
-          <span class="material-symbols-outlined">map</span>
-          <span>Map</span>
-        </a>
-        
-        <div class="nav-section-label admin-only-section" id="adminSectionLabel" style="display: none;">Admin</div>
-        <a href="#" class="nav-item admin-only-nav" data-page="admin-notes" onclick="event.preventDefault(); window.navigate && window.navigate('admin-notes');" style="display: none;">
-          <span class="material-symbols-outlined">sticky_note_2</span>
-          <span>Notes</span>
-        </a>
-      </nav>
-      
-      <div class="sidebar-user" id="sidebarUserContainer">
-        <div class="sidebar-user-avatar" id="sidebarUserAvatar">
-          <span class="material-symbols-outlined" id="sidebarAvatarIcon">person</span>
-        </div>
-        <div class="sidebar-user-info">
-          <div class="sidebar-user-name" id="sidebarUserName">Loading...</div>
-        </div>
-      </div>
-    </aside>
-    
-    <!-- Mobile Sidebar Overlay -->
-    <div class="general-sidebar-overlay" id="gearSidebarOverlay"></div>
-    
-    <!-- Main Content -->
-    <main class="gear-main">
-      
-      <!-- Gear Header -->
-      <header class="gear-header-dark">
-        <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu">
-          <span class="material-symbols-outlined">menu</span>
-        </button>
-        <div class="gear-header-left">
-          <h1 class="gear-title" id="eventTitle">Gear List</h1>
-          <span class="gear-subtitle">Manage your gear reservations and packing checklist</span>
-        </div>
-        <div class="gear-header-right">
                 <div class="date-controls">
                     <label>Out:</label>
-                    <input type="date" id="checkoutDate" class="date-input">
+                    <input type="date" id="checkOutDate" class="date-input">
                     <label>In:</label>
-                    <input type="date" id="checkinDate" class="date-input">
+                    <input type="date" id="checkInDate" class="date-input">
                     <button class="save-dates-btn" onclick="saveDates()">Save</button>
                 </div>
             </div>
-      </header>
+        </div>
 
-      <!-- Gear Content -->
-      <div class="gear-content">
         <!-- Sections Container for Horizontal Layout -->
         <div class="sections-container">
             <!-- List Management Section -->
@@ -1099,7 +1079,7 @@
                         Gear Lists
                     </h2>
                     <div class="package-controls">
-                        <select id="gearListSelect" class="package-select" onchange="handleListSelection()">
+                        <select id="listSelect" class="package-select" onchange="handleListSelection()">
                             <option value="">Loading lists...</option>
                         </select>
                         <button class="package-btn" onclick="renameCurrentList()">Rename</button>
@@ -1143,21 +1123,64 @@
         </div>
         </div>
 
-      <!-- Action Buttons - Floating FAB style -->
-      <div class="action-buttons" id="actionButtons">
-            <div class="action-buttons-content">
-          <button class="btn btn-secondary" onclick="viewCart()" id="viewCartBtn" title="View Cart" style="position: relative;">
-                    <span class="material-symbols-outlined">shopping_cart</span>
-            <span>Cart</span>
-            <span class="cart-badge" id="cartBadge" style="display: none;">0</span>
-                </button>
-          <button class="btn btn-primary" onclick="addItems()" id="addItemsBtn" title="Add Items">
-            <span class="material-symbols-outlined">add</span>
-            <span>Add Items</span>
-                </button>
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav-material" id="bottomNav">
+        <a href="#" id="navHome" data-page="general"><span class="material-symbols-outlined">home</span><span>Home</span></a>
+        <a href="#" id="navCrew" data-page="crew"><span class="material-symbols-outlined">group</span><span>Crew</span></a>
+        <a href="#" id="navLuma" class="chat-button-nav"><span class="material-symbols-outlined">lightbulb_2</span><span>Luma</span></a>
+        <a href="#" id="navSchedule" data-page="schedule"><span class="material-symbols-outlined">calendar_today</span><span>Schedule</span></a>
+        <a href="#" id="navShotlist" data-page="shotlist"><span class="material-symbols-outlined">checklist</span><span>Shotlist</span></a>
+        
+        <!-- Dropdown menu for Travel, Gear, Cards, Map, Exit -->
+        <div class="nav-dropdown" id="navMore">
+            <a href="#" class="dropdown-toggle active">
+                <span class="material-symbols-outlined">more_horiz</span>
+                <span>More</span>
+            </a>
+            <div class="dropdown-menu" id="dropdownMenu">
+                <a href="#" data-page="travel-accommodation">
+                    <span class="material-symbols-outlined">flight_takeoff</span>
+                    <span>Travel</span>
+                </a>
+                <a href="#" data-page="gear" class="active">
+                    <span class="material-symbols-outlined">photo_camera</span>
+                    <span>Gear</span>
+                </a>
+                <a href="#" data-page="card-log">
+                    <span class="material-symbols-outlined">sd_card</span>
+                    <span>Cards</span>
+                </a>
+                <a href="#" data-page="documents">
+                    <span class="material-symbols-outlined">map</span>
+                    <span>Map</span>
+                </a>
+                <a href="#" data-page="shotlist" class="mobile-shotlist-dropdown">
+                    <span class="material-symbols-outlined">checklist</span>
+                    <span>Shotlist</span>
+                </a>
+                <a href="#" id="navExit" data-page="events">
+                    <span class="material-symbols-outlined">exit_to_app</span>
+                    <span>Exit</span>
+                </a>
+            </div>
         </div>
-      </div>
-    </main>
+    </nav>
+
+    <!-- Action Buttons -->
+        <div class="action-buttons">
+            <div class="action-buttons-content">
+                <button class="btn btn-primary" onclick="addItems()" id="addItemsBtn">
+                    <span class="material-symbols-outlined">add_shopping_cart</span>
+                    Add Items
+                </button>
+                <button class="btn btn-secondary" onclick="viewCart()" id="viewCartBtn">
+                    <span class="material-symbols-outlined">shopping_cart</span>
+                    View Cart
+                </button>
+                <button class="btn btn-secondary" onclick="manageInventory()" id="manageInventoryBtn" style="display: none;">
+                    <span class="material-symbols-outlined">inventory</span>
+                    Manage Inventory
+                </button>
             </div>
         </div>
 
@@ -1166,17 +1189,14 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Create New Package</h3>
-                <button class="modal-close-btn" onclick="closeNewPackageModal()">
-                    <span class="material-symbols-outlined">close</span>
-                </button>
             </div>
             <div class="modal-body">
                 <div class="form-group">
-                    <label for="packageName">Package Name</label>
+                    <label for="packageName">Package Name:</label>
                     <input type="text" id="packageName" placeholder="Enter package name...">
                 </div>
                 <div class="form-group">
-                    <label for="packageDescription">Description (optional)</label>
+                    <label for="packageDescription">Description (optional):</label>
                     <input type="text" id="packageDescription" placeholder="Enter description...">
                 </div>
             </div>
@@ -1187,71 +1207,52 @@
         </div>
     </div>
 
-    <!-- Package Contents Modal (Load Gear Package) -->
+    <!-- Package Contents Modal -->
     <div id="packageContentsModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width: 800px;">
             <div class="modal-header">
-                <h3 id="packageModalTitle">Load Gear Package</h3>
-                <button class="modal-close-btn" onclick="closePackageModal()">
-                    <span class="material-symbols-outlined">close</span>
-                </button>
+                <h3 id="packageModalTitle">Package Contents</h3>
             </div>
             <div class="modal-body">
-                <div style="margin-bottom: 16px; display: flex; justify-content: flex-end;">
-                    <button class="package-btn primary" onclick="addAllAvailableToCart()" id="addAllBtn" style="font-size: 13px;">
-                        <span class="material-symbols-outlined" style="font-size: 18px;">playlist_add</span>
-                        Add All Available to Cart
-                    </button>
-                </div>
                 <div id="packageItemsContainer">
-                    <!-- Package items table will be loaded here -->
+                    <!-- Package items will be loaded here -->
                 </div>
             </div>
             <div class="modal-footer">
-                <button class="package-btn" onclick="closePackageModal()">Close</button>
-                <button class="package-btn" onclick="viewCart()" id="viewCartFromPackageBtn">
-                    <span class="material-symbols-outlined">shopping_cart</span>
-                    View Cart
-                </button>
+                <button class="package-btn" onclick="closePackageModal()">Cancel</button>
+                <button class="package-btn" onclick="viewCart()" id="viewCartFromPackageBtn">View Cart</button>
+                <button class="package-btn primary" onclick="addAllAvailableToCart()" id="addAllBtn">Add All Available to Cart</button>
             </div>
         </div>
     </div>
 
-    <!-- Add Items Modal (serial selection with checkboxes) -->
+    <!-- Serial Selection Modal (for package items) -->
     <div id="packageSerialModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3 id="packageSerialModalTitle">Add Items</h3>
-                <button class="modal-close-btn" onclick="closePackageSerialModal()">
-                    <span class="material-symbols-outlined">close</span>
-                </button>
+                <h3 id="packageSerialModalTitle">Select Serial</h3>
             </div>
             <div class="modal-body" id="packageSerialModalBody">
-                <!-- Serial checkbox options will be loaded here -->
+                <!-- Serial options will be loaded here -->
             </div>
             <div class="modal-footer">
                 <button class="package-btn" onclick="closePackageSerialModal()">Cancel</button>
-                <button class="package-btn primary" onclick="addSelectedPackageItemToCart()">
-                    <span class="material-symbols-outlined">add_shopping_cart</span>
-                    Add Selected
-                </button>
+                <button class="package-btn primary" onclick="addSelectedPackageItemToCart()">Add to Cart</button>
             </div>
         </div>
     </div>
 
     <!-- Templates Modal -->
     <div id="templatesModal" class="modal">
-        <div class="modal-content">
+        <div class="modal-content" style="max-width: 800px;">
             <div class="modal-header">
                 <h3>Package Templates</h3>
-                <button class="modal-close-btn" onclick="closeTemplatesModal()">
-                    <span class="material-symbols-outlined">close</span>
-                </button>
+                <button class="close-btn" onclick="closeTemplatesModal()">&times;</button>
             </div>
             <div class="modal-body">
                 <div style="margin-bottom: 20px;">
                     <button class="package-btn primary" onclick="openCreateTemplateModal()" style="width: 100%;">
-                        <span class="material-symbols-outlined" style="font-size: 18px;">add</span>
+                        <span class="material-symbols-outlined">add</span>
                         Create New Template
                     </button>
                 </div>
@@ -1265,59 +1266,24 @@
         </div>
     </div>
 
-    <!-- Template Details Modal (simple preview) -->
-    <div id="templateDetailsModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="templateDetailsTitle">Package Details</h3>
-                <button class="modal-close-btn" onclick="closeTemplateDetailsModal()">
-                    <span class="material-symbols-outlined">close</span>
-                </button>
-            </div>
-            <div class="modal-body">
-                <div id="templateDetailsDescription" class="modal-description"></div>
-                <table class="pkg-table">
-                    <thead>
-                        <tr>
-                            <th>Item</th>
-                            <th style="text-align: center;">Qty</th>
-                        </tr>
-                    </thead>
-                    <tbody id="templateDetailsBody">
-                        <!-- Template items will be listed here -->
-                    </tbody>
-                </table>
-            </div>
-            <div class="modal-footer">
-                <button class="package-btn danger" onclick="deleteTemplateFromDetails()" id="deleteTemplateFromDetailsBtn">
-                    <span class="material-symbols-outlined" style="font-size: 18px;">delete</span>
-                    Delete
-                </button>
-                <button class="package-btn" onclick="closeTemplateDetailsModal()">Close</button>
-            </div>
-        </div>
-    </div>
-
     <!-- Create Template Modal -->
     <div id="createTemplateModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Save as Template</h3>
-                <button class="modal-close-btn" onclick="closeCreateTemplateModal()">
-                    <span class="material-symbols-outlined">close</span>
-                </button>
+                <h3>Create New Template</h3>
+                <button class="close-btn" onclick="closeCreateTemplateModal()">&times;</button>
             </div>
             <div class="modal-body">
-                <div class="form-group">
-                    <label for="templateNameInput">Template Name</label>
-                    <input type="text" id="templateNameInput" placeholder="Enter template name...">
+                <div style="margin-bottom: 16px;">
+                    <label for="templateNameInput" style="display: block; margin-bottom: 8px; font-weight: 500;">Template Name:</label>
+                    <input type="text" id="templateNameInput" placeholder="Enter template name..." style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px;">
                 </div>
-                <div class="form-group">
-                    <label for="templateDescInput">Description (optional)</label>
-                    <textarea id="templateDescInput" placeholder="Enter description..." style="min-height: 80px; resize: vertical;"></textarea>
+                <div style="margin-bottom: 16px;">
+                    <label for="templateDescInput" style="display: block; margin-bottom: 8px; font-weight: 500;">Description (optional):</label>
+                    <textarea id="templateDescInput" placeholder="Enter description..." style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 6px; font-size: 14px; min-height: 80px; resize: vertical;"></textarea>
                 </div>
-                <div class="items-preview-box">
-                    <h4>Items to include:</h4>
+                <div style="padding: 16px; background: #f8f9fa; border-radius: 8px; border: 1px solid #e0e0e0;">
+                    <h4 style="margin: 0 0 12px 0; color: #333;">Items to include:</h4>
                     <div id="templateItemsPreview">
                         <!-- Current gear items will be shown here -->
                     </div>
@@ -1331,15 +1297,11 @@
           </div>
   
         <!-- Load config and chat scripts -->
-        <script src="js/config.js"></script>
-        <script src="js/chat.js"></script>
+        <script src="../js/config.js"></script>
+        <script src="../js/chat.js"></script>
         
         <script>
-        (function() {
-        'use strict';
-        console.log('[gear.html] Script tag execution started!');
-        
-        // Page-specific variables (scoped to IIFE to prevent redeclaration errors)
+        // Page-specific variables
         let currentEvent = null;
         let currentGear = [];
         let manualItems = [];
@@ -1353,173 +1315,24 @@
         let currentUser = null;
         let userPermissions = { canReserve: false, canManageLists: false, canPack: true };
 
-        // Navigation function for sidebar
-        function navigateToPage(page) {
-            // Get eventId from various sources
-            const id = eventId || localStorage.getItem('eventId');
-            
-            if (!id && page !== 'events') {
-                console.error('No event ID available for navigation');
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', async function() {
+            eventId = new URLSearchParams(window.location.search).get('eventId');
+            if (!eventId) {
+                alert('No event ID provided');
+                window.history.back();
                 return;
             }
-            
-            if (page === 'gear') {
-                // Already on gear page
-                return;
-            }
-            
-            // Use SPA navigation if available, otherwise fallback to URL
-            if (window.navigate) {
-                window.navigate(page, id);
-            } else {
-                // Fallback for non-SPA context
-                if (page === 'events') {
-                    window.location.href = '/dashboard.html#events';
-                } else {
-                    window.location.href = `/dashboard.html#${page}?id=${id}`;
-                }
-            }
-        }
 
-        // Setup mobile sidebar menu
-        function setupMobileSidebar() {
-            const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-            const sidebar = document.getElementById('gearSidebar');
-            const overlay = document.getElementById('gearSidebarOverlay');
+            checkUserRole();
+            loadEvent();
+            await loadGearLists(); // Wait for gear lists to load before loading gear
+            loadGear();
+            setupBottomNavigation();
             
-            if (mobileMenuBtn && sidebar) {
-                mobileMenuBtn.addEventListener('click', () => {
-                    sidebar.classList.add('show');
-                    if (overlay) overlay.classList.add('show');
-                });
-            }
-            
-            if (overlay && sidebar) {
-                overlay.addEventListener('click', () => {
-                    sidebar.classList.remove('show');
-                    overlay.classList.remove('show');
-                });
-            }
-        }
-
-        // Update sidebar user info
-        function updateSidebarUser() {
-            const userName = document.getElementById('sidebarUserName');
-            if (userName) {
-                const fullName = localStorage.getItem('fullName');
-                const storedUser = localStorage.getItem('user');
-                
-                if (fullName) {
-                    userName.textContent = fullName;
-                } else if (storedUser) {
-                    try {
-                        const user = JSON.parse(storedUser);
-                        userName.textContent = user.name || user.fullName || 'User';
-                    } catch (e) {
-                        userName.textContent = 'User';
-                    }
-                } else {
-                    // Try to get from token
-                    const token = localStorage.getItem('token');
-                    if (token) {
-                        try {
-                            const payload = JSON.parse(atob(token.split('.')[1]));
-                            userName.textContent = payload.name || payload.fullName || 'User';
-                        } catch (e) {
-                            userName.textContent = 'User';
-                        }
-                    }
-                }
-            }
-        }
-
-        // Get event ID from various sources (SPA hash, query string, localStorage)
-        function getEventId() {
-            // 1. Try SPA hash format: #gear?id=xxx
-            if (window.parseHash) {
-                const { id } = window.parseHash();
-                if (id) return id;
-            }
-            // Manual hash parsing as fallback
-            const hash = location.hash.replace('#', '');
-            const questionIndex = hash.indexOf('?');
-            if (questionIndex !== -1) {
-                const queryString = hash.substring(questionIndex + 1);
-                const params = new URLSearchParams(queryString);
-                if (params.get('id')) return params.get('id');
-            }
-            
-            // 2. Try query string formats: ?eventId=xxx or ?id=xxx
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('eventId')) return urlParams.get('eventId');
-            if (urlParams.get('id')) return urlParams.get('id');
-            
-            // 3. Try localStorage
-            if (localStorage.getItem('eventId')) return localStorage.getItem('eventId');
-            
-            // 4. Try window.getTableId if available
-            if (window.getTableId) return window.getTableId();
-            
-            return null;
-        }
-        
-        // Initialize page - works for both SPA and standalone modes
-        async function initGearPage() {
-            console.log('[gear.html] Initializing gear page...');
-            console.log('[gear.html] API_BASE:', typeof API_BASE !== 'undefined' ? API_BASE : 'UNDEFINED');
-            console.log('[gear.html] location.hash:', location.hash);
-            
-            try {
-                // Get event ID from various sources
-                eventId = getEventId();
-                console.log('[gear.html] Event ID:', eventId);
-                
-                if (!eventId) {
-                    console.error('[gear.html] No event ID provided');
-                    alert('No event ID provided');
-                    if (window.navigate) {
-                        window.navigate('events');
-                    } else {
-                        window.history.back();
-                    }
-                    return;
-                }
-
-                // Setup dark theme components
-                console.log('[gear.html] Setting up mobile sidebar...');
-                setupMobileSidebar();
-                console.log('[gear.html] Updating sidebar user...');
-                updateSidebarUser();
-
-                console.log('[gear.html] Checking user role...');
-                checkUserRole();
-                console.log('[gear.html] Loading event...');
-                loadEvent();
-                console.log('[gear.html] Loading gear lists...');
-                await loadGearLists(); // Wait for gear lists to load before loading gear
-                console.log('[gear.html] Loading gear...');
-                loadGear();
-                updateCartBadge();
-                
-                // Initialize chat widget after everything else is set up
-                setTimeout(initializeChatWidget, 100);
-                console.log('[gear.html] Initialization complete!');
-            } catch (err) {
-                console.error('[gear.html] Error during initialization:', err);
-            }
-        }
-        
-        // Initialize on DOMContentLoaded for standalone mode
-        // Also expose for SPA inline script execution
-        console.log('[gear.html] document.readyState:', document.readyState);
-        if (document.readyState === 'loading') {
-            console.log('[gear.html] Adding DOMContentLoaded listener');
-            document.addEventListener('DOMContentLoaded', initGearPage);
-        } else {
-            // DOM already loaded (SPA mode or immediate execution)
-            console.log('[gear.html] DOM ready, calling initGearPage now...');
-            initGearPage();
-        }
+            // Initialize chat widget after everything else is set up
+            setTimeout(initializeChatWidget, 100);
+        });
 
         // Load event data
         async function loadEvent() {
@@ -1535,7 +1348,7 @@
                     updateDateInputs();
                     
                     // Update header with event name and list name
-                    const gearHeader = document.getElementById('eventTitle');
+                    const gearHeader = document.querySelector('.header h1');
                     if (gearHeader) {
                         const eventName = currentEvent?.title || 'Event';
                         gearHeader.textContent = `${eventName} - ${currentListName}`;
@@ -1639,10 +1452,6 @@
         // Render gear by categories
         function renderGear() {
             const container = document.getElementById('gearContainer');
-            if (!container) {
-                console.error('[gear.html] gearContainer element not found');
-                return;
-            }
             
             // Update header to show event name and list name
             const gearHeader = document.querySelector('.header h1');
@@ -1839,13 +1648,9 @@
             const totalPacked = packedGear + completedManualItems;
             const percentage = totalItems > 0 ? Math.round((totalPacked / totalItems) * 100) : 0;
 
-            const totalCountEl = document.getElementById('totalCount');
-            const packedCountEl = document.getElementById('packedCount');
-            const progressFillEl = document.getElementById('progressFill');
-            
-            if (totalCountEl) totalCountEl.textContent = totalItems;
-            if (packedCountEl) packedCountEl.textContent = totalPacked;
-            if (progressFillEl) progressFillEl.style.width = `${percentage}%`;
+            document.getElementById('totalCount').textContent = totalItems;
+            document.getElementById('packedCount').textContent = totalPacked;
+            document.getElementById('progressFill').style.width = `${percentage}%`;
         }
 
         // Toggle packed status
@@ -2067,8 +1872,8 @@
 
         // Save dates
         async function saveDates() {
-            const checkOutDate = document.getElementById('checkoutDate').value;
-            const checkInDate = document.getElementById('checkinDate').value;
+            const checkOutDate = document.getElementById('checkOutDate').value;
+            const checkInDate = document.getElementById('checkInDate').value;
 
             if (!checkOutDate || !checkInDate) {
                 alert('Please select both check-out and check-in dates');
@@ -2177,11 +1982,7 @@
 
         // List management functions
         function updateListSelect() {
-            const select = document.getElementById('gearListSelect');
-            if (!select) {
-                console.error('[gear.html] gearListSelect element not found');
-                return;
-            }
+            const select = document.getElementById('listSelect');
             select.innerHTML = '';
             
             gearLists.forEach(list => {
@@ -2202,8 +2003,7 @@
         }
 
         function handleListSelection() {
-            const select = document.getElementById('gearListSelect');
-            if (!select) return;
+            const select = document.getElementById('listSelect');
             const selectedValue = select.value;
             
             if (selectedValue === '__ADD_NEW__') {
@@ -2370,32 +2170,30 @@
             
             if (templates.length === 0) {
                 container.innerHTML = `
-                    <div style="text-align: center; padding: 40px; color: var(--text-tertiary);">
-                        <span class="material-symbols-outlined" style="font-size: 48px; color: var(--text-muted); margin-bottom: 12px; display: block;">inventory_2</span>
-                        <h3 style="color: var(--text-primary); margin: 0 0 8px 0;">No Templates Yet</h3>
-                        <p style="margin: 0; font-size: 14px;">Save your current gear list to create a reusable template.</p>
+                    <div style="text-align: center; padding: 40px; color: #666;">
+                        <div style="font-size: 48px; color: #ccc; margin-bottom: 16px;">📦</div>
+                        <h3>No Templates Yet</h3>
+                        <p>Create your first template to get started!</p>
                     </div>
                 `;
                 return;
             }
 
             container.innerHTML = templates.map(template => `
-                <div class="template-item" style="display: flex; align-items: center; justify-content: space-between;">
-                    <div style="flex: 1; min-width: 0;">
-                        <h4>${template.name}</h4>
-                        ${template.description ? `<p>${template.description}</p>` : ''}
-                        <div style="font-size: 12px; color: var(--text-muted);">
-                            ${template.items.length} item${template.items.length !== 1 ? 's' : ''} • Created ${formatDate(template.createdAt)}
+                <div class="template-item" style="display: flex; align-items: center; justify-content: space-between; padding: 16px; border: 1px solid #e0e0e0; border-radius: 8px; margin-bottom: 12px; background: white;">
+                    <div style="flex: 1;">
+                        <h4 style="margin: 0 0 4px 0; color: #333;">${template.name}</h4>
+                        ${template.description ? `<p style="margin: 0 0 8px 0; color: #666; font-size: 14px;">${template.description}</p>` : ''}
+                        <div style="font-size: 12px; color: #888;">
+                            ${template.items.length} items • Created ${formatDate(template.createdAt)}
                         </div>
                     </div>
-                    <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0; margin-left: 16px;">
-                        <button class="package-btn primary" onclick="loadTemplate('${template._id}')">
-                            <span class="material-symbols-outlined" style="font-size: 16px;">download</span>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button class="package-btn" onclick="loadTemplate('${template._id}')" style="padding: 8px 16px;">
                             Load
                         </button>
-                        <button class="package-btn" onclick="showTemplateDetails('${template._id}')">
-                            <span class="material-symbols-outlined" style="font-size: 16px;">info</span>
-                            Details
+                        <button class="delete-btn" onclick="deleteTemplateFromModal('${template._id}')" style="padding: 8px; background: #ff4444; color: white; border: none; border-radius: 4px; cursor: pointer;" title="Delete template">
+                            <span class="material-symbols-outlined" style="font-size: 16px;">delete</span>
                         </button>
                     </div>
                 </div>
@@ -2412,72 +2210,6 @@
 
             closeTemplatesModal();
             await showTemplateContentsModal(template);
-        }
-
-        // Show template details (simple preview - no availability check)
-        function showTemplateDetails(templateId) {
-            const template = packageTemplates.find(t => t._id === templateId);
-            if (!template) {
-                alert('Template not found');
-                return;
-            }
-
-            // Store for delete functionality
-            currentTemplateId = templateId;
-
-            document.getElementById('templateDetailsTitle').textContent = template.name;
-            
-            const descEl = document.getElementById('templateDetailsDescription');
-            descEl.textContent = template.description || '';
-            descEl.style.display = template.description ? 'block' : 'none';
-
-            const tbody = document.getElementById('templateDetailsBody');
-            tbody.innerHTML = template.items.map(item => `
-                <tr>
-                    <td style="font-weight: 500;">${item.brand} ${item.model}</td>
-                    <td style="text-align: center;"><span class="qty-badge">${item.quantity}</span></td>
-                </tr>
-            `).join('');
-
-            document.getElementById('templateDetailsModal').style.display = 'block';
-        }
-
-        // Close template details modal
-        function closeTemplateDetailsModal() {
-            document.getElementById('templateDetailsModal').style.display = 'none';
-        }
-
-        // Delete template from details modal
-        async function deleteTemplateFromDetails() {
-            const templateId = currentTemplateId;
-            const template = packageTemplates.find(t => t._id === templateId);
-            if (!template) return;
-
-            if (!confirm(`Are you sure you want to delete the template "${template.name}"?`)) {
-                return;
-            }
-
-            try {
-                const response = await fetch(`${API_BASE}/api/package-templates/${templateId}`, {
-                    method: 'DELETE',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    }
-                });
-
-                if (response.ok) {
-                    closeTemplateDetailsModal();
-                    packageTemplates = await loadPackageTemplates();
-                    renderTemplatesModal(packageTemplates);
-                    showToast(`Template "${template.name}" deleted`, 'success');
-                } else {
-                    const error = await response.json();
-                    alert(error.error || 'Failed to delete template');
-                }
-            } catch (error) {
-                console.error('Error deleting template:', error);
-                alert('Failed to delete template');
-            }
         }
 
         // Delete template from modal
@@ -2516,35 +2248,25 @@
         }
 
         async function saveAsTemplate() {
-            if (!currentGear || currentGear.length === 0) {
-                alert('No gear items on the current list to save as a template. Add items first.');
+            if (currentGear.length === 0) {
+                alert('No gear to save as template');
                 return;
             }
 
-            // Filter out items with null inventoryId
-            const validGear = currentGear.filter(item => item.inventoryId || item.brand);
-
-            if (validGear.length === 0) {
-                alert('No valid gear items found to save as a template.');
-                return;
-            }
-
-            // Show current gear items in preview using direct brand/model fields (more reliable)
+            // Show current gear items in preview
             const previewContainer = document.getElementById('templateItemsPreview');
-            previewContainer.innerHTML = validGear.map(item => {
-                // Use direct brand/model fields from ReservedGearItem (guaranteed to exist)
-                // Fall back to parsing inventoryId.label if direct fields aren't available
-                const brand = item.brand || (item.inventoryId?.label?.split(' ')[0]) || 'Unknown';
-                const model = item.model || (item.inventoryId?.label?.split(' ').slice(1).join(' ')) || 'Unknown';
-                const category = item.category || item.inventoryId?.category || 'Accessories';
+            previewContainer.innerHTML = currentGear.map(item => {
+                const labelParts = item.inventoryId.label.split(' ');
+                const brand = labelParts[0] || 'Unknown';
+                const model = labelParts.slice(1).join(' ') || 'Unknown';
                 
                 return `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-subtle);">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #eee;">
                         <div>
-                            <strong style="color: var(--text-primary);">${brand} ${model}</strong>
-                            <div style="font-size: 12px; color: var(--text-tertiary); margin-top: 2px;">${category}</div>
+                            <strong>${brand} ${model}</strong>
+                            <div style="font-size: 12px; color: #666;">${item.inventoryId.category || 'Accessories'}</div>
                         </div>
-                        <span class="qty-badge">×${item.quantity || 1}</span>
+                        <div style="font-weight: 500; color: #333;">Qty: ${item.quantity}</div>
                     </div>
                 `;
             }).join('');
@@ -2578,20 +2300,13 @@
                 return;
             }
 
-            // Filter out invalid items and convert to template items
-            // Use direct brand/model fields from ReservedGearItem (more reliable than parsing label)
-            const validGear = currentGear.filter(item => item.inventoryId || item.brand);
-            const items = validGear.map(item => ({
-                brand: item.brand || (item.inventoryId?.label?.split(' ')[0]) || 'Unknown',
-                model: item.model || (item.inventoryId?.label?.split(' ').slice(1).join(' ')) || 'Unknown',
-                category: item.category || item.inventoryId?.category || 'Accessories',
-                quantity: item.quantity || 1
+            // Convert current gear to template items
+            const items = currentGear.map(item => ({
+                brand: item.inventoryId.label.split(' ')[0] || 'Unknown',
+                model: item.inventoryId.label.split(' ').slice(1).join(' ') || 'Unknown',
+                category: item.inventoryId.category || 'Accessories',
+                quantity: item.quantity
             }));
-
-            if (items.length === 0) {
-                alert('No valid items to save in template');
-                return;
-            }
 
             try {
                 const response = await fetch(`${API_BASE}/api/package-templates`, {
@@ -2610,14 +2325,14 @@
                 if (response.ok) {
                     closeCreateTemplateModal();
                     packageTemplates = await loadPackageTemplates(); // Reload templates
-                    showToast(`Template "${templateName}" created with ${items.length} items!`, 'success');
+                    showToast(`Template "${templateName}" created!`, 'success');
                 } else {
                     const error = await response.json();
                     alert(error.error || 'Failed to create template');
                 }
             } catch (error) {
                 console.error('Error creating template:', error);
-                alert('Failed to create template. Please try again.');
+                alert('Failed to create template');
             }
         }
 
@@ -2671,10 +2386,9 @@
         let currentPackageItems = [];
         let selectedPackageInventoryId = null;
         let selectedPackageSerial = null;
-        let selectedPackageSerials = []; // Multi-select: [{serial, inventoryId}]
         let selectedPackageQuantity = 1;
 
-        // Show template contents modal with availability (table layout)
+        // Show template contents modal with availability
         async function showTemplateContentsModal(selectedTemplate) {
             try {
                 // Store the current template for use in other functions
@@ -2682,71 +2396,50 @@
                 // Get inventory items for this template
                 const inventoryItems = await getTemplateInventoryItems(selectedTemplate.items);
                 
-                document.getElementById('packageModalTitle').textContent = `Load Gear Package — ${selectedTemplate.name}`;
+                document.getElementById('packageModalTitle').textContent = `${selectedTemplate.name} - Template Contents`;
                 
                 const container = document.getElementById('packageItemsContainer');
                 
                 if (inventoryItems.length === 0) {
                     container.innerHTML = `
-                        <div style="text-align: center; padding: 40px; color: var(--text-tertiary);">
-                            <span class="material-symbols-outlined" style="font-size: 48px; color: var(--text-muted); margin-bottom: 12px; display: block;">playlist_remove</span>
-                            <h3 style="color: var(--text-primary); margin: 0 0 8px 0;">No items in this template</h3>
-                            <p style="margin: 0; font-size: 14px;">This template appears to be empty.</p>
+                        <div style="text-align: center; padding: 40px; color: #666;">
+                            <div style="font-size: 48px; color: #ccc; margin-bottom: 16px;">📋</div>
+                            <h3>No items in this template</h3>
+                            <p>This template appears to be empty.</p>
                         </div>
                     `;
                 } else {
-                    // Build table layout: Item | Qty | Available | Status | Action
-                    let tableHTML = `
-                        <table class="pkg-table">
-                            <thead>
-                                <tr>
-                                    <th>Item</th>
-                                    <th style="text-align: center;">Qty</th>
-                                    <th style="text-align: center;">Available</th>
-                                    <th>Status</th>
-                                    <th style="text-align: right;"></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                    `;
-
-                    inventoryItems.forEach(item => {
-                        const templateQty = item.templateQuantity || 1;
-                        const availableQty = item.availableQuantity || 0;
+                    container.innerHTML = inventoryItems.map(item => {
+                        const isAvailable = item.availableQuantity > 0;
+                        const statusClass = isAvailable ? 'available' : 'unavailable';
+                        const statusText = isAvailable ? `${item.availableQuantity} Available` : 'Not Available';
                         
-                        // Determine status
-                        let statusClass, statusText, actionHTML;
-                        if (availableQty >= templateQty) {
-                            statusText = 'Available';
-                            statusClass = 'status-available';
-                            actionHTML = `<button class="package-btn primary" onclick="openAddItemsModal('${item._id}', ${templateQty})" style="padding: 6px 14px; font-size: 13px;">
-                                <span class="material-symbols-outlined" style="font-size: 16px;">add</span> Add Items
-                            </button>`;
-                        } else if (availableQty > 0) {
-                            statusText = 'Partial';
-                            statusClass = 'status-partial';
-                            actionHTML = `<button class="package-btn" onclick="openAddItemsModal('${item._id}', ${availableQty})" style="padding: 6px 14px; font-size: 13px; border-color: #f59e0b; color: #f59e0b;">
-                                <span class="material-symbols-outlined" style="font-size: 16px;">add</span> Add Available
-                            </button>`;
-                        } else {
-                            statusText = 'Out of Stock';
-                            statusClass = 'status-unavailable';
-                            actionHTML = '';
-                        }
-
-                        tableHTML += `
-                            <tr>
-                                <td style="font-weight: 500;">${item.brand} ${item.model}</td>
-                                <td style="text-align: center;"><span class="qty-badge">${templateQty}</span></td>
-                                <td style="text-align: center;"><span class="qty-badge">${availableQty}</span></td>
-                                <td><span class="${statusClass}">${statusText}</span></td>
-                                <td style="text-align: right;">${actionHTML}</td>
-                            </tr>
+                        return `
+                            <div class="package-item ${statusClass}">
+                                <div class="package-item-info">
+                                    <div class="package-item-name">${item.brand} ${item.model}</div>
+                                    <div class="package-item-details">
+                                        <span>Category: ${item.category}</span>
+                                        <span>Template Qty: ${item.templateQuantity}</span>
+                                        <span class="status-text ${statusClass}">${statusText}</span>
+                                    </div>
+                                </div>
+                                <div class="package-item-controls">
+                                    ${isAvailable ? `
+                                        <button class="package-btn primary" onclick="addTemplateItemToCart('${item._id}', '${item.brand} ${item.model}', ${item.templateQuantity})">
+                                            <span class="material-symbols-outlined">add_shopping_cart</span>
+                                            Add to Cart
+                                        </button>
+                                    ` : `
+                                        <button class="package-btn" disabled>
+                                            <span class="material-symbols-outlined">block</span>
+                                            Unavailable
+                                        </button>
+                                    `}
+                                </div>
+                            </div>
                         `;
-                    });
-
-                    tableHTML += `</tbody></table>`;
-                    container.innerHTML = tableHTML;
+                    }).join('');
                 }
                 
                 currentPackageItems = inventoryItems;
@@ -2830,26 +2523,50 @@
             }
         }
 
-        // Open Add Items modal for a specific template item (used by both "Add Items" and "Add Available")
-        function openAddItemsModal(inventoryId, maxQuantity) {
+        // Add template item to cart
+        async function addTemplateItemToCart(inventoryId, itemLabel, quantity) {
             const templateItem = currentPackageItems.find(item => item._id === inventoryId);
             if (!templateItem) {
                 alert('Item not found');
                 return;
             }
 
-            if (!templateItem.matchingItems || templateItem.matchingItems.length === 0) {
-                alert(`${templateItem.brand} ${templateItem.model} has no matching inventory items`);
+            await addTemplateItemToCartWithQuantity(templateItem, quantity);
+        }
+
+        // Add template item to cart with proper quantity handling
+        async function addTemplateItemToCartWithQuantity(templateItem, requestedQuantity) {
+            const availableQty = templateItem.availableQuantity;
+            const qtyToAdd = Math.min(requestedQuantity, availableQty);
+            
+            if (qtyToAdd <= 0) {
+                alert(`${templateItem.brand} ${templateItem.model} is not available`);
                 return;
             }
 
-            // Store context
+            // If there are multiple matching items (different serials), show serial selection
+            if (templateItem.matchingItems && templateItem.matchingItems.length > 1) {
+                showTemplateSerialSelectionModal(templateItem, qtyToAdd);
+            } else if (templateItem.matchingItems && templateItem.matchingItems.length === 1) {
+                // Single item available - add directly using the actual inventory ID
+                const actualInventoryId = templateItem.matchingItems[0]._id;
+                await addPackageItemToCartDirect(actualInventoryId, qtyToAdd, null);
+                
+                if (qtyToAdd < requestedQuantity) {
+                    showToast(`Added ${qtyToAdd}/${requestedQuantity} ${templateItem.brand} ${templateItem.model} (limited by availability)`, 'warning');
+                }
+            } else {
+                alert(`${templateItem.brand} ${templateItem.model} has no matching inventory items`);
+            }
+        }
+
+        // Show serial selection modal for template items
+        function showTemplateSerialSelectionModal(templateItem, quantity) {
             selectedPackageInventoryId = templateItem._id;
             selectedPackageSerial = null;
-            selectedPackageQuantity = maxQuantity;
-            selectedPackageSerials = []; // Reset multi-select
+            selectedPackageQuantity = quantity;
 
-            document.getElementById('packageSerialModalTitle').textContent = `Add Items — ${templateItem.brand} ${templateItem.model}`;
+            document.getElementById('packageSerialModalTitle').textContent = `Select Serial - ${templateItem.brand} ${templateItem.model}`;
             
             const modalBody = document.getElementById('packageSerialModalBody');
             
@@ -2861,88 +2578,114 @@
             // Check if all items have N/A serials (no real serial numbers)
             const hasRealSerials = templateItem.matchingItems.some(item => item.serial && item.serial !== 'N/A');
             
+            // Update description based on whether there are real serials
             const description = hasRealSerials 
-                ? 'Select items to add. Use "No Preference" for sequential assignment, or check specific serial numbers.'
-                : 'This item has no serial numbers. Items will be assigned automatically.';
+                ? 'Choose a specific serial number or select "No Preference" to reserve any available unit.'
+                : 'This item has no serial numbers. You can reserve any available unit.';
             
-            let html = `
-                <p class="modal-description">${description}</p>
-                <div style="font-weight: var(--font-weight-semibold); margin-bottom: 12px; color: var(--text-primary); font-size: var(--font-size-sm); text-transform: uppercase; letter-spacing: 0.5px;">Select Items</div>
-                <table class="pkg-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 40px;"></th>
-                            <th>Item</th>
-                            <th>Serial</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-
-            // "No Preference" row
-            html += `
-                <tr style="background: var(--bg-tertiary);">
-                    <td style="text-align: center;">
-                        <input type="checkbox" id="serial_no_pref" class="serial-checkbox" data-serial="__no_preference__" data-inventory-id="" onchange="handleSerialCheckbox(this)">
-                    </td>
-                    <td style="font-weight: 500; color: var(--text-primary);">${templateItem.brand} ${templateItem.model}</td>
-                    <td style="color: var(--text-tertiary); font-style: italic;">No Preference</td>
-                </tr>
-            `;
-
-            // Individual serial rows
-            templateItem.matchingItems.forEach(item => {
-                const available = item.availableQuantity ?? 0;
-                const serialDisplay = (item.serial && item.serial !== 'N/A') ? item.serial : 'N/A';
-                const isDisabled = available <= 0;
+            modalBody.innerHTML = `
+                <p style="margin-bottom: 16px; color: #666;">
+                    ${description}
+                </p>
                 
-                html += `
-                    <tr style="${isDisabled ? 'opacity: 0.4;' : ''}">
-                        <td style="text-align: center;">
-                            <input type="checkbox" class="serial-checkbox" data-serial="${item.serial}" data-inventory-id="${item._id}" 
-                                onchange="handleSerialCheckbox(this)" ${isDisabled ? 'disabled' : ''}>
-                        </td>
-                        <td style="font-weight: 500; color: var(--text-primary);">${templateItem.brand} ${templateItem.model}</td>
-                        <td style="color: ${isDisabled ? 'var(--text-muted)' : 'var(--text-secondary)'};">${serialDisplay}</td>
-                    </tr>
-                `;
-            });
+                ${hasRealSerials ? `
+                    <div class="serial-option" onclick="selectPackageSerial(null)">
+                        <div class="serial-info">
+                            <div><strong>No Preference</strong></div>
+                            <div style="font-size: 13px; color: #666;">Reserve any available unit</div>
+                        </div>
+                        <div style="color: #28a745; font-weight: 600;">
+                            ${totalAvailable} available
+                        </div>
+                    </div>
+                ` : ''}
 
-            html += `</tbody></table>`;
-
-            // Quantity selector at bottom
-            html += `
-                <div style="margin-top: 20px; display: flex; align-items: center; justify-content: flex-end; gap: 12px;">
-                    <label for="packageQuantityInput" style="font-weight: var(--font-weight-medium); color: var(--text-secondary); font-size: var(--font-size-sm);">Quantity</label>
-                    <input type="number" id="packageQuantityInput" value="${maxQuantity}" min="1" max="${totalAvailable}" 
-                        onchange="updatePackageQuantity(this.value)" 
-                        style="width: 70px; text-align: center;">
+                ${templateItem.matchingItems.map(item => {
+                    const available = item.availableQuantity ?? 0;
+                    const displayText = item.serial === 'N/A' ? 'No Serial Number' : `Serial: ${item.serial}`;
+                    const subText = item.serial === 'N/A' ? 'Item without serial number' : 'Specific unit';
+                    
+                    return `
+                        <div class="serial-option" onclick="selectPackageSerial('${item.serial}', '${item._id}')">
+                            <div class="serial-info">
+                                <div><strong>${displayText}</strong></div>
+                                <div style="font-size: 13px; color: #666;">${subText}</div>
+                            </div>
+                            <div style="color: ${available > 0 ? '#28a745' : '#dc3545'}; font-weight: 600;">
+                                ${available} available
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+                
+                <div style="margin-top: 20px;">
+                    <label for="packageQuantityInput" style="display: block; margin-bottom: 8px; font-weight: 500;">Quantity:</label>
+                    <input type="number" id="packageQuantityInput" value="${quantity}" min="1" max="${totalAvailable}" onchange="updatePackageQuantity(this.value)" style="width: 100%; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px;">
                 </div>
             `;
 
-            modalBody.innerHTML = html;
             document.getElementById('packageSerialModal').style.display = 'block';
         }
 
-        // Legacy wrapper - kept for compatibility
-        async function addTemplateItemToCart(inventoryId, itemLabel, quantity) {
-            openAddItemsModal(inventoryId, quantity);
-        }
-
-        // Legacy wrapper
-        async function addTemplateItemToCartWithQuantity(templateItem, requestedQuantity) {
-            openAddItemsModal(templateItem._id, Math.min(requestedQuantity, templateItem.availableQuantity));
-        }
-
-        // Legacy wrapper
-        function showTemplateSerialSelectionModal(templateItem, quantity) {
-            openAddItemsModal(templateItem._id, quantity);
-        }
-
-        // Show package contents modal with availability (LEGACY - redirects to template contents modal)
+        // Show package contents modal with availability (LEGACY - kept for compatibility)
         async function showPackageContentsModal(selectedPackage) {
-            // Redirect to the new template contents modal
-            await showTemplateContentsModal(selectedPackage);
+            try {
+                // Get inventory items for this package
+                const inventoryItems = await getPackageInventoryItems(selectedPackage.items);
+                
+                document.getElementById('packageModalTitle').textContent = `${selectedPackage.name} - Package Contents`;
+                
+                const container = document.getElementById('packageItemsContainer');
+                
+                if (inventoryItems.length === 0) {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 40px; color: #666;">
+                            <div style="font-size: 48px; color: #ccc; margin-bottom: 16px;">📦</div>
+                            <h3>No items in this package</h3>
+                            <p>This package appears to be empty.</p>
+                        </div>
+                    `;
+                } else {
+                    container.innerHTML = inventoryItems.map(item => {
+                        const isAvailable = item.availableQuantity > 0;
+                        const statusClass = isAvailable ? 'available' : 'unavailable';
+                        const statusText = isAvailable ? `${item.availableQuantity} Available` : 'Not Available';
+                        
+                        return `
+                            <div class="package-item ${statusClass}">
+                                <div class="package-item-info">
+                                    <div class="package-item-name">${item.label}</div>
+                                    <div class="package-item-details">
+                                        <span>Category: ${item.category}</span>
+                                        <span>Total Units: ${item.quantity}</span>
+                                        <span class="status-text ${statusClass}">${statusText}</span>
+                                    </div>
+                                </div>
+                                <div class="package-item-controls">
+                                    ${isAvailable ? `
+                                        <button class="package-btn primary" onclick="addPackageItemToCart('${item._id}', '${item.label}')">
+                                            <span class="material-symbols-outlined">add_shopping_cart</span>
+                                            Add to Cart
+                                        </button>
+                                    ` : `
+                                        <button class="package-btn" disabled>
+                                            <span class="material-symbols-outlined">block</span>
+                                            Unavailable
+                                        </button>
+                                    `}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+                
+                currentPackageItems = inventoryItems;
+                document.getElementById('packageContentsModal').style.display = 'block';
+                
+            } catch (error) {
+                console.error('Error loading package contents:', error);
+                alert('Failed to load package contents');
+            }
         }
 
         // Get inventory items for package with availability
@@ -3030,62 +2773,87 @@
             }
         }
 
-        // Show serial selection modal for package items (legacy - redirects to new checkbox modal)
+        // Show serial selection modal for package items
         function showPackageSerialSelectionModal(packageItem) {
-            // Find this item in currentPackageItems and use the new modal
-            const templateItem = currentPackageItems.find(item => item._id === packageItem._id);
-            if (templateItem) {
-                const maxQty = Math.min(templateItem.templateQuantity || 1, templateItem.availableQuantity || 1);
-                openAddItemsModal(templateItem._id, maxQty);
-            } else {
-                // Fallback: add the packageItem to currentPackageItems temporarily  
-                currentPackageItems.push({
-                    ...packageItem,
-                    brand: packageItem.label?.split(' ')[0] || 'Unknown',
-                    model: packageItem.label?.split(' ').slice(1).join(' ') || 'Unknown',
-                    templateQuantity: 1,
-                    availableQuantity: packageItem.availableQuantity ?? 1
-                });
-                openAddItemsModal(packageItem._id, packageItem.availableQuantity ?? 1);
-            }
-        }
+            selectedPackageInventoryId = packageItem._id;
+            selectedPackageSerial = null;
+            selectedPackageQuantity = 1;
 
-        // Handle serial checkbox toggle (multi-select)
-        function handleSerialCheckbox(checkbox) {
-            const serial = checkbox.dataset.serial;
-            const inventoryId = checkbox.dataset.inventoryId;
+            const labelParts = packageItem.label.split(' ');
+            const brand = labelParts[0] || 'Unknown';
+            const model = labelParts.slice(1).join(' ') || 'Unknown';
 
-            if (serial === '__no_preference__') {
-                // "No Preference" unchecks all specific serials
-                if (checkbox.checked) {
-                    document.querySelectorAll('.serial-checkbox').forEach(cb => {
-                        if (cb !== checkbox) cb.checked = false;
-                    });
-                    selectedPackageSerials = [];
-                    selectedPackageSerial = null; // Flag for no preference
-                } 
-            } else {
-                // Specific serial - uncheck "No Preference" if checked
-                if (checkbox.checked) {
-                    const noPrefCb = document.getElementById('serial_no_pref');
-                    if (noPrefCb) noPrefCb.checked = false;
-                }
-            }
-
-            // Rebuild selected serials list from checked checkboxes
-            selectedPackageSerials = [];
-            document.querySelectorAll('.serial-checkbox:checked').forEach(cb => {
-                if (cb.dataset.serial !== '__no_preference__') {
-                    selectedPackageSerials.push({
-                        serial: cb.dataset.serial,
-                        inventoryId: cb.dataset.inventoryId
-                    });
-                }
+            document.getElementById('packageSerialModalTitle').textContent = `Select Serial - ${brand} ${model}`;
+            
+            const modalBody = document.getElementById('packageSerialModalBody');
+            
+            let totalAvailable = 0;
+            packageItem.matchingItems.forEach(item => {
+                totalAvailable += (item.availableQuantity ?? 0);
             });
+            
+            // Check if all items have N/A serials (no real serial numbers)
+            const hasRealSerials = packageItem.matchingItems.some(item => item.serial && item.serial !== 'N/A');
+            
+            // Update description based on whether there are real serials
+            const description = hasRealSerials 
+                ? 'Choose a specific serial number or select "No Preference" to reserve any available unit.'
+                : 'This item has no serial numbers. You can reserve any available unit.';
+            
+            modalBody.innerHTML = `
+                <p style="margin-bottom: 16px; color: #666;">
+                    ${description}
+                </p>
+                
+                ${hasRealSerials ? `
+                    <div class="serial-option" onclick="selectPackageSerial(null)">
+                        <div class="serial-info">
+                            <div><strong>No Preference</strong></div>
+                            <div style="font-size: 13px; color: #666;">Reserve any available unit</div>
+                        </div>
+                        <div style="color: #28a745; font-weight: 600;">
+                            ${totalAvailable} available
+                        </div>
+                    </div>
+                ` : ''}
+
+                ${packageItem.matchingItems.map(item => {
+                    const available = item.availableQuantity ?? 0;
+                    const displayText = item.serial === 'N/A' ? 'No Serial Number' : `Serial: ${item.serial}`;
+                    const subText = item.serial === 'N/A' ? 'Item without serial number' : 'Specific unit';
+                    
+                    return `
+                        <div class="serial-option" onclick="selectPackageSerial('${item.serial}', '${item._id}')">
+                            <div class="serial-info">
+                                <div><strong>${displayText}</strong></div>
+                                <div style="font-size: 13px; color: #666;">${subText}</div>
+                            </div>
+                            <div style="color: ${available > 0 ? '#28a745' : '#dc3545'}; font-weight: 600;">
+                                ${available} available
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+                
+                <div style="margin-top: 20px;">
+                    <label for="packageQuantityInput" style="display: block; margin-bottom: 8px; font-weight: 500;">Quantity:</label>
+                    <input type="number" id="packageQuantityInput" value="1" min="1" max="${totalAvailable}" onchange="updatePackageQuantity(this.value)" style="width: 100%; padding: 8px; border: 2px solid #e0e0e0; border-radius: 6px;">
+                </div>
+            `;
+
+            document.getElementById('packageSerialModal').style.display = 'block';
         }
 
-        // Legacy - kept for compatibility
+        // Select serial for package item
         function selectPackageSerial(serial, inventoryId = null) {
+            // Remove previous selection
+            document.querySelectorAll('.serial-option').forEach(option => {
+                option.classList.remove('selected');
+            });
+
+            // Add selection to clicked option
+            event.currentTarget.classList.add('selected');
+            
             selectedPackageSerial = serial;
             selectedPackageInventoryId = inventoryId || selectedPackageInventoryId;
         }
@@ -3095,71 +2863,22 @@
             selectedPackageQuantity = parseInt(value) || 1;
         }
 
-        // Add selected package items to cart (multi-select aware)
+        // Add selected package item to cart
         async function addSelectedPackageItemToCart() {
-            const noPrefChecked = document.getElementById('serial_no_pref')?.checked;
-            const quantity = selectedPackageQuantity;
-
-            if (noPrefChecked) {
-                // No Preference: distribute quantity across available items sequentially
-                // Close modals first so the toast is readable
-                closePackageSerialModal();
-                closePackageModal();
-                await addQuantityWithNoPreference(selectedPackageInventoryId, quantity);
-                // Refresh gear list and cart badge
-                await loadGear();
-                updateCartBadge();
+            if (!selectedPackageInventoryId) {
+                alert('Please select a serial number option');
                 return;
             }
 
-            if (selectedPackageSerials.length > 0) {
-                // Multi-select: batch add all checked serials
-                const batchItems = selectedPackageSerials.map(sel => ({
-                    inventoryId: sel.inventoryId,
-                    quantity: 1,
-                    specificSerial: sel.serial
-                }));
-
-                try {
-                    const response = await fetch(`${API_BASE}/api/carts/${eventId}/items/batch`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('token')}`
-                        },
-                        body: JSON.stringify({ items: batchItems })
-                    });
-
-                    if (!response.ok) {
-                        const result = await response.json();
-                        throw new Error(result.error || 'Failed to add items');
-                    }
-
-                    const result = await response.json();
-                    // Close modals first so the toast is readable
-                    closePackageSerialModal();
-                    closePackageModal();
-                    if (result.successCount > 0) {
-                        showToast(`Added ${result.successCount} item${result.successCount > 1 ? 's' : ''} to cart`, 'success');
-                    }
-                    if (result.failCount > 0) {
-                        showToast(`${result.failCount} item${result.failCount > 1 ? 's' : ''} couldn't be added`, 'warning');
-                    }
-                } catch (error) {
-                    console.error('Batch serial add failed:', error);
-                    closePackageSerialModal();
-                    closePackageModal();
-                    showToast('Failed to add items: ' + error.message, 'error');
-                }
-
-                // Refresh gear list and cart badge
-                await loadGear();
-                updateCartBadge();
-                return;
+            // If no specific serial selected, distribute quantity across available items
+            if (!selectedPackageSerial) {
+                await addQuantityWithNoPreference(selectedPackageInventoryId, selectedPackageQuantity);
+            } else {
+                // Use the specific inventory item ID that was selected
+                await addPackageItemToCartDirect(selectedPackageInventoryId, selectedPackageQuantity, selectedPackageSerial);
             }
-
-            // Nothing selected
-            alert('Please select items to add (check "No Preference" or specific serials)');
+            
+            closePackageSerialModal();
         }
 
         // Add quantity with no preference - distribute across available items
@@ -3170,61 +2889,44 @@
                 return;
             }
 
-            // Build batch items — distribute across matching inventory items
-            const batchItems = [];
             let remainingQuantity = requestedQuantity;
+            let addedItems = [];
 
+            // Sort items by availability (highest first) to maximize successful additions
             const sortedItems = templateItem.matchingItems
                 .filter(item => (item.availableQuantity ?? 0) > 0)
                 .sort((a, b) => (b.availableQuantity ?? 0) - (a.availableQuantity ?? 0));
 
             for (const item of sortedItems) {
                 if (remainingQuantity <= 0) break;
-                const qtyToAdd = Math.min(remainingQuantity, item.availableQuantity ?? 0);
+
+                const availableQty = item.availableQuantity ?? 0;
+                const qtyToAdd = Math.min(remainingQuantity, availableQty);
+
                 if (qtyToAdd > 0) {
-                    batchItems.push({ inventoryId: item._id, quantity: qtyToAdd, specificSerial: null });
-                    remainingQuantity -= qtyToAdd;
-                }
-            }
-
-            if (batchItems.length === 0) {
-                alert(`No units of ${templateItem.brand} ${templateItem.model} could be added`);
-                return;
-            }
-
-            // Single batch API call instead of N sequential calls
-            try {
-                const response = await fetch(`${API_BASE}/api/carts/${eventId}/items/batch`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    },
-                    body: JSON.stringify({ items: batchItems })
-                });
-
-                if (!response.ok) {
-                    const result = await response.json();
-                    throw new Error(result.error || 'Failed to add items');
-                }
-
-                const result = await response.json();
-                const totalAdded = result.successCount;
-
-                if (totalAdded > 0) {
-                    let message = `Added ${totalAdded} unit${totalAdded !== 1 ? 's' : ''} of ${templateItem.brand} ${templateItem.model}`;
-                    if (result.failCount > 0) {
-                        message += ` (${result.failCount} unavailable)`;
+                    try {
+                        await addPackageItemToCartDirect(item._id, qtyToAdd, null);
+                        addedItems.push(`${qtyToAdd} units`);
+                        remainingQuantity -= qtyToAdd;
+                    } catch (error) {
+                        console.error(`Failed to add ${item.label}:`, error);
                     }
-                    showToast(message, result.failCount > 0 ? 'warning' : 'success');
                 }
-            } catch (error) {
-                console.error(`Failed to add ${templateItem.brand} ${templateItem.model}:`, error);
-                showToast(`Failed to add ${templateItem.brand} ${templateItem.model}: ${error.message}`, 'error');
+            }
+
+            const totalAdded = requestedQuantity - remainingQuantity;
+            if (totalAdded > 0) {
+                let message = `Added ${totalAdded} units of ${templateItem.brand} ${templateItem.model}`;
+                if (totalAdded < requestedQuantity) {
+                    message += ` (${remainingQuantity} units unavailable)`;
+                }
+                showToast(message, totalAdded === requestedQuantity ? 'success' : 'warning');
+            } else {
+                alert(`No units of ${templateItem.brand} ${templateItem.model} could be added`);
             }
         }
 
-        // Add package item to cart directly (calls cart API)
+        // Add package item to cart directly
         async function addPackageItemToCartDirect(inventoryId, quantity, specificSerial) {
             try {
                 const response = await fetch(`${API_BASE}/api/carts/${eventId}/items`, {
@@ -3240,19 +2942,26 @@
                     })
                 });
 
-                if (!response.ok) {
+                if (response.ok) {
+                    const item = currentPackageItems.find(i => i._id === inventoryId);
+                    showToast(`Added ${item?.label || 'item'} to cart!`, 'success');
+                    
+                    // Refresh package modal to update availability
+                    const selectedPackage = currentTemplate;
+                    if (selectedPackage) {
+                        await showPackageContentsModal(selectedPackage);
+                    }
+                } else {
                     const result = await response.json();
-                    throw new Error(result.error || 'Failed to add item to cart');
+                    alert(result.error || 'Failed to add item to cart');
                 }
-                
-                return true;
             } catch (error) {
                 console.error('Error adding package item to cart:', error);
-                throw error;
+                alert('Failed to add item to cart. Please try again.');
             }
         }
 
-        // Add all available package items to cart (batch - single API call)
+        // Add all available package items to cart
         async function addAllAvailableToCart() {
             const availableItems = currentPackageItems.filter(item => item.availableQuantity > 0);
             
@@ -3261,88 +2970,44 @@
                 return;
             }
 
-            if (!confirm(`Add all ${availableItems.length} available items to cart with no serial preference?`)) {
+            if (!confirm(`Add all ${availableItems.length} available items to cart?`)) {
                 return;
             }
 
-            // Build batch request: collect all individual inventory items to add
-            const batchItems = [];
-            const partialAdds = [];
-
+            let successCount = 0;
+            let partialAdds = [];
+            
             for (const item of availableItems) {
-                const templateQty = item.templateQuantity || 1;
-                const availableQty = item.availableQuantity;
-                const qtyToAdd = Math.min(templateQty, availableQty);
-
-                if (qtyToAdd > 0 && item.matchingItems) {
-                    // Distribute quantity across matching inventory items (highest availability first)
-                    let remaining = qtyToAdd;
-                    const sorted = item.matchingItems
-                        .filter(mi => (mi.availableQuantity ?? 0) > 0)
-                        .sort((a, b) => (b.availableQuantity ?? 0) - (a.availableQuantity ?? 0));
-
-                    for (const mi of sorted) {
-                        if (remaining <= 0) break;
-                        const qty = Math.min(remaining, mi.availableQuantity ?? 0);
-                        if (qty > 0) {
-                            batchItems.push({ inventoryId: mi._id, quantity: qty, specificSerial: null });
-                            remaining -= qty;
+                try {
+                    const templateQty = item.templateQuantity || 1;
+                    const availableQty = item.availableQuantity;
+                    const qtyToAdd = Math.min(templateQty, availableQty);
+                    
+                    if (qtyToAdd > 0) {
+                        await addTemplateItemToCartWithQuantity(item, qtyToAdd);
+                        successCount++;
+                        
+                        if (qtyToAdd < templateQty) {
+                            partialAdds.push(`${item.brand} ${item.model}: added ${qtyToAdd}/${templateQty}`);
                         }
                     }
-
-                    if (qtyToAdd < templateQty) {
-                        partialAdds.push(`${item.brand} ${item.model}: ${qtyToAdd}/${templateQty}`);
-                    }
+                } catch (error) {
+                    console.error(`Failed to add ${item.label} to cart:`, error);
                 }
             }
 
-            if (batchItems.length === 0) {
-                alert('No items could be resolved for adding');
-                return;
+            let message = `Added ${successCount} items to cart!`;
+            if (partialAdds.length > 0) {
+                message += `\n\nPartial quantities added:\n${partialAdds.join('\n')}`;
             }
-
-            try {
-                const response = await fetch(`${API_BASE}/api/carts/${eventId}/items/batch`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    },
-                    body: JSON.stringify({ items: batchItems })
-                });
-
-                if (!response.ok) {
-                    const result = await response.json();
-                    throw new Error(result.error || 'Batch add failed');
-                }
-
-                const result = await response.json();
-                // Close modal first so the toast is readable (not blurred by backdrop)
-                closePackageModal();
-
-                if (result.successCount > 0 && result.failCount === 0 && partialAdds.length === 0) {
-                    showToast(`✓ All ${result.successCount} item${result.successCount !== 1 ? 's' : ''} added to cart successfully!`, 'success');
-                } else if (result.successCount > 0) {
-                    let message = `${result.successCount} item${result.successCount !== 1 ? 's' : ''} added to cart`;
-                    if (result.failCount > 0) {
-                        message += `, ${result.failCount} unavailable`;
-                    }
-                    if (partialAdds.length > 0) {
-                        message += ` (partial: ${partialAdds.join(', ')})`;
-                    }
-                    showToast(message, 'warning');
-                } else {
-                    showToast('No items could be added — all unavailable', 'error');
-                }
-            } catch (error) {
-                console.error('Batch add to cart failed:', error);
-                closePackageModal();
-                showToast('Failed to add items to cart: ' + error.message, 'error');
+            
+            showToast(message, successCount > 0 ? 'success' : 'warning');
+            
+            // Refresh package modal
+            const selectedPackage = currentTemplate;
+            if (selectedPackage) {
+                await showPackageContentsModal(selectedPackage);
             }
-
-            // Refresh the gear list and cart badge to reflect updated state
-            await loadGear();
-            updateCartBadge();
         }
 
         // Close package modals
@@ -3355,33 +3020,12 @@
             document.getElementById('packageSerialModal').style.display = 'none';
             selectedPackageInventoryId = null;
             selectedPackageSerial = null;
-            selectedPackageSerials = [];
             selectedPackageQuantity = 1;
         }
 
         // View cart function
         function viewCart() {
-            window.location.href = `/checkout.html?eventId=${eventId}`;
-        }
-
-        // Fetch cart item count and update badge
-        async function updateCartBadge() {
-            try {
-                const response = await fetch(`${API_BASE}/api/carts/${eventId}`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
-                });
-                if (response.ok) {
-                    const cart = await response.json();
-                    const count = (cart.items || []).length;
-                    const badge = document.getElementById('cartBadge');
-                    if (badge) {
-                        badge.textContent = count;
-                        badge.style.display = count > 0 ? 'inline-block' : 'none';
-                    }
-                }
-            } catch (e) {
-                // Silently fail — badge just won't update
-            }
+            window.location.href = `../checkout.html?eventId=${eventId}`;
         }
 
         // Check user role and show admin buttons
@@ -3392,6 +3036,11 @@
                     // Decode token to get user info
                     const payload = JSON.parse(atob(token.split('.')[1]));
                     currentUser = payload;
+                    
+                    // Show inventory management button for admins
+                    if (currentUser.role === 'admin') {
+                        document.getElementById('manageInventoryBtn').style.display = 'flex';
+                    }
                 }
             } catch (error) {
                 console.error('Error checking user role:', error);
@@ -3401,13 +3050,6 @@
         // Update UI based on user permissions
         function updateUIBasedOnPermissions() {
             console.log('Updating UI based on permissions:', userPermissions);
-            
-            // Add/remove .owner class on body to control delete button visibility via CSS
-            if (userPermissions.canReserve) {
-                document.body.classList.add('owner');
-            } else {
-                document.body.classList.remove('owner');
-            }
             
             // Show/hide Add Items button
             const addItemsBtn = document.getElementById('addItemsBtn');
@@ -3444,12 +3086,12 @@
 
         // Navigation
         function addItems() {
-            const checkOutDate = document.getElementById('checkoutDate').value;
-            const checkInDate = document.getElementById('checkinDate').value;
+            const checkOutDate = document.getElementById('checkOutDate').value;
+            const checkInDate = document.getElementById('checkInDate').value;
 
             if (!checkOutDate || !checkInDate) {
                 if (confirm('No dates set. Would you like to set check-out and check-in dates first?')) {
-                    document.getElementById('checkoutDate').focus();
+                    document.getElementById('checkOutDate').focus();
                     return;
                 } else {
                     // User clicked Cancel, stay on current page
@@ -3457,7 +3099,11 @@
                 }
             }
 
-            window.location.href = `/inventory.html?eventId=${eventId}`;
+            window.location.href = `../inventory.html?eventId=${eventId}`;
+        }
+
+        function manageInventory() {
+            window.location.href = `inventory-management.html`;
         }
 
         // Setup bottom navigation - matches main dashboard exactly
@@ -3564,10 +3210,10 @@
                     
                     if (page !== 'gear') {
                         if (page === 'events') {
-                            window.location.href = `/dashboard.html#events`;
+                            window.location.href = `../dashboard.html#events`;
                         } else {
                             // Navigate to main dashboard with the specific page
-                            window.location.href = `/dashboard.html#${page}?id=${eventId}`;
+                            window.location.href = `../dashboard.html?eventId=${eventId}&page=${page}`;
                         }
                     }
                 });
@@ -3664,10 +3310,10 @@
                     
                     if (page !== 'gear') {
                         if (page === 'events') {
-                            window.location.href = `/dashboard.html#events`;
+                            window.location.href = `../dashboard.html#events`;
                         } else {
                             // Navigate to main dashboard with the specific page
-                            window.location.href = `/dashboard.html#${page}?id=${eventId}`;
+                            window.location.href = `../dashboard.html?eventId=${eventId}&page=${page}`;
                         }
                     }
                 });
@@ -3763,10 +3409,10 @@
                     
                     if (page !== 'gear') {
                         if (page === 'events') {
-                            window.location.href = `/dashboard.html#events`;
+                            window.location.href = `../dashboard.html#events`;
                         } else {
                             // Navigate to main dashboard with the specific page
-                            window.location.href = `/dashboard.html#${page}?id=${eventId}`;
+                            window.location.href = `../dashboard.html?eventId=${eventId}&page=${page}`;
                         }
                     }
                 };
@@ -3807,27 +3453,27 @@
                 if (currentEvent.gear.checkOutDate) {
                     // If it's already a date string like "2025-07-02", use it directly
                     if (typeof currentEvent.gear.checkOutDate === 'string' && currentEvent.gear.checkOutDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                        document.getElementById('checkoutDate').value = currentEvent.gear.checkOutDate;
+                        document.getElementById('checkOutDate').value = currentEvent.gear.checkOutDate;
                     } else {
                         // Handle other date formats by extracting date part
                         const checkOutDate = new Date(currentEvent.gear.checkOutDate);
                         const checkOutDateStr = checkOutDate.getFullYear() + '-' + 
                             String(checkOutDate.getMonth() + 1).padStart(2, '0') + '-' + 
                             String(checkOutDate.getDate()).padStart(2, '0');
-                        document.getElementById('checkoutDate').value = checkOutDateStr;
+                        document.getElementById('checkOutDate').value = checkOutDateStr;
                     }
                 }
                 if (currentEvent.gear.checkInDate) {
                     // If it's already a date string like "2025-07-02", use it directly
                     if (typeof currentEvent.gear.checkInDate === 'string' && currentEvent.gear.checkInDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                        document.getElementById('checkinDate').value = currentEvent.gear.checkInDate;
+                        document.getElementById('checkInDate').value = currentEvent.gear.checkInDate;
                     } else {
                         // Handle other date formats by extracting date part
                         const checkInDate = new Date(currentEvent.gear.checkInDate);
                         const checkInDateStr = checkInDate.getFullYear() + '-' + 
                             String(checkInDate.getMonth() + 1).padStart(2, '0') + '-' + 
                             String(checkInDate.getDate()).padStart(2, '0');
-                        document.getElementById('checkinDate').value = checkInDateStr;
+                        document.getElementById('checkInDate').value = checkInDateStr;
                     }
                 }
             }
@@ -3867,48 +3513,26 @@
         }
 
         function showToast(message, type) {
-            const colorMap = {
-                success: '#28a745',
-                warning: '#f0ad4e',
-                info: '#17a2b8',
-                error: '#dc3545'
-            };
-            const iconMap = {
-                success: 'check_circle',
-                warning: 'warning',
-                info: 'info',
-                error: 'error'
-            };
-            const bg = colorMap[type] || colorMap.info;
-            const icon = iconMap[type] || iconMap.info;
-
             const toast = document.createElement('div');
             toast.style.cssText = `
                 position: fixed;
                 top: 20px;
                 right: 20px;
-                background: ${bg};
+                background: ${type === 'success' ? '#28a745' : '#dc3545'};
                 color: white;
-                padding: 14px 22px;
-                border-radius: 10px;
+                padding: 12px 20px;
+                border-radius: 8px;
                 font-weight: 500;
                 z-index: 3000;
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                box-shadow: 0 4px 16px rgba(0,0,0,0.3);
-                max-width: 420px;
                 animation: slideIn 0.3s ease;
             `;
-            toast.innerHTML = `<span class="material-symbols-outlined" style="font-size:20px;">${icon}</span><span>${message}</span>`;
-
+            toast.textContent = message;
+            
             document.body.appendChild(toast);
-
+            
             setTimeout(() => {
-                toast.style.transition = 'opacity 0.3s ease';
-                toast.style.opacity = '0';
-                setTimeout(() => toast.remove(), 300);
-            }, 4000);
+                toast.remove();
+            }, 3000);
         }
 
         // Close modal when clicking outside
@@ -3916,10 +3540,6 @@
             const modal = document.getElementById('newPackageModal');
             if (event.target === modal) {
                 closeNewPackageModal();
-            }
-            const detailsModal = document.getElementById('templateDetailsModal');
-            if (event.target === detailsModal) {
-                closeTemplateDetailsModal();
             }
         }
 
@@ -3935,44 +3555,7 @@
             }
         }
 
-        // Expose functions to global scope for inline event handlers
-        window.saveDates = saveDates;
-        window.handleListSelection = handleListSelection;
-        window.renameCurrentList = renameCurrentList;
-        window.deleteCurrentList = deleteCurrentList;
-        window.openTemplatesModal = openTemplatesModal;
-        window.saveAsTemplate = saveAsTemplate;
-        window.viewCart = viewCart;
-        window.addItems = addItems;
-        window.closeNewPackageModal = closeNewPackageModal;
-        window.createNewPackage = createNewPackage;
-        window.closePackageModal = closePackageModal;
-        window.addAllAvailableToCart = addAllAvailableToCart;
-        window.closePackageSerialModal = closePackageSerialModal;
-        window.addSelectedPackageItemToCart = addSelectedPackageItemToCart;
-        window.closeTemplatesModal = closeTemplatesModal;
-        window.openCreateTemplateModal = openCreateTemplateModal;
-        window.closeCreateTemplateModal = closeCreateTemplateModal;
-        window.createTemplateFromModal = createTemplateFromModal;
-        window.togglePacked = togglePacked;
-        window.deleteGearItem = deleteGearItem;
-        window.toggleManualItem = toggleManualItem;
-        window.deleteManualItem = deleteManualItem;
-        window.addManualItem = addManualItem;
-        window.cancelAddManualItem = cancelAddManualItem;
-        window.showAddManualForm = showAddManualForm;
-        window.loadTemplate = loadTemplate;
-        window.deleteTemplateFromModal = deleteTemplateFromModal;
-        window.addTemplateItemToCart = addTemplateItemToCart;
-        window.selectPackageSerial = selectPackageSerial;
-        window.updatePackageQuantity = updatePackageQuantity;
-        window.addPackageItemToCart = addPackageItemToCart;
-        window.navigateToPage = navigateToPage;
-        window.showTemplateDetails = showTemplateDetails;
-        window.closeTemplateDetailsModal = closeTemplateDetailsModal;
-        window.deleteTemplateFromDetails = deleteTemplateFromDetails;
-        window.openAddItemsModal = openAddItemsModal;
-        window.handleSerialCheckbox = handleSerialCheckbox;
 
-        })(); // End of IIFE
     </script>
+</body>
+</html>

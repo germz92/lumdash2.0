@@ -1,0 +1,1162 @@
+/* ===== TIMESHEET PAGE RESET - Override all conflicting styles ===== */
+
+/* Reset the page container for timesheet */
+body:has(.timesheet-page) #page-container {
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
+/* Hide bottom nav on timesheet page */
+body:has(.timesheet-page) #bottomNav,
+body:has(.timesheet-page) .bottom-nav-material {
+  display: none !important;
+}
+
+/* ===== TIMESHEET PAGE STYLES ===== */
+.timesheet-page {
+  min-height: auto;
+  background: linear-gradient(145deg, #fafbfc 0%, #f0f2f5 100%);
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+
+.timesheet-header {
+  background: #fff;
+  padding: 12px 16px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.header-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.header-top h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #CC0007;
+  flex: 1;
+}
+
+.header-top .btn-edit-mode {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+/* Inline summary in header */
+.timesheet-summary-inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.timesheet-summary-inline .summary-info {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.timesheet-summary-inline .summary-label {
+  font-size: 14px;
+  color: #666;
+}
+
+.timesheet-summary-inline .summary-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #CC0007;
+}
+
+.timesheet-summary-inline .filter-dropdown {
+  display: block !important;
+  position: relative !important;
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  min-width: auto !important;
+  padding: 0 !important;
+}
+
+.timesheet-summary-inline .filter-dropdown select {
+  padding: 8px 32px 8px 12px;
+  font-size: 13px;
+  min-width: 130px;
+}
+
+/* Custom date range picker */
+.custom-date-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: #f8f9fa;
+  border-radius: 8px;
+}
+
+.custom-date-range input[type="date"] {
+  padding: 8px 12px;
+  font-size: 13px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: #fff;
+  flex: 1;
+  min-width: 0;
+}
+
+.custom-date-range input[type="date"]:focus {
+  outline: none;
+  border-color: #CC0007;
+}
+
+.custom-date-range .date-separator {
+  color: #666;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.custom-date-range .btn-apply-range {
+  padding: 8px 16px;
+  background: #CC0007;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+
+.custom-date-range .btn-apply-range:hover {
+  background: #a30006;
+}
+
+.btn-back {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid #e0e0e0;
+  color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  box-shadow: none;
+}
+
+.btn-back:hover {
+  background: #f5f5f5;
+  color: #CC0007;
+  border-color: #CC0007;
+  box-shadow: none;
+}
+
+/* Old timesheet-actions - hidden, now using footer */
+.timesheet-actions {
+  display: none;
+}
+
+.action-group {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-action {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  text-transform: none;
+}
+
+.btn-action .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.btn-clock-in {
+  background: linear-gradient(135deg, #28a745 0%, #20873a 100%);
+  color: #fff;
+  box-shadow: 0 3px 12px rgba(40, 167, 69, 0.25);
+}
+
+.btn-clock-in:hover {
+  background: linear-gradient(135deg, #20873a 0%, #1a6e30 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(40, 167, 69, 0.35);
+}
+
+.btn-clock-out {
+  background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+  color: #fff;
+  box-shadow: 0 3px 12px rgba(220, 53, 69, 0.25);
+}
+
+.btn-clock-out:hover {
+  background: linear-gradient(135deg, #c82333 0%, #bd2130 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(220, 53, 69, 0.35);
+}
+
+.btn-travel {
+  background: linear-gradient(135deg, #6c757d 0%, #5a6268 100%);
+  color: #fff;
+  box-shadow: 0 3px 12px rgba(108, 117, 125, 0.25);
+}
+
+.btn-travel:hover {
+  background: linear-gradient(135deg, #5a6268 0%, #495057 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(108, 117, 125, 0.35);
+}
+
+.btn-manual {
+  background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+  color: #fff;
+  box-shadow: 0 3px 12px rgba(23, 162, 184, 0.25);
+}
+
+.btn-manual:hover {
+  background: linear-gradient(135deg, #138496 0%, #117a8b 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(23, 162, 184, 0.35);
+}
+
+.btn-edit-mode {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 14px;
+  background: transparent;
+  color: #666;
+  border: 2px solid #e0e0e0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: none;
+  box-shadow: none;
+}
+
+.btn-edit-mode:hover {
+  border-color: #CC0007;
+  color: #CC0007;
+  background: rgba(204, 0, 7, 0.04);
+  box-shadow: none;
+}
+
+.btn-edit-mode.active {
+  background: #CC0007;
+  color: #fff;
+  border-color: #CC0007;
+}
+
+/* Legacy summary styles - keeping for compatibility */
+.timesheet-summary {
+  display: none;
+}
+
+/* Action buttons section */
+.timesheet-actions-footer {
+  background: #fff;
+  padding: 16px;
+  border-top: 1px solid #eee;
+}
+
+.timesheet-actions-footer .action-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.timesheet-actions-footer .btn-action {
+  padding: 12px 16px;
+  font-size: 14px;
+  justify-content: center;
+  gap: 8px;
+}
+
+.timesheet-actions-footer .btn-action .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.summary-card {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  background: #fff;
+  padding: 16px 24px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.summary-label {
+  font-size: 16px;
+  font-weight: 500;
+  color: #666;
+}
+
+.summary-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #CC0007;
+}
+
+.filter-dropdown select {
+  padding: 12px 40px 12px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E") no-repeat right 16px center;
+  appearance: none;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+  color: #333;
+}
+
+.filter-dropdown select:focus {
+  outline: none;
+  border-color: #CC0007;
+}
+
+.timesheet-table-container {
+  padding: 12px 16px 20px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.timesheet-table {
+  width: 100%;
+  background: #fff;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  border-collapse: collapse;
+}
+
+.timesheet-table thead {
+  background: linear-gradient(135deg, #f8f9fa 0%, #f0f2f5 100%);
+}
+
+.timesheet-table th {
+  padding: 16px 14px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #666;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.timesheet-table th:first-child {
+  padding-left: 20px;
+  width: 60px;
+}
+
+.timesheet-table th.edit-col {
+  width: 50px;
+  text-align: center;
+}
+
+.timesheet-table tbody tr {
+  border-bottom: 1px solid #f0f2f5;
+  transition: background 0.15s ease;
+}
+
+.timesheet-table tbody tr:hover {
+  background: #fafbfc;
+}
+
+.timesheet-table tbody tr.entry-row-in {
+  border-left: 3px solid #28a745;
+}
+
+.timesheet-table tbody tr.entry-row-out {
+  border-left: 3px solid #dc3545;
+}
+
+.timesheet-table tbody tr.entry-row-travel {
+  border-left: 3px solid #6c757d;
+}
+
+.timesheet-table td {
+  padding: 14px;
+  color: #333;
+  font-size: 14px;
+}
+
+.timesheet-table td:first-child {
+  padding-left: 20px;
+}
+
+.entry-type-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.entry-type-badge.type-in {
+  background: rgba(40, 167, 69, 0.12);
+  color: #28a745;
+}
+
+.entry-type-badge.type-out {
+  background: rgba(220, 53, 69, 0.12);
+  color: #dc3545;
+}
+
+.entry-type-badge.type-travel {
+  background: rgba(108, 117, 125, 0.12);
+  color: #6c757d;
+}
+
+.entry-hours {
+  font-weight: 600;
+  color: #CC0007;
+}
+
+.entry-notes {
+  color: #666;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Delete button - only visible in edit mode */
+.btn-delete-entry {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: transparent;
+  border: 1px solid #e0e0e0;
+  color: #999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+  box-shadow: none;
+}
+
+.edit-mode-active .btn-delete-entry {
+  display: flex;
+}
+
+.btn-delete-entry:hover {
+  background: rgba(220, 53, 69, 0.1);
+  color: #dc3545;
+  border-color: #dc3545;
+  box-shadow: none;
+}
+
+.btn-delete-entry .material-symbols-outlined {
+  font-size: 18px;
+}
+
+/* Inline editing styles */
+.inline-edit-input,
+.inline-edit-select {
+  display: none;
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 2px solid #CC0007;
+  border-radius: 6px;
+  background: #fff;
+  width: 100%;
+  max-width: 140px;
+  box-sizing: border-box;
+}
+
+.inline-edit-input:focus,
+.inline-edit-select:focus {
+  outline: none;
+  border-color: #a30006;
+  box-shadow: 0 0 0 3px rgba(204, 0, 7, 0.1);
+}
+
+/* Cell display text */
+.cell-display {
+  display: block;
+}
+
+/* In edit mode, show inputs and hide display text */
+.edit-mode-active .cell-display {
+  display: none;
+}
+
+.edit-mode-active .inline-edit-input,
+.edit-mode-active .inline-edit-select {
+  display: block;
+}
+
+/* Type select styling */
+.inline-edit-select {
+  max-width: 80px;
+  cursor: pointer;
+}
+
+/* Notes input wider */
+.cell-notes .inline-edit-input {
+  max-width: 200px;
+}
+
+/* Hours input narrower */
+.cell-hours .inline-edit-input {
+  max-width: 80px;
+  text-align: center;
+}
+
+/* Time input */
+.cell-time .inline-edit-input {
+  max-width: 110px;
+}
+
+/* Date input */
+.cell-date .inline-edit-input {
+  max-width: 140px;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+.empty-icon {
+  font-size: 64px;
+  color: #ccc;
+  margin-bottom: 16px;
+}
+
+.empty-state h3 {
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: #333;
+  margin: 0 0 8px;
+}
+
+.empty-state p {
+  color: #666;
+  margin: 0;
+}
+
+/* Modal styles - high specificity with !important to override all global styles */
+body #manualEntryModal,
+body #editEntryModal,
+#manualEntryModal,
+#editEntryModal {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  background: rgba(0, 0, 0, 0.5) !important;
+  align-items: center !important;
+  justify-content: center !important;
+  z-index: 999999 !important;
+  padding: 12px !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+}
+
+#manualEntryModal .modal-content,
+#editEntryModal .modal-content {
+  background: #fff !important;
+  border-radius: 16px !important;
+  width: 100% !important;
+  max-width: 400px !important;
+  max-height: 90vh !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25) !important;
+  animation: modalSlideIn 0.2s ease;
+  position: relative !important;
+  z-index: 1000000 !important;
+  margin: auto !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+}
+
+/* Prevent body scroll when modal is open */
+body.modal-open {
+  overflow: hidden !important;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+#manualEntryModal .modal-header,
+#editEntryModal .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid #f0f2f5;
+}
+
+#manualEntryModal .modal-header h3,
+#editEntryModal .modal-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #333;
+}
+
+#manualEntryModal .close-btn,
+#editEntryModal .close-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: #666;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  padding: 0;
+  box-shadow: none;
+}
+
+#manualEntryModal .close-btn:hover,
+#editEntryModal .close-btn:hover {
+  background: #f5f5f5;
+  box-shadow: none;
+}
+
+#manualEntryModal .modal-body,
+#editEntryModal .modal-body {
+  padding: 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+#manualEntryModal .form-group,
+#editEntryModal .form-group {
+  margin-bottom: 20px;
+  width: 100% !important;
+  max-width: none !important;
+}
+
+#manualEntryModal .form-group:last-child,
+#editEntryModal .form-group:last-child {
+  margin-bottom: 0;
+}
+
+#manualEntryModal .form-group label,
+#editEntryModal .form-group label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+#manualEntryModal .form-group input,
+#manualEntryModal .form-group select,
+#editEntryModal .form-group input,
+#editEntryModal .form-group select {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  padding: 12px 16px !important;
+  font-size: 15px !important;
+  border: 2px solid #e0e0e0 !important;
+  border-radius: 10px !important;
+  transition: border-color 0.2s ease;
+  box-sizing: border-box !important;
+  display: block !important;
+}
+
+#manualEntryModal .form-group input:focus,
+#manualEntryModal .form-group select:focus,
+#editEntryModal .form-group input:focus,
+#editEntryModal .form-group select:focus {
+  outline: none;
+  border-color: #CC0007;
+}
+
+#manualEntryModal .form-select,
+#editEntryModal .form-select {
+  width: 100% !important;
+  max-width: none !important;
+  padding: 12px 16px;
+  font-size: 15px;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E") no-repeat right 16px center;
+  appearance: none;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+  color: #333;
+  box-sizing: border-box;
+}
+
+#manualEntryModal .modal-actions,
+#editEntryModal .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px;
+  border-top: 1px solid #f0f2f5;
+}
+
+#manualEntryModal .btn-primary,
+#editEntryModal .btn-primary {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #CC0007 0%, #a30006 100%);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+#manualEntryModal .btn-primary:hover,
+#editEntryModal .btn-primary:hover {
+  background: linear-gradient(135deg, #a30006 0%, #8a0005 100%);
+  box-shadow: 0 4px 12px rgba(204, 0, 7, 0.25);
+}
+
+#manualEntryModal .btn-outlined,
+#editEntryModal .btn-outlined {
+  padding: 12px 24px;
+  background: transparent;
+  color: #666;
+  border: 2px solid #e0e0e0;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: none;
+}
+
+#manualEntryModal .btn-outlined:hover,
+#editEntryModal .btn-outlined:hover {
+  border-color: #999;
+  color: #333;
+  box-shadow: none;
+}
+
+#manualEntryModal .btn-danger,
+#editEntryModal .btn-danger {
+  padding: 12px 24px;
+  background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-right: auto;
+}
+
+#manualEntryModal .btn-danger:hover,
+#editEntryModal .btn-danger:hover {
+  background: linear-gradient(135deg, #c82333 0%, #bd2130 100%);
+  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.25);
+}
+
+/* Pair grouping styles */
+.timesheet-table tbody tr.pair-start {
+  border-bottom: none;
+}
+
+.timesheet-table tbody tr.pair-end {
+  background: #fafbfc;
+}
+
+.pair-group {
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  margin: 8px 0;
+}
+
+/* Mobile cards container - hidden on desktop */
+.mobile-cards-container {
+  display: none;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .timesheet-page {
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+  
+  .timesheet-header {
+    padding: 10px 14px;
+  }
+  
+  .header-top {
+    margin-bottom: 8px;
+  }
+  
+  .header-top h1 {
+    font-size: 1.2rem;
+  }
+  
+  .header-top .btn-edit-mode {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  
+  .timesheet-summary-inline .summary-value {
+    font-size: 1.2rem;
+  }
+  
+  .custom-date-range {
+    flex-wrap: wrap;
+    padding: 10px;
+    gap: 8px;
+  }
+  
+  .custom-date-range input[type="date"] {
+    flex: 1 1 40%;
+    min-width: 120px;
+  }
+  
+  .custom-date-range .date-separator {
+    flex: 0 0 auto;
+  }
+  
+  .custom-date-range .btn-apply-range {
+    flex: 1 1 100%;
+    margin-top: 4px;
+  }
+  
+  .timesheet-table-container {
+    padding: 8px 12px 12px;
+    flex: 1;
+    overflow-y: auto;
+  }
+  
+  .timesheet-actions-footer {
+    padding: 12px;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom, 12px));
+  }
+  
+  .timesheet-actions-footer .action-group {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  
+  .timesheet-actions-footer .btn-action {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+  
+  .timesheet-actions-footer .btn-action .material-symbols-outlined {
+    font-size: 18px;
+  }
+  
+  /* Hide table view on mobile, show cards */
+  .timesheet-table {
+    display: none !important;
+  }
+  
+  .mobile-cards-container {
+    display: block;
+  }
+  
+  .entry-card {
+    display: block;
+    background: #fff;
+    border-radius: 12px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    overflow: hidden;
+  }
+  
+  .entry-card-main {
+    display: grid;
+    grid-template-columns: auto 1fr 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+  }
+  
+  .entry-card.entry-row-in {
+    border-left: 4px solid #28a745;
+  }
+  
+  .entry-card.entry-row-out {
+    border-left: 4px solid #dc3545;
+  }
+  
+  .entry-card.entry-row-travel {
+    border-left: 4px solid #6c757d;
+  }
+  
+  /* Paired card styles (clock in + clock out together) */
+  .entry-card.entry-card-paired {
+    border-left: 4px solid;
+    border-image: linear-gradient(to bottom, #28a745 50%, #dc3545 50%) 1;
+  }
+  
+  .entry-card-pair-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px 8px;
+    border-bottom: 1px solid #f0f2f5;
+  }
+  
+  .entry-card-pair-date {
+    font-size: 14px;
+    font-weight: 600;
+    color: #333;
+  }
+  
+  .entry-card-pair-hours {
+    font-size: 18px;
+    font-weight: 700;
+    color: #CC0007;
+  }
+  
+  .entry-card-pair-times {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 12px 16px;
+    gap: 8px;
+  }
+  
+  .entry-card-pair-time {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    flex: 1;
+    padding: 8px;
+    border-radius: 8px;
+    transition: background 0.2s;
+  }
+  
+  /* Highlight IN/OUT areas in edit mode */
+  .edit-mode-active .entry-card-pair-time {
+    cursor: pointer;
+    background: #f5f5f5;
+    border: 1px dashed #ccc;
+    position: relative;
+  }
+  
+  .edit-mode-active .entry-card-pair-time::after {
+    content: 'tap to edit';
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 9px;
+    color: #999;
+  }
+  
+  .edit-mode-active .entry-card-pair-time:hover {
+    background: #e8f4fd;
+    border-color: #2196F3;
+  }
+  
+  .entry-card-pair-time .time-value {
+    font-size: 15px;
+    font-weight: 500;
+    color: #333;
+  }
+  
+  .entry-card-pair-arrow {
+    color: #999;
+    display: flex;
+    align-items: center;
+  }
+  
+  .entry-card-pair-arrow .material-symbols-outlined {
+    font-size: 20px;
+  }
+  
+  .entry-card .entry-type-badge {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+  
+  .entry-card-date {
+    font-size: 14px;
+    font-weight: 500;
+    color: #333;
+  }
+  
+  .entry-card-time {
+    font-size: 14px;
+    color: #666;
+    text-align: center;
+  }
+  
+  .entry-card-hours {
+    font-size: 14px;
+    font-weight: 600;
+    color: #CC0007;
+    text-align: right;
+  }
+  
+  /* Collapsible notes */
+  .entry-card-notes {
+    display: block;
+    background: #f8f9fa;
+    border-top: 1px solid #eee;
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.3s ease, padding 0.3s ease;
+    padding: 0 16px;
+  }
+  
+  .entry-card-notes.expanded {
+    max-height: 100px;
+    padding: 12px 16px;
+  }
+  
+  .entry-card-notes-content {
+    font-size: 13px;
+    color: #666;
+    line-height: 1.4;
+  }
+  
+  .entry-card-notes-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px;
+    background: #f8f9fa;
+    border: none;
+    cursor: pointer;
+    width: 100%;
+    color: #999;
+    font-size: 12px;
+    gap: 4px;
+    transition: background 0.15s ease;
+  }
+  
+  .entry-card-notes-toggle:hover {
+    background: #f0f2f5;
+    color: #666;
+  }
+  
+  .entry-card-notes-toggle .material-symbols-outlined {
+    font-size: 16px;
+    transition: transform 0.2s ease;
+  }
+  
+  .entry-card-notes-toggle.expanded .material-symbols-outlined {
+    transform: rotate(180deg);
+  }
+  
+  .entry-card-notes-toggle.no-notes {
+    display: none;
+  }
+  
+  /* Edit mode on mobile - make cards clickable */
+  .edit-mode-active .entry-card {
+    cursor: pointer;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  
+  .edit-mode-active .entry-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+  }
+  
+  .edit-mode-active .entry-card::after {
+    content: 'Tap to edit';
+    display: block;
+    text-align: center;
+    padding: 8px;
+    background: rgba(204, 0, 7, 0.05);
+    color: #CC0007;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  
+  /* Hide inline editing on mobile */
+  .edit-mode-active .inline-edit-input,
+  .edit-mode-active .inline-edit-select {
+    display: none;
+  }
+  
+  .edit-mode-active .cell-display {
+    display: block;
+  }
+  
+  /* Hide delete button on mobile (use modal instead) */
+  .edit-mode-active .btn-delete-entry {
+    display: none;
+  }
+}
+
+/* Desktop: hide card view */
+@media (min-width: 769px) {
+  .entry-card {
+    display: none !important;
+  }
+}
+
+/* Edit mode styles */
+.edit-mode-active .timesheet-table tbody tr {
+  background: rgba(204, 0, 7, 0.02);
+}
+
+.edit-mode-active .timesheet-table tbody tr:hover {
+  background: rgba(204, 0, 7, 0.05);
+}
+
+/* Edit column header changes in edit mode */
+.edit-mode-active .timesheet-table th.edit-col::after {
+  content: 'Delete';
+  font-size: 10px;
+  text-transform: uppercase;
+}

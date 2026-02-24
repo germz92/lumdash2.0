@@ -170,86 +170,15 @@ class DocumentsPage {
   async init() {
     console.log('🔥 DocumentsPage.init() called');
     
-    // Initialize dark theme components
-    this.initDarkTheme();
-    
     // Load Cloudinary script if not already loaded
     if (!window.cloudinary) {
       await this.loadCloudinaryScript();
     }
     
     await this.checkOwnerStatus();
-    await this.loadEventTitle();
     await this.loadDocuments();
     this.setupEventListeners();
     this.updateUIForOwnerStatus();
-  }
-  
-  initDarkTheme() {
-    // Setup sidebar user info
-    this.loadSidebarUser();
-    
-    // Setup mobile menu
-    this.setupMobileMenu();
-  }
-  
-  loadSidebarUser() {
-    try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-      
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      const userName = payload.fullName || payload.email || 'User';
-      
-      const userNameEl = document.getElementById('sidebarUserName');
-      if (userNameEl) userNameEl.textContent = userName;
-      
-      // Load avatar if available
-      const avatarImg = document.getElementById('sidebarAvatarImg');
-      const avatarIcon = document.getElementById('sidebarAvatarIcon');
-      if (payload.avatar && avatarImg && avatarIcon) {
-        avatarImg.src = payload.avatar;
-        avatarImg.style.display = 'block';
-        avatarIcon.style.display = 'none';
-      }
-    } catch (err) {
-      console.error('Error loading sidebar user:', err);
-    }
-  }
-  
-  setupMobileMenu() {
-    const menuBtn = document.getElementById('mobileMenuBtn');
-    const sidebar = document.getElementById('mapsSidebar');
-    const overlay = document.getElementById('mapsSidebarOverlay');
-    
-    if (menuBtn && sidebar && overlay) {
-      menuBtn.addEventListener('click', () => {
-        sidebar.classList.add('open');
-        overlay.classList.add('show');
-      });
-      
-      overlay.addEventListener('click', () => {
-        sidebar.classList.remove('open');
-        overlay.classList.remove('show');
-      });
-    }
-  }
-  
-  async loadEventTitle() {
-    try {
-      const apiBase = window.API_BASE || API_BASE || 'http://localhost:3000';
-      const response = await fetch(`${apiBase}/api/tables/${this.eventId}`, {
-        headers: { 'Authorization': localStorage.getItem('token') }
-      });
-      
-      if (response.ok) {
-        const table = await response.json();
-        const titleEl = document.getElementById('eventTitle');
-        if (titleEl) titleEl.textContent = table.title || 'Event Maps';
-      }
-    } catch (err) {
-      console.error('Error loading event title:', err);
-    }
   }
 
   async loadCloudinaryScript() {
@@ -339,21 +268,28 @@ class DocumentsPage {
   }
 
   updateUIForOwnerStatus() {
-    const uploadSection = document.getElementById('uploadSection');
-    const uploadBtn = document.getElementById('uploadMapBtn');
+    const uploadSection = document.querySelector('.upload-section');
+    const uploadNewButton = document.querySelector('.btn-upload-new');
     
-    if (this.isOwner) {
-      // Show upload button in header for owners
-      if (uploadBtn) {
-        uploadBtn.style.display = 'flex';
-      }
-    } else {
-      // Hide upload elements for non-owners
+    if (!this.isOwner) {
+      // Hide upload section for non-owners
       if (uploadSection) {
         uploadSection.style.display = 'none';
       }
-      if (uploadBtn) {
-        uploadBtn.style.display = 'none';
+      
+      // Hide upload new button for non-owners
+      if (uploadNewButton) {
+        uploadNewButton.style.display = 'none';
+      }
+    } else {
+      // Show upload section for owners
+      if (uploadSection) {
+        uploadSection.style.display = 'block';
+      }
+      
+      // Show upload new button for owners
+      if (uploadNewButton) {
+        uploadNewButton.style.display = 'block';
       }
     }
   }
@@ -362,8 +298,11 @@ class DocumentsPage {
     // Upload area events
     const uploadArea = document.getElementById('uploadArea');
     const fileInput = document.getElementById('fileInput');
-    const uploadBtn = document.getElementById('uploadMapBtn');
-    const uploadSection = document.getElementById('uploadSection');
+
+    if (!uploadArea || !fileInput) {
+      console.error('Upload area or file input not found!');
+      return;
+    }
 
     // Handle click events for both desktop and mobile
     const handleUploadAreaClick = (e) => {
@@ -380,22 +319,6 @@ class DocumentsPage {
       fileInput.click();
     };
 
-    // Header upload button
-    if (uploadBtn) {
-      uploadBtn.addEventListener('click', () => {
-        if (!this.isOwner) {
-          this.showError('Only event owners can upload maps');
-          return;
-        }
-        // Show upload section if hidden
-        if (uploadSection) {
-          uploadSection.style.display = 'block';
-          uploadSection.scrollIntoView({ behavior: 'smooth' });
-        }
-      });
-    }
-
-    if (uploadArea) {
     // Add both click and touchend events for better mobile support
     uploadArea.addEventListener('click', handleUploadAreaClick);
     uploadArea.addEventListener('touchend', (e) => {
@@ -407,32 +330,21 @@ class DocumentsPage {
     uploadArea.addEventListener('dragover', this.handleDragOver.bind(this));
     uploadArea.addEventListener('dragleave', this.handleDragLeave.bind(this));
     uploadArea.addEventListener('drop', this.handleDrop.bind(this));
-    }
 
     // File input change event
-    if (fileInput) {
     fileInput.addEventListener('change', (e) => {
       console.log('File input changed, files:', e.target.files.length);
       if (e.target.files.length > 0) {
         this.uploadFile(e.target.files[0]);
       }
     });
-    }
 
-    // Modal events - dark theme modal
+    // Modal events
     const closeModal = document.getElementById('closeModal');
-    const documentModal = document.getElementById('documentModal');
+    const modalOverlay = document.getElementById('modalOverlay');
 
     if (closeModal) closeModal.addEventListener('click', this.closeModal.bind(this));
-    // Allow clicking the modal backdrop to close it
-    if (documentModal) {
-      documentModal.addEventListener('click', (e) => {
-        // Only close if clicking the backdrop, not the content
-        if (e.target === documentModal) {
-          this.closeModal();
-        }
-      });
-    }
+    if (modalOverlay) modalOverlay.addEventListener('click', this.closeModal.bind(this));
 
     // Keyboard events
     document.addEventListener('keydown', (e) => {
@@ -581,9 +493,6 @@ class DocumentsPage {
       console.log('Loaded documents:', documents.length);
       console.log('Documents data:', documents);
       
-      // Store documents for later use
-      this.documents = documents;
-      
       this.renderDocuments(documents);
       
       // Update UI for owner status after rendering documents
@@ -597,25 +506,25 @@ class DocumentsPage {
   }
 
   renderDocuments(documents) {
-    const uploadSection = document.getElementById('uploadSection');
+    const uploadSection = document.querySelector('.upload-section');
     const grid = document.getElementById('documentsGrid');
     
     if (documents.length === 0) {
-      // Show empty state
+      // Show upload area when no documents, but only for owners
       if (this.isOwner) {
-        if (uploadSection) uploadSection.style.display = 'block';
+        uploadSection.style.display = 'block';
         grid.innerHTML = `
-          <div class="empty-state-dark">
-            <span class="material-symbols-outlined empty-icon">map</span>
+          <div class="empty-state" style="grid-column: 1 / -1;">
+            <span class="material-symbols-outlined">map</span>
             <h3>No maps yet</h3>
             <p>Upload your first map to get started</p>
           </div>
         `;
       } else {
-        if (uploadSection) uploadSection.style.display = 'none';
+        uploadSection.style.display = 'none';
         grid.innerHTML = `
-          <div class="empty-state-dark">
-            <span class="material-symbols-outlined empty-icon">map</span>
+          <div class="empty-state" style="grid-column: 1 / -1;">
+            <span class="material-symbols-outlined">map</span>
             <h3>No maps available</h3>
             <p>No maps have been uploaded for this event yet</p>
           </div>
@@ -624,87 +533,46 @@ class DocumentsPage {
       return;
     }
 
-    // Hide upload area when documents exist
-    if (uploadSection) uploadSection.style.display = 'none';
+    // Hide upload area when documents exist (will be shown via button for owners)
+    uploadSection.style.display = 'none';
 
-    // Render map cards with dark theme styling
+    // Show documents prominently with conditional remove button
     grid.innerHTML = documents.map(doc => `
-      <div class="map-card" onclick="documentsPage.openDocument('${doc._id}')">
-        <div class="map-card-preview">
-          ${this.getDocumentPreview(doc, false)}
+      <div class="document-card-prominent">
+        <div class="document-preview-large">
+          ${this.getDocumentPreview(doc, true)}
         </div>
-        <div class="map-card-info">
-          <h3 class="map-card-title">${doc.originalName}</h3>
-          <div class="map-card-meta">
-            <span>${this.formatDate(doc.uploadedAt)}</span>
-            <span>${this.formatFileSize(doc.size)}</span>
+        <div class="document-info-prominent">
+          <h2 class="document-title-large">${doc.originalName}</h2>
+          <div class="document-meta-prominent">
+            <span>Uploaded: ${this.formatDate(doc.uploadedAt)}</span>
+            <span class="document-size">${this.formatFileSize(doc.size)}</span>
+          </div>
+          <div class="document-actions">
+            <button class="btn-primary" onclick="documentsPage.openDocument('${doc._id}')">
+              <span class="material-symbols-outlined">open_in_full</span>
+              View Full Screen
+            </button>
           </div>
         </div>
         ${this.isOwner ? `
-          <div class="map-card-actions">
-            <button class="map-card-action-btn download" onclick="event.stopPropagation(); documentsPage.downloadDocument('${doc._id}')" title="Download">
-              <span class="material-symbols-outlined">download</span>
+          <button class="remove-file-btn" onclick="documentsPage.deleteDocumentDirect('${doc._id}')" title="Remove file">
+            <span class="material-symbols-outlined">close</span>
           </button>
-            <button class="map-card-action-btn danger" onclick="event.stopPropagation(); documentsPage.confirmDeleteDocument('${doc._id}')" title="Delete">
-              <span class="material-symbols-outlined">delete</span>
-            </button>
-          </div>
         ` : ''}
       </div>
     `).join('');
 
-    // Add "Add Map" card for owners
+    // Add upload new file button at the bottom, but only for owners
     if (this.isOwner) {
       grid.innerHTML += `
-        <div class="add-map-card" onclick="documentsPage.showUploadArea()">
-          <div class="add-map-content">
-            <span class="material-symbols-outlined">add_circle</span>
-            <span>Upload New Map</span>
-          </div>
+        <div class="upload-new-section">
+          <button class="btn-upload-new" onclick="documentsPage.showUploadArea()">
+            <span class="material-symbols-outlined">add</span>
+            Upload Another Map
+          </button>
         </div>
       `;
-    }
-  }
-  
-  downloadDocument(documentId) {
-    const doc = this.documents.find(d => d._id === documentId);
-    if (doc && doc.url) {
-      const link = document.createElement('a');
-      link.href = doc.url;
-      link.download = doc.originalName;
-      link.click();
-    }
-  }
-  
-  confirmDeleteDocument(documentId) {
-    this.pendingDeleteId = documentId;
-    const modal = document.getElementById('mapsDeleteModal');
-    if (modal) {
-      modal.classList.add('show');
-      document.body.style.overflow = 'hidden';
-      
-      // Setup delete modal buttons
-      const confirmBtn = document.getElementById('confirmDeleteBtn');
-      const cancelBtn = document.getElementById('cancelDeleteBtn');
-      const closeBtn = document.getElementById('closeDeleteModal');
-      
-      const closeDeleteModal = () => {
-        modal.classList.remove('show');
-        document.body.style.overflow = '';
-        this.pendingDeleteId = null;
-      };
-      
-      if (confirmBtn) {
-        confirmBtn.onclick = async () => {
-          await this.deleteDocumentDirect(this.pendingDeleteId);
-          closeDeleteModal();
-        };
-      }
-      if (cancelBtn) cancelBtn.onclick = closeDeleteModal;
-      if (closeBtn) closeBtn.onclick = closeDeleteModal;
-    } else {
-      // Fallback to direct delete with confirm
-      this.deleteDocumentDirect(documentId);
     }
   }
 
@@ -902,11 +770,19 @@ class DocumentsPage {
       `;
     }
 
-    // Show modal with dark theme class
-    modal.classList.add('show');
+    // Show modal with proper display
+    modal.style.display = 'block';
     document.body.style.overflow = 'hidden';
     
     console.log('Modal should now be visible');
+    
+    // Add a small delay to ensure modal is rendered
+    setTimeout(() => {
+      const modalRect = modal.getBoundingClientRect();
+      console.log('Modal dimensions:', modalRect);
+      const viewerRect = viewer.getBoundingClientRect();
+      console.log('Viewer dimensions:', viewerRect);
+    }, 100);
   }
 
   closeModal() {
@@ -921,11 +797,8 @@ class DocumentsPage {
       viewer.classList.remove('zoomed');
     }
     
-    // Hide modal - dark theme uses classList
-    if (modal) {
-      modal.classList.remove('show');
+    // Hide modal
     modal.style.display = 'none';
-    }
     document.body.style.overflow = '';
     this.currentDocument = null;
   }
@@ -964,11 +837,9 @@ class DocumentsPage {
       return;
     }
     
-    const uploadSection = document.getElementById('uploadSection');
-    if (uploadSection) {
+    const uploadSection = document.querySelector('.upload-section');
     uploadSection.style.display = 'block';
     uploadSection.scrollIntoView({ behavior: 'smooth' });
-    }
   }
 
   async deleteDocumentDirect(documentId) {

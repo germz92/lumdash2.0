@@ -86,7 +86,7 @@ console.log(' app.js loaded');
 })();
 
 const PAGE_CLASSES = [
-  'events-page', 'general-page', 'crew-page', 'travel-page', 'card-log-page', 'schedule-page', 'dashboard-page', 'login-page', 'register-page', 'users-page', 'crew-planner-page', 'crew-calendar-page', 'gear-page', 'todos-page'
+  'events-page', 'general-page', 'crew-page', 'travel-page', 'card-log-page', 'schedule-page', 'dashboard-page', 'login-page', 'register-page', 'users-page', 'crew-planner-page', 'crew-calendar-page', 'call-times-page', 'flights-page', 'timesheet-page'
 ];
 
 function setBodyPageClass(page) {
@@ -99,49 +99,13 @@ function setBodyPageClass(page) {
   }
 }
 
-// Parse hash to extract page and ID (supports #page?id=xxx format)
-function parseHash() {
-  const hash = location.hash.replace('#', '') || 'events';
-  
-  // Split only on the FIRST ? to handle any malformed URLs
-  const questionIndex = hash.indexOf('?');
-  let page, queryString;
-  
-  if (questionIndex !== -1) {
-    page = hash.substring(0, questionIndex);
-    queryString = hash.substring(questionIndex + 1);
-  } else {
-    page = hash;
-    queryString = null;
-  }
-  
-  let id = null;
-  if (queryString) {
-    // Handle potentially malformed query strings (e.g., id=xxx?id=xxx)
-    // Only take the first id parameter
-    const params = new URLSearchParams(queryString.split('?')[0]);
-    id = params.get('id');
-  }
-  
-  console.log(`[parseHash] hash: "${hash}", page: "${page}", id: "${id}"`);
-  
-  return { page: page || 'events', id };
-}
-
 function getTableId() {
-  // First check hash for ID (new approach - bookmarkable URLs)
-  const { id: hashId } = parseHash();
-  
-  // Then check query string (legacy support)
   const params = new URLSearchParams(window.location.search);
   const urlId = params.get('id');
-  
-  // Finally fall back to localStorage
   const storedId = localStorage.getItem('eventId');
+  const result = urlId || storedId;
   
-  const result = hashId || urlId || storedId;
-  
-  console.log(`[getTableId] Hash ID: ${hashId}, URL ID: ${urlId}, localStorage ID: ${storedId}, returning: ${result}`);
+  console.log(`[getTableId] URL ID: ${urlId}, localStorage ID: ${storedId}, returning: ${result}`);
   
   return result;
 }
@@ -150,8 +114,6 @@ function getTableId() {
 let navigationInProgress = false;
 
 function navigate(page, id) {
-  console.log(`[NAVIGATE] Called with page: "${page}", id: "${id}"`);
-  
   // Prevent double navigation
   if (navigationInProgress) {
     console.log(`[NAVIGATE] Navigation already in progress, skipping duplicate call for page: ${page}`);
@@ -162,7 +124,7 @@ function navigate(page, id) {
   window.currentNavigatingPage = page; // Track for debugging
   
   // Only require an ID for pages that need it
-  const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management', 'my-tasks', 'call-times'].includes(page);
+  const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'call-times', 'flights', 'timesheet'].includes(page);
   
   // CRITICAL FIX: Determine the final tableId to use consistently throughout navigation
   let finalId = id;
@@ -192,9 +154,6 @@ function navigate(page, id) {
   // Clean up any existing page content and scripts
   const pageContainer = document.getElementById('page-container');
   if (pageContainer) {
-    // DON'T clear content yet - we'll do it in injectPageContent after new content is ready
-    // This prevents the flash by keeping old content visible during fetch
-    
     // Call any cleanup function from the current page before removing scripts
     // but only if we're not on the first load (window.currentPage will be set)
     if (window.currentPage) {
@@ -202,7 +161,8 @@ function navigate(page, id) {
       const cleanupFunctionMap = {
         'schedule': 'cleanupSchedulePage',
         'card-log': 'cleanupCardLogPage',
-        'shotlist': 'cleanupShotlist'
+        'shotlist': 'cleanupShotlist',
+        'timesheet': 'cleanupTimesheet'
         // Add more page cleanup functions here as needed
       };
       
@@ -230,31 +190,12 @@ function navigate(page, id) {
       script.remove();
     });
  
-    // Note: We don't clear pageContainer.innerHTML here anymore
-    // The content swap happens in injectPageContent for smoother transitions
+    // Clear page container
+    pageContainer.innerHTML = '';
   }
   
-  // Update hash and load new page (include ID in hash for bookmarkable URLs)
-  const newHash = needsId && finalId ? `#${page}?id=${finalId}` : `#${page}`;
-  
-  console.log(`[NAVIGATE] Current hash: "${location.hash}", New hash: "${newHash}"`);
-  
-  // Parse current hash to check if it already has the correct page and ID
-  const currentParsed = parseHash();
-  const hashAlreadyCorrect = currentParsed.page === page && 
-                             (!needsId || currentParsed.id === finalId);
-  
-  if (!hashAlreadyCorrect) {
-    console.log(`[NAVIGATE] Updating hash to "${newHash}"`);
-    // Use pushState to create browser history entries so back button works correctly
-    if (history.pushState) {
-      history.pushState({ page, id: finalId }, '', newHash);
-    } else {
-      location.hash = newHash;
-    }
-  } else {
-    console.log(`[NAVIGATE] Hash already correct (page: ${currentParsed.page}, id: ${currentParsed.id}), skipping update`);
-  }
+  // Update hash and load new page
+  location.hash = `#${page}`;
   loadPageCSS(page);
   
   // Track the current page to know when we're navigating
@@ -273,9 +214,7 @@ function navigate(page, id) {
 }
 
 function loadPage(page, id) {
-  // Add cache buster to ensure fresh HTML is loaded
-  const cacheBuster = Date.now();
-  fetch(`pages/${page}.html?v=${cacheBuster}`)
+  fetch(`pages/${page}.html`)
     .then(res => res.text())
     .then(html => {
       // Wait for DOM to be ready if it isn't already
@@ -300,22 +239,16 @@ function injectPageContent(html, page, id) {
     return;
   }
 
-  // Swap content immediately, then fade in
-  targetElement.style.opacity = '0';
-  targetElement.innerHTML = html;
+  // Clear any existing content
+  targetElement.innerHTML = '';
   
-  // Use requestAnimationFrame to let the browser parse and apply styles,
-  // then fade in after a brief delay for fonts to apply
-  requestAnimationFrame(() => {
-    setTimeout(() => {
-      targetElement.style.opacity = '1';
-    }, 80);
-  });
+  // Add new content to the target element
+  targetElement.innerHTML = html;
   
   // Show/hide bottom nav based on page and set it up
   const bottomNav = document.getElementById('bottomNav');
   if (bottomNav) {
-    if (page === 'events') { // 'events' page usually doesn't show the main event-specific nav
+    if (page === 'events' || page === 'call-times' || page === 'flights') { // 'events', 'call-times', and 'flights' pages don't show the main event-specific nav
       bottomNav.style.display = 'none';
     } else {
       bottomNav.style.display = ''; // Ensure it's visible for other pages
@@ -337,26 +270,13 @@ function injectPageContent(html, page, id) {
     console.log('Bottom navigation element (bottomNav) not found.');
   }
 
-  // Re-initialize notification system for the new DOM
-  if (window.notificationSystem && typeof window.notificationSystem.init === 'function') {
-    window.notificationSystem.init();
+  // Initialize AI Chat Widget for pages with event ID
+  if (id && typeof window.initChat === 'function') {
+    console.log(`Initializing AI chat for page: ${page} with id: ${id}`);
+    window.initChat(id);
+  } else if (id) {
+    console.warn('Chat widget not available - window.initChat not found');
   }
-
-  // Initialize AI Chat Widget
-  // For event pages (with ID): use event-specific chat
-  // For dashboard pages (no ID): use global chat
-  setTimeout(() => {
-    if (id && typeof window.initChat === 'function') {
-      console.log(`Initializing AI chat for page: ${page} with id: ${id}`);
-      window.initChat(id);
-    } else if (typeof window.initGlobalChat === 'function') {
-      console.log(`Initializing global AI chat for dashboard page: ${page}`);
-      window.initGlobalChat();
-    } else if (typeof window.ensureChatInitialized === 'function') {
-      console.log(`Ensuring AI chat is initialized for page: ${page}`);
-      window.ensureChatInitialized();
-    }
-  }, 200); // Small delay to ensure chat.js is loaded
 
   // Lucide icons init should be called AFTER setupBottomNavigation has potentially changed data-lucide attributes
   // Note: updateActiveNavigation, called by setupBottomNavigation, already calls lucide.createIcons().
@@ -437,47 +357,6 @@ function injectPageContent(html, page, id) {
     document.head.appendChild(script);
   }
 
-     // Pages that use inline scripts and should NOT load external JS files
-     const pagesWithInlineScripts = ['gear'];
-     
-     if (pagesWithInlineScripts.includes(page)) {
-       console.log(`[SCRIPT_LOAD] Page ${page} uses inline script, skipping external JS load`);
-       // For gear page, the inline script in gear.html handles initialization
-       // Just need to execute inline scripts that may have been injected
-       const inlineScripts = targetElement.querySelectorAll('script');
-       console.log(`[SCRIPT_LOAD] Found ${inlineScripts.length} script(s) in the injected HTML`);
-       
-       inlineScripts.forEach((script, index) => {
-         if (!script.src) {
-           console.log(`[SCRIPT_LOAD] Executing inline script #${index + 1} (${script.textContent.length} chars)`);
-           try {
-             // Execute inline script content
-             const newScript = document.createElement('script');
-             newScript.textContent = script.textContent;
-             document.head.appendChild(newScript);
-             console.log(`[SCRIPT_LOAD] Script #${index + 1} appended to head`);
-             // Don't remove the script - let it stay for async operations
-           } catch (err) {
-             console.error(`[SCRIPT_LOAD] Error executing script #${index + 1}:`, err);
-           }
-         } else {
-           console.log(`[SCRIPT_LOAD] Skipping external script: ${script.src}`);
-         }
-       });
-       
-       // Populate sidebar event info for inline script pages too
-       setTimeout(() => {
-         if (window.populateSidebarEventInfo) {
-           window.populateSidebarEventInfo();
-         }
-         if (window.checkAdminNotesAccess) {
-           window.checkAdminNotesAccess();
-         }
-       }, 200);
-       
-       return; // Skip loading external gear.js
-  }
-
      // Dynamically load JS if it exists
    loadPageScript(page, () => {
      console.log(`Script loaded for ${page}, calling window.initPage with id: ${id}`);
@@ -503,20 +382,11 @@ function injectPageContent(html, page, id) {
       if (window.initPage) {
         try {
           // CRITICAL FIX: Always call initPage if it exists, but only pass ID for pages that need it
-          const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management', 'my-tasks', 'call-times'].includes(page);
+          const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'timesheet'].includes(page);
           
           if (needsId && id) {
             console.log(`[INIT_PAGE] Calling initPage with explicit id: ${id}`);
             window.initPage(id);
-            // Populate sidebar event info for event-specific pages (with small delay to ensure DOM is ready)
-            setTimeout(() => {
-              if (window.populateSidebarEventInfo) {
-                window.populateSidebarEventInfo();
-              }
-              if (window.checkAdminNotesAccess) {
-                window.checkAdminNotesAccess();
-              }
-            }, 100);
           } else if (needsId && !id) {
             console.warn(`[INIT_PAGE] Page ${page} needs event ID but none provided, initPage not called`);
           } else {
@@ -630,7 +500,16 @@ function setupDropdownMenu(tableId) {
       console.log(`Dropdown link clicked: ${page}, using currentEventId: ${currentEventId}`);
       dropdownMenu.classList.remove('show');
       
+      // Special handling for gear page - redirect to new gear system
+      if (page === 'gear') {
+        if (currentEventId) {
+          window.location.href = `pages/gear.html?eventId=${currentEventId}`;
+        } else {
+          alert('No event selected. Please select an event first.');
+        }
+      } else {
         window.navigate(page, currentEventId);
+      }
     };
     link.addEventListener('click', linkHandler);
     dropdownEventListeners.links.push({ element: link, handler: linkHandler });
@@ -658,7 +537,7 @@ function loadPageCSS(page) {
     case 'schedule': cssFile = 'css/schedule.css'; break;
     case 'shotlist': cssFile = 'css/shotlist.css'; break;
     case 'users': cssFile = 'css/users.css'; break;
-    case 'gear': cssFile = 'css/gear.css'; break;
+    case 'timesheet': cssFile = 'css/timesheet.css'; break;
   }
   if (cssFile) {
     const link = document.createElement('link');
@@ -677,54 +556,19 @@ window.addEventListener('hashchange', () => {
     return;
   }
   
-  // Parse page and ID from hash (supports #page?id=xxx format)
-  const { page, id: hashId } = parseHash();
-  console.log(`[HASHCHANGE] Hash changed to page: ${page}, id: ${hashId}`);
+  const page = location.hash.replace('#', '') || 'events';
+  console.log(`[HASHCHANGE] Hash changed to: ${page}`);
   
   // For hash changes (back/forward navigation), we need to be more careful about event IDs
   // Only pass an event ID if the page actually needs one
-  const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management', 'my-tasks', 'call-times'].includes(page);
+  const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'timesheet'].includes(page);
   
   if (needsId) {
-    // Prefer hash ID, fall back to localStorage
-    const eventId = hashId || localStorage.getItem('eventId');
-    console.log(`[HASHCHANGE] Page ${page} needs event ID, using: ${eventId}`);
-    navigate(page, eventId);
+    const currentEventId = localStorage.getItem('eventId');
+    console.log(`[HASHCHANGE] Page ${page} needs event ID, using: ${currentEventId}`);
+    navigate(page, currentEventId);
   } else {
     console.log(`[HASHCHANGE] Page ${page} doesn't need event ID`);
-    navigate(page);
-  }
-});
-
-// Handle popstate events (browser back/forward buttons with pushState)
-window.addEventListener('popstate', (event) => {
-  // Prevent handling if navigation is already in progress
-  if (navigationInProgress) {
-    console.log(`[POPSTATE] Navigation in progress, skipping popstate handler`);
-    return;
-  }
-  
-  console.log(`[POPSTATE] Browser back/forward detected, state:`, event.state);
-  
-  // Parse page and ID from hash (supports #page?id=xxx format)
-  const { page, id: hashId } = parseHash();
-  
-  if (!page) {
-    console.log(`[POPSTATE] No page in hash, defaulting to events`);
-    navigate('events');
-    return;
-  }
-  
-  // For popstate navigation, use state if available, otherwise parse from hash
-  const stateId = event.state?.id;
-  const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management', 'my-tasks', 'call-times'].includes(page);
-  
-  if (needsId) {
-    const eventId = stateId || hashId || localStorage.getItem('eventId');
-    console.log(`[POPSTATE] Page ${page} needs event ID, using: ${eventId}`);
-    navigate(page, eventId);
-  } else {
-    console.log(`[POPSTATE] Page ${page} doesn't need event ID`);
     navigate(page);
   }
 });
@@ -750,180 +594,30 @@ window.addEventListener('DOMContentLoaded', () => {
   // Reset body classes
   const PAGE_CLASSES_RESET = [
     'events-page', 'general-page', 'crew-page', 'travel-page', 
-    'card-log-page', 'schedule-page', 'dashboard-page', 'login-page', 'register-page'
+    'card-log-page', 'schedule-page', 'dashboard-page', 'login-page', 'register-page', 'call-times-page', 'flights-page'
   ];
   PAGE_CLASSES_RESET.forEach(cls => document.body.classList.remove(cls));
   
-  // Parse page and ID from hash (supports #page?id=xxx format)
-  const { page, id: hashId } = parseHash();
-  console.log(`[INITIAL_LOAD] Initial page load: ${page}, hash ID: ${hashId}`);
+  // Get page from hash or default to events
+  const page = location.hash.replace('#', '') || 'events';
+  console.log(`[INITIAL_LOAD] Initial page load: ${page}`);
   
   // Use the same logic as hashchange handler for consistency
-  const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management', 'my-tasks', 'call-times'].includes(page);
+  const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'timesheet'].includes(page);
   
   if (needsId) {
-    // Prefer hash ID, fall back to localStorage
-    const eventId = hashId || localStorage.getItem('eventId');
-    console.log(`[INITIAL_LOAD] Page ${page} needs event ID, using: ${eventId}`);
-    navigate(page, eventId);
+    const currentEventId = localStorage.getItem('eventId');
+    console.log(`[INITIAL_LOAD] Page ${page} needs event ID, using: ${currentEventId}`);
+    navigate(page, currentEventId);
   } else {
     console.log(`[INITIAL_LOAD] Page ${page} doesn't need event ID`);
     navigate(page);
   }
 });
 
-// Expose navigation functions globally for nav links and external pages
+// Expose navigate globally for nav links
 window.navigate = navigate;
 window.setupBottomNavigation = setupBottomNavigation;
-window.parseHash = parseHash;
-window.getTableId = getTableId;
-
-// Parse date string as local date to avoid timezone shifts
-function parseLocalDateApp(dateStr) {
-  if (!dateStr) return null;
-  // Handle ISO date strings like "2026-01-15" or "2026-01-15T00:00:00.000Z"
-  const str = String(dateStr);
-  const match = str.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (match) {
-    const [, year, month, day] = match;
-    // Create date in local timezone at midnight
-    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day), 0, 0, 0, 0);
-  }
-  // Fallback to regular parsing
-  return new Date(dateStr);
-}
-
-/**
- * Populate sidebar event info section with event name, location, and dates
- * Called from each event page's initPage function
- */
-async function populateSidebarEventInfo() {
-  const eventId = localStorage.getItem('eventId');
-  if (!eventId) return;
-  
-  // Find the event info container (works for any page with the sidebar)
-  const eventInfoContainer = document.getElementById('sidebarEventInfo');
-  if (!eventInfoContainer) {
-    console.log('[SIDEBAR] No sidebarEventInfo container found');
-    return;
-  }
-  
-  try {
-    const token = localStorage.getItem('token');
-    const API_BASE = window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://lumdash2-0.onrender.com');
-    
-    const res = await fetch(`${API_BASE}/api/tables/${eventId}`, {
-      headers: { Authorization: token }
-    });
-    
-    if (!res.ok) {
-      console.error('[SIDEBAR] Failed to load event data for sidebar');
-      return;
-    }
-    
-    const table = await res.json();
-    const general = table.general || {};
-    
-    // Format the date range (using parseLocalDateApp to avoid timezone shifts)
-    let dateDisplay = '';
-    if (general.start && general.end) {
-      const startDate = parseLocalDateApp(general.start);
-      const endDate = parseLocalDateApp(general.end);
-      const options = { month: 'short', day: 'numeric' };
-      
-      if (startDate.toDateString() === endDate.toDateString()) {
-        dateDisplay = startDate.toLocaleDateString('en-US', { ...options, year: 'numeric' });
-      } else if (startDate.getFullYear() === endDate.getFullYear()) {
-        dateDisplay = `${startDate.toLocaleDateString('en-US', options)} - ${endDate.toLocaleDateString('en-US', { ...options, year: 'numeric' })}`;
-      } else {
-        dateDisplay = `${startDate.toLocaleDateString('en-US', { ...options, year: 'numeric' })} - ${endDate.toLocaleDateString('en-US', { ...options, year: 'numeric' })}`;
-      }
-    } else if (general.start) {
-      dateDisplay = parseLocalDateApp(general.start).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    }
-    
-    // Format location
-    let locationDisplay = '';
-    if (general.city && general.state) {
-      locationDisplay = `${general.city}, ${general.state}`;
-    } else if (general.city) {
-      locationDisplay = general.city;
-    } else if (general.state) {
-      locationDisplay = general.state;
-    }
-    
-    // Update the container
-    eventInfoContainer.innerHTML = `
-      <div class="sidebar-event-name">${table.title || 'Untitled Event'}</div>
-      ${locationDisplay ? `<div class="sidebar-event-location"><span class="material-symbols-outlined">location_on</span>${locationDisplay}</div>` : ''}
-      ${dateDisplay ? `<div class="sidebar-event-date"><span class="material-symbols-outlined">calendar_today</span>${dateDisplay}</div>` : ''}
-    `;
-    eventInfoContainer.style.display = 'block';
-    
-  } catch (err) {
-    console.error('[SIDEBAR] Error loading event info:', err);
-  }
-}
-
-// Expose globally
-window.populateSidebarEventInfo = populateSidebarEventInfo;
-
-/**
- * Show/hide admin notes link in sidebar based on user permissions
- * Only visible to admins and event owners
- */
-async function checkAdminNotesAccess() {
-  const eventId = localStorage.getItem('eventId');
-  if (!eventId) return;
-  
-  try {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    
-    const API_BASE = window.API_BASE || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : 'https://lumdash2-0.onrender.com');
-    
-    // Decode JWT token to get user info
-    let userId, userRole;
-    try {
-      const payload = JSON.parse(atob(token.split('.')[1]));
-      userId = payload.id || payload._id || payload.userId;
-      userRole = payload.role;
-    } catch (e) {
-      console.error('[SIDEBAR] Failed to decode token:', e);
-      return;
-    }
-    
-    // Get table info to check owners
-    const tableRes = await fetch(`${API_BASE}/api/tables/${eventId}`, {
-      headers: { Authorization: token }
-    });
-    if (!tableRes.ok) return;
-    const table = await tableRes.json();
-    
-    // Check if admin or owner
-    const isAdmin = userRole === 'admin';
-    const isOwner = table.owners && table.owners.includes(userId);
-    
-    console.log('[SIDEBAR] Admin notes access check:', { userId, userRole, isAdmin, isOwner, owners: table.owners });
-    
-    if (isAdmin || isOwner) {
-      // Show admin notes section
-      const adminSectionLabel = document.getElementById('adminSectionLabel');
-      const adminNotesLink = document.querySelector('.admin-only-nav[data-page="admin-notes"]');
-      
-      if (adminSectionLabel) adminSectionLabel.style.display = 'block';
-      if (adminNotesLink) adminNotesLink.style.display = 'flex';
-      
-      console.log('[SIDEBAR] Admin notes link shown');
-    }
-    
-  } catch (err) {
-    console.error('[SIDEBAR] Error checking admin notes access:', err);
-  }
-}
-
-// Expose globally
-window.checkAdminNotesAccess = checkAdminNotesAccess;
 
 // PullToRefresh.js integration for PWA/mobile
 if (window.PullToRefresh) {
@@ -1071,7 +765,16 @@ function setupDesktopNavigation(navContainer, tableId, currentPage) {
       const currentEventId = localStorage.getItem('eventId');
       console.log(`Desktop nav link clicked: ${page}, using currentEventId: ${currentEventId}`);
       
+      // Special handling for gear page - redirect to new gear system
+      if (page === 'gear') {
+        if (currentEventId) {
+          window.location.href = `pages/gear.html?eventId=${currentEventId}`;
+        } else {
+          alert('No event selected. Please select an event first.');
+        }
+      } else {
         window.navigate(page, currentEventId);
+      }
     });
     
     navContainer.appendChild(navLink);
@@ -1176,7 +879,16 @@ function setupRegularNavLinks(navContainer) {
         dropdownMenu.classList.remove('show');
       }
       
+      // Special handling for gear page - redirect to new gear system
+      if (page === 'gear') {
+        if (currentEventId) {
+          window.location.href = `pages/gear.html?eventId=${currentEventId}`;
+        } else {
+          alert('No event selected. Please select an event first.');
+        }
+      } else {
         window.navigate(page, currentEventId);
+      }
     });
   });
   
@@ -1226,7 +938,6 @@ function updateActiveNavigation(currentPage) {
     'gear': 'photo_camera',
     'card-log': 'sd_card',
     'shotlist': 'checklist',
-    'todos': 'task_alt',
     'documents': 'map'
   };
 
@@ -1362,7 +1073,7 @@ function restoreLastPageState() {
     }
     
     // Restore the page if it's valid and we have the required eventId for pages that need it
-    const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management', 'my-tasks'].includes(pageState.page);
+    const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'timesheet'].includes(pageState.page);
     
     if (needsId && !pageState.eventId) {
       console.log('[PWA] Cannot restore page state - missing eventId for page:', pageState.page);

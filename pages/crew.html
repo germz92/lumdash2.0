@@ -1,282 +1,46 @@
-<!-- Dark Theme Crew Schedule Page -->
-<link rel="stylesheet" href="css/theme-dark.css">
-
-<div class="dark-theme crew-page">
-  <div class="crew-layout">
-    
-    <!-- Sidebar Navigation -->
-    <aside class="general-sidebar" id="crewSidebar">
-      <div class="sidebar-header">
-        <div class="sidebar-logo">
-          <img src="assets/Logo - Dark BG.png" alt="Lumetry Media" class="sidebar-logo-img">
-        </div>
-      </div>
-      
-      <nav class="sidebar-nav">
-        <a href="#" class="nav-item" data-page="events" onclick="event.preventDefault(); window.navigate && window.navigate('events');">
-          <span class="material-symbols-outlined">arrow_back</span>
-          <span>Back to Events</span>
-        </a>
-        
-        <!-- Event Info Section -->
-        <div class="sidebar-event-info" id="sidebarEventInfo"></div>
-        
-        <div class="nav-section-label">Event Pages</div>
-        
-        <a href="#" class="nav-item" data-page="general" onclick="event.preventDefault(); window.navigate && window.navigate('general');">
-          <span class="material-symbols-outlined">home</span>
-          <span>Home</span>
-        </a>
-        <a href="#" class="nav-item active" data-page="crew" onclick="event.preventDefault(); window.navigate && window.navigate('crew');">
-          <span class="material-symbols-outlined">group</span>
-          <span>Crew</span>
-        </a>
-        <a href="#" class="nav-item" data-page="schedule" onclick="event.preventDefault(); window.navigate && window.navigate('schedule');">
-          <span class="material-symbols-outlined">calendar_today</span>
-          <span>Schedule</span>
-        </a>
-        <a href="#" class="nav-item" data-page="shotlist" onclick="event.preventDefault(); window.navigate && window.navigate('shotlist');">
-          <span class="material-symbols-outlined">checklist</span>
-          <span>Shotlist</span>
-        </a>
-        <a href="#" class="nav-item" data-page="todos" onclick="event.preventDefault(); window.navigate && window.navigate('todos');">
-          <span class="material-symbols-outlined">task_alt</span>
-          <span>To-Dos</span>
-        </a>
-        <a href="#" class="nav-item" data-page="travel-accommodation" onclick="event.preventDefault(); window.navigate && window.navigate('travel-accommodation');">
-          <span class="material-symbols-outlined">flight_takeoff</span>
-          <span>Travel</span>
-        </a>
-        <a href="#" class="nav-item" data-page="gear" onclick="event.preventDefault(); window.navigate && window.navigate('gear');">
-          <span class="material-symbols-outlined">photo_camera</span>
-          <span>Gear</span>
-        </a>
-        <a href="#" class="nav-item" data-page="card-log" onclick="event.preventDefault(); window.navigate && window.navigate('card-log');">
-          <span class="material-symbols-outlined">sd_card</span>
-          <span>Cards</span>
-        </a>
-        <a href="#" class="nav-item" data-page="documents" onclick="event.preventDefault(); window.navigate && window.navigate('documents');">
-          <span class="material-symbols-outlined">map</span>
-          <span>Map</span>
-        </a>
-
-        <div class="nav-section-label admin-only-section" id="adminSectionLabel" style="display: none;">Admin</div>
-        <a href="#" class="nav-item admin-only-nav" data-page="admin-notes" onclick="event.preventDefault(); window.navigate && window.navigate('admin-notes');" style="display: none;">
-          <span class="material-symbols-outlined">sticky_note_2</span>
-          <span>Notes</span>
-        </a>
-      </nav>
-      
-      <div class="sidebar-user" id="sidebarUserContainer">
-        <div class="sidebar-user-avatar" id="sidebarUserAvatar">
-          <img src="" alt="User" id="sidebarAvatarImg" style="display: none;">
-          <span class="material-symbols-outlined" id="sidebarAvatarIcon">person</span>
-        </div>
-        <div class="sidebar-user-info">
-          <div class="sidebar-user-name" id="sidebarUserName">Loading...</div>
-        </div>
-        <div class="sidebar-user-dropdown" id="userDropdownBtn">
-          <span class="material-symbols-outlined">expand_more</span>
-        </div>
-      </div>
-    </aside>
-    
-    <!-- Mobile Sidebar Overlay -->
-    <div class="general-sidebar-overlay" id="crewSidebarOverlay"></div>
-    
-    <!-- Main Content -->
-    <main class="crew-main">
-      
-      <!-- Crew Header -->
-      <header class="crew-header-dark">
-        <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu">
-          <span class="material-symbols-outlined">menu</span>
-        </button>
-        <div class="crew-header-left">
-          <h1 class="crew-title" id="tableTitle">Loading Event...</h1>
-          <span class="crew-subtitle">Crew Schedule</span>
-        </div>
-        <div class="crew-header-right">
-          <span id="saveStatus" class="save-status">All changes saved</span>
-          <button class="add-shift-btn" id="addDateBtn">
-            <span class="material-symbols-outlined">add</span>
-            <span>Add Date</span>
-          </button>
-        </div>
-      </header>
-      
-      <!-- Filter Bar -->
-      <div class="crew-filter-bar">
-        <div class="filter-left">
-          <button class="filter-toggle-btn active" id="showAllBtn">Show All</button>
-          <button class="filter-toggle-btn" id="showMineBtn">Show Mine</button>
-          <div class="date-range-info">
-            <span class="material-symbols-outlined">calendar_today</span>
-            <span id="dateRangeFrom">From</span>
-            <span class="material-symbols-outlined">arrow_forward</span>
-            <span id="dateRangeTo">To</span>
+<div class="crew-page-content">
+  <!-- Persistent Header -->
+  <header class="crew-header">
+    <div class="header-inner">
+      <!-- Title Section -->
+      <div class="crew-title">
+        <div class="title-with-save">
+          <div class="title-text">
+            <h1 id="tableTitle">Loading Event...</h1>
+            <h2>CREW CALL SHEET</h2>
           </div>
-        </div>
-        <div class="filter-right">
-          <input type="text" id="searchInput" class="crew-search-input" placeholder="Search crew...">
-          <button class="filter-action-btn" id="crewListBtn" style="display: none;">
-            <span class="material-symbols-outlined">list</span>
-            <span>Crew List</span>
-          </button>
-          <button class="filter-action-btn" id="crewCostCalcBtn" style="display: none;">
-            <span class="material-symbols-outlined">calculate</span>
-            <span>Cost Calculator</span>
-          </button>
-          <button class="filter-action-btn" id="exportCsvBtn" style="display: none;">
-            <span class="material-symbols-outlined">download</span>
-            <span>Export CSV</span>
-          </button>
-        </div>
-      </div>
-      
-      <!-- Date Filter Dropdown -->
-      <select id="filterDate" style="display: none;">
-        <option value="">Show All Dates</option>
-      </select>
-      
-      <!-- Crew Schedule Content -->
-      <div class="crew-schedule-content">
-        <div id="dateSections" class="date-sections-container">
-          <!-- Date sections will be rendered here by JS -->
-          <div class="loading-skeleton">
-            <div class="skeleton-date-header"></div>
-            <div class="skeleton-row"></div>
-            <div class="skeleton-row"></div>
+          <div class="save-controls">
+            <span id="saveStatus" class="save-status">All changes saved</span>
           </div>
         </div>
       </div>
       
-    </main>
-  </div>
-</div>
-
-<!-- Modals Container -->
-<div id="crewCostCalcModalContainer"></div>
-
-<!-- Row Action Dropdown -->
-<div class="row-action-dropdown" id="rowActionDropdown">
-  <button class="action-menu-item" id="duplicateShiftAction">
-    <span class="material-symbols-outlined">content_copy</span>
-    <span>Duplicate</span>
-  </button>
-  <button class="action-menu-item danger" id="deleteShiftAction">
-    <span class="material-symbols-outlined">delete</span>
-    <span>Delete</span>
+      <!-- Compact Filter & Controls Bar -->
+      <div class="filter-sort-bar">
+        <button id="addDateBtn" class="add-date-btn" title="Add a new date">
+          <span class="material-symbols-outlined">add</span>
+          Add Date
         </button>
-</div>
-
-<!-- Date Action Dropdown -->
-<div class="row-action-dropdown" id="dateActionDropdown">
-  <button class="action-menu-item danger" id="deleteDateAction">
-    <span class="material-symbols-outlined">delete</span>
-    <span>Delete Date</span>
+        <select id="filterDate" title="Filter by date">
+          <option value="">Show All Dates</option>
+        </select>
+        <input type="text" id="searchInput" placeholder="Search crew..." title="Search by name, role, or notes">
+        <div id="crewListBtnContainer"></div>
+        <button id="crewCostCalcBtn" title="Calculate crew costs">
+          Cost Calculator
         </button>
-</div>
-
-<!-- Edit Shift Modal -->
-<div class="dark-modal" id="editShiftModal">
-  <div class="dark-modal-content">
-    <div class="modal-header-dark">
-      <h3 id="editShiftModalTitle">Edit Shift</h3>
-      <button class="modal-close-btn" onclick="hideEditShiftModal()">
-        <span class="material-symbols-outlined">close</span>
+        <button id="exportCsvBtn" title="Export to CSV">
+          Export CSV
         </button>
-    </div>
-    <div class="modal-body-dark">
-      <input type="hidden" id="editShiftRowId">
-      <div class="form-row-dark">
-        <div class="form-group-dark">
-          <label for="editShiftName">Crew Member</label>
-          <select id="editShiftName">
-            <option value="">-- Select Name --</option>
-          </select>
-        </div>
-        <div class="form-group-dark">
-          <label for="editShiftRole">Role</label>
-          <select id="editShiftRole">
-            <option value="">-- Select Role --</option>
-          </select>
-        </div>
-      </div>
-      <div class="form-row-dark">
-        <div class="form-group-dark">
-          <label for="editShiftStart">Start Time</label>
-          <input type="time" id="editShiftStart">
-        </div>
-        <div class="form-group-dark">
-          <label for="editShiftEnd">End Time</label>
-          <input type="time" id="editShiftEnd">
-        </div>
-      </div>
-      <div class="form-group-dark">
-        <label for="editShiftNotes">Notes</label>
-        <textarea id="editShiftNotes" rows="3" placeholder="Add any notes..."></textarea>
-      </div>
-      <div class="form-group-dark">
-        <label for="editShiftLocation">Location Badge</label>
-        <input type="text" id="editShiftLocation" placeholder="e.g., DIFFERENT LOCATION">
       </div>
     </div>
-    <div class="modal-footer-dark">
-      <button class="btn-secondary" onclick="hideEditShiftModal()">Cancel</button>
-      <button class="btn-primary" id="saveShiftBtn">Save Changes</button>
-    </div>
-  </div>
+  </header>
+  
+  <!-- Main Content Area -->
+  <main class="crew-main">
+    <div id="dateSections"></div>
+  </main>
+  
+  <!-- Modals Container -->
+  <div id="crewCostCalcModalContainer"></div>
 </div>
-
-<!-- Add Date Modal -->
-<div class="dark-modal" id="addDateModal">
-  <div class="dark-modal-content small">
-    <div class="modal-header-dark">
-      <h3>Add New Date</h3>
-      <button class="modal-close-btn" onclick="hideAddDateModal()">
-        <span class="material-symbols-outlined">close</span>
-      </button>
-    </div>
-    <div class="modal-body-dark">
-      <div class="form-group-dark">
-        <label for="addDateInput">Select Date</label>
-        <input type="date" id="addDateInput">
-      </div>
-    </div>
-    <div class="modal-footer-dark">
-      <button class="btn-secondary" onclick="hideAddDateModal()">Cancel</button>
-      <button class="btn-primary" id="confirmAddDateBtn">Add Date</button>
-    </div>
-  </div>
-</div>
-
-<script>
-// Global modal functions
-window.hideEditShiftModal = function() {
-  const modal = document.getElementById('editShiftModal');
-  if (modal) modal.classList.remove('show');
-  document.body.style.overflow = '';
-};
-
-window.hideAddDateModal = function() {
-  const modal = document.getElementById('addDateModal');
-  if (modal) modal.classList.remove('show');
-  document.body.style.overflow = '';
-};
-
-window.showEditShiftModal = function() {
-  const modal = document.getElementById('editShiftModal');
-  if (modal) modal.classList.add('show');
-  document.body.style.overflow = 'hidden';
-};
-
-window.showAddDateModal = function() {
-  const modal = document.getElementById('addDateModal');
-  if (modal) modal.classList.add('show');
-  document.body.style.overflow = 'hidden';
-  // Set default date to today
-  const today = new Date().toISOString().split('T')[0];
-  document.getElementById('addDateInput').value = today;
-};
-</script>

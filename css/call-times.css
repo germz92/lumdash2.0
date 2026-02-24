@@ -1,6 +1,6 @@
-/* Flights Page Styles - Based on Call Times */
+/* Call Times Page Styles */
 
-.flights-page {
+.call-times-page {
   padding: 20px;
   max-width: 1400px;
   margin: 0 auto;
@@ -70,35 +70,8 @@
   font-weight: 500;
 }
 
-/* Info Notice */
-.info-notice {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  background: #e3f2fd;
-  border: 1.5px solid #2196F3;
-  border-radius: 10px;
-  padding: 14px 16px;
-  margin-bottom: 20px;
-}
-
-.info-notice .material-symbols-outlined {
-  font-size: 24px;
-  color: #2196F3;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.info-notice p {
-  margin: 0;
-  font-size: 15px;
-  line-height: 1.5;
-  color: #1565c0;
-  font-weight: 500;
-}
-
 /* Filters */
-.flights-filters {
+.call-times-filters {
   background: #f8fafd;
   border-radius: 12px;
   padding: 16px;
@@ -218,7 +191,7 @@
 }
 
 /* Table Container */
-.flights-table-container {
+.call-times-table-container {
   background: white;
   border-radius: 12px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
@@ -226,18 +199,18 @@
   margin-bottom: 20px;
 }
 
-.flights-table {
+.call-times-table {
   width: 100%;
   border-collapse: collapse;
   min-width: 900px;
 }
 
-.flights-table thead {
+.call-times-table thead {
   background: linear-gradient(135deg, #CC0007 0%, #a30006 100%);
   color: white;
 }
 
-.flights-table th {
+.call-times-table th {
   padding: 14px 12px;
   text-align: left;
   font-weight: 600;
@@ -247,16 +220,16 @@
   white-space: nowrap;
 }
 
-.flights-table tbody tr {
+.call-times-table tbody tr {
   border-bottom: 1px solid #f0f0f0;
   transition: background 0.15s;
 }
 
-.flights-table tbody tr:hover {
+.call-times-table tbody tr:hover {
   background: #f8fafd;
 }
 
-.flights-table td {
+.call-times-table td {
   padding: 12px;
   font-size: 15px;
   color: #333;
@@ -268,8 +241,8 @@ td.col-name {
   color: #222;
 }
 
-/* Hide Name column for non-admin/non-lead users */
-.flights-page.non-admin .col-name {
+/* Hide Name column for non-admin users (they only see their own calls anyway) */
+.call-times-page.non-admin .col-name {
   display: none;
 }
 
@@ -309,35 +282,31 @@ td.col-name {
   color: white;
 }
 
-/* Flight Type Badges (Outbound/Return) */
-.fromto-cell-content {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
+td.col-hours {
+  font-weight: 600;
+  color: #CC0007;
 }
 
-.flight-type-badge {
+.role-badge {
   display: inline-block;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.3px;
+  padding: 4px 10px;
+  background: #f0f0f0;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #555;
+}
+
+.col-notes {
+  max-width: 200px;
+}
+
+.notes-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.flight-type-badge.outbound {
-  background: #e3f2fd;
-  color: #1565c0;
-  border: 1px solid #90caf9;
-}
-
-.flight-type-badge.return {
-  background: #fff3e0;
-  color: #e65100;
-  border: 1px solid #ffcc80;
+  color: #666;
 }
 
 .event-link {
@@ -352,8 +321,13 @@ td.col-name {
   text-decoration: underline;
 }
 
+.location-text {
+  color: #666;
+  font-size: 14px;
+}
+
 /* Pagination */
-.flights-pagination {
+.call-times-pagination {
   display: flex;
   justify-content: center;
   align-items: center;
@@ -394,7 +368,7 @@ td.col-name {
 }
 
 /* Loading State */
-.flights-loading {
+.call-times-loading {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -404,7 +378,7 @@ td.col-name {
   color: #666;
 }
 
-.flights-loading .material-symbols-outlined {
+.call-times-loading .material-symbols-outlined {
   font-size: 48px;
   color: #CC0007;
 }
@@ -423,7 +397,7 @@ td.col-name {
 }
 
 /* Empty State */
-.flights-empty {
+.call-times-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -433,18 +407,18 @@ td.col-name {
   color: #999;
 }
 
-.flights-empty .material-symbols-outlined {
+.call-times-empty .material-symbols-outlined {
   font-size: 64px;
   color: #ccc;
 }
 
-.flights-empty h3 {
+.call-times-empty h3 {
   margin: 0;
   font-size: 20px;
   color: #666;
 }
 
-.flights-empty p {
+.call-times-empty p {
   margin: 0;
   font-size: 15px;
   color: #999;
@@ -583,7 +557,7 @@ td.col-name {
 
 /* Responsive */
 @media (max-width: 768px) {
-  .flights-page {
+  .call-times-page {
     padding: 8px 4px;
   }
   
@@ -611,21 +585,7 @@ td.col-name {
     font-size: 14px;
   }
   
-  .info-notice {
-    padding: 12px 14px;
-    margin-left: 4px;
-    margin-right: 4px;
-  }
-  
-  .info-notice .material-symbols-outlined {
-    font-size: 20px;
-  }
-  
-  .info-notice p {
-    font-size: 14px;
-  }
-  
-  .flights-filters {
+  .call-times-filters {
     padding: 12px 8px;
     margin-left: 4px;
     margin-right: 4px;
@@ -650,24 +610,24 @@ td.col-name {
     justify-content: center;
   }
   
-  .flights-table-container {
+  .call-times-table-container {
     margin-left: 4px;
     margin-right: 4px;
     border-radius: 8px;
   }
   
-  .flights-table {
+  .call-times-table {
     font-size: 13px;
     min-width: 100%;
   }
   
-  .flights-table th,
-  .flights-table td {
+  .call-times-table th,
+  .call-times-table td {
     padding: 8px 4px;
     font-size: 12px;
   }
   
-  .flights-table th {
+  .call-times-table th {
     font-size: 11px;
   }
   
@@ -676,9 +636,13 @@ td.col-name {
     padding: 2px 6px;
   }
   
-  .flight-type-badge {
-    font-size: 9px;
-    padding: 1px 4px;
+  .role-badge {
+    font-size: 12px;
+    padding: 3px 8px;
+  }
+  
+  .col-notes {
+    max-width: 150px;
   }
   
   .pagination-btn {
@@ -686,7 +650,7 @@ td.col-name {
     font-size: 14px;
   }
   
-  .flights-pagination {
+  .call-times-pagination {
     padding: 16px 8px;
   }
 }

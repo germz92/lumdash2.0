@@ -56,7 +56,6 @@ let filterDate = 'all';
 let allNotesVisible = false;
 let isOwner = false;
 let lastKnownEventId = null; // Add this declaration
-let cachedScheduleUsers = []; // Cached user list for photographer auto-suggest
 
 // Store the intended event ID at module level to prevent external interference
 let currentEventId = null;
@@ -95,32 +94,6 @@ function stopEventIdMonitoring() {
   console.log(`[MONITOR] Event ID monitoring stopped`);
 }
 
-// Load registered users for photographer auto-suggest
-async function loadScheduleUsers() {
-  try {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-    const res = await fetch(`${API_BASE}/api/users`, {
-      headers: { Authorization: token }
-    });
-    if (res.ok) {
-      const users = await res.json();
-      // Extract first names, deduplicate, and sort
-      cachedScheduleUsers = users
-        .map(u => {
-          const fullName = u.name || u.fullName || '';
-          return fullName.split(' ')[0].trim();
-        })
-        .filter(Boolean)
-        .filter((name, i, arr) => arr.indexOf(name) === i)
-        .sort((a, b) => a.localeCompare(b));
-      console.log('[SCHEDULE] Loaded', cachedScheduleUsers.length, 'user first names for auto-suggest');
-    }
-  } catch (err) {
-    console.error('[SCHEDULE] Failed to load users for auto-suggest:', err);
-  }
-}
-
 // Only check for changes when actually needed
 function checkEventIdStability() {
   if (!eventIdMonitorActive) return true;
@@ -132,6 +105,181 @@ function checkEventIdStability() {
     return false;
   }
   return true;
+}
+
+// Photographer autocomplete functionality
+let cachedUserFirstNames = [];
+let autocompleteContainer = null;
+
+// Fetch and cache user first names
+async function loadUserFirstNames() {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    
+    const res = await fetch(`${API_BASE}/api/users`, {
+      headers: { Authorization: token }
+    });
+    const users = await res.json();
+    
+    // Extract first names from fullName
+    cachedUserFirstNames = users.map(u => {
+      const fullName = u.name || u.fullName || '';
+      const firstName = fullName.trim().split(/\s+/)[0]; // Get first word
+      return firstName;
+    }).filter(name => name); // Remove empty names
+    
+    // Remove duplicates and sort
+    cachedUserFirstNames = [...new Set(cachedUserFirstNames)].sort();
+    console.log('[AUTOCOMPLETE] Loaded user first names:', cachedUserFirstNames);
+  } catch (error) {
+    console.error('[AUTOCOMPLETE] Error loading user names:', error);
+  }
+}
+
+// Show autocomplete suggestions
+function showAutocomplete(textarea, suggestions, currentWord, cursorPos) {
+  // Remove existing autocomplete
+  hideAutocomplete();
+  
+  if (suggestions.length === 0) return;
+  
+  // Create autocomplete container
+  autocompleteContainer = document.createElement('div');
+  autocompleteContainer.className = 'photographer-autocomplete';
+  autocompleteContainer.style.cssText = `
+    position: absolute;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 1000;
+    min-width: 150px;
+  `;
+  
+  // Position it below the textarea
+  const rect = textarea.getBoundingClientRect();
+  autocompleteContainer.style.top = `${rect.bottom + window.scrollY}px`;
+  autocompleteContainer.style.left = `${rect.left + window.scrollX}px`;
+  
+  // Add suggestions
+  suggestions.forEach((suggestion, index) => {
+    const item = document.createElement('div');
+    item.textContent = suggestion;
+    item.style.cssText = `
+      padding: 8px 12px;
+      cursor: pointer;
+      border-bottom: 1px solid #f0f0f0;
+    `;
+    
+    // Hover effect
+    item.addEventListener('mouseenter', () => {
+      item.style.backgroundColor = '#f0f0f0';
+    });
+    item.addEventListener('mouseleave', () => {
+      item.style.backgroundColor = 'white';
+    });
+    
+    // Click to select
+    item.addEventListener('mousedown', (e) => {
+      e.preventDefault(); // Prevent textarea blur
+      insertSuggestion(textarea, suggestion, currentWord, cursorPos);
+      hideAutocomplete();
+    });
+    
+    autocompleteContainer.appendChild(item);
+  });
+  
+  document.body.appendChild(autocompleteContainer);
+}
+
+// Hide autocomplete
+function hideAutocomplete() {
+  if (autocompleteContainer) {
+    autocompleteContainer.remove();
+    autocompleteContainer = null;
+  }
+}
+
+// Insert selected suggestion
+function insertSuggestion(textarea, suggestion, currentWord, cursorPos) {
+  const value = textarea.value;
+  const beforeCursor = value.substring(0, cursorPos);
+  const afterCursor = value.substring(cursorPos);
+  
+  // Find the start of the current word (after last comma or start of string)
+  const lastCommaIndex = beforeCursor.lastIndexOf(',');
+  const wordStart = lastCommaIndex >= 0 ? lastCommaIndex + 1 : 0;
+  
+  // Replace current word with suggestion
+  const before = value.substring(0, wordStart).trim();
+  const newValue = (before ? before + ', ' : '') + suggestion + afterCursor;
+  
+  textarea.value = newValue;
+  
+  // Set cursor after the inserted name
+  const newCursorPos = (before ? before.length + 2 : 0) + suggestion.length;
+  textarea.setSelectionRange(newCursorPos, newCursorPos);
+  
+  // Trigger input event to auto-resize
+  textarea.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+// Handle autocomplete on input
+function handlePhotographerInput(textarea) {
+  const cursorPos = textarea.selectionStart;
+  const value = textarea.value;
+  const beforeCursor = value.substring(0, cursorPos);
+  
+  // Get the current word being typed (after last comma)
+  const lastCommaIndex = beforeCursor.lastIndexOf(',');
+  const currentWord = beforeCursor.substring(lastCommaIndex + 1).trim();
+  
+  // If no word or word is empty, hide autocomplete
+  if (!currentWord || currentWord.length === 0) {
+    hideAutocomplete();
+    return;
+  }
+  
+  // Filter suggestions based on current word
+  const suggestions = cachedUserFirstNames.filter(name => 
+    name.toLowerCase().startsWith(currentWord.toLowerCase())
+  ).slice(0, 10); // Limit to 10 suggestions
+  
+  if (suggestions.length > 0) {
+    showAutocomplete(textarea, suggestions, currentWord, cursorPos);
+  } else {
+    hideAutocomplete();
+  }
+}
+
+// Setup autocomplete for photographer fields
+function setupPhotographerAutocomplete() {
+  // Add event delegation for photographer textareas
+  document.addEventListener('input', (e) => {
+    if (e.target.matches('textarea[data-field="photographer"]')) {
+      handlePhotographerInput(e.target);
+    }
+  });
+  
+  // Hide autocomplete when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!e.target.matches('textarea[data-field="photographer"]') && 
+        !e.target.closest('.photographer-autocomplete')) {
+      hideAutocomplete();
+    }
+  });
+  
+  // Handle keyboard navigation (future enhancement: arrow keys)
+  document.addEventListener('keydown', (e) => {
+    if (e.target.matches('textarea[data-field="photographer"]')) {
+      if (e.key === 'Escape') {
+        hideAutocomplete();
+      }
+    }
+  });
 }
 
 // Add a global variable to track if scroll position should be restored
@@ -336,9 +484,6 @@ window.initPage = async function(id) {
   }
 
 
-  // Load users for photographer auto-suggest (don't await - non-blocking)
-  loadScheduleUsers();
-
   // Load collaborative system first
   await loadCollaborativeSystem();
 
@@ -440,12 +585,11 @@ window.initPage = async function(id) {
   await loadPrograms(tableId);
   console.log(`[INIT] Programs loaded successfully`);
 
-  // Initialize dark theme if detected
-  const isDarkTheme = document.querySelector('.schedule-page.dark-theme');
-  if (isDarkTheme) {
-    console.log(`[INIT] Dark theme detected, initializing...`);
-    initDarkThemeSchedule();
-  }
+  // Initialize photographer autocomplete
+  console.log(`[INIT] Loading user names for autocomplete...`);
+  await loadUserFirstNames();
+  setupPhotographerAutocomplete();
+  console.log(`[INIT] Photographer autocomplete initialized`);
 
   // Check for interference after loadPrograms
   if (!checkEventIdStability()) {
@@ -878,13 +1022,6 @@ function renderProgramSections(hasScheduleAccess) {
     hasScheduleAccess = isOwner;
   }
 
-  // Check for dark theme - render card view (table view uses existing renderScheduleTable)
-  const schedulePage = document.querySelector('.schedule-page.dark-theme');
-  if (schedulePage) {
-    renderDarkThemeCardView(hasScheduleAccess);
-    return;
-  }
-
   const container = document.getElementById('programSections');
   if (!container) {
     console.error('Missing #programSections div!');
@@ -942,11 +1079,6 @@ function renderProgramSections(hasScheduleAccess) {
       filterDropdown.appendChild(option);
     });
     filterDropdown.value = currentSelection;
-    
-    // Update custom dropdown if it exists (dark theme)
-    if (typeof updateScheduleDateDropdown === 'function') {
-      updateScheduleDateDropdown();
-    }
   }
 
   if (tableData.programs.length === 0) {
@@ -961,6 +1093,19 @@ function renderProgramSections(hasScheduleAccess) {
 
   const dates = [...new Set(tableData.programs.map(p => p.date))].sort((a, b) => a.localeCompare(b));
 
+  // Helper function to calculate duration in minutes
+  function calculateDuration(startTime, endTime) {
+    if (!startTime || !endTime) return Infinity; // Programs without end time go last
+    
+    const [startHour, startMin] = startTime.split(':').map(Number);
+    const [endHour, endMin] = endTime.split(':').map(Number);
+    
+    const startMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+    
+    return endMinutes - startMinutes;
+  }
+
   dates.forEach(date => {
     const matchingPrograms = tableData.programs
       .map((p, i) => ({ ...p, __index: i }))
@@ -971,18 +1116,18 @@ function renderProgramSections(hasScheduleAccess) {
         const aHasTime = a.startTime && a.startTime.trim() !== '';
         const bHasTime = b.startTime && b.startTime.trim() !== '';
         
-        // If both have times, sort by time
+        // If both have times, sort by time first, then by duration
         if (aHasTime && bHasTime) {
-          const startCmp = a.startTime.localeCompare(b.startTime);
-          if (startCmp !== 0) return startCmp;
+          const timeComparison = a.startTime.localeCompare(b.startTime);
           
-          // Same start time: sort by end time (shorter duration first)
-          const aHasEnd = a.endTime && a.endTime.trim() !== '';
-          const bHasEnd = b.endTime && b.endTime.trim() !== '';
-          if (aHasEnd && bHasEnd) return a.endTime.localeCompare(b.endTime);
-          if (aHasEnd && !bHasEnd) return -1; // a has end time, show first
-          if (!aHasEnd && bHasEnd) return 1;
-          return a.__index - b.__index;
+          // If start times are the same, sort by duration (shortest first)
+          if (timeComparison === 0) {
+            const aDuration = calculateDuration(a.startTime, a.endTime);
+            const bDuration = calculateDuration(b.startTime, b.endTime);
+            return aDuration - bDuration; // Shorter duration comes first
+          }
+          
+          return timeComparison;
         }
         
         // If only a has time, a comes first
@@ -1025,23 +1170,25 @@ function renderProgramSections(hasScheduleAccess) {
       }
 
       entry.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: 4px;">
-          <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; gap: 4px;" class="time-row">
+          <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;" class="time-fields-container">
             <input type="time" placeholder="Start Time" 
               data-field="startTime"
-              style="width: 130px; min-width: 130px; text-align: left; font-size: 12px;"
+              class="time-input"
+              style="width: 110px; min-width: 90px; text-align: left; font-size: 12px;"
               value="${program.startTime || ''}"
               ${!hasScheduleAccess ? 'readonly' : ''}
               onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
               onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'startTime')` : ''}">
             <input type="time" placeholder="End Time" 
               data-field="endTime"
-              style="width: 130px; min-width: 130px; text-align: left; font-size: 12px;"
+              class="time-input"
+              style="width: 110px; min-width: 90px; text-align: left; font-size: 12px;"
               value="${program.endTime || ''}"
               ${!hasScheduleAccess ? 'readonly' : ''}
               onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
               onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'endTime')` : ''}">
-            ${program.folder ? `<div style="display: flex; align-items: center; gap: 2px;" class="folder-field-container">
+            <div style="display: ${program.folder ? 'flex' : 'none'}; align-items: center; gap: 2px;" class="folder-field-container" data-has-value="${program.folder ? 'true' : 'false'}">
               <span class="material-symbols-outlined folder-icon" style="font-size: 14px; color: #2563eb;">folder</span>
               <input type="text"
                 data-field="folder"
@@ -1049,11 +1196,12 @@ function renderProgramSections(hasScheduleAccess) {
                 placeholder="Folder"
                 maxlength="7"
                 ${!hasScheduleAccess ? 'readonly' : ''}
-                style="width: 70px; min-width: 70px; padding: 4px 8px; font-size: 12px;"
+                style="width: 70px; min-width: 50px; padding: 4px 8px; font-size: 12px;"
                 value="${program.folder || ''}"
                 onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
+                oninput="toggleFolderVisibility(this)"
                 onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'folder')` : ''}">
-            </div>` : ''}
+            </div>
           </div>
           <div class="right-actions" style="flex-shrink: 0; margin-left: auto;">
             <label style="display: flex; align-items: center; margin-bottom: 0;">
@@ -1209,11 +1357,18 @@ function applyScrollRestore() {
   }
 }
 
-function toggleDone(checkbox, index) {
-  console.log(`[TOGGLE DONE] Called with index: ${index}, checkbox checked: ${checkbox.checked}`);
+function toggleFolderVisibility(input) {
+  const container = input.closest('.folder-field-container');
+  if (!container) return;
   
+  const hasValue = input.value.trim().length > 0;
+  container.setAttribute('data-has-value', hasValue ? 'true' : 'false');
+  container.style.display = hasValue ? 'flex' : 'none';
+}
+
+function toggleDone(checkbox, index) {
   if (isNaN(index) || !tableData.programs[index]) {
-    console.error(`[TOGGLE DONE] Invalid program index: ${index}, programs length: ${tableData.programs?.length}`);
+    console.error(`[TOGGLE DONE] Invalid program index: ${index}`);
     return;
   }
   
@@ -1230,14 +1385,10 @@ function toggleDone(checkbox, index) {
   
   console.log(`[TOGGLE DONE] Program ${index} done: ${originalValue} → ${newValue}`);
   
-  // Update visual state immediately - handle both card view (.program-entry) and table view (tr)
+  // Update visual state immediately
   const entry = checkbox.closest('.program-entry');
-  const tableRow = checkbox.closest('tr');
   if (entry) {
     entry.classList.toggle('done-entry', newValue);
-  }
-  if (tableRow) {
-    tableRow.classList.toggle('done-row', newValue);
   }
   
   // Update in-memory data immediately for responsive UI
@@ -1313,15 +1464,6 @@ function matchesSearch(program) {
     (program.folder || '').toLowerCase().includes(lower) ||
     (program.notes || '').toLowerCase().includes(lower)
   );
-}
-
-// Update folder field data attribute based on input value (for styling)
-function toggleFolderVisibility(input) {
-  const container = input.closest('.folder-field-container');
-  if (!container) return;
-  
-  const hasValue = input.value.trim().length > 0;
-  container.setAttribute('data-has-value', hasValue ? 'true' : 'false');
 }
 
 // --- Editing guard for partial updates and optimistic UI ---
@@ -1667,7 +1809,7 @@ const operationalTransform = {
   
   // Check if field contains text that can be merged
   isTextField(field) {
-    return ['name', 'location', 'photographer', 'notes'].includes(field);
+    return ['name', 'location', 'photographer', 'folder', 'notes'].includes(field);
   },
   
   // Transform text operations (advanced)
@@ -2133,6 +2275,7 @@ const userPresence = {
     if (field.className.includes('end-time')) return 'endTime';
     if (field.className.includes('location')) return 'location';
     if (field.className.includes('photographer')) return 'photographer';
+    if (field.className.includes('folder')) return 'folder';
     if (field.className.includes('notes')) return 'notes';
     
     return null;
@@ -2722,6 +2865,7 @@ const conflictResolution = {
       endTime: 'End Time',
       location: 'Location',
       photographer: 'Photographer',
+      folder: 'Folder',
       notes: 'Notes',
       done: 'Completion Status'
     };
@@ -3064,47 +3208,10 @@ function safeDeleteProgram(programIndex) {
   
   const confirmMessage = `Are you sure you want to delete "${programName}" on ${programDate}${timeInfo}?`;
   
-  // Check if dark theme modal exists
-  const deleteModal = document.getElementById('scheduleDeleteModal');
-  if (deleteModal) {
-    // Use custom dark theme modal
-    const titleEl = document.getElementById('deleteModalTitle');
-    const messageEl = document.getElementById('deleteModalMessage');
-    const confirmBtn = document.getElementById('confirmDeleteBtn');
-    const cancelBtn = document.getElementById('cancelDeleteBtn');
-    
-    if (titleEl) titleEl.textContent = 'Delete Program';
-    if (messageEl) messageEl.textContent = confirmMessage;
-    
-    deleteModal.classList.add('show');
-    
-    // Remove old listeners and add new ones
-    const newConfirmBtn = confirmBtn.cloneNode(true);
-    const newCancelBtn = cancelBtn.cloneNode(true);
-    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-    cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
-    
-    newConfirmBtn.onclick = () => {
-      deleteModal.classList.remove('show');
-      executeDeleteProgram(programIndex, program, programName);
-    };
-    
-    newCancelBtn.onclick = () => {
-      deleteModal.classList.remove('show');
-    };
-    
-    return;
-  }
-  
-  // Fallback to confirm() for non-dark theme
   if (!confirm(confirmMessage)) {
     return;
   }
   
-  executeDeleteProgram(programIndex, program, programName);
-}
-
-function executeDeleteProgram(programIndex, program, programName) {
   console.log(`[SAFE DELETE] Removing program: ${programName} on ${program.date}`);
   
   // Broadcast to other users if collaboration is enabled
@@ -3119,50 +3226,8 @@ function executeDeleteProgram(programIndex, program, programName) {
 }
 
 function safeDeleteDate(date) {
-  // Count how many programs will be deleted
-  const programCount = tableData.programs.filter(p => p.date === date).length;
-  const formattedDate = formatDate(date);
-  const confirmMessage = `Are you sure you want to delete ${formattedDate} and all ${programCount} program${programCount !== 1 ? 's' : ''} for this date?`;
+  if (!confirm('Delete all programs for this date?')) return;
   
-  // Check if dark theme modal exists
-  const deleteModal = document.getElementById('scheduleDeleteModal');
-  if (deleteModal) {
-    // Use custom dark theme modal
-    const titleEl = document.getElementById('deleteModalTitle');
-    const messageEl = document.getElementById('deleteModalMessage');
-    const confirmBtn = document.getElementById('confirmDeleteBtn');
-    const cancelBtn = document.getElementById('cancelDeleteBtn');
-    
-    if (titleEl) titleEl.textContent = 'Delete Date';
-    if (messageEl) messageEl.textContent = confirmMessage;
-    
-    deleteModal.classList.add('show');
-    
-    // Remove old listeners and add new ones
-    const newConfirmBtn = confirmBtn.cloneNode(true);
-    const newCancelBtn = cancelBtn.cloneNode(true);
-    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
-    cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
-    
-    newConfirmBtn.onclick = () => {
-      deleteModal.classList.remove('show');
-      executeDeleteDate(date);
-    };
-    
-    newCancelBtn.onclick = () => {
-      deleteModal.classList.remove('show');
-    };
-    
-    return;
-  }
-  
-  // Fallback to confirm() for non-dark theme
-  if (!confirm(confirmMessage)) return;
-  
-  executeDeleteDate(date);
-}
-
-function executeDeleteDate(date) {
   const originalCount = tableData.programs.length;
   tableData.programs = tableData.programs.filter(p => p.date !== date);
   const removedCount = originalCount - tableData.programs.length;
@@ -3185,6 +3250,7 @@ function addDateSection() {
     endTime: '', 
     location: '', 
     photographer: '', 
+    folder: '',
     notes: '',
     done: false,
     // Add automatic temporary ID for collaborative system compatibility
@@ -3205,17 +3271,7 @@ function addProgram(date) {
 }
 
 function deleteProgram(button) {
-  // Support both card view (.program-entry) and table view (tr)
-  const cardEntry = button.closest('.program-entry');
-  const tableRow = button.closest('tr');
-  
-  let index;
-  if (cardEntry) {
-    index = parseInt(cardEntry.getAttribute('data-program-index'), 10);
-  } else if (tableRow) {
-    index = parseInt(tableRow.getAttribute('data-program-index'), 10);
-  }
-  
+  const index = parseInt(button.closest('.program-entry').getAttribute('data-program-index'), 10);
   if (!isNaN(index)) {
     safeDeleteProgram(index);
   }
@@ -3250,13 +3306,13 @@ window.savePrograms = savePrograms;
 window.scheduleSave = scheduleSave;
 window.renderProgramSections = renderProgramSections;
 window.toggleDone = toggleDone;
+window.toggleFolderVisibility = toggleFolderVisibility;
 window.matchesSearch = matchesSearch;
 window.enableEdit = enableEdit;
 window.autoSave = autoSave;
 window.toggleNotes = toggleNotes;
 window.toggleAllNotes = toggleAllNotes;
 window.autoResizeTextarea = autoResizeTextarea;
-window.toggleFolderVisibility = toggleFolderVisibility;
 
 // DEPRECATED: Use safe functions instead
 window.captureCurrentPrograms = captureCurrentPrograms;
@@ -3593,8 +3649,8 @@ async function exportScheduleToExcel() {
       'Program Name',
       'Location',
       'Photographer',
-      'Notes',
       'Folder',
+      'Notes',
       'Done'
     ]);
     
@@ -3612,8 +3668,8 @@ async function exportScheduleToExcel() {
         program.name || '',
         program.location || '',
         program.photographer || '',
-        program.notes || '',
         program.folder || '',
+        program.notes || '',
         program.done ? 'Yes' : 'No'
       ]);
     });
@@ -3629,8 +3685,8 @@ async function exportScheduleToExcel() {
       { width: 30 },  // Program Name
       { width: 25 },  // Location
       { width: 20 },  // Photographer
-      { width: 40 },  // Notes
       { width: 10 },  // Folder
+      { width: 40 },  // Notes
       { width: 8 }    // Done
     ];
     
@@ -3679,8 +3735,8 @@ function processImportedData(data) {
     endTime: headers.indexOf('endtime') !== -1 ? headers.indexOf('endtime') : headers.indexOf('end time'),
     location: headers.indexOf('location'),
     photographer: headers.indexOf('photographer'),
-    notes: headers.indexOf('notes'),
     folder: headers.indexOf('folder'),
+    notes: headers.indexOf('notes'),
     done: headers.indexOf('done') !== -1 ? headers.indexOf('done') : headers.indexOf('completed')
   };
   
@@ -3743,8 +3799,8 @@ function processImportedData(data) {
       endTime: endTime,
       location: columnMap.location !== -1 ? (row[columnMap.location] || '') : '',
       photographer: columnMap.photographer !== -1 ? (row[columnMap.photographer] || '') : '',
-      notes: columnMap.notes !== -1 ? (row[columnMap.notes] || '') : '',
       folder: columnMap.folder !== -1 ? (row[columnMap.folder] || '') : '',
+      notes: columnMap.notes !== -1 ? (row[columnMap.notes] || '') : '',
       done: isDone,
       // Add automatic temporary ID for collaborative system compatibility
       _tempId: generateTempId(`import_${i}`)
@@ -3762,23 +3818,36 @@ function processImportedData(data) {
 
 // Function to create and show the import modal
 function showImportModal(newPrograms) {
-  // Create modal container using dark theme classes
+  // Create modal container
   const modalContainer = document.createElement('div');
-  modalContainer.className = 'dark-modal show';
-  modalContainer.id = 'importScheduleModal';
+  modalContainer.className = 'import-modal-container';
+  modalContainer.style.position = 'fixed';
+  modalContainer.style.top = '0';
+  modalContainer.style.left = '0';
+  modalContainer.style.width = '100%';
+  modalContainer.style.height = '100%';
+  modalContainer.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+  modalContainer.style.display = 'flex';
+  modalContainer.style.justifyContent = 'center';
+  modalContainer.style.alignItems = 'center';
+  modalContainer.style.zIndex = '9999';
   
   // Create modal content
   const modalContent = document.createElement('div');
-  modalContent.className = 'dark-modal-content';
+  modalContent.className = 'import-modal-content';
+  modalContent.style.backgroundColor = 'white';
+  modalContent.style.padding = '20px';
+  modalContent.style.borderRadius = '8px';
+  modalContent.style.maxWidth = '500px';
+  modalContent.style.width = '90%';
+  modalContent.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)';
   
   // Create modal header
   const modalHeader = document.createElement('div');
-  modalHeader.className = 'modal-header-dark';
-  modalHeader.innerHTML = `<h3>Import Schedule</h3>`;
+  modalHeader.innerHTML = `<h3 style="margin-top: 0; color: #333;">Import Schedule</h3>`;
   
   // Create modal body
   const modalBody = document.createElement('div');
-  modalBody.className = 'modal-body-dark';
   modalBody.innerHTML = `
     <p>Found ${newPrograms.length} valid program entries.</p>
     <p>How would you like to import these entries?</p>
@@ -3786,25 +3855,39 @@ function showImportModal(newPrograms) {
   
   // Create modal footer with buttons
   const modalFooter = document.createElement('div');
-  modalFooter.className = 'modal-footer-dark';
+  modalFooter.style.display = 'flex';
+  modalFooter.style.justifyContent = 'flex-end';
+  modalFooter.style.marginTop = '20px';
+  modalFooter.style.gap = '10px';
 
   // Create cancel button
   const cancelButton = document.createElement('button');
-  cancelButton.className = 'btn-secondary';
   cancelButton.textContent = 'Cancel';
+  cancelButton.style.padding = '8px 16px';
+  cancelButton.style.border = '1px solid #ddd';
+  cancelButton.style.borderRadius = '4px';
+  cancelButton.style.backgroundColor = '#f5f5f5';
+  cancelButton.style.cursor = 'pointer';
   
   // Create merge button
   const mergeButton = document.createElement('button');
-  mergeButton.className = 'btn-primary';
-  mergeButton.style.background = 'var(--bg-tertiary)';
-  mergeButton.style.border = '1px solid var(--border-default)';
   mergeButton.textContent = 'Merge with Current';
+  mergeButton.style.padding = '8px 16px';
+  mergeButton.style.border = 'none';
+  mergeButton.style.borderRadius = '4px';
+  mergeButton.style.backgroundColor = '#4a5568';
+  mergeButton.style.color = 'white';
+  mergeButton.style.cursor = 'pointer';
   
   // Create replace button
   const replaceButton = document.createElement('button');
-  replaceButton.className = 'btn-primary';
-  replaceButton.style.background = 'var(--brand-red)';
   replaceButton.textContent = 'Replace Current';
+  replaceButton.style.padding = '8px 16px';
+  replaceButton.style.border = 'none';
+  replaceButton.style.borderRadius = '4px';
+  replaceButton.style.backgroundColor = '#CC0007';
+  replaceButton.style.color = 'white';
+  replaceButton.style.cursor = 'pointer';
   
   // Add buttons to footer
   modalFooter.appendChild(cancelButton);
@@ -3822,25 +3905,10 @@ function showImportModal(newPrograms) {
   // Add modal to body
   document.body.appendChild(modalContainer);
   
-  // Helper function to close the modal
-  const closeModal = () => {
-    modalContainer.classList.remove('show');
-    setTimeout(() => {
-      if (modalContainer.parentNode) {
-        modalContainer.parentNode.removeChild(modalContainer);
-      }
-    }, 200);
-  };
-
-  // Close modal when clicking backdrop
-  modalContainer.addEventListener('click', (e) => {
-    if (e.target === modalContainer) {
-      closeModal();
-    }
-  });
-
   // Add event listeners to buttons
-  cancelButton.addEventListener('click', closeModal);
+  cancelButton.addEventListener('click', () => {
+    document.body.removeChild(modalContainer);
+  });
   
   mergeButton.addEventListener('click', async () => {
     // Show loading state
@@ -3856,7 +3924,7 @@ function showImportModal(newPrograms) {
       await saveImportedPrograms(newPrograms, 'merge');
       
       renderProgramSections();
-      closeModal();
+      document.body.removeChild(modalContainer);
       alert(`Successfully imported ${newPrograms.length} program entries.`);
     } catch (error) {
       console.error('Import failed:', error);
@@ -3882,7 +3950,7 @@ function showImportModal(newPrograms) {
       await saveImportedPrograms(newPrograms, 'replace');
       
       renderProgramSections();
-      closeModal();
+      document.body.removeChild(modalContainer);
       alert(`Successfully replaced schedule with ${newPrograms.length} program entries.`);
     } catch (error) {
       console.error('Replace failed:', error);
@@ -3983,13 +4051,13 @@ function downloadImportTemplate() {
     return;
   }
   
-  const headers = ['Date', 'Name', 'StartTime', 'EndTime', 'Location', 'Photographer', 'Notes', 'Folder', 'Done'];
+  const headers = ['Date', 'Name', 'StartTime', 'EndTime', 'Location', 'Photographer', 'Folder', 'Notes', 'Done'];
   const csvContent = headers.join(',') + '\n' +
-    '2023-06-01,Main Event,09:00,12:00,Grand Hall,John Smith,VIP guests expected,DAY1,FALSE\n' +
-    '2023-06-01,Lunch Break,12:00,13:00,Dining Room,N/A,Catering by LocalFood,DAY1,FALSE\n' +
-    '2023-06-01,Panel Discussion,13:30,15:00,Conference Room B,Jane Doe,Q&A session at the end,DAY1,TRUE\n' +
-    '2023-06-02,Workshop,10:00,12:30,Training Room,Michael Johnson,Bring extra equipment,DAY2,FALSE\n' +
-    '2023-06-02,Closing Event,16:00,18:00,Main Stage,Full Team,Group photo at 17:30,DAY2,FALSE';
+    '2023-06-01,Main Event,09:00,12:00,Grand Hall,John Smith,CARD01,VIP guests expected,FALSE\n' +
+    '2023-06-01,Lunch Break,12:00,13:00,Dining Room,N/A,CARD02,Catering by LocalFood,FALSE\n' +
+    '2023-06-01,Panel Discussion,13:30,15:00,Conference Room B,Jane Doe,CARD03,Q&A session at the end,TRUE\n' +
+    '2023-06-02,Workshop,10:00,12:30,Training Room,Michael Johnson,CARD04,Bring extra equipment,FALSE\n' +
+    '2023-06-02,Closing Event,16:00,18:00,Main Stage,Full Team,CARD05,Group photo at 17:30,FALSE';
   
   // Create a Blob with the CSV content
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -4557,20 +4625,6 @@ function updateProgramFields(entry, program, preservationData, hasScheduleAccess
     }
   }
   
-  // Update notes textarea
-  const notesTextarea = entry.querySelector('.notes-field textarea');
-  if (notesTextarea && !isFieldCurrentlyFocused(notesTextarea, preservationData)) {
-    if (notesTextarea.value !== (program.notes || '')) {
-      console.log(`[UPDATE] Updating notes: '${notesTextarea.value}' -> '${program.notes || ''}'`);
-      
-      // CRITICAL: Mark as programmatic update to prevent feedback loops
-      notesTextarea.dataset.collaborativeUpdate = 'true';
-      
-      notesTextarea.value = program.notes || '';
-      autoResizeTextarea(notesTextarea);
-    }
-  }
-  
   // Update folder input
   const folderInput = entry.querySelector('input[data-field="folder"]');
   if (folderInput && !isFieldCurrentlyFocused(folderInput, preservationData)) {
@@ -4582,12 +4636,27 @@ function updateProgramFields(entry, program, preservationData, hasScheduleAccess
       
       folderInput.value = program.folder || '';
       
-      // Update data attribute for styling purposes
+      // Show/hide folder field based on whether there's data
       const container = folderInput.closest('.folder-field-container');
       if (container) {
         const hasValue = (program.folder || '').trim().length > 0;
         container.setAttribute('data-has-value', hasValue ? 'true' : 'false');
+        container.style.display = hasValue ? 'flex' : 'none';
       }
+    }
+  }
+  
+  // Update notes textarea
+  const notesTextarea = entry.querySelector('.notes-field textarea');
+  if (notesTextarea && !isFieldCurrentlyFocused(notesTextarea, preservationData)) {
+    if (notesTextarea.value !== (program.notes || '')) {
+      console.log(`[UPDATE] Updating notes: '${notesTextarea.value}' -> '${program.notes || ''}'`);
+      
+      // CRITICAL: Mark as programmatic update to prevent feedback loops
+      notesTextarea.dataset.collaborativeUpdate = 'true';
+      
+      notesTextarea.value = program.notes || '';
+      autoResizeTextarea(notesTextarea);
     }
   }
   
@@ -4921,7 +4990,7 @@ function renderScheduleTable() {
   const tableContainer = document.getElementById('scheduleTableView');
   if (!tableContainer) return;
   
-  console.log('[TABLE VIEW] Rendering schedule table, isOwner:', isOwner);
+  console.log('[TABLE VIEW] Rendering schedule table');
   
   tableContainer.innerHTML = '';
   
@@ -4933,6 +5002,19 @@ function renderScheduleTable() {
   // Group by dates
   const dates = [...new Set(tableData.programs.map(p => p.date))].sort((a, b) => a.localeCompare(b));
   
+  // Helper function to calculate duration in minutes
+  function calculateDuration(startTime, endTime) {
+    if (!startTime || !endTime) return Infinity; // Programs without end time go last
+    
+    const [startHour, startMin] = startTime.split(':').map(Number);
+    const [endHour, endMin] = endTime.split(':').map(Number);
+    
+    const startMinutes = startHour * 60 + startMin;
+    const endMinutes = endHour * 60 + endMin;
+    
+    return endMinutes - startMinutes;
+  }
+
   dates.forEach(date => {
     const matchingPrograms = tableData.programs
       .map((p, i) => ({ ...p, __index: i }))
@@ -4942,16 +5024,16 @@ function renderScheduleTable() {
         const bHasTime = b.startTime && b.startTime.trim() !== '';
         
         if (aHasTime && bHasTime) {
-          const startCmp = a.startTime.localeCompare(b.startTime);
-          if (startCmp !== 0) return startCmp;
+          const timeComparison = a.startTime.localeCompare(b.startTime);
           
-          // Same start time: sort by end time (shorter duration first)
-          const aHasEnd = a.endTime && a.endTime.trim() !== '';
-          const bHasEnd = b.endTime && b.endTime.trim() !== '';
-          if (aHasEnd && bHasEnd) return a.endTime.localeCompare(b.endTime);
-          if (aHasEnd && !bHasEnd) return -1;
-          if (!aHasEnd && bHasEnd) return 1;
-          return a.__index - b.__index;
+          // If start times are the same, sort by duration (shortest first)
+          if (timeComparison === 0) {
+            const aDuration = calculateDuration(a.startTime, a.endTime);
+            const bDuration = calculateDuration(b.startTime, b.endTime);
+            return aDuration - bDuration; // Shorter duration comes first
+          }
+          
+          return timeComparison;
         }
         if (aHasTime && !bHasTime) return -1;
         if (!aHasTime && bHasTime) return 1;
@@ -4968,20 +5050,9 @@ function renderScheduleTable() {
     dateHeader.className = 'date-header';
     dateHeader.innerHTML = `
       <div>${formatDate(date)}</div>
-      ${isOwner ? `<button class="date-action-btn" data-date="${date}" title="More options"><span class="material-symbols-outlined">more_horiz</span></button>` : ''}
+      ${isOwner ? `<button class="delete-date-btn" onclick="deleteDate('${date}')"><span class="material-symbols-outlined">delete</span></button>` : ''}
     `;
     section.appendChild(dateHeader);
-    
-    // Add date action menu handler
-    if (isOwner) {
-      const dateActionBtn = dateHeader.querySelector('.date-action-btn');
-      if (dateActionBtn) {
-        dateActionBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          showScheduleDateActionMenu(date, e.currentTarget);
-        });
-      }
-    }
     
     const table = document.createElement('table');
     
@@ -5034,7 +5105,7 @@ function renderScheduleTable() {
           <span class="cell-display">${program.notes || ''}</span>
         </td>
         <td class="editable-cell ${isOwner ? 'owner-editable' : ''}" data-field="folder">
-          <span class="cell-display folder-cell">${program.folder || ''}</span>
+          <span class="cell-display">${program.folder || ''}</span>
         </td>
         <td class="done-checkbox-cell">
           <input type="checkbox" class="done-checkbox"
@@ -5044,9 +5115,9 @@ function renderScheduleTable() {
             ${isOwner ? `onchange="toggleDone(this, ${program.__index})"` : 'disabled'}>
         </td>
         ${isOwner ? `
-          <td class="action-cell">
-            <button class="row-action-btn" data-program-index="${program.__index}" title="More options">
-              <span class="material-symbols-outlined">more_horiz</span>
+          <td>
+            <button class="delete-row-btn" onclick="deleteProgram(this)" title="Delete">
+              <span class="material-symbols-outlined">delete</span>
             </button>
           </td>
         ` : ''}
@@ -5059,15 +5130,6 @@ function renderScheduleTable() {
         row.querySelectorAll('.owner-editable').forEach(cell => {
           cell.addEventListener('click', () => makeTableCellEditable(cell, program));
         });
-        
-        // Add row action menu handler
-        const actionBtn = row.querySelector('.row-action-btn');
-        if (actionBtn) {
-          actionBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            showScheduleRowActionMenu(program.__index, e.currentTarget);
-          });
-        }
       }
     });
     
@@ -5097,11 +5159,9 @@ function makeTableCellEditable(cell, program) {
   const displaySpan = cell.querySelector('.cell-display');
   if (!displaySpan) return;
   
-  // Read from the live tableData instead of the stale program copy
-  // so that re-clicking a cell after editing shows the updated value
-  const programIndex = parseInt(cell.closest('tr').getAttribute('data-program-index'));
-  const liveProgram = tableData.programs[programIndex] || program;
-  const currentValue = liveProgram[field] || '';
+  // Get current value from the cell display, not from program object
+  // This ensures we're editing what's actually shown in the cell
+  const currentValue = displaySpan.textContent.trim();
   
   cell.classList.add('editing');
   
@@ -5118,7 +5178,7 @@ function makeTableCellEditable(cell, program) {
     inputElement = document.createElement('input');
     inputElement.type = 'text';
     inputElement.value = currentValue;
-    inputElement.maxLength = 7; // Set max length to 7 characters for folder
+    inputElement.maxLength = 7; // Set max length to 7 characters
   } else {
     inputElement = document.createElement('input');
     inputElement.type = 'text';
@@ -5127,120 +5187,18 @@ function makeTableCellEditable(cell, program) {
   
   inputElement.className = 'inline-edit-input';
   
-  // --- Auto-suggest dropdown for photographer field ---
-  let suggestDropdown = null;
-  let suppressBlur = false; // Flag to prevent blur when clicking a suggestion
-  
-  if (field === 'photographer' && cachedScheduleUsers.length > 0) {
-    // Create the suggestion dropdown container
-    suggestDropdown = document.createElement('div');
-    suggestDropdown.className = 'photographer-suggest-dropdown';
-    cell.appendChild(suggestDropdown);
-    
-    // Helper: get the token currently being typed (text after last comma)
-    function getCurrentToken(value) {
-      const parts = value.split(',');
-      return (parts[parts.length - 1] || '').trim();
-    }
-    
-    // Helper: get all tokens before the current one (text before last comma)
-    function getPrefixTokens(value) {
-      const parts = value.split(',');
-      if (parts.length <= 1) return '';
-      const prefix = parts.slice(0, -1).map(t => t.trim()).filter(Boolean).join(', ');
-      return prefix;
-    }
-    
-    // Helper: build final value by replacing the current token with a selected name
-    function buildValueWithSelection(currentInput, selectedName) {
-      const prefix = getPrefixTokens(currentInput);
-      if (prefix) {
-        return prefix + ', ' + selectedName;
-      }
-      return selectedName;
-    }
-    
-    // Show/update suggestions based on current input
-    function updateSuggestions() {
-      const token = getCurrentToken(inputElement.value).toLowerCase();
-      suggestDropdown.innerHTML = '';
-      
-      if (!token) {
-        suggestDropdown.style.display = 'none';
-        return;
-      }
-      
-      // Get names already entered (to avoid suggesting duplicates)
-      const existingNames = inputElement.value.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
-      // Don't include the current token in the "existing" list
-      existingNames.pop();
-      
-      const matches = cachedScheduleUsers.filter(name => {
-        const lowerName = name.toLowerCase();
-        return lowerName.startsWith(token) && !existingNames.includes(lowerName);
-      });
-      
-      if (matches.length === 0) {
-        suggestDropdown.style.display = 'none';
-        return;
-      }
-      
-      matches.forEach(name => {
-        const item = document.createElement('div');
-        item.className = 'photographer-suggest-item';
-        item.textContent = name;
-        
-        // Use mousedown instead of click so it fires before blur
-        item.addEventListener('mousedown', (e) => {
-          e.preventDefault(); // Prevent focus loss
-          suppressBlur = true;
-          inputElement.value = buildValueWithSelection(inputElement.value, name);
-          suggestDropdown.style.display = 'none';
-          inputElement.focus();
-          // Reset suppressBlur after a tick
-          setTimeout(() => { suppressBlur = false; }, 0);
-        });
-        
-        suggestDropdown.appendChild(item);
-      });
-      
-      suggestDropdown.style.display = 'block';
-    }
-    
-    // Update suggestions as user types
-    inputElement.addEventListener('input', updateSuggestions);
-    
-    // Show suggestions on focus if there's already a token being typed
-    inputElement.addEventListener('focus', () => {
-      setTimeout(updateSuggestions, 0);
-    });
-  }
-  
-  // --- Save on blur ---
+  // Save on blur
   inputElement.addEventListener('blur', () => {
-    // If the user clicked a suggestion, don't blur yet
-    if (suppressBlur) return;
-    
-    // Clean up the suggest dropdown
-    if (suggestDropdown) {
-      suggestDropdown.remove();
-      suggestDropdown = null;
-    }
-    
-    // Clean up trailing commas and extra spaces for photographer field
-    let newValue = inputElement.value;
-    if (field === 'photographer') {
-      newValue = newValue.split(',').map(t => t.trim()).filter(Boolean).join(', ');
-    }
+    const newValue = inputElement.value;
+    const programIndex = parseInt(cell.closest('tr').getAttribute('data-program-index'));
     
     if (newValue !== currentValue) {
-      // Update the program in the live data
+      // Update the program
       const wasChanged = safeUpdateProgram(programIndex, field, newValue);
       if (wasChanged) {
         // Use atomic save if program has ID
-        const liveProgramId = tableData.programs[programIndex] && tableData.programs[programIndex]._id;
-        if (liveProgramId) {
-          atomicSaveField(inputElement, field, liveProgramId, newValue, currentValue)
+        if (program._id) {
+          atomicSaveField(inputElement, field, program._id, newValue, currentValue)
             .then(() => console.log(`[TABLE VIEW] Saved ${field} for program ${programIndex}`))
             .catch(err => {
               console.error(`[TABLE VIEW] Failed to save ${field}:`, err);
@@ -5263,15 +5221,7 @@ function makeTableCellEditable(cell, program) {
   if (inputElement.tagName !== 'TEXTAREA') {
     inputElement.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
-        if (suggestDropdown) {
-          suggestDropdown.style.display = 'none';
-        }
         inputElement.blur();
-      }
-      if (e.key === 'Escape') {
-        if (suggestDropdown) {
-          suggestDropdown.style.display = 'none';
-        }
       }
     });
   }
@@ -5355,874 +5305,126 @@ window.addEventListener('resize', () => {
 
 console.log('✅ [TABLE VIEW] Table view functionality loaded');
 
-// ============================================
-// DARK THEME SUPPORT
-// ============================================
+// =====================================================
+// SHARE SCHEDULE WITH CLIENT
+// =====================================================
 
-// Check if page is in dark theme mode
-function isDarkThemeSchedule() {
-  const schedulePage = document.querySelector('.schedule-page.dark-theme');
-  return !!schedulePage;
-}
+window.openShareScheduleModal = function() {
+  const modal = document.getElementById('shareScheduleModal');
+  if (!modal) return;
 
-// Track selected items for dropdown menus
-let selectedProgramIndex = null;
-let selectedScheduleDate = null;
+  modal.style.display = 'flex';
+  document.getElementById('shareModalLoading').style.display = 'block';
+  document.getElementById('shareModalResult').style.display = 'none';
+  document.getElementById('shareCopyFeedback').style.display = 'none';
 
-// Initialize dark theme elements
-function initDarkThemeSchedule() {
-  console.log('🌙 Initializing dark theme schedule');
-  
-  // Load sidebar user info
-  loadScheduleSidebarUser();
-  
-  // Setup dark theme event listeners
-  setupDarkThemeListeners();
-  
-  // Setup action menu handlers
-  setupScheduleActionMenuHandlers();
-  
-  // Create custom date dropdown
-  createScheduleDateDropdown();
-}
+  // Generate or retrieve the share token
+  const tableId = currentEventId || localStorage.getItem('eventId');
+  if (!tableId) {
+    alert('No event selected.');
+    modal.style.display = 'none';
+    return;
+  }
 
-// Load user info in sidebar (matching crew/general page structure)
-async function loadScheduleSidebarUser() {
-  const nameEl = document.getElementById('sidebarUserName');
-  const avatarImg = document.getElementById('sidebarAvatarImg');
-  const avatarIcon = document.getElementById('sidebarAvatarIcon');
-  
-  try {
-    let userName = localStorage.getItem('fullName');
-    
-    if (!userName) {
-      const tokenStr = localStorage.getItem('token');
-      if (tokenStr) {
-        const payload = JSON.parse(atob(tokenStr.split('.')[1]));
-        userName = payload.fullName || payload.name || payload.email || 'User';
-      }
+  fetch(`${API_BASE}/api/tables/${tableId}/share-schedule`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: localStorage.getItem('token')
     }
-    
-    if (nameEl && userName) nameEl.textContent = userName;
-    
-    // Try to fetch user photo
-    try {
-      const tokenStr = localStorage.getItem('token');
-      if (tokenStr) {
-        const payload = JSON.parse(atob(tokenStr.split('.')[1]));
-        const userId = payload.userId || payload.id || payload.sub;
-        if (userId) {
-          const res = await fetch(`${API_BASE}/api/users/${userId}`, {
-            headers: { Authorization: tokenStr }
-          });
-          if (res.ok) {
-            const user = await res.json();
-            if (user.avatar && avatarImg && avatarIcon) {
-              avatarImg.src = user.avatar;
-              avatarImg.style.display = 'block';
-              avatarIcon.style.display = 'none';
-            }
-          }
-        }
+  })
+    .then(res => {
+      if (!res.ok) throw new Error('Failed to generate share link');
+      return res.json();
+    })
+    .then(data => {
+      const shareUrl = `${window.location.origin}/shared-schedule.html?token=${data.shareToken}`;
+      document.getElementById('shareLinkInput').value = shareUrl;
+      document.getElementById('shareModalLoading').style.display = 'none';
+      document.getElementById('shareModalResult').style.display = 'block';
+    })
+    .catch(err => {
+      console.error('Error generating share link:', err);
+      document.getElementById('shareModalLoading').innerHTML =
+        '<div style="color:#dc3545;"><span class="material-symbols-outlined" style="vertical-align:middle;">error</span> Failed to generate share link. Please try again.</div>';
+    });
+};
+
+window.closeShareScheduleModal = function() {
+  const modal = document.getElementById('shareScheduleModal');
+  if (modal) modal.style.display = 'none';
+};
+
+window.copyShareLink = function() {
+  const input = document.getElementById('shareLinkInput');
+  if (!input) return;
+
+  navigator.clipboard.writeText(input.value)
+    .then(() => {
+      const feedback = document.getElementById('shareCopyFeedback');
+      if (feedback) {
+        feedback.style.display = 'block';
+        setTimeout(() => { feedback.style.display = 'none'; }, 3000);
       }
-    } catch (photoErr) {
-      console.log('Could not load user photo:', photoErr);
-    }
-  } catch (err) {
-    console.error('Failed to load user:', err);
-  }
-}
-
-// Setup dark theme event listeners
-function setupDarkThemeListeners() {
-  // Add Date button in header
-  const addDateBtnHeader = document.getElementById('addDateBtnHeader');
-  if (addDateBtnHeader) {
-    addDateBtnHeader.onclick = () => addDateDarkTheme();
-  }
-  
-  // Mobile menu toggle (uses general-sidebar class like crew/general pages)
-  const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-  const sidebar = document.getElementById('scheduleSidebar');
-  const overlay = document.getElementById('scheduleSidebarOverlay');
-  
-  if (mobileMenuBtn && sidebar) {
-    mobileMenuBtn.onclick = () => {
-      sidebar.classList.toggle('open');
-      if (overlay) overlay.classList.toggle('show');
-    };
-  }
-  
-  if (overlay) {
-    overlay.onclick = () => {
-      if (sidebar) sidebar.classList.remove('open');
-      overlay.classList.remove('show');
-    };
-  }
-  
-  // Filter dropdown
-  const filterDropdown = document.getElementById('filterDateDropdown');
-  if (filterDropdown) {
-    filterDropdown.onchange = (e) => {
-      filterDate = e.target.value;
-      renderProgramSections(isOwner);
-    };
-  }
-  
-  // Search input
-  const searchInput = document.getElementById('searchInput');
-  if (searchInput) {
-    searchInput.oninput = handleSearchInput;
-  }
-  
-  // Import/Export buttons are set up in initPage with cloneNode approach
-  // to prevent duplicate event listener attachment - do not add here
-}
-
-// Setup action menu handlers for dark theme
-function setupScheduleActionMenuHandlers() {
-  // Duplicate program action
-  const duplicateAction = document.getElementById('duplicateProgramAction');
-  if (duplicateAction && !duplicateAction._listenerAttached) {
-    duplicateAction._listenerAttached = true;
-    duplicateAction.onclick = (e) => {
-      e.stopPropagation();
-      const idx = selectedProgramIndex;
-      hideScheduleRowActionMenu();
-      if (idx !== null) duplicateProgram(idx);
-    };
-  }
-  
-  // Delete program action
-  const deleteAction = document.getElementById('deleteProgramAction');
-  if (deleteAction && !deleteAction._listenerAttached) {
-    deleteAction._listenerAttached = true;
-    deleteAction.onclick = (e) => {
-      e.stopPropagation();
-      const idx = selectedProgramIndex;
-      hideScheduleRowActionMenu();
-      if (idx !== null) deleteProgramDarkTheme(idx);
-    };
-  }
-  
-  // Delete date action
-  const deleteDateAction = document.getElementById('deleteDateAction');
-  if (deleteDateAction && !deleteDateAction._listenerAttached) {
-    deleteDateAction._listenerAttached = true;
-    deleteDateAction.onclick = (e) => {
-      e.stopPropagation();
-      const date = selectedScheduleDate;
-      hideScheduleDateActionMenu();
-      if (date) deleteDate(date);
-    };
-  }
-}
-
-// Show row action menu
-function showScheduleRowActionMenu(programIndex, button) {
-  selectedProgramIndex = programIndex;
-  
-  const dropdown = document.getElementById('scheduleRowActionDropdown');
-  if (!dropdown) {
-    console.error('[SCHEDULE] Row action dropdown not found');
-    return;
-  }
-  
-  if (dropdown.classList.contains('show')) {
-    hideScheduleRowActionMenu();
-    return;
-  }
-  
-  const rect = button.getBoundingClientRect();
-  const viewportWidth = window.innerWidth;
-  const dropdownWidth = 180; // Approximate width
-  
-  // Position dropdown - prevent going off right edge
-  let left = rect.left;
-  if (left + dropdownWidth > viewportWidth - 20) {
-    left = rect.right - dropdownWidth;
-  }
-  
-  dropdown.style.top = `${rect.bottom + 4}px`;
-  dropdown.style.left = `${left}px`;
-  dropdown.classList.add('show');
-  
-  console.log('[SCHEDULE] Showing row action menu for program index:', programIndex);
-  
-  setTimeout(() => {
-    document.addEventListener('click', handleScheduleRowOutsideClick);
-  }, 10);
-}
-
-function hideScheduleRowActionMenu() {
-  const dropdown = document.getElementById('scheduleRowActionDropdown');
-  if (dropdown) dropdown.classList.remove('show');
-  selectedProgramIndex = null;
-  document.removeEventListener('click', handleScheduleRowOutsideClick);
-}
-
-function handleScheduleRowOutsideClick(e) {
-  const dropdown = document.getElementById('scheduleRowActionDropdown');
-  if (dropdown && !dropdown.contains(e.target) && !e.target.closest('.row-action-btn')) {
-    hideScheduleRowActionMenu();
-  }
-}
-
-// Show date action menu
-function showScheduleDateActionMenu(date, button) {
-  selectedScheduleDate = date;
-  
-  const dropdown = document.getElementById('scheduleDateActionDropdown');
-  if (!dropdown) {
-    console.error('[SCHEDULE] Date action dropdown not found');
-    return;
-  }
-  
-  if (dropdown.classList.contains('show')) {
-    hideScheduleDateActionMenu();
-    return;
-  }
-  
-  const rect = button.getBoundingClientRect();
-  const viewportWidth = window.innerWidth;
-  const dropdownWidth = 180; // Approximate width
-  
-  // Position dropdown - prevent going off right edge
-  let left = rect.left;
-  if (left + dropdownWidth > viewportWidth - 20) {
-    left = rect.right - dropdownWidth;
-  }
-  
-  dropdown.style.top = `${rect.bottom + 4}px`;
-  dropdown.style.left = `${left}px`;
-  dropdown.classList.add('show');
-  
-  console.log('[SCHEDULE] Showing date action menu for date:', date);
-  
-  setTimeout(() => {
-    document.addEventListener('click', handleScheduleDateOutsideClick);
-  }, 10);
-}
-
-function hideScheduleDateActionMenu() {
-  const dropdown = document.getElementById('scheduleDateActionDropdown');
-  if (dropdown) dropdown.classList.remove('show');
-  selectedScheduleDate = null;
-  document.removeEventListener('click', handleScheduleDateOutsideClick);
-}
-
-function handleScheduleDateOutsideClick(e) {
-  const dropdown = document.getElementById('scheduleDateActionDropdown');
-  if (dropdown && !dropdown.contains(e.target) && !e.target.closest('.date-action-btn')) {
-    hideScheduleDateActionMenu();
-  }
-}
-
-// Duplicate program (for dark theme)
-async function duplicateProgram(programIndex) {
-  const program = tableData.programs[programIndex];
-  if (!program) return;
-  
-  try {
-    const newProgram = {
-      date: program.date,
-      startTime: program.startTime,
-      endTime: program.endTime,
-      name: program.name + ' (Copy)',
-      location: program.location,
-      photographer: program.photographer,
-      notes: program.notes,
-      done: false
-    };
-    
-    tableData.programs.push(newProgram);
-    await savePrograms();
-    renderProgramSections(isOwner);
-    console.log('Program duplicated successfully');
-  } catch (err) {
-    console.error('Duplicate error:', err);
-  }
-}
-
-// Delete program from dark theme (wrapper for safeDeleteProgram)
-function deleteProgramDarkTheme(programIndex) {
-  safeDeleteProgram(programIndex);
-}
-
-// Add date with modal for dark theme
-async function addDateDarkTheme() {
-  const date = await showScheduleDatePickerModal();
-  if (!date) return; // User cancelled
-  
-  // Check if date already exists
-  const existingDate = tableData.programs.find(p => p.date === date);
-  if (existingDate) {
-    alert('This date already exists in the schedule.');
-    return;
-  }
-  
-  // Add empty program for this date
-  tableData.programs.push({
-    date,
-    startTime: '',
-    endTime: '',
-    name: '',
-    location: '',
-    photographer: '',
-    notes: '',
-    done: false
-  });
-  
-  renderProgramSections(isOwner);
-  await savePrograms();
-}
-
-// Show date picker modal for schedule
-function showScheduleDatePickerModal() {
-  return new Promise((resolve) => {
-    // Remove any existing modal
-    const existingModal = document.querySelector('.date-picker-modal');
-    if (existingModal) existingModal.remove();
-    
-    // Create modal
-    const modal = document.createElement('div');
-    modal.className = 'date-picker-modal dark-theme-modal';
-    
-    // Get today's date in YYYY-MM-DD format
-    const today = new Date().toISOString().split('T')[0];
-    
-    modal.innerHTML = `
-      <div class="date-picker-content">
-        <h3>
-          <span class="material-symbols-outlined">event</span>
-          Add New Date
-        </h3>
-        <input type="date" id="scheduleDatePickerInput" class="date-picker-input" value="${today}" />
-        <div class="date-picker-buttons">
-          <button class="date-picker-cancel-btn" id="scheduleDatePickerCancel">Cancel</button>
-          <button class="date-picker-confirm-btn" id="scheduleDatePickerConfirm">Add Date</button>
-        </div>
-      </div>
-    `;
-    
-    document.body.appendChild(modal);
-    
-    const dateInput = document.getElementById('scheduleDatePickerInput');
-    const cancelBtn = document.getElementById('scheduleDatePickerCancel');
-    const confirmBtn = document.getElementById('scheduleDatePickerConfirm');
-    
-    // Focus the input field
-    setTimeout(() => dateInput.focus(), 100);
-    
-    // Handle cancel
-    const handleCancel = () => {
-      modal.style.animation = 'fadeOut 0.2s ease';
-      setTimeout(() => {
-        modal.remove();
-        resolve(null);
-      }, 200);
-    };
-    
-    // Handle confirm
-    const handleConfirm = () => {
-      const date = dateInput.value;
-      if (date) {
-        modal.style.animation = 'fadeOut 0.2s ease';
-        setTimeout(() => {
-          modal.remove();
-          resolve(date);
-        }, 200);
-      } else {
-        dateInput.focus();
-      }
-    };
-    
-    cancelBtn.addEventListener('click', handleCancel);
-    confirmBtn.addEventListener('click', handleConfirm);
-    
-    // Enter key to confirm
-    dateInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        handleConfirm();
-      } else if (e.key === 'Escape') {
-        e.preventDefault();
-        handleCancel();
+    })
+    .catch(() => {
+      // Fallback for older browsers
+      input.select();
+      document.execCommand('copy');
+      const feedback = document.getElementById('shareCopyFeedback');
+      if (feedback) {
+        feedback.style.display = 'block';
+        setTimeout(() => { feedback.style.display = 'none'; }, 3000);
       }
     });
-    
-    // Click outside to cancel
-    modal.addEventListener('click', (e) => {
-      if (e.target === modal) {
-        handleCancel();
-      }
+};
+
+window.revokeShareLink = function() {
+  if (!confirm('Are you sure you want to revoke the share link? The current link will stop working.')) return;
+
+  const tableId = currentEventId || localStorage.getItem('eventId');
+  if (!tableId) return;
+
+  fetch(`${API_BASE}/api/tables/${tableId}/share-schedule`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: localStorage.getItem('token')
+    }
+  })
+    .then(res => {
+      if (!res.ok) throw new Error('Failed to revoke share link');
+      return res.json();
+    })
+    .then(() => {
+      document.getElementById('shareLinkInput').value = '';
+      document.getElementById('shareModalResult').style.display = 'none';
+      document.getElementById('shareModalLoading').style.display = 'block';
+      document.getElementById('shareModalLoading').innerHTML =
+        '<div style="color:#28a745;"><span class="material-symbols-outlined" style="vertical-align:middle;">check_circle</span> Share link has been revoked.</div>';
+    })
+    .catch(err => {
+      console.error('Error revoking share link:', err);
+      alert('Failed to revoke share link. Please try again.');
     });
-  });
-}
+};
 
-// Dark theme render function for CARD VIEW
-function renderDarkThemeCardView(hasScheduleAccess) {
-  const container = document.getElementById('programSections');
-  if (!container) return;
-  
-  container.innerHTML = '';
-  
-  // Update filter dropdown
-  const filterDropdown = document.getElementById('filterDateDropdown');
-  if (filterDropdown) {
-    const allDates = [...new Set(tableData.programs.map(p => p.date))].sort();
-    const currentSelection = filterDate || 'all';
-    filterDropdown.innerHTML = `<option value="all">All Dates</option>`;
-    allDates.forEach(date => {
-      const option = document.createElement('option');
-      option.value = date;
-      option.textContent = formatDate(date);
-      filterDropdown.appendChild(option);
-    });
-    filterDropdown.value = currentSelection;
-    
-    // Update custom dropdown if it exists
-    if (typeof updateScheduleDateDropdown === 'function') {
-      updateScheduleDateDropdown();
-    }
+// Close modal on overlay click
+document.addEventListener('click', function(e) {
+  if (e.target && e.target.id === 'shareScheduleModal') {
+    closeShareScheduleModal();
   }
-  
-  // Update date range display
-  const dates = [...new Set(tableData.programs.map(p => p.date))].filter(d => d).sort();
-  if (dates.length > 0) {
-    const fromEl = document.getElementById('dateRangeFrom');
-    const toEl = document.getElementById('dateRangeTo');
-    if (fromEl) fromEl.textContent = formatDate(dates[0]);
-    if (toEl) toEl.textContent = formatDate(dates[dates.length - 1]);
-  }
-  
-  if (tableData.programs.length === 0) {
-    container.innerHTML = `
-      <div class="schedule-empty-state">
-        <span class="material-symbols-outlined">calendar_month</span>
-        <h3>No Programs Yet</h3>
-        <p>Add a new date to get started with your schedule.</p>
-        <button class="btn-primary" onclick="addDateDarkTheme()">
-          <span class="material-symbols-outlined">add</span>
-          Add Date
-        </button>
-      </div>
-    `;
-    return;
-  }
-  
-  const filteredDates = filterDate === 'all' ? dates : dates.filter(d => d === filterDate);
-  
-  filteredDates.forEach(date => {
-    const matchingPrograms = tableData.programs
-      .map((p, i) => ({ ...p, __index: i }))
-      .filter(p => p.date === date && matchesSearch(p))
-      .sort((a, b) => {
-        const aHasTime = a.startTime && a.startTime.trim() !== '';
-        const bHasTime = b.startTime && b.startTime.trim() !== '';
-        if (aHasTime && bHasTime) return a.startTime.localeCompare(b.startTime);
-        if (aHasTime) return -1;
-        if (bHasTime) return 1;
-        return a.__index - b.__index;
-      });
-    
-    if (matchingPrograms.length === 0) return;
-    
-    // Create date section (card style)
-    const section = document.createElement('div');
-    section.className = 'date-section';
-    section.setAttribute('data-date', date);
-    
-    // Section header
-    const header = document.createElement('div');
-    header.className = 'date-header';
-    header.innerHTML = `
-      <div class="date-title">${formatDate(date)}</div>
-      ${hasScheduleAccess ? `
-        <button class="delete-date-btn" onclick="deleteDate('${date}')">
-          <span class="material-symbols-outlined">delete</span>
-        </button>
-      ` : ''}
-    `;
-    section.appendChild(header);
-    
-    // Create program entry cards
-    matchingPrograms.forEach(program => {
-      const entry = document.createElement('div');
-      entry.className = 'program-entry' + (program.done ? ' done-entry' : '');
-      entry.setAttribute('data-program-index', program.__index);
-      
-      const programId = program._id || program._tempId;
-      if (programId) {
-        entry.setAttribute('data-program-id', programId);
-      }
-      
-      entry.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-          <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
-            <input type="time" placeholder="Start" 
-              data-field="startTime"
-              value="${program.startTime || ''}"
-              ${!hasScheduleAccess ? 'readonly' : ''}
-              onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
-              onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'startTime')` : ''}">
-            <span style="color: var(--text-muted);">→</span>
-            <input type="time" placeholder="End" 
-              data-field="endTime"
-              value="${program.endTime || ''}"
-              ${!hasScheduleAccess ? 'readonly' : ''}
-              onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
-              onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'endTime')` : ''}">
-            ${program.folder ? `<div style="display: flex; align-items: center; gap: 2px;" class="folder-field-container">
-              <span class="material-symbols-outlined folder-icon" style="font-size: 14px; color: #2563eb;">folder</span>
-              <input type="text"
-                data-field="folder"
-                class="folder-input"
-                placeholder="Folder"
-                maxlength="7"
-                ${!hasScheduleAccess ? 'readonly' : ''}
-                style="width: 70px; min-width: 70px; padding: 4px 8px; font-size: 12px;"
-                value="${program.folder || ''}"
-                onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
-                onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'folder')` : ''}">
-            </div>` : ''}
-          </div>
-          <label style="display: flex; align-items: center; cursor: pointer;">
-            <input type="checkbox" class="done-checkbox"
-              data-field="done"
-              data-original-value="${program.done ? 'true' : 'false'}"
-              ${program.done ? 'checked' : ''}
-              ${hasScheduleAccess ? `onchange="toggleDone(this, ${program.__index})"` : 'disabled'}>
-          </label>
-        </div>
-        <div>
-          <input class="program-name" type="text"
-            data-field="name"
-            ${!hasScheduleAccess ? 'readonly' : ''}
-            placeholder="Program Name"
-            value="${program.name || ''}" 
-            onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}" 
-            onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'name')` : ''}">
-        </div>
-        <div style="display: flex; gap: 8px; margin-top: 4px;">
-          <div style="flex: 1; display: flex; align-items: center; gap: 4px;">
-            <span class="material-symbols-outlined" style="font-size: 16px; color: var(--text-muted);">location_on</span>
-            <input type="text"
-              data-field="location"
-              placeholder="Location"
-              value="${program.location || ''}"
-              ${!hasScheduleAccess ? 'readonly' : ''}
-              onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
-              onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'location')` : ''}">
-          </div>
-          <div style="flex: 1; display: flex; align-items: center; gap: 4px;">
-            <span class="material-symbols-outlined" style="font-size: 16px; color: var(--text-muted);">photo_camera</span>
-            <input type="text"
-              data-field="photographer"
-              placeholder="Photographer"
-              value="${program.photographer || ''}"
-              ${!hasScheduleAccess ? 'readonly' : ''}
-              onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
-              onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'photographer')` : ''}">
-          </div>
-        </div>
-        <div class="entry-actions">
-          <button class="show-notes-btn" onclick="toggleNotes(this)">Show Notes</button>
-          ${hasScheduleAccess ? `<button class="delete-btn" onclick="deleteProgram(this)"><span class="material-symbols-outlined">delete</span></button>` : ''}
-        </div>
-        <div class="notes-field" style="display: none;">
-          <textarea
-            data-field="notes"
-            placeholder="Notes"
-            ${!hasScheduleAccess ? 'readonly' : ''}
-            onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
-            onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'notes')` : ''}">${program.notes || ''}</textarea>
-        </div>
-      `;
-      
-      section.appendChild(entry);
-    });
-    
-    // Add program button
-    if (hasScheduleAccess) {
-      const addBtn = document.createElement('button');
-      addBtn.className = 'add-btn';
-      addBtn.textContent = '+ Add Row';
-      addBtn.onclick = () => addProgram(date);
-      section.appendChild(addBtn);
-    }
-    
-    container.appendChild(section);
-  });
-}
+});
 
-// Format time for display (convert 24h to 12h)
-function formatTimeDisplay(time) {
-  if (!time) return '';
-  const [hours, minutes] = time.split(':');
-  const h = parseInt(hours, 10);
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const h12 = h % 12 || 12;
-  return `${h12}:${minutes} ${ampm}`;
-}
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    const modal = document.getElementById('shareScheduleModal');
+    if (modal && modal.style.display === 'flex') {
+      closeShareScheduleModal();
+    }
+  }
+});
 
-// Make cell editable in dark theme table
-function makeScheduleCellEditable(cell, program, date) {
-  if (cell.classList.contains('editing')) return;
-  
-  const field = cell.getAttribute('data-field');
-  const displaySpan = cell.querySelector('.cell-display');
-  const currentValue = tableData.programs[program.__index][field] || '';
-  
-  cell.classList.add('editing');
-  displaySpan.style.display = 'none';
-  
-  let input;
-  if (field === 'startTime' || field === 'endTime') {
-    input = document.createElement('input');
-    input.type = 'time';
-    input.value = currentValue;
-  } else if (field === 'notes') {
-    input = document.createElement('textarea');
-    input.value = currentValue;
-    input.rows = 2;
-  } else {
-    input = document.createElement('input');
-    input.type = 'text';
-    input.value = currentValue;
-  }
-  
-  input.className = 'inline-edit-input';
-  cell.appendChild(input);
-  input.focus();
-  
-  const saveAndExit = async () => {
-    const newValue = input.value;
-    if (newValue !== currentValue) {
-      tableData.programs[program.__index][field] = newValue;
-      await autoSave(input, date, program.__index, field);
-    }
-    
-    input.remove();
-    displaySpan.style.display = '';
-    if (field === 'startTime' || field === 'endTime') {
-      displaySpan.textContent = formatTimeDisplay(newValue) || '--';
-    } else {
-      displaySpan.textContent = newValue || (field === 'notes' ? '' : 'Click to add');
-    }
-    cell.classList.remove('editing');
-  };
-  
-  input.addEventListener('blur', saveAndExit);
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && field !== 'notes') {
-      e.preventDefault();
-      input.blur();
-    }
-    if (e.key === 'Escape') {
-      input.value = currentValue;
-      input.blur();
-    }
-  });
-}
-
-// Create custom dropdown for date filter (dark theme)
-function createScheduleDateDropdown() {
-  const selectEl = document.getElementById('filterDateDropdown');
-  if (!selectEl) return;
-  
-  // Check if already replaced
-  if (selectEl.classList.contains('hidden-native-select')) return;
-  
-  // Get options from select
-  const options = Array.from(selectEl.options).map(opt => ({
-    value: opt.value,
-    label: opt.textContent
-  }));
-  
-  // Hide native select
-  selectEl.classList.add('hidden-native-select');
-  selectEl.style.display = 'none';
-  
-  // Create custom dropdown container
-  const container = document.createElement('div');
-  container.className = 'custom-dropdown schedule-date-dropdown';
-  container.id = 'scheduleDateDropdownContainer';
-  
-  // Create trigger button
-  const trigger = document.createElement('button');
-  trigger.type = 'button';
-  trigger.className = 'custom-dropdown-trigger';
-  const currentOption = options.find(opt => opt.value === filterDate) || options[0];
-  trigger.innerHTML = `
-    <span class="dropdown-value">${currentOption?.label || 'All Dates'}</span>
-    <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
-  `;
-  
-  // Create dropdown menu
-  const menu = document.createElement('div');
-  menu.className = 'custom-dropdown-menu schedule-date-menu';
-  
-  // Create options container
-  const optionsContainer = document.createElement('div');
-  optionsContainer.className = 'custom-dropdown-options';
-  
-  // Render options
-  function renderOptions() {
-    optionsContainer.innerHTML = options.map(opt => `
-      <button type="button" class="custom-dropdown-option ${opt.value === filterDate ? 'selected' : ''}" data-value="${opt.value}">
-        ${opt.label}
-      </button>
-    `).join('');
-  }
-  
-  renderOptions();
-  menu.appendChild(optionsContainer);
-  container.appendChild(trigger);
-  container.appendChild(menu);
-  
-  // Insert after the hidden select
-  selectEl.parentNode.insertBefore(container, selectEl.nextSibling);
-  
-  // Track open state
-  let isOpen = false;
-  
-  // Open dropdown function
-  function openDropdown() {
-    if (isOpen) return;
-    isOpen = true;
-    container.classList.add('open');
-    
-    // Position the menu
-    const triggerRect = trigger.getBoundingClientRect();
-    const viewportHeight = window.innerHeight;
-    const spaceBelow = viewportHeight - triggerRect.bottom - 20;
-    const spaceAbove = triggerRect.top - 20;
-    
-    menu.style.position = 'fixed';
-    menu.style.left = `${triggerRect.left}px`;
-    menu.style.width = `${Math.max(triggerRect.width, 200)}px`;
-    
-    // Decide whether to open above or below
-    const menuHeight = Math.min(300, options.length * 40 + 20);
-    if (spaceBelow >= menuHeight || spaceBelow >= spaceAbove) {
-      menu.style.top = `${triggerRect.bottom + 4}px`;
-      menu.style.bottom = 'auto';
-      menu.style.maxHeight = `${Math.min(spaceBelow, 300)}px`;
-    } else {
-      menu.style.bottom = `${viewportHeight - triggerRect.top + 4}px`;
-      menu.style.top = 'auto';
-      menu.style.maxHeight = `${Math.min(spaceAbove, 300)}px`;
-    }
-    
-    // Close when clicking outside
-    setTimeout(() => {
-      document.addEventListener('click', handleOutsideClick);
-    }, 10);
-  }
-  
-  // Close dropdown function
-  function closeDropdown() {
-    if (!isOpen) return;
-    isOpen = false;
-    container.classList.remove('open');
-    document.removeEventListener('click', handleOutsideClick);
-  }
-  
-  // Handle outside clicks
-  function handleOutsideClick(e) {
-    if (!container.contains(e.target)) {
-      closeDropdown();
-    }
-  }
-  
-  // Toggle on trigger click
-  trigger.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (isOpen) {
-      closeDropdown();
-    } else {
-      openDropdown();
-    }
-  });
-  
-  // Handle option selection
-  optionsContainer.addEventListener('click', (e) => {
-    const option = e.target.closest('.custom-dropdown-option');
-    if (!option) return;
-    
-    const value = option.dataset.value;
-    
-    // Update native select
-    selectEl.value = value;
-    
-    // Update global filter
-    filterDate = value;
-    
-    // Update trigger display
-    const selectedLabel = options.find(opt => opt.value === value)?.label || 'All Dates';
-    trigger.querySelector('.dropdown-value').textContent = selectedLabel;
-    
-    // Update selected state
-    optionsContainer.querySelectorAll('.custom-dropdown-option').forEach(opt => {
-      opt.classList.toggle('selected', opt.dataset.value === value);
-    });
-    
-    // Close and re-render
-    closeDropdown();
-    renderProgramSections(isOwner);
-    saveFilterSettings();
-  });
-  
-  return container;
-}
-
-// Update custom dropdown options (called when dates change)
-function updateScheduleDateDropdown() {
-  const container = document.getElementById('scheduleDateDropdownContainer');
-  if (!container) return;
-  
-  const selectEl = document.getElementById('filterDateDropdown');
-  if (!selectEl) return;
-  
-  // Get updated options
-  const options = Array.from(selectEl.options).map(opt => ({
-    value: opt.value,
-    label: opt.textContent
-  }));
-  
-  // Update trigger
-  const trigger = container.querySelector('.custom-dropdown-trigger');
-  const currentOption = options.find(opt => opt.value === filterDate) || options[0];
-  if (trigger) {
-    trigger.querySelector('.dropdown-value').textContent = currentOption?.label || 'All Dates';
-  }
-  
-  // Update options
-  const optionsContainer = container.querySelector('.custom-dropdown-options');
-  if (optionsContainer) {
-    optionsContainer.innerHTML = options.map(opt => `
-      <button type="button" class="custom-dropdown-option ${opt.value === filterDate ? 'selected' : ''}" data-value="${opt.value}">
-        ${opt.label}
-      </button>
-    `).join('');
-  }
-}
-
-// Expose functions globally
-window.showScheduleRowActionMenu = showScheduleRowActionMenu;
-window.hideScheduleRowActionMenu = hideScheduleRowActionMenu;
-window.showScheduleDateActionMenu = showScheduleDateActionMenu;
-window.hideScheduleDateActionMenu = hideScheduleDateActionMenu;
-window.duplicateProgram = duplicateProgram;
-window.deleteProgramDarkTheme = deleteProgramDarkTheme;
-window.addDateDarkTheme = addDateDarkTheme;
-window.showScheduleDatePickerModal = showScheduleDatePickerModal;
-window.initDarkThemeSchedule = initDarkThemeSchedule;
-window.renderDarkThemeCardView = renderDarkThemeCardView;
-window.createScheduleDateDropdown = createScheduleDateDropdown;
-window.updateScheduleDateDropdown = updateScheduleDateDropdown;
-
-console.log('✅ [DARK THEME] Dark theme schedule functionality loaded');
+console.log('✅ [SHARE] Schedule sharing functionality loaded');
 
 })();

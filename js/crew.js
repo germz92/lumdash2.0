@@ -30,7 +30,6 @@ let cachedRoles = [
 ];
 let isOwner = false;
 let reloadTimeout = null;
-let showMineOnly = false; // Filter to show only current user's shifts
 
 // State management for unsaved changes
 let hasUnsavedChanges = false;
@@ -39,35 +38,24 @@ let deletedRows = new Set(); // Track deleted rows
 let autosaveTimeout = null; // Debounce autosave
 let isSaving = false; // Track if currently saving
 let isEditing = false; // Track if any field is currently being edited
-let suppressSocketUntil = 0; // Timestamp to suppress socket events until (self-notification suppression)
 
-// Suppress socket events for a short time after own saves
-function suppressNextSocketEvent() {
-  suppressSocketUntil = Date.now() + 3000; // 3 second suppression window
-}
-
-// Socket.IO real-time updates - disabled when there are unsaved changes or self-saving
+// Socket.IO real-time updates - disabled when there are unsaved changes
 if (window.socket) {
   window.socket.on('crewChanged', (data) => {
     const currentTableId = getCurrentTableId();
     if (data && data.tableId && data.tableId !== currentTableId) {
       return;
     }
-    // Skip if this is our own save bouncing back
-    if (Date.now() < suppressSocketUntil) {
-      console.log('Ignoring crewChanged (self-notification suppressed)');
-      return;
-    }
-    // Don't reload if user has unsaved changes or is editing
-    if (hasUnsavedChanges || isEditing) {
+    // Don't reload if user has unsaved changes
+    if (hasUnsavedChanges) {
       console.log('Crew data changed remotely, but you have unsaved changes. Save or discard first.');
       return;
     }
-    console.log('Crew data changed remotely, reloading...');
+    console.log('Crew data changed, reloading...');
     tableId = currentTableId;
     
     if (reloadTimeout) clearTimeout(reloadTimeout);
-    reloadTimeout = setTimeout(() => loadTable(), 800);
+    reloadTimeout = setTimeout(() => loadTable(), 500);
   });
   
   window.socket.on('tableUpdated', (data) => {
@@ -75,21 +63,16 @@ if (window.socket) {
     if (data && data.tableId && data.tableId !== currentTableId) {
       return;
     }
-    // Skip if this is our own save bouncing back
-    if (Date.now() < suppressSocketUntil) {
-      console.log('Ignoring tableUpdated (self-notification suppressed)');
-      return;
-    }
-    // Don't reload if user has unsaved changes or is editing
-    if (hasUnsavedChanges || isEditing) {
+    // Don't reload if user has unsaved changes
+    if (hasUnsavedChanges) {
       console.log('Table updated remotely, but you have unsaved changes. Save or discard first.');
       return;
     }
-    console.log('Table updated remotely, reloading...');
+    console.log('Table updated, reloading...');
     tableId = currentTableId;
     
     if (reloadTimeout) clearTimeout(reloadTimeout);
-    reloadTimeout = setTimeout(() => loadTable(), 800);
+    reloadTimeout = setTimeout(() => loadTable(), 500);
   });
 }
 
@@ -140,17 +123,11 @@ function triggerAutosave() {
   }, 2500);
 }
 
-// Save to localStorage as backup (only changed/deleted row IDs, not entire table)
+// Save to localStorage as backup
 function saveToLocalStorage() {
   try {
-    // Only store the rows that actually changed, not the entire table
-    const changedRowData = {};
-    for (const rowId of changedRows) {
-      const row = tableData.rows.find(r => r._id === rowId);
-      if (row) changedRowData[rowId] = row;
-    }
     const backup = {
-      changedRowData,
+      tableData: tableData,
       changedRows: Array.from(changedRows),
       deletedRows: Array.from(deletedRows),
       timestamp: Date.now()
@@ -292,23 +269,6 @@ async function preloadUsers() {
   cachedUsers = users;
 }
 
-// Helper function to get initials from name
-function getInitials(name) {
-  if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
-}
-
-// Helper function to get user photo URL
-function getUserPhoto(name) {
-  const user = cachedUsers.find(u => u.name === name);
-  return user?.photo || null;
-}
-
-// Track currently selected row for action menu
-let selectedRowId = null;
-
 function renderTableSection() {
   const container = document.getElementById('dateSections');
   container.innerHTML = '';
@@ -319,14 +279,6 @@ function renderTableSection() {
   // Get unique dates, filtering out any undefined/null values
   let dates = [...new Set(tableData.rows.map(row => row.date).filter(d => d))];
   dates.sort((a, b) => new Date(a) - new Date(b));
-
-  // Update date range display
-  if (dates.length > 0) {
-    const fromEl = document.getElementById('dateRangeFrom');
-    const toEl = document.getElementById('dateRangeTo');
-    if (fromEl) fromEl.textContent = formatDateLocal(dates[0]);
-    if (toEl) toEl.textContent = formatDateLocal(dates[dates.length - 1]);
-  }
 
   if (filterDropdown) {
     const savedFilterDate = localStorage.getItem(`crew_filter_date_${tableId}`) || '';
@@ -343,152 +295,126 @@ function renderTableSection() {
     dates = dates.filter(d => d === selectedDate);
   }
 
+  // Always show oldest first (already sorted above)
+
   const visibleNames = new Set();
 
   dates.forEach(date => {
-    // Count tasks for this date
-    const dateRows = tableData.rows.filter(row => row.date === date && row.role !== '__placeholder__');
-    const taskCount = dateRows.length;
-    
-    // Create date section with new dark theme structure
     const sectionBox = document.createElement('div');
-    sectionBox.className = 'crew-date-section';
+    sectionBox.className = 'date-section';
 
-    // Date Section Header
-    const sectionHeader = document.createElement('div');
-    sectionHeader.className = 'date-section-header';
-    sectionHeader.innerHTML = `
-      <div class="date-section-title">
-        <h3>${formatDateLocal(date)}</h3>
-        <span class="date-task-count">· ${taskCount} Task${taskCount !== 1 ? 's' : ''}</span>
-      </div>
-      ${isOwner ? `
-        <button class="date-section-menu" data-date="${date}" title="Date options">
-          <span class="material-symbols-outlined">more_horiz</span>
-        </button>
-      ` : ''}
-    `;
-    
-    // Add date menu click handler
+    const headerWrapper = document.createElement('div');
+    headerWrapper.style.display = 'flex';
+    headerWrapper.style.alignItems = 'center';
+    headerWrapper.style.justifyContent = 'space-between';
+    headerWrapper.style.marginBottom = '8px';
+
+      const header = document.createElement('h2');
+      header.textContent = formatDateLocal(date);
+      headerWrapper.appendChild(header);
+
     if (isOwner) {
-      const dateMenuBtn = sectionHeader.querySelector('.date-section-menu');
-      if (dateMenuBtn) {
-        dateMenuBtn.addEventListener('click', (e) => {
-          e.stopPropagation();
-          showDateActionMenu(date, e.currentTarget);
-        });
-      }
+      const deleteDateBtn = document.createElement('button');
+      deleteDateBtn.className = 'delete-date-btn';
+      deleteDateBtn.innerHTML = '<span class="material-symbols-outlined">delete</span>';
+      deleteDateBtn.title = 'Delete Date';
+      deleteDateBtn.onclick = () => deleteDate(date);
+      headerWrapper.appendChild(deleteDateBtn);
     }
 
-    // Create table
+    const wrapper = document.createElement('div');
+    wrapper.className = 'table-wrapper';
+
     const table = document.createElement('table');
-    table.className = 'crew-schedule-table';
+    // Let CSS handle table layout and width for responsive behavior
+    // Column widths are defined in styles.css using nth-child selectors
 
     const thead = document.createElement('thead');
+    if (isOwner) {
       thead.innerHTML = `
         <tr>
           <th>Name</th>
           <th>Start</th>
-        <th></th>
           <th>End</th>
-        <th>Hours</th>
+          <th>Total</th>
           <th>Role</th>
           <th>Notes</th>
-        <th></th>
-      </tr>
-    `;
+          <th>Action</th>
+        </tr>`;
+    } else {
+      thead.innerHTML = `
+        <tr>
+          <th>Name</th>
+          <th>Start</th>
+          <th>End</th>
+          <th>Total</th>
+          <th>Role</th>
+          <th>Notes</th>
+        </tr>`;
+    }
     table.appendChild(thead);
 
     const tbody = document.createElement('tbody');
 
-    // Get current user's name for "Show Mine" filter
-    const currentUserName = localStorage.getItem('fullName') || '';
-
     const visibleRows = tableData.rows.filter(row => {
       if (row.date !== date || row.role === '__placeholder__') return false;
-      
-      // Filter by current user if "Show Mine" is active
-      if (showMineOnly && currentUserName) {
-        if (!row.name || row.name.toLowerCase() !== currentUserName.toLowerCase()) {
-          return false;
-        }
-      }
-      
       const text = [row.name, row.role, row.notes].join(' ').toLowerCase();
       return text.includes(searchQuery);
     });
 
     visibleRows.forEach(row => {
       const rowId = row._id;
+      const prefix = `row-${rowId}`;
       const tr = document.createElement('tr');
-      tr.id = `row-${rowId}`;
+      tr.id = prefix;
       tr.setAttribute('data-id', rowId);
     
-      // Drag and drop for owners
       if (isOwner) {
         tr.setAttribute('draggable', 'true');
+    
         tr.addEventListener('dragstart', (e) => {
           e.dataTransfer.setData('text/plain', rowId);
           tr.classList.add('dragging');
         });
-        tr.addEventListener('dragend', () => tr.classList.remove('dragging'));
+    
+        tr.addEventListener('dragend', () => {
+          tr.classList.remove('dragging');
+        });
+    
         tr.addEventListener('dragover', (e) => e.preventDefault());
+    
         tr.addEventListener('drop', (e) => {
           e.preventDefault();
-          handleDrop(rowId, e.dataTransfer.getData('text/plain'));
+          const draggedId = e.dataTransfer.getData('text/plain');
+          handleDrop(rowId, draggedId);
         });
       }
-
-      // Get user photo
-      const photo = getUserPhoto(row.name);
-      const initials = getInitials(row.name);
       
-      // Build notes cell content
-      let notesContent = '';
-      if (row.locationBadge) {
-        notesContent += `<span class="location-badge">${row.locationBadge}</span>`;
-      }
-      if (row.notes) {
-        notesContent += `<span class="notes-text">${row.notes}</span>`;
-      }
-
+      // Show as regular table for everyone (inline editing for owners)
         tr.innerHTML = `
         <td class="editable-cell ${isOwner ? 'owner-editable' : ''}" data-row-id="${rowId}" data-field="name">
-          <div class="crew-name-cell">
-            <div class="crew-avatar ${photo ? '' : 'initials'}">
-              ${photo ? `<img src="${photo}" alt="${row.name || ''}">` : initials}
-            </div>
-            <span class="crew-member-name cell-display">${row.name || (isOwner ? 'Click to add' : '')}</span>
-          </div>
+          <span class="cell-display">${row.name || (isOwner ? 'Click to add' : '')}</span>
           </td>
-        <td class="editable-cell time-cell ${isOwner ? 'owner-editable' : ''}" data-row-id="${rowId}" data-field="startTime">
-          <span class="cell-display">${formatTime(row.startTime) || '--'}</span>
+        <td class="editable-cell ${isOwner ? 'owner-editable' : ''}" data-row-id="${rowId}" data-field="startTime">
+          <span class="cell-display">${formatTime(row.startTime)}</span>
           </td>
-        <td class="time-arrow">
-          <span class="material-symbols-outlined">arrow_forward</span>
+        <td class="editable-cell ${isOwner ? 'owner-editable' : ''}" data-row-id="${rowId}" data-field="endTime">
+          <span class="cell-display">${formatTime(row.endTime)}</span>
           </td>
-        <td class="editable-cell time-cell ${isOwner ? 'owner-editable' : ''}" data-row-id="${rowId}" data-field="endTime">
-          <span class="cell-display">${formatTime(row.endTime) || '--'}</span>
-        </td>
-        <td class="hours-cell">
-          <span class="shift-hours total-hours-cell">
-            <span class="material-symbols-outlined">schedule</span>
-            ${row.totalHours || 0}
-          </span>
-        </td>
-        <td class="editable-cell role-cell ${isOwner ? 'owner-editable' : ''}" data-row-id="${rowId}" data-field="role">
+        <td class="total-hours-cell">${row.totalHours || 0}</td>
+        <td class="editable-cell ${isOwner ? 'owner-editable' : ''}" data-row-id="${rowId}" data-field="role">
           <span class="cell-display">${row.role || (isOwner ? 'Click to add' : '')}</span>
           </td>
-        <td class="editable-cell notes-cell ${isOwner ? 'owner-editable' : ''}" data-row-id="${rowId}" data-field="notes">
-          <div class="cell-display">${notesContent || ''}</div>
+        <td class="editable-cell ${isOwner ? 'owner-editable' : ''}" data-row-id="${rowId}" data-field="notes">
+          <span class="cell-display">${row.notes || ''}</span>
           </td>
-        <td class="action-cell">
         ${isOwner ? `
-            <button class="row-action-btn" data-row-id="${rowId}" title="More options">
-              <span class="material-symbols-outlined">more_horiz</span>
-            </button>
+          <td class="actions-cell" style="text-align: center;">
+            <div class="icon-buttons">
+              <button class="delete-row-btn" onclick="deleteRow('${rowId}')" title="Delete"><span class="material-symbols-outlined">delete</span></button>
+            </div>
+          </td>
         ` : ''}
-        </td>
       `;
     
       tbody.appendChild(tr);
@@ -496,20 +422,32 @@ function renderTableSection() {
       // Add click handlers for inline editing (owners only)
       if (isOwner) {
         tr.querySelectorAll('.owner-editable').forEach(cell => {
-          cell.addEventListener('click', (e) => {
-            // Don't trigger if clicking action button
-            if (e.target.closest('.row-action-btn')) return;
-            makeEditable(cell, row);
-          });
+          cell.addEventListener('click', () => makeEditable(cell, row));
         });
-        
-        // Add row action menu handler
-        const actionBtn = tr.querySelector('.row-action-btn');
-        if (actionBtn) {
-          actionBtn.addEventListener('click', (e) => {
+      }
+      
+      // Add click-to-expand for notes on mobile (non-owners and owners when not editing)
+      if (window.innerWidth <= 768) {
+        const notesCell = tr.querySelector('td:nth-child(6) .cell-display');
+        if (notesCell && notesCell.textContent.trim()) {
+          // Use setTimeout to ensure CSS is applied before checking dimensions
+          setTimeout(() => {
+            // Check if content is truncated (scrollHeight will be greater if clamped)
+            const isOverflowing = notesCell.scrollHeight > notesCell.clientHeight + 2; // +2px threshold
+            
+            if (isOverflowing) {
+              notesCell.classList.add('notes-truncated');
+              
+              notesCell.addEventListener('click', (e) => {
+                // Only toggle if not in edit mode
+                if (!notesCell.closest('td').querySelector('.inline-edit-input')) {
                   e.stopPropagation();
-            showRowActionMenu(rowId, e.currentTarget);
+                  notesCell.classList.toggle('notes-truncated');
+                  notesCell.classList.toggle('notes-expanded');
+                }
               });
+            }
+          }, 50);
         }
       }
     
@@ -518,510 +456,50 @@ function renderTableSection() {
       }
     });
 
-    table.appendChild(tbody);
-    
-    // Add row section for owners
-    let addRowSection = '';
+    // Add row button for owners
     if (isOwner) {
-      addRowSection = `
-        <div class="add-row-section">
-          <button class="crew-add-row-btn" data-date="${date}">
-            <span class="material-symbols-outlined">add</span>
-            ADD ROW
-          </button>
-        </div>
-      `;
+      const actionRow = document.createElement('tr');
+      const actionTd = document.createElement('td');
+      actionTd.colSpan = 7;
+      const btnContainer = document.createElement('div');
+      btnContainer.className = 'add-row-btn-container';
+      const addBtn = document.createElement('button');
+      addBtn.className = 'add-row-btn';
+      addBtn.textContent = 'Add Row';
+      addBtn.onclick = () => addRow(date);
+      btnContainer.appendChild(addBtn);
+      actionTd.appendChild(btnContainer);
+      actionRow.appendChild(actionTd);
+      tbody.appendChild(actionRow);
     }
 
-    sectionBox.appendChild(sectionHeader);
-    sectionBox.appendChild(table);
-    if (isOwner) {
-      const addRowDiv = document.createElement('div');
-      addRowDiv.innerHTML = addRowSection;
-      sectionBox.appendChild(addRowDiv.firstElementChild);
-      
-      // Add click handler for add row button
-      const addRowBtn = sectionBox.querySelector('.crew-add-row-btn');
-      if (addRowBtn) {
-        addRowBtn.addEventListener('click', () => addRow(date));
-      }
-    }
-    
+    table.appendChild(tbody);
+    wrapper.appendChild(table);
+    sectionBox.appendChild(headerWrapper);
+    sectionBox.appendChild(wrapper);
     container.appendChild(sectionBox);
   });
 
-  // Update owner-only buttons visibility
-  updateOwnerButtons();
-}
-
-// Update owner-only buttons visibility
-function updateOwnerButtons() {
-  const crewListBtn = document.getElementById('crewListBtn');
-  const crewCostCalcBtn = document.getElementById('crewCostCalcBtn');
-  const exportCsvBtn = document.getElementById('exportCsvBtn');
-  const addDateBtn = document.getElementById('addDateBtn');
-  const saveStatus = document.getElementById('saveStatus');
-  
+  // Crew List button for owners only
+  const btnContainer = document.getElementById('crewListBtnContainer');
+  if (btnContainer) {
   if (isOwner) {
-    if (crewListBtn) crewListBtn.style.display = 'inline-flex';
-    if (crewCostCalcBtn) crewCostCalcBtn.style.display = 'inline-flex';
-    if (exportCsvBtn) exportCsvBtn.style.display = 'inline-flex';
-    if (addDateBtn) addDateBtn.style.display = 'inline-flex';
-    if (saveStatus) saveStatus.style.display = 'block';
-  } else {
-    if (crewListBtn) crewListBtn.style.display = 'none';
-    if (crewCostCalcBtn) crewCostCalcBtn.style.display = 'none';
-    if (exportCsvBtn) exportCsvBtn.style.display = 'none';
-    if (addDateBtn) addDateBtn.style.display = 'none';
-    if (saveStatus) saveStatus.style.display = 'none';
-  }
-}
-
-// Show row action menu (three-dot menu)
-function showRowActionMenu(rowId, button) {
-  selectedRowId = rowId;
-  
-  const dropdown = document.getElementById('rowActionDropdown');
-  if (!dropdown) return;
-  
-  // Hide if already showing
-  if (dropdown.classList.contains('show')) {
-    hideRowActionModal();
-    return;
-  }
-  
-  // Position the dropdown near the button
-  const rect = button.getBoundingClientRect();
-  const menuHeight = 90;
-  const menuWidth = 150;
-  
-  // Check if there's enough space below
-  const spaceBelow = window.innerHeight - rect.bottom;
-  const spaceRight = window.innerWidth - rect.right;
-  
-  if (spaceBelow < menuHeight) {
-    // Show above
-    dropdown.style.top = 'auto';
-    dropdown.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+    let crewListBtn = document.getElementById('crewListBtn');
+    if (!crewListBtn) {
+      crewListBtn = document.createElement('button');
+      crewListBtn.id = 'crewListBtn';
+      crewListBtn.textContent = 'Crew List';
+        crewListBtn.title = 'View all crew members';
+      crewListBtn.onclick = showCrewListModal;
+        btnContainer.innerHTML = '';
+        btnContainer.appendChild(crewListBtn);
+      }
       } else {
-    // Show below
-    dropdown.style.top = `${rect.bottom + 4}px`;
-    dropdown.style.bottom = 'auto';
-  }
-  
-  if (spaceRight < menuWidth) {
-    // Align to right edge of button
-    dropdown.style.left = 'auto';
-    dropdown.style.right = `${window.innerWidth - rect.right}px`;
-  } else {
-    // Align to left edge of button
-    dropdown.style.left = `${rect.left}px`;
-    dropdown.style.right = 'auto';
-  }
-  
-  dropdown.classList.add('show');
-  
-  // Close when clicking outside
-  setTimeout(() => {
-    document.addEventListener('click', handleOutsideClick);
-  }, 10);
-}
-
-function handleOutsideClick(e) {
-  const dropdown = document.getElementById('rowActionDropdown');
-  if (dropdown && !dropdown.contains(e.target) && !e.target.closest('.row-action-btn')) {
-    hideRowActionModal();
-  }
-}
-
-// Track selected date for date actions
-let selectedDate = null;
-
-// Show date action menu
-function showDateActionMenu(date, button) {
-  selectedDate = date;
-  
-  const dropdown = document.getElementById('dateActionDropdown');
-  if (!dropdown) return;
-  
-  // Hide if already showing
-  if (dropdown.classList.contains('show')) {
-    hideDateActionModal();
-    return;
-  }
-  
-  // Position the dropdown near the button
-  const rect = button.getBoundingClientRect();
-  const menuHeight = 50;
-  const menuWidth = 150;
-  
-  // Check if there's enough space below
-  const spaceBelow = window.innerHeight - rect.bottom;
-  const spaceRight = window.innerWidth - rect.right;
-  
-  if (spaceBelow < menuHeight) {
-    dropdown.style.top = 'auto';
-    dropdown.style.bottom = `${window.innerHeight - rect.top + 4}px`;
-  } else {
-    dropdown.style.top = `${rect.bottom + 4}px`;
-    dropdown.style.bottom = 'auto';
-  }
-  
-  if (spaceRight < menuWidth) {
-    dropdown.style.left = 'auto';
-    dropdown.style.right = `${window.innerWidth - rect.right}px`;
-  } else {
-    dropdown.style.left = `${rect.left}px`;
-    dropdown.style.right = 'auto';
-  }
-  
-  dropdown.classList.add('show');
-  
-  // Close when clicking outside
-  setTimeout(() => {
-    document.addEventListener('click', handleDateOutsideClick);
-  }, 10);
-}
-
-function handleDateOutsideClick(e) {
-  const dropdown = document.getElementById('dateActionDropdown');
-  if (dropdown && !dropdown.contains(e.target) && !e.target.closest('.date-section-menu')) {
-    hideDateActionModal();
-  }
-}
-
-// Hide date action dropdown
-function hideDateActionModal() {
-  const dropdown = document.getElementById('dateActionDropdown');
-  if (dropdown) dropdown.classList.remove('show');
-  selectedDate = null;
-  document.removeEventListener('click', handleDateOutsideClick);
-}
-
-// Hide row action dropdown
-function hideRowActionModal() {
-  const dropdown = document.getElementById('rowActionDropdown');
-  if (dropdown) dropdown.classList.remove('show');
-  selectedRowId = null;
-  document.removeEventListener('click', handleOutsideClick);
-}
-
-// Setup action menu handlers
-function setupActionMenuHandlers() {
-  // Duplicate shift action
-  const duplicateAction = document.getElementById('duplicateShiftAction');
-  if (duplicateAction && !duplicateAction._listenerAttached) {
-    duplicateAction._listenerAttached = true;
-    duplicateAction.onclick = (e) => {
-      e.stopPropagation();
-      const rowId = selectedRowId; // Capture before hiding
-      hideRowActionModal();
-      if (rowId) duplicateRow(rowId);
-    };
-  }
-  
-  // Delete shift action
-  const deleteAction = document.getElementById('deleteShiftAction');
-  if (deleteAction && !deleteAction._listenerAttached) {
-    deleteAction._listenerAttached = true;
-    deleteAction.onclick = (e) => {
-      e.stopPropagation();
-      const rowId = selectedRowId; // Capture before hiding
-      hideRowActionModal();
-      if (rowId) deleteRow(rowId);
-    };
-  }
-  
-  // Delete date action
-  const deleteDateAction = document.getElementById('deleteDateAction');
-  if (deleteDateAction && !deleteDateAction._listenerAttached) {
-    deleteDateAction._listenerAttached = true;
-    deleteDateAction.onclick = (e) => {
-      e.stopPropagation();
-      const date = selectedDate; // Capture before hiding
-      hideDateActionModal();
-      if (date) deleteDate(date);
-    };
-  }
-}
-
-// Open edit shift modal
-function openEditShiftModal(rowId) {
-  const row = tableData.rows.find(r => r._id === rowId);
-  if (!row) return;
-  
-  // Populate name dropdown
-  const nameSelect = document.getElementById('editShiftName');
-  if (nameSelect) {
-    nameSelect.innerHTML = `
-      <option value="">-- Select Name --</option>
-      ${cachedUsers.map(u => `<option value="${u.name}" ${u.name === row.name ? 'selected' : ''}>${u.name}</option>`).join('')}
-    `;
-  }
-  
-  // Populate role dropdown
-  const roleSelect = document.getElementById('editShiftRole');
-  if (roleSelect) {
-    roleSelect.innerHTML = `
-      <option value="">-- Select Role --</option>
-      ${cachedRoles.map(r => `<option value="${r}" ${r === row.role ? 'selected' : ''}>${r}</option>`).join('')}
-    `;
-  }
-  
-  // Populate other fields
-  document.getElementById('editShiftRowId').value = rowId;
-  document.getElementById('editShiftStart').value = row.startTime || '';
-  document.getElementById('editShiftEnd').value = row.endTime || '';
-  document.getElementById('editShiftNotes').value = row.notes || '';
-  document.getElementById('editShiftLocation').value = row.locationBadge || '';
-  
-  window.showEditShiftModal();
-}
-
-// Save shift from modal
-async function saveShiftFromModal() {
-  const rowId = document.getElementById('editShiftRowId').value;
-  const row = tableData.rows.find(r => r._id === rowId);
-  if (!row) return;
-  
-  const saveBtn = document.getElementById('saveShiftBtn');
-  if (saveBtn) {
-    saveBtn.disabled = true;
-    saveBtn.textContent = 'Saving...';
-  }
-  
-  try {
-    row.name = document.getElementById('editShiftName').value;
-    row.role = document.getElementById('editShiftRole').value;
-    row.startTime = document.getElementById('editShiftStart').value;
-    row.endTime = document.getElementById('editShiftEnd').value;
-    row.notes = document.getElementById('editShiftNotes').value;
-    row.locationBadge = document.getElementById('editShiftLocation').value;
-    row.totalHours = calculateHours(row.startTime, row.endTime);
-    
-    markChanged(rowId);
-    window.hideEditShiftModal();
-    renderTableSection();
-    
-  } catch (err) {
-    console.error('Save shift error:', err);
-    alert('Failed to save shift');
-  } finally {
-    if (saveBtn) {
-      saveBtn.disabled = false;
-      saveBtn.textContent = 'Save Changes';
+      // Hide for non-owners
+      btnContainer.innerHTML = '';
+      btnContainer.style.display = 'none';
     }
   }
-}
-
-// Duplicate a row
-async function duplicateRow(rowId) {
-  const row = tableData.rows.find(r => r._id === rowId);
-  if (!row) return;
-  
-  try {
-    const newRow = {
-      date: row.date,
-      name: row.name,
-      role: row.role,
-      startTime: row.startTime,
-      endTime: row.endTime,
-      totalHours: row.totalHours,
-      notes: row.notes,
-      locationBadge: row.locationBadge
-    };
-    
-    suppressNextSocketEvent();
-    
-    const response = await fetch(`${API_BASE}/api/tables/${tableId}/rows`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: token
-      },
-      body: JSON.stringify(newRow)
-    });
-    
-    if (!response.ok) throw new Error('Failed to duplicate');
-    
-    const result = await response.json();
-    const savedRow = result.row;
-    
-    if (savedRow && savedRow._id) {
-      tableData.rows.push(savedRow);
-      renderTableSection();
-      updateCrewCount();
-      showMessage('Shift duplicated!', 'success');
-    } else {
-      // Fallback: reload from server
-      await loadTable();
-      showMessage('Shift duplicated!', 'success');
-    }
-  } catch (err) {
-    console.error('Duplicate error:', err);
-    showMessage('Failed to duplicate shift', 'error');
-  }
-}
-
-// Create custom dropdown component
-function createCustomDropdown(options, currentValue, placeholder, onSelect, onAddNew) {
-  const container = document.createElement('div');
-  container.className = 'custom-dropdown';
-  
-  const trigger = document.createElement('button');
-  trigger.type = 'button';
-  trigger.className = 'custom-dropdown-trigger';
-  trigger.innerHTML = `
-    <span class="dropdown-value ${!currentValue ? 'placeholder' : ''}">${currentValue || placeholder}</span>
-    <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
-  `;
-  
-  const menu = document.createElement('div');
-  menu.className = 'custom-dropdown-menu';
-  
-  // Search input for filtering
-  const searchWrapper = document.createElement('div');
-  searchWrapper.className = 'custom-dropdown-search';
-  searchWrapper.innerHTML = `<input type="text" placeholder="Search..." autocomplete="off">`;
-  
-  const optionsContainer = document.createElement('div');
-  optionsContainer.className = 'custom-dropdown-options';
-  
-  // Render options
-  function renderOptions(filter = '') {
-    const filtered = options.filter(opt => 
-      opt.toLowerCase().includes(filter.toLowerCase())
-    );
-    
-    if (filtered.length === 0 && filter) {
-      optionsContainer.innerHTML = `<div class="custom-dropdown-empty">No results found</div>`;
-    } else {
-      optionsContainer.innerHTML = filtered.map(opt => `
-        <button type="button" class="custom-dropdown-option ${opt === currentValue ? 'selected' : ''}" data-value="${opt}">
-          ${opt}
-        </button>
-      `).join('');
-      
-      // Add "Add new" option
-      if (onAddNew) {
-        optionsContainer.innerHTML += `
-          <button type="button" class="custom-dropdown-option add-new" data-value="__add_new__">
-            <span class="material-symbols-outlined">add</span>
-            Add new...
-          </button>
-        `;
-      }
-    }
-  }
-  
-  renderOptions();
-  
-  menu.appendChild(searchWrapper);
-  menu.appendChild(optionsContainer);
-  container.appendChild(trigger);
-  container.appendChild(menu);
-  
-  // Event handlers
-  let isOpen = false;
-  
-  function openDropdown() {
-    isOpen = true;
-    container.classList.add('open');
-    
-    // Position the menu using fixed positioning
-    const triggerRect = trigger.getBoundingClientRect();
-    const viewportHeight = window.innerHeight;
-    const menuHeight = Math.min(400, viewportHeight * 0.5);
-    
-    // Check if menu should open above or below
-    const spaceBelow = viewportHeight - triggerRect.bottom - 10;
-    const spaceAbove = triggerRect.top - 10;
-    
-    if (spaceBelow >= menuHeight || spaceBelow >= spaceAbove) {
-      // Open below
-      menu.style.top = `${triggerRect.bottom + 4}px`;
-      menu.style.maxHeight = `${Math.min(menuHeight, spaceBelow)}px`;
-    } else {
-      // Open above
-      menu.style.top = `${triggerRect.top - menuHeight - 4}px`;
-      menu.style.maxHeight = `${Math.min(menuHeight, spaceAbove)}px`;
-    }
-    
-    menu.style.left = `${triggerRect.left}px`;
-    menu.style.width = `${Math.max(triggerRect.width, 200)}px`;
-    
-    const searchInput = searchWrapper.querySelector('input');
-    searchInput.value = '';
-    renderOptions();
-    setTimeout(() => searchInput.focus(), 50);
-  }
-  
-  function closeDropdown() {
-    isOpen = false;
-    container.classList.remove('open');
-  }
-  
-  trigger.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (isOpen) {
-      closeDropdown();
-    } else {
-      openDropdown();
-    }
-  });
-  
-  // Search filtering
-  const searchInput = searchWrapper.querySelector('input');
-  searchInput.addEventListener('input', (e) => {
-    renderOptions(e.target.value);
-  });
-  
-  searchInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      closeDropdown();
-    }
-  });
-  
-  // Option selection
-  optionsContainer.addEventListener('click', async (e) => {
-    const option = e.target.closest('.custom-dropdown-option');
-    if (!option) return;
-    
-    e.stopPropagation();
-    const value = option.dataset.value;
-    
-    if (value === '__add_new__' && onAddNew) {
-      closeDropdown();
-      const newValue = await onAddNew();
-      if (newValue) {
-        trigger.querySelector('.dropdown-value').textContent = newValue;
-        trigger.querySelector('.dropdown-value').classList.remove('placeholder');
-        onSelect(newValue);
-      }
-    } else {
-      trigger.querySelector('.dropdown-value').textContent = value;
-      trigger.querySelector('.dropdown-value').classList.remove('placeholder');
-      closeDropdown();
-      onSelect(value);
-    }
-  });
-  
-  // Close on outside click
-  function handleOutsideClick(e) {
-    if (!container.contains(e.target)) {
-      closeDropdown();
-      document.removeEventListener('click', handleOutsideClick);
-    }
-  }
-  
-  container.addEventListener('click', () => {
-    document.addEventListener('click', handleOutsideClick);
-  });
-  
-  // Expose close method
-  container.closeDropdown = closeDropdown;
-  
-  return container;
 }
 
 // Make a cell editable (inline editing) - NO AUTO-SAVE VERSION
@@ -1039,65 +517,23 @@ function makeEditable(cell, row) {
   
   // Create appropriate input based on field type
   let input;
-  let isCustomDropdown = false;
   
   if (field === 'name') {
-    // Custom dropdown for name
-    isCustomDropdown = true;
-    const options = cachedUsers.map(u => u.name).filter(Boolean);
-    
-    input = createCustomDropdown(
-      options,
-      currentValue,
-      '-- Select Name --',
-      (value) => {
-        if (value !== currentValue) {
-          row[field] = value;
-          displaySpan.textContent = value;
-          markChanged(rowId);
-        }
-        exitEdit();
-      },
-      async () => {
-        const newValue = await showInputModal('Add New Name', 'Enter name...');
-        if (newValue && !cachedUsers.some(u => u.name === newValue)) {
-          cachedUsers.push({ name: newValue });
-          cachedUsers.sort((a, b) => a.name.localeCompare(b.name));
-          return newValue;
-        } else if (newValue) {
-          showMessage('This name already exists', 'error');
-        }
-        return null;
-      }
-    );
+    // Dropdown for name
+    input = document.createElement('select');
+    input.innerHTML = `
+      <option value="">-- Select Name --</option>
+      ${cachedUsers.map(u => `<option value="${u.name}" ${u.name === currentValue ? 'selected' : ''}>${u.name}</option>`).join('')}
+      <option value="__add_new__">+ Add new name</option>
+    `;
   } else if (field === 'role') {
-    // Custom dropdown for role
-    isCustomDropdown = true;
-    
-    input = createCustomDropdown(
-      cachedRoles,
-      currentValue,
-      '-- Select Role --',
-      (value) => {
-        if (value !== currentValue) {
-          row[field] = value;
-          displaySpan.textContent = value;
-          markChanged(rowId);
-        }
-        exitEdit();
-      },
-      async () => {
-        const newValue = await showInputModal('Add New Role', 'Enter role...');
-        if (newValue && !cachedRoles.includes(newValue)) {
-          cachedRoles.push(newValue);
-          cachedRoles.sort();
-          return newValue;
-        } else if (newValue) {
-          showMessage('This role already exists', 'error');
-        }
-        return null;
-      }
-    );
+    // Dropdown for role
+    input = document.createElement('select');
+    input.innerHTML = `
+      <option value="">-- Select Role --</option>
+      ${cachedRoles.map(r => `<option value="${r}" ${r === currentValue ? 'selected' : ''}>${r}</option>`).join('')}
+      <option value="__add_new__">+ Add new role</option>
+    `;
   } else if (field === 'startTime' || field === 'endTime') {
     // Time input
     input = document.createElement('input');
@@ -1111,47 +547,81 @@ function makeEditable(cell, row) {
   }
   
   // Style the input to fit the cell
-  if (!isCustomDropdown) {
   input.style.width = '100%';
   input.style.boxSizing = 'border-box';
   input.className = 'inline-edit-input';
-  }
   
   // Replace display with input
   displaySpan.style.display = 'none';
   cell.appendChild(input);
+  input.focus();
   
-  if (!isCustomDropdown) {
-    input.focus();
+  // Track if we've already handled "add new" to prevent double modal
+  let addNewHandled = false;
+  
+  // For dropdowns, immediately show modal if "Add new" is selected
+  if (field === 'name' || field === 'role') {
+    input.addEventListener('change', async (e) => {
+      if (e.target.value === '__add_new__') {
+        addNewHandled = true; // Mark as handled
+        
+        // Immediately show the modal
+        const title = field === 'name' ? 'Add New Name' : 'Add New Role';
+        const placeholder = field === 'name' ? 'Enter name...' : 'Enter role...';
+        
+        const newValue = await showInputModal(title, placeholder);
+        
+        if (newValue) {
+          let valueToSet = null;
+          
+          if (field === 'name') {
+            if (!cachedUsers.some(u => u.name === newValue)) {
+              cachedUsers.push({ name: newValue });
+        cachedUsers.sort((a, b) => a.name.localeCompare(b.name));
+              
+              // Rebuild dropdown with new option
+              input.innerHTML = `
+                <option value="">-- Select Name --</option>
+                ${cachedUsers.map(u => `<option value="${u.name}" ${u.name === newValue ? 'selected' : ''}>${u.name}</option>`).join('')}
+                <option value="__add_new__">+ Add new name</option>
+              `;
+              input.value = newValue;
+              valueToSet = newValue;
       } else {
-    // Auto-open the dropdown
-    setTimeout(() => {
-      const trigger = input.querySelector('.custom-dropdown-trigger');
-      if (trigger) trigger.click();
-    }, 50);
-  }
-  
-  // Exit edit mode function
-  const exitEdit = () => {
-    if (!input.parentNode) return; // Already removed
-    input.remove();
-    displaySpan.style.display = '';
-    cell.classList.remove('editing');
-    isEditing = false;
-  };
-  
-  // For custom dropdowns, handle click outside to exit
-  if (isCustomDropdown) {
-    const handleClickOutside = (e) => {
-      if (!input.contains(e.target) && !e.target.closest('.input-modal')) {
-        exitEdit();
-        document.removeEventListener('click', handleClickOutside);
+              showMessage('This name already exists', 'error');
+              input.value = currentValue;
+            }
+          } else if (field === 'role') {
+            if (!cachedRoles.includes(newValue)) {
+              cachedRoles.push(newValue);
+              cachedRoles.sort();
+              
+              // Rebuild dropdown with new option
+              input.innerHTML = `
+                <option value="">-- Select Role --</option>
+                ${cachedRoles.map(r => `<option value="${r}" ${r === newValue ? 'selected' : ''}>${r}</option>`).join('')}
+                <option value="__add_new__">+ Add new role</option>
+              `;
+              input.value = newValue;
+              valueToSet = newValue;
+            } else {
+              showMessage('This role already exists', 'error');
+              input.value = currentValue;
+            }
           }
-    };
-    setTimeout(() => {
-      document.addEventListener('click', handleClickOutside);
-    }, 100);
-    return; // Skip the rest for custom dropdowns
+          
+          // Actually save the value to the row data
+          if (valueToSet && valueToSet !== currentValue) {
+            row[field] = valueToSet;
+            displaySpan.textContent = valueToSet;
+            markChanged(rowId);
+          }
+        } else {
+          // User cancelled, reset to previous value
+          input.value = currentValue;
+        }
+      }
+    });
   }
   
   // Get next editable cell for Tab navigation
@@ -1171,8 +641,12 @@ function makeEditable(cell, row) {
   
   // Update local data only (no API calls)
   const updateValue = async (newValue) => {
-    // Handle "add new" option
+    // Skip if "add new" was already handled by change event
     if (newValue === '__add_new__') {
+      if (addNewHandled) {
+        console.log('⏭️ Skipping __add_new__ (already handled by change event)');
+        return; // Already handled by the change event
+      }
       
       // Fallback: handle it here if change event didn't fire
       if (field === 'name') {
@@ -1226,6 +700,15 @@ function makeEditable(cell, row) {
     }
   };
   
+  // Exit edit mode and restore cell
+  const exitEdit = () => {
+    if (!input.parentNode) return; // Already removed
+    input.remove();
+    displaySpan.style.display = '';
+    cell.classList.remove('editing');
+    isEditing = false; // Mark that editing is done
+  };
+  
   // Simple blur handler
   input.addEventListener('blur', () => {
     // Small delay to allow clicking other cells
@@ -1264,7 +747,7 @@ function makeEditable(cell, row) {
   });
 }
 
-// Bulk save all changes to the server using single atomic request
+// Bulk save all changes to the server
 async function saveAllChanges(silent = false) {
   if (!hasUnsavedChanges) {
     if (!silent) {
@@ -1283,76 +766,109 @@ async function saveAllChanges(silent = false) {
   updateSaveStatus('saving');
   
   try {
-    // Build bulk payload
-    const updates = [];
+    console.log(`💾 Saving changes: ${changedRows.size} modified, ${deletedRows.size} deleted`);
+    
+    let successCount = 0;
+    let failCount = 0;
+    
+    // Step 1: Handle all updates in parallel (safe - different rows)
+    const updatePromises = [];
     for (const rowId of changedRows) {
-      if (deletedRows.has(rowId)) continue; // Skip rows marked for deletion
+      // Skip if this row is also being deleted
+      if (deletedRows.has(rowId)) {
+        console.log(`⏭️ Skipping save for ${rowId} (marked for deletion)`);
+        continue;
+      }
+      
       const row = tableData.rows.find(r => r._id === rowId);
       if (row) {
-        updates.push({
-          rowId: rowId,
-          data: {
-            date: row.date,
-            name: row.name,
-            role: row.role,
-            startTime: row.startTime,
-            endTime: row.endTime,
-            totalHours: row.totalHours,
-            notes: row.notes
-          }
-        });
+        console.log(`📝 Updating row ${rowId}`);
+        updatePromises.push(
+          fetch(`${API_BASE}/api/tables/${tableId}/rows/${rowId}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: token
+            },
+            body: JSON.stringify(row)
+          }).then(res => {
+            if (res.ok) {
+              console.log(`✅ Update ${rowId} succeeded`);
+              successCount++;
+            } else {
+              console.error(`❌ Update ${rowId} failed:`, res.status);
+              failCount++;
+            }
+            return res;
+          })
+        );
       }
     }
     
-    const deletes = Array.from(deletedRows);
+    // Wait for all updates to complete
+    if (updatePromises.length > 0) {
+      await Promise.all(updatePromises);
+    }
     
-    const totalOps = updates.length + deletes.length;
-    if (totalOps === 0) {
+    // Step 2: Handle deletes SEQUENTIALLY to avoid version conflicts
+    for (const rowId of deletedRows) {
+      console.log(`🗑️ Deleting row ${rowId}`);
+      try {
+        const response = await fetch(`${API_BASE}/api/tables/${tableId}/rows-by-id/${rowId}`, {
+          method: 'DELETE',
+          headers: { Authorization: token }
+        });
+        
+        if (response.ok) {
+          console.log(`✅ Delete ${rowId} succeeded`);
+          successCount++;
+    } else {
+          const errorText = await response.text();
+          console.error(`❌ Delete ${rowId} failed:`, response.status, errorText);
+          failCount++;
+        }
+      } catch (error) {
+        console.error(`❌ Delete ${rowId} error:`, error);
+        failCount++;
+      }
+    }
+    
+    // Check if we had any operations
+    if (successCount === 0 && failCount === 0) {
       console.log('⚠️ No changes to save');
       hasUnsavedChanges = false;
       updateSaveStatus();
-      return;
-    }
-    
-    console.log(`💾 Bulk saving: ${updates.length} updates, ${deletes.length} deletes`);
-    suppressNextSocketEvent(); // Don't reload from our own save
-    
-    const response = await fetch(`${API_BASE}/api/tables/${tableId}/crew-bulk`, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: token
-      },
-      body: JSON.stringify({ updates, deletes })
-    });
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Bulk save failed: ${response.status} ${errorText}`);
-    }
-    
-    const result = await response.json();
-    console.log(`✅ Bulk save complete: ${result.successCount} operations`);
-    
-    // Clear changed tracking
-    changedRows.clear();
-    deletedRows.clear();
-    hasUnsavedChanges = false;
-    
-    // Clear localStorage backup
-    clearLocalStorage();
-    
-    // Update UI
-    updateSaveStatus('saved');
-    
-    if (!silent) {
-      showMessage(`All changes saved successfully`, 'success');
+    return;
+  }
+  
+    if (failCount === 0) {
+      console.log(`✅ All ${successCount} changes saved successfully`);
+      
+      // Clear changed tracking
+      changedRows.clear();
+      deletedRows.clear();
+      hasUnsavedChanges = false;
+      
+      // Clear localStorage backup
+      clearLocalStorage();
+      
+      // Update UI
+      updateSaveStatus('saved');
+      
+      if (!silent) {
+        showMessage(`All ${successCount} changes saved successfully`, 'success');
+      }
+      
+      // Don't reload the page for autosave - keeps user in place
+      // Real-time updates will come through sockets when needed
+    } else {
+      throw new Error(`${failCount} of ${successCount + failCount} operations failed`);
     }
     
   } catch (error) {
     console.error('❌ Failed to save changes:', error);
     if (!silent) {
-      showMessage('Failed to save changes. Please try again.', 'error');
+      showMessage('Failed to save some changes. Please try again.', 'error');
     }
     updateSaveStatus('unsaved');
   } finally {
@@ -1430,7 +946,6 @@ async function addRow(date) {
     };
     
     console.log('📝 Adding new row:', newRow);
-    suppressNextSocketEvent(); // Don't reload from our own save
     
     const response = await fetch(`${API_BASE}/api/tables/${tableId}/rows`, {
       method: 'POST',
@@ -1450,17 +965,19 @@ async function addRow(date) {
     const result = await response.json();
     console.log('✅ Server response:', result);
     
-    // Server now returns { row: {...} }
-    const savedRow = result.row;
+    // Handle different response formats
+    const savedRow = result.row || result;
     
     if (savedRow && savedRow._id) {
       // Ensure date is set correctly
       if (!savedRow.date) {
         savedRow.date = date;
+        console.log('⚠️ Date was missing from server response, using original date:', date);
       }
       
       // Add to local data
       tableData.rows.push(savedRow);
+      console.log('✅ Row added to local data:', savedRow);
       
       // Re-render immediately
       renderTableSection();
@@ -1468,9 +985,7 @@ async function addRow(date) {
       showMessage('Row added successfully!', 'success');
     } else {
       console.error('❌ Invalid response format:', result);
-      // Fallback: reload from server to stay in sync
-      await loadTable();
-      showMessage('Row added!', 'success');
+      throw new Error('Invalid response from server');
     }
     
   } catch (error) {
@@ -1496,7 +1011,7 @@ async function deleteRow(rowId) {
   
   console.log(`🗑️ Deleting row ${rowId}`);
   
-  // Mark for deletion
+  // Mark for deletion (will be saved with Save Changes button)
   deletedRows.add(rowId);
   hasUnsavedChanges = true;
   
@@ -1513,10 +1028,7 @@ async function deleteRow(rowId) {
   renderTableSection();
   updateCrewCount();
   
-  showMessage(`Deleting ${rowName || 'row'}...`, 'info');
-  
-  // Trigger autosave to persist the deletion
-  triggerAutosave();
+  showMessage(`${rowName || 'Row'} will be deleted shortly (autosaving...)`, 'info');
 }
 
 // Show date picker modal
@@ -1618,17 +1130,15 @@ async function addDateSection() {
   try {
     showMessage('Adding date...', 'info');
     
-    const newRow = {
-      date,
+  const newRow = {
+    date,
       role: '__placeholder__',
-      name: '',
-      startTime: '',
-      endTime: '',
-      totalHours: 0,
-      notes: ''
-    };
-    
-    suppressNextSocketEvent();
+    name: '',
+    startTime: '',
+    endTime: '',
+    totalHours: 0,
+    notes: ''
+  };
     
     const response = await fetch(`${API_BASE}/api/tables/${tableId}/rows`, {
       method: 'POST',
@@ -1690,10 +1200,7 @@ async function deleteDate(date) {
   renderTableSection();
   updateCrewCount();
   
-  showMessage(`Deleting ${formattedDate}...`, 'info');
-  
-  // Trigger autosave to persist the deletion
-  triggerAutosave();
+  showMessage(`Date ${formattedDate} will be deleted shortly (autosaving...)`, 'info');
 }
 
 // Drag and drop for reordering
@@ -1721,7 +1228,6 @@ function handleDrop(targetId, draggedId) {
 async function saveRowOrder() {
   try {
     console.log('🔄 Saving row order...');
-    suppressNextSocketEvent();
     const response = await fetch(`${API_BASE}/api/tables/${tableId}`, {
         method: 'PUT',
         headers: {
@@ -1774,16 +1280,15 @@ function showMessage(message, type = 'info') {
     position: fixed;
     top: 20px;
     right: 20px;
-    padding: 14px 24px;
-    border-radius: 8px;
+    padding: 12px 20px;
+    border-radius: 6px;
     font-weight: 500;
-    font-size: 14px;
     z-index: 10001;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-    transition: all 0.3s ease;
-    ${type === 'success' ? 'background: #065f46; color: #d1fae5; border: 1px solid #10b981;' : 
-      type === 'error' ? 'background: #7f1d1d; color: #fecaca; border: 1px solid #ef4444;' :
-      'background: #1e293b; color: #e2e8f0; border: 1px solid #475569;'}
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    transition: opacity 0.3s ease;
+    ${type === 'success' ? 'background: #d4edda; color: #155724; border: 1px solid #c3e6cb;' : 
+      type === 'error' ? 'background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb;' :
+      'background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb;'}
   `;
   messageEl.textContent = message;
   
@@ -1791,7 +1296,6 @@ function showMessage(message, type = 'info') {
   
   setTimeout(() => {
     messageEl.style.opacity = '0';
-    messageEl.style.transform = 'translateY(-10px)';
     setTimeout(() => {
       if (messageEl.parentNode) {
         messageEl.parentNode.removeChild(messageEl);
@@ -1964,7 +1468,7 @@ function showCrewListModal() {
   });
   
   if (crewArr.length === 0) {
-    showMessage('No crew found.', 'info');
+    alert('No crew found.');
     return;
   }
   
@@ -1973,39 +1477,56 @@ function showCrewListModal() {
   
   modal = document.createElement('div');
   modal.id = 'crewListModal';
-  modal.className = 'dark-modal show';
+  modal.className = 'modal-backdrop';
+  modal.style = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:9999;';
   modal.innerHTML = `
-    <div class="dark-modal-content" style="max-width:500px;width:92vw;">
-      <div class="modal-header-dark">
-        <h3>Crew List</h3>
-        <span style="background:var(--bg-tertiary);color:var(--text-secondary);padding:4px 12px;border-radius:20px;font-size:0.85rem;font-weight:500;">
+    <div style="background:#fff;border-radius:20px;max-width:500px;width:92vw;box-shadow:0 20px 60px rgba(0,0,0,0.3);padding:32px;display:flex;flex-direction:column;gap:20px;animation:slideUp 0.3s ease;">
+      <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:3px solid #f8f9fa;padding-bottom:16px;">
+        <h3 style='color:#2c3e50;margin:0;font-size:1.5rem;font-weight:700;display:flex;align-items:center;gap:10px;'>
+          Crew List
+        </h3>
+        <span style='background:#e9ecef;color:#6c757d;padding:6px 12px;border-radius:20px;font-size:0.85rem;font-weight:600;'>
           ${crewArr.length} member${crewArr.length !== 1 ? 's' : ''}
         </span>
       </div>
-      <div class="modal-body-dark" style="max-height:400px;overflow-y:auto;padding:16px 24px;">
-        <ul style="list-style:none;padding:0;margin:0;">
+      <div style='max-height:400px;overflow-y:auto;'>
+        <ul style='list-style:none;padding:0;margin:0;'>
           ${crewArr.map(({name, email}) => `
-            <li style="padding:14px;margin-bottom:8px;background:var(--bg-tertiary);border-radius:8px;border-left:3px solid var(--brand-red);">
-              <div style="font-weight:600;color:var(--text-primary);font-size:0.95rem;margin-bottom:4px;">${name}</div>
-              ${email ? `<a href="mailto:${email}" style="color:var(--text-secondary);text-decoration:none;font-size:0.85rem;">
+            <li style='padding:14px;margin-bottom:8px;background:#f8f9fa;border-radius:10px;border-left:4px solid #CC0007;transition:all 0.2s ease;'>
+              <div style='font-weight:600;color:#2c3e50;font-size:1rem;margin-bottom:4px;'>${name}</div>
+              ${email ? `<a href='mailto:${email}' style='color:#6c757d;text-decoration:none;font-size:0.9rem;'>
                 ${email}
-              </a>` : '<span style="color:var(--text-muted);font-size:0.85rem;">No email</span>'}
+              </a>` : '<span style="color:#adb5bd;font-size:0.85rem;">No email</span>'}
             </li>
           `).join('')}
         </ul>
       </div>
-      <div class="modal-footer-dark">
-        <button class="btn-secondary" id="closeCrewListModalBtn">Close</button>
-        <button class="btn-primary" id="emailEveryoneBtn">Email Everyone</button>
+      <div style='display:flex;gap:12px;margin-top:8px;'>
+        <button id='emailEveryoneBtn' style='flex:1;background:linear-gradient(135deg,#CC0007,#a30006);color:#fff;border:none;border-radius:10px;padding:12px 20px;font-weight:600;font-size:15px;cursor:pointer;transition:all 0.3s ease;box-shadow:0 4px 12px rgba(204,0,7,0.2);'>
+          Email Everyone
+        </button>
+        <button id='closeCrewListModalBtn' style='flex:1;background:#6c757d;color:#fff;border:none;border-radius:10px;padding:12px 20px;font-weight:600;font-size:15px;cursor:pointer;transition:all 0.3s ease;'>
+          Close
+        </button>
       </div>
     </div>
   `;
   document.body.appendChild(modal);
   
-  const closeBtn = document.getElementById('closeCrewListModalBtn');
-  closeBtn.onclick = () => modal.remove();
-  
+  // Add hover effects
   const emailBtn = document.getElementById('emailEveryoneBtn');
+  emailBtn.onmouseover = () => emailBtn.style.transform = 'translateY(-2px)';
+  emailBtn.onmouseout = () => emailBtn.style.transform = 'translateY(0)';
+  
+  const closeBtn = document.getElementById('closeCrewListModalBtn');
+  closeBtn.onmouseover = () => closeBtn.style.background = '#5a6268';
+  closeBtn.onmouseout = () => closeBtn.style.background = '#6c757d';
+  
+  closeBtn.onclick = () => {
+    modal.style.animation = 'fadeOut 0.2s ease';
+    setTimeout(() => modal.remove(), 200);
+  };
+  
   emailBtn.onclick = () => {
     const allEmails = crewArr.filter(c => c.email).map(c => c.email).join(',');
     if (allEmails) {
@@ -2020,7 +1541,7 @@ function showCrewListModal() {
   // Close on backdrop click
   modal.onclick = (e) => {
     if (e.target === modal) {
-      modal.remove();
+      closeBtn.click();
     }
   };
 }
@@ -2062,13 +1583,13 @@ function exportCrewCsv() {
 // Crew Cost Calculator
 function showCrewCostCalcModal() {
   if (!isOwner) {
-    showMessage('Access denied. Only event owners can view the crew cost calculator.', 'error');
+    alert('Access denied. Only event owners can view the crew cost calculator.');
     return;
   }
   
   const rows = (tableData.rows || []).filter(row => row.role !== '__placeholder__' && row.name && row.role);
   if (!rows.length) {
-    showMessage('No crew data available.', 'info');
+    alert('No crew data available.');
     return;
   }
   
@@ -2086,39 +1607,31 @@ function showCrewCostCalcModal() {
   
   modal = document.createElement('div');
   modal.id = 'crewCostCalcModal';
-  modal.className = 'dark-modal show';
+  modal.className = 'crew-cost-calc-modal';
+  modal.style = 'position:fixed;top:0;left:0;width:100vw;height:100vh;background:rgba(34,41,47,0.18);display:flex;align-items:center;justify-content:center;z-index:10000;';
   
   modal.innerHTML = `
-    <div class="dark-modal-content" style="max-width:700px;width:96vw;max-height:90vh;">
-      <div class="modal-header-dark">
-        <h3>Crew Cost Calculator</h3>
-        <button class="modal-close-btn" id="closeCrewCostCalcModalBtn">
-          <span class="material-symbols-outlined">close</span>
-        </button>
-      </div>
-      <div class="modal-body-dark" style="flex:1;overflow-y:auto;padding:16px 24px;">
-        <table class="cost-calc-table" style="width:100%;border-collapse:collapse;font-size:0.9rem;">
+    <div style="background:#fff;border-radius:18px;max-width:700px;width:96vw;max-height:96vh;height:96vh;box-shadow:0 12px 40px rgba(204,0,7,0.13),0 2px 8px rgba(0,0,0,0.08);padding:38px 32px 28px 32px;display:flex;flex-direction:column;gap:18px;align-items:center;">
+      <h3 style='color:#CC0007;margin:0 0 8px 0;'>Crew Cost Calculator</h3>
+      <div style='width:100%;flex:1 1 auto;overflow-x:auto;overflow-y:auto;min-height:0;'>
+        <table style='width:100%;border-collapse:collapse;font-size:1rem;'>
           <thead>
-            <tr style="background:var(--bg-tertiary);border-bottom:1px solid var(--border-default);">
-              <th style="padding:12px;text-align:left;color:var(--text-secondary);font-weight:500;">Name</th>
-              <th style="padding:12px;text-align:left;color:var(--text-secondary);font-weight:500;">Role</th>
-              <th style="padding:12px;text-align:right;color:var(--text-secondary);font-weight:500;">Hours</th>
-              <th style="padding:12px;text-align:right;color:var(--text-secondary);font-weight:500;">Rate</th>
-              <th style="padding:12px;text-align:right;color:var(--text-secondary);font-weight:500;">Cost</th>
+            <tr style='background:#f5f5f5;'>
+              <th style='padding:8px 10px;text-align:left;'>Name</th>
+              <th style='padding:8px 10px;text-align:left;'>Role</th>
+              <th style='padding:8px 10px;text-align:right;'>Total Hours</th>
+              <th style='padding:8px 10px;text-align:right;'>Hourly Rate</th>
+              <th style='padding:8px 10px;text-align:right;'>Cost</th>
             </tr>
           </thead>
-          <tbody id="crewCostCalcTableBody">
+          <tbody id='crewCostCalcTableBody'>
           </tbody>
         </table>
-        <div style="display:flex;justify-content:flex-end;padding:16px 0;border-top:1px solid var(--border-default);margin-top:16px;">
-          <div style="font-size:1.1rem;color:var(--text-primary);">
-            <strong>Total: <span style="color:var(--brand-red);">$<span id="crewCostCalcTotal">0.00</span></span></strong>
       </div>
+      <div style='width:100%;text-align:right;font-size:1.1rem;margin-top:10px;'>
+        <strong>Total Project Cost: $<span id='crewCostCalcTotal'>0.00</span></strong>
       </div>
-      </div>
-      <div class="modal-footer-dark" id="crewCostCalcFooter">
-        <button class="btn-secondary" id="closeCostCalcBtn">Close</button>
-      </div>
+      <button id='closeCrewCostCalcModalBtn' style='background:#6c757d;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-weight:600;font-size:16px;box-shadow:0 2px 8px rgba(204,0,7,0.08);cursor:pointer;margin-top:10px;'>Close</button>
     </div>
   `;
   document.getElementById('crewCostCalcModalContainer').appendChild(modal);
@@ -2138,16 +1651,14 @@ function showCrewCostCalcModal() {
       const validRate = isNaN(rate) ? 0 : rate;
       const cost = validRate * crew.totalHours;
       total += cost;
-      return `<tr style="border-bottom:1px solid var(--border-subtle);">
-        <td style="padding:12px;color:var(--text-primary);">${crew.name}</td>
-        <td style="padding:12px;color:var(--text-secondary);">${crew.role}</td>
-        <td style="padding:12px;text-align:right;color:var(--text-primary);">${crew.totalHours.toFixed(2)}</td>
-        <td style="padding:12px;text-align:right;">
-          <input type="text" inputmode="decimal" data-key="${key}" value="${crewRates[key]}" 
-            style="width:80px;padding:6px 8px;font-size:0.9rem;background:var(--bg-tertiary);border:1px solid var(--border-default);border-radius:6px;color:var(--text-primary);text-align:right;"
-            placeholder="0.00">
+      return `<tr>
+        <td style='padding:7px 10px;'>${crew.name}</td>
+        <td style='padding:7px 10px;'>${crew.role}</td>
+        <td style='padding:7px 10px;text-align:right;'>${crew.totalHours.toFixed(2)}</td>
+        <td style='padding:7px 10px;text-align:right;'>
+          <input type='text' inputmode='decimal' data-key='${key}' value='${crewRates[key]}' style='width:90px;padding:3px 6px;font-size:1rem;border:1px solid #bbb;border-radius:5px;text-align:right;'>
         </td>
-        <td style="padding:12px;text-align:right;color:var(--brand-red);font-weight:500;">$${cost.toFixed(2)}</td>
+        <td style='padding:7px 10px;text-align:right;'>$${cost.toFixed(2)}</td>
       </tr>`;
     }).join('');
     document.getElementById('crewCostCalcTotal').textContent = total.toFixed(2);
@@ -2174,13 +1685,11 @@ function showCrewCostCalcModal() {
   });
 
   if (isOwner) {
-    const footer = document.getElementById('crewCostCalcFooter');
     const saveBtn = document.createElement('button');
     saveBtn.textContent = 'Save Rates';
-    saveBtn.className = 'btn-primary';
+    saveBtn.style = 'background:#CC0007;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-weight:600;font-size:16px;box-shadow:0 2px 8px rgba(204,0,7,0.08);cursor:pointer;margin-top:10px;';
     saveBtn.id = 'saveCrewRatesBtn';
-    footer.appendChild(saveBtn);
-    
+    modal.querySelector('div').appendChild(saveBtn);
     saveBtn.onclick = async function() {
       saveBtn.disabled = true;
       saveBtn.textContent = 'Saving...';
@@ -2200,47 +1709,24 @@ function showCrewCostCalcModal() {
         } else {
           const err = await res.text();
           saveBtn.textContent = 'Error';
-          showMessage('Failed to save rates: ' + err, 'error');
+          alert('Failed to save rates: ' + err);
           saveBtn.disabled = false;
         }
       } catch (err) {
         saveBtn.textContent = 'Error';
-        showMessage('Failed to save rates: ' + err.message, 'error');
+        alert('Failed to save rates: ' + err.message);
         saveBtn.disabled = false;
       }
     };
   }
 
   document.getElementById('closeCrewCostCalcModalBtn').onclick = () => modal.remove();
-  document.getElementById('closeCostCalcBtn').onclick = () => modal.remove();
-  
-  // Close on backdrop click
-  modal.onclick = (e) => {
-    if (e.target === modal) {
-      modal.remove();
-    }
-  };
 }
 
 // Attach event listeners
 function attachEventListeners() {
   const addDateBtn = document.getElementById('addDateBtn');
-  if (addDateBtn) {
-    addDateBtn.onclick = () => addDateSection();
-  }
-  
-  // Confirm add date button
-  const confirmAddDateBtn = document.getElementById('confirmAddDateBtn');
-  if (confirmAddDateBtn) {
-    confirmAddDateBtn.onclick = async () => {
-      const dateInput = document.getElementById('addDateInput');
-      const date = dateInput?.value;
-      if (date) {
-        window.hideAddDateModal();
-        await addDateWithValue(date);
-      }
-    };
-  }
+  if (addDateBtn) addDateBtn.onclick = addDateSection;
   
   const filterDate = document.getElementById('filterDate');
   if (filterDate) {
@@ -2258,173 +1744,20 @@ function attachEventListeners() {
     };
   }
   
-  // Show All / Show Mine filter buttons
-  const showAllBtn = document.getElementById('showAllBtn');
-  const showMineBtn = document.getElementById('showMineBtn');
-  
-  if (showAllBtn) {
-    showAllBtn.onclick = () => {
-      showMineOnly = false;
-      showAllBtn.classList.add('active');
-      if (showMineBtn) showMineBtn.classList.remove('active');
-      renderTableSection();
-    };
-  }
-  
-  if (showMineBtn) {
-    showMineBtn.onclick = () => {
-      showMineOnly = true;
-      showMineBtn.classList.add('active');
-      if (showAllBtn) showAllBtn.classList.remove('active');
-      renderTableSection();
-    };
-  }
-  
     const exportBtn = document.getElementById('exportCsvBtn');
     if (exportBtn) exportBtn.onclick = exportCrewCsv;
   
     const costCalcBtn = document.getElementById('crewCostCalcBtn');
     if (costCalcBtn) costCalcBtn.onclick = showCrewCostCalcModal;
   
-  const crewListBtn = document.getElementById('crewListBtn');
-  if (crewListBtn) crewListBtn.onclick = showCrewListModal;
-  
-  // Setup action menu handlers
-  setupActionMenuHandlers();
-  
-  // Save shift button
-  const saveShiftBtn = document.getElementById('saveShiftBtn');
-  if (saveShiftBtn) saveShiftBtn.onclick = saveShiftFromModal;
-  
-  // Mobile menu button
-  const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-  const sidebar = document.getElementById('crewSidebar');
-  const overlay = document.getElementById('crewSidebarOverlay');
-  
-  if (mobileMenuBtn && sidebar) {
-    mobileMenuBtn.onclick = () => {
-      sidebar.classList.toggle('open');
-      overlay?.classList.toggle('show');
-    };
-  }
-  
-  if (overlay) {
-    overlay.onclick = () => {
-      sidebar?.classList.remove('open');
-      overlay.classList.remove('show');
-    };
-  }
-  
-  // Load user info for sidebar
-  loadSidebarUser();
-}
-
-// Load user info for sidebar
-async function loadSidebarUser() {
-  try {
-    const nameEl = document.getElementById('sidebarUserName');
-    const avatarImg = document.getElementById('sidebarAvatarImg');
-    const avatarIcon = document.getElementById('sidebarAvatarIcon');
-    
-    // First, set name from localStorage for instant display
-    let userName = localStorage.getItem('fullName');
-    
-    if (!userName) {
-      // Fallback to token
-      const tokenStr = localStorage.getItem('token');
-      if (tokenStr) {
-        const payload = JSON.parse(atob(tokenStr.split('.')[1]));
-        userName = payload.fullName || payload.name || payload.email || 'User';
-      }
-    }
-    
-    if (nameEl && userName) nameEl.textContent = userName;
-    
-    // Try to fetch user photo (optional - may not be implemented)
-    try {
-      const userId = getUserIdFromToken();
-      if (userId) {
-        const res = await fetch(`${API_BASE}/api/users/${userId}`, {
-          headers: { Authorization: token }
-        });
-        
-        if (res.ok) {
-          const user = await res.json();
-          
-          // Update name if we got a better one from API
-          if (nameEl && user.name) nameEl.textContent = user.name;
-          
-          if (user.photo && avatarImg) {
-            avatarImg.src = user.photo;
-            avatarImg.style.display = 'block';
-            if (avatarIcon) avatarIcon.style.display = 'none';
-          }
-        }
-        // Silently ignore 404 - endpoint may not be implemented
-      }
-    } catch (photoErr) {
-      // Photo fetch failed - not critical, just use default avatar
-    }
-  } catch (err) {
-    console.error('Failed to load user:', err);
-  }
-}
-
-// Add date with specific value
-async function addDateWithValue(date) {
-  if (!isOwner) return;
-  
-  const exists = tableData.rows.some(row => row.date === date);
-  if (exists) {
-    showMessage('This date already exists.', 'error');
-    return;
-  }
-  
-  try {
-    showMessage('Adding date...', 'info');
-    
-    const newRow = {
-      date,
-      role: '__placeholder__',
-      name: '',
-      startTime: '',
-      endTime: '',
-      totalHours: 0,
-      notes: ''
-    };
-    
-    suppressNextSocketEvent();
-    
-    const response = await fetch(`${API_BASE}/api/tables/${tableId}/rows`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: token
-      },
-      body: JSON.stringify(newRow)
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Failed to add date: ${response.status}`);
-    }
-    
-    await loadTable();
-    showMessage('Date added successfully!', 'success');
-    
-  } catch (error) {
-    console.error('❌ Failed to add date:', error);
-    showMessage('Failed to add date. Please try again.', 'error');
-  }
+  // No longer need save button or keyboard shortcut with autosave
+  // Removed: Save changes button
+  // Removed: Ctrl+S keyboard shortcut
+  // Removed: beforeunload warning (autosave handles it)
 }
 
 // Initialize page
 function initPage(id) {
-  // Update tableId if provided
-  if (id) {
-    tableId = id;
-    localStorage.setItem('eventId', id);
-  }
-  
   loadTable().then(() => {
     attachEventListeners();
     document.body.classList.add('crew-page');
@@ -2441,8 +1774,5 @@ window.makeEditable = makeEditable;
 window.exportCrewCsv = exportCrewCsv;
 window.showCrewListModal = showCrewListModal;
 window.showCrewCostCalcModal = showCrewCostCalcModal;
-window.hideRowActionModal = hideRowActionModal;
-window.openEditShiftModal = openEditShiftModal;
-window.duplicateRow = duplicateRow;
 
 })();

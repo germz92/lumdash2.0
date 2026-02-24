@@ -1,169 +1,157 @@
 <!-- Call Times Page - All crew call times across all events -->
-<link rel="stylesheet" href="css/theme-dark.css">
-
-<div class="dark-theme call-times-page">
-  <div class="call-times-layout" id="callTimesPageLayout">
-    
-    <!-- Sidebar will be injected here by sidebar-dashboard.js -->
-    
-    <!-- Main Content -->
-    <main class="call-times-main">
-      
-      <!-- Header -->
-      <header class="call-times-header-dark">
-        <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu">
-          <span class="material-symbols-outlined">menu</span>
-        </button>
-        <div class="call-times-header-left">
-          <h1 class="call-times-title">
-            <span class="material-symbols-outlined">schedule</span>
-            Call Times
-          </h1>
-        </div>
-        <div class="call-times-header-right">
-          <div class="call-times-stats">
-            <span class="stats-text" id="statsText">0 call times</span>
-          </div>
-        </div>
-      </header>
-      
-      <!-- Filter Bar -->
-      <div class="call-times-filter-bar">
-        <div class="filter-left">
-          <div class="search-box">
-            <span class="material-symbols-outlined">search</span>
-            <input type="text" id="callTimesSearch" placeholder="Search call times...">
-          </div>
-        </div>
-        <div class="filter-right">
-          <!-- Status Filter (Live/Upcoming/Past/All) -->
-          <div class="filter-group">
-            <button class="filter-btn" id="statusFilterBtn">
-              <span class="material-symbols-outlined">event</span>
-              <span id="statusFilterLabel">All</span>
-              <span class="material-symbols-outlined">expand_more</span>
-            </button>
-            <div class="filter-dropdown" id="statusFilterDropdown">
-              <button class="filter-option" data-value="all">All</button>
-              <button class="filter-option" data-value="live">Live</button>
-              <button class="filter-option" data-value="upcoming">Upcoming</button>
-              <button class="filter-option" data-value="past">Past</button>
-            </div>
-          </div>
-          
-          <!-- Date Range Filter -->
-          <div class="filter-group">
-            <button class="filter-btn" id="dateFilterBtn">
-              <span class="material-symbols-outlined">date_range</span>
-              <span id="dateFilterLabel">All Time</span>
-              <span class="material-symbols-outlined">expand_more</span>
-            </button>
-            <div class="filter-dropdown" id="dateFilterDropdown">
-              <button class="filter-option" data-value="all">All Time</button>
-              <button class="filter-option" data-value="this-month">This Month</button>
-              <button class="filter-option" data-value="last-month">Last Month</button>
-              <button class="filter-option" data-value="last-3-months">Last 3 Months</button>
-              <button class="filter-option" data-value="this-year">This Year</button>
-              <button class="filter-option" data-value="last-year">Last Year</button>
-              <button class="filter-option" data-value="custom">Custom Range...</button>
-            </div>
-          </div>
-          
-          <!-- My Calls Filter (Admin only) -->
-          <div class="filter-group admin-only" id="myCallsFilterGroup" style="display: none;">
-            <button class="filter-btn" id="myCallsFilterBtn">
-              <span class="material-symbols-outlined">person</span>
-              <span id="myCallsFilterLabel">All Crew</span>
-              <span class="material-symbols-outlined">expand_more</span>
-            </button>
-            <div class="filter-dropdown" id="myCallsFilterDropdown">
-              <button class="filter-option" data-value="all">All Crew</button>
-              <button class="filter-option" data-value="mine">My Calls Only</button>
-            </div>
-          </div>
-        </div>
+<div class="call-times-page">
+  <div class="page-header">
+    <button class="back-btn" id="backToEventsBtn">
+      <span class="material-symbols-outlined">arrow_back</span>
+      Back to Events
+    </button>
+    <div class="header-title-group">
+      <h2>
+        <span class="material-symbols-outlined">schedule</span>
+        Call Times
+      </h2>
+      <div class="header-stats">
+        <span id="callTimesStats">0 call times</span>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Filter Bar -->
+  <div class="call-times-filters">
+    <div class="filter-row">
+      <div class="search-input-wrapper">
+        <span class="material-symbols-outlined search-icon">search</span>
+        <input type="text" id="callTimesSearch" placeholder="Search call times..." class="search-input">
       </div>
       
-      <!-- Call Times List -->
-      <div class="call-times-list-container">
-        <div class="call-times-table-wrapper">
-          <table class="call-times-table">
-            <thead>
-              <tr>
-                <th class="col-name">Name</th>
-                <th class="col-date">Date</th>
-                <th class="col-start">Start</th>
-                <th class="col-end">End</th>
-                <th class="col-hours">Hours</th>
-                <th class="col-role">Role</th>
-                <th class="col-notes">Notes</th>
-                <th class="col-event">Event</th>
-                <th class="col-location">Location</th>
-              </tr>
-            </thead>
-            <tbody id="callTimesTableBody">
-              <!-- Call times will be populated here -->
-            </tbody>
-          </table>
-        </div>
-        
-        <!-- Pagination -->
-        <div class="call-times-pagination" id="paginationContainer" style="display: none;">
-          <button class="pagination-btn" id="prevPageBtn" disabled>
-            <span class="material-symbols-outlined">chevron_left</span>
+      <div class="filter-buttons">
+        <!-- Status Filter -->
+        <div class="filter-dropdown-wrapper">
+          <button class="filter-btn" id="statusFilterBtn">
+            <span class="material-symbols-outlined">event</span>
+            <span id="statusFilterLabel">All</span>
+            <span class="material-symbols-outlined">expand_more</span>
           </button>
-          <span class="pagination-info" id="paginationInfo">Page 1 of 1</span>
-          <button class="pagination-btn" id="nextPageBtn" disabled>
-            <span class="material-symbols-outlined">chevron_right</span>
-          </button>
-        </div>
-        
-        <!-- Loading State -->
-        <div class="call-times-loading" id="callTimesLoading">
-          <span class="material-symbols-outlined spinning">sync</span>
-          <span>Loading call times...</span>
-        </div>
-        
-        <!-- Empty State -->
-        <div class="call-times-empty" id="callTimesEmpty" style="display: none;">
-          <span class="material-symbols-outlined">schedule</span>
-          <h3>No call times found</h3>
-          <p>Your crew call times will appear here</p>
-        </div>
-      </div>
-      
-    </main>
-    
-    <!-- Custom Date Range Modal -->
-    <div class="dark-modal" id="customDateModal">
-      <div class="dark-modal-content custom-date-modal-content">
-        <div class="dark-modal-header">
-          <h3><span class="material-symbols-outlined">date_range</span> Custom Date Range</h3>
-          <button class="modal-close" onclick="window.closeCustomDateModal && window.closeCustomDateModal()">
-            <span class="material-symbols-outlined">close</span>
-          </button>
-        </div>
-        <div class="modal-body-dark">
-          <div class="date-range-inputs">
-            <div class="form-group-dark">
-              <label for="customStartDate">Start Date</label>
-              <input type="date" id="customStartDate">
-            </div>
-            <div class="form-group-dark">
-              <label for="customEndDate">End Date</label>
-              <input type="date" id="customEndDate">
-            </div>
+          <div class="filter-dropdown" id="statusFilterDropdown">
+            <button class="filter-option" data-value="all">All</button>
+            <button class="filter-option" data-value="live">Live (Today)</button>
+            <button class="filter-option" data-value="upcoming">Upcoming</button>
+            <button class="filter-option" data-value="past">Past</button>
           </div>
         </div>
-        <div class="dark-modal-footer">
-          <button class="btn-secondary" onclick="window.closeCustomDateModal && window.closeCustomDateModal()">Cancel</button>
-          <button class="btn-primary" onclick="window.applyCustomDateRange && window.applyCustomDateRange()">Apply</button>
+        
+        <!-- Date Range Filter -->
+        <div class="filter-dropdown-wrapper">
+          <button class="filter-btn" id="dateFilterBtn">
+            <span class="material-symbols-outlined">date_range</span>
+            <span id="dateFilterLabel">All Time</span>
+            <span class="material-symbols-outlined">expand_more</span>
+          </button>
+          <div class="filter-dropdown" id="dateFilterDropdown">
+            <button class="filter-option" data-value="all">All Time</button>
+            <button class="filter-option" data-value="this-month">This Month</button>
+            <button class="filter-option" data-value="last-month">Last Month</button>
+            <button class="filter-option" data-value="last-3-months">Last 3 Months</button>
+            <button class="filter-option" data-value="this-year">This Year</button>
+            <button class="filter-option" data-value="last-year">Last Year</button>
+            <button class="filter-option" data-value="custom">Custom Range...</button>
+          </div>
+        </div>
+        
+        <!-- My Calls Filter (Admin only) -->
+        <div class="filter-dropdown-wrapper admin-only" id="myCallsFilterWrapper" style="display: none;">
+          <button class="filter-btn" id="myCallsFilterBtn">
+            <span class="material-symbols-outlined">person</span>
+            <span id="myCallsFilterLabel">All Crew</span>
+            <span class="material-symbols-outlined">expand_more</span>
+          </button>
+          <div class="filter-dropdown" id="myCallsFilterDropdown">
+            <button class="filter-option" data-value="all">All Crew</button>
+            <button class="filter-option" data-value="mine">My Calls Only</button>
+          </div>
         </div>
       </div>
     </div>
-    
+  </div>
+  
+  <!-- Call Times Table -->
+  <div class="call-times-table-container">
+    <table class="call-times-table">
+      <thead>
+        <tr>
+          <th class="col-name">Name</th>
+          <th class="col-date">Date</th>
+          <th class="col-start">Start</th>
+          <th class="col-end">End</th>
+          <th class="col-hours">Hours</th>
+          <th class="col-role">Role</th>
+          <th class="col-notes">Notes</th>
+          <th class="col-event">Event</th>
+          <th class="col-location">Location</th>
+        </tr>
+      </thead>
+      <tbody id="callTimesTableBody">
+        <!-- Call times will be populated here -->
+      </tbody>
+    </table>
+  </div>
+  
+  <!-- Pagination -->
+  <div class="call-times-pagination" id="paginationContainer" style="display: none;">
+    <button class="pagination-btn" id="prevPageBtn" disabled>
+      <span class="material-symbols-outlined">chevron_left</span>
+      Previous
+    </button>
+    <span class="pagination-info" id="paginationInfo">Page 1 of 1</span>
+    <button class="pagination-btn" id="nextPageBtn" disabled>
+      Next
+      <span class="material-symbols-outlined">chevron_right</span>
+    </button>
+  </div>
+  
+  <!-- Loading State -->
+  <div class="call-times-loading" id="callTimesLoading">
+    <span class="material-symbols-outlined spinning">sync</span>
+    <span>Loading call times...</span>
+  </div>
+  
+  <!-- Empty State -->
+  <div class="call-times-empty" id="callTimesEmpty" style="display: none;">
+    <span class="material-symbols-outlined">schedule</span>
+    <h3>No call times found</h3>
+    <p>Your crew call times will appear here</p>
+  </div>
+</div>
+
+<!-- Custom Date Range Modal -->
+<div class="modal-overlay" id="customDateModal" style="display: none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>
+        <span class="material-symbols-outlined">date_range</span>
+        Custom Date Range
+      </h3>
+      <button class="modal-close" id="closeCustomDateModal">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body">
+      <div class="date-range-inputs">
+        <div class="form-group">
+          <label for="customStartDate">Start Date</label>
+          <input type="date" id="customStartDate" class="date-input">
+        </div>
+        <div class="form-group">
+          <label for="customEndDate">End Date</label>
+          <input type="date" id="customEndDate" class="date-input">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-secondary" id="cancelCustomDateBtn">Cancel</button>
+      <button class="btn-primary" id="applyCustomDateBtn">Apply</button>
+    </div>
   </div>
 </div>
 
 <script src="js/call-times.js"></script>
-

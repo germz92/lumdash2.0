@@ -533,13 +533,13 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
         width: 100% !important;
     }
 
-    /* Time inputs on mobile - give them more space to prevent cutoff */
+    /* Time inputs on mobile - compact to save space */
     .schedule-page .program-entry input[type="time"] {
-        width: 120px !important;
-        min-width: 120px !important;
-        max-width: 120px !important;
+        width: 90px !important;
+        min-width: 90px !important;
+        max-width: 90px !important;
         font-size: 12px !important;
-        padding: 6px 4px !important;
+        padding: 4px 2px !important;
         border: 1px solid transparent !important;
         border-radius: 4px !important;
         background: transparent !important;
@@ -559,24 +559,41 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
         border-color: rgba(204, 0, 7, 0.2) !important;
     }
 
-    /* Mobile folder input styles */
+    /* Folder input on mobile - use remaining space flexibly */
     .schedule-page .program-entry .folder-input {
-        width: 55px !important;
-        min-width: 55px !important;
-        max-width: 55px !important;
+        width: auto !important;
+        min-width: 40px !important;
+        max-width: 70px !important;
         font-size: 11px !important;
-        padding: 6px 2px !important;
+        padding: 4px 4px !important;
         border: 1px solid #4a90e2 !important;
         border-radius: 4px !important;
         background: #e8f4fd !important;
         color: #2563eb !important;
         text-align: center !important;
+        flex-shrink: 1 !important;
+        font-weight: 500 !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
     }
 
     .schedule-page .program-entry .folder-input:focus {
         border-color: #2563eb !important;
         background-color: #dbeafe !important;
         box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15) !important;
+    }
+
+    /* Reduce gap between time inputs on mobile to save space */
+    .schedule-page .program-entry .time-fields-container {
+        gap: 4px !important;
+        overflow: hidden !important;
+    }
+
+    /* Folder container should shrink if needed to prevent overlap */
+    .schedule-page .program-entry .folder-field-container {
+        flex-shrink: 1 !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
     }
 
     /* Make checkboxes smaller on mobile since they don't need much room */
@@ -633,18 +650,6 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
     .schedule-page .delete-date-btn {
         width: auto !important;
         min-width: 0 !important;
-    }
-
-    /* Folder input should not be 100% width */
-    .schedule-page .program-entry .folder-input {
-        width: 55px !important;
-        min-width: 55px !important;
-        max-width: 55px !important;
-    }
-
-    /* Folder container styling */
-    .schedule-page .program-entry .folder-field-container {
-        flex-shrink: 0 !important;
     }
 
     .schedule-page .program-entry input.program-name {
@@ -790,17 +795,6 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
     font-size: 12px;
 }
 
-.schedule-page .program-entry input[type="time"]:focus {
-    border-color: #CC0007;
-    background-color: #fff;
-    box-shadow: 0 0 0 2px rgba(204, 0, 7, 0.1);
-}
-
-.schedule-page .program-entry input[type="time"]:hover {
-    background-color: rgba(204, 0, 7, 0.02);
-    border-color: rgba(204, 0, 7, 0.2);
-}
-
 /* Base styles for folder input - blue theme */
 .schedule-page .program-entry .folder-input {
     border: 1px solid #4a90e2 !important;
@@ -824,23 +818,15 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
     outline: none !important;
 }
 
-/* Folder icon styling */
-.schedule-page .program-entry .folder-icon {
-    color: #2563eb;
+.schedule-page .program-entry input[type="time"]:focus {
+    border-color: #CC0007;
+    background-color: #fff;
+    box-shadow: 0 0 0 2px rgba(204, 0, 7, 0.1);
 }
 
-/* Folder field container */
-.schedule-page .program-entry .folder-field-container {
-    display: flex;
-    align-items: center;
-    gap: 2px;
-    flex-shrink: 0;
-}
-
-/* Table view folder cell styling */
-.schedule-table-section .folder-cell {
-    color: #2563eb;
-    font-weight: 500;
+.schedule-page .program-entry input[type="time"]:hover {
+    background-color: rgba(204, 0, 7, 0.02);
+    border-color: rgba(204, 0, 7, 0.2);
 }
 
 .schedule-page .program-entry textarea[placeholder="Location"],
@@ -1737,8 +1723,207 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
   }
 }
 
+/* Extra small mobile screens - further optimize spacing */
+@media (max-width: 375px) {
+  /* Make time inputs slightly smaller on very small screens */
+  .schedule-page .program-entry input[type="time"] {
+    width: 100px !important;
+    min-width: 100px !important;
+    max-width: 100px !important;
+    font-size: 11px !important;
+    padding: 5px 2px !important;
+  }
+
+  /* Make folder input even more compact */
+  .schedule-page .program-entry .folder-input {
+    width: 48px !important;
+    min-width: 48px !important;
+    max-width: 48px !important;
+    font-size: 10px !important;
+    padding: 5px 1px !important;
+  }
+
+  /* Reduce gap even more */
+  .schedule-page .program-entry .time-fields-container {
+    gap: 3px !important;
+  }
+
+  /* Reduce checkbox size slightly */
+  .schedule-page .done-checkbox {
+    width: 16px !important;
+    height: 16px !important;
+    min-width: 16px !important;
+    min-height: 16px !important;
+  }
+
+  /* Reduce padding on program entries */
+  .schedule-page .program-entry {
+    padding: 10px !important;
+  }
+}
+
 /* Proper fix: Ensure delete buttons show for owners */
 .schedule-page .program-entry .entry-actions .delete-btn {
   display: inline-flex !important;
+}
+
+/* ============================================
+   SHARE SCHEDULE BUTTON & MODAL
+   ============================================ */
+
+/* Share button */
+.schedule-page .share-schedule-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  font-size: 14px;
+  border: none;
+  color: white;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(21, 101, 192, 0.15);
+  transition: background 0.2s, box-shadow 0.2s;
+}
+
+.schedule-page .share-schedule-btn:hover {
+  background-color: #0d47a1 !important;
+  box-shadow: 0 4px 16px rgba(21, 101, 192, 0.25);
+}
+
+/* Hide share button for non-owners/non-leads */
+body.no-owner-controls .schedule-page .share-schedule-btn {
+  display: none !important;
+}
+
+/* Fix entry-actions overlap on shared/view-only page (no delete button) */
+body.no-owner-controls .schedule-page .program-entry .entry-actions {
+  margin-top: 4px !important;
+}
+
+/* Hide share button on mobile */
+@media (max-width: 768px) {
+  .schedule-page .share-schedule-btn {
+    display: none !important;
+  }
+}
+
+/* Share modal overlay */
+.share-modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 10002;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.share-modal-content {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  max-width: 520px;
+  width: 90%;
+  overflow: hidden;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from { transform: translateY(30px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.share-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #eee;
+}
+
+.share-modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  display: flex;
+  align-items: center;
+}
+
+.share-modal-close {
+  background: none;
+  border: none;
+  font-size: 28px;
+  color: #999;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.share-modal-close:hover {
+  color: #333;
+}
+
+.share-modal-body {
+  padding: 24px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Photographer Autocomplete Styles */
+.photographer-autocomplete {
+  position: absolute;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  min-width: 150px;
+  font-family: 'Roboto', Arial, sans-serif;
+}
+
+.photographer-autocomplete > div {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.15s ease;
+}
+
+.photographer-autocomplete > div:last-child {
+  border-bottom: none;
+}
+
+.photographer-autocomplete > div:hover {
+  background-color: #f0f0f0;
+}
+
+.photographer-autocomplete::-webkit-scrollbar {
+  width: 8px;
+}
+
+.photographer-autocomplete::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.photographer-autocomplete::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+.photographer-autocomplete::-webkit-scrollbar-thumb:hover {
+  background: #555;
 }
   

@@ -1,747 +1,105 @@
-<!-- Dark Theme Events/Dashboard Page -->
-<link rel="stylesheet" href="css/theme-dark.css">
+<!-- Google Fonts Roboto -->
+<link href="https://fonts.googleapis.com/css?family=Roboto:400,500,700&display=swap" rel="stylesheet">
+<!-- Add Material Symbols -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
 
-<div class="dark-theme events-page">
-  <div class="dashboard-layout" id="eventsPageLayout">
-    
-    <!-- Sidebar will be injected here by sidebar-dashboard.js -->
-    
-    <!-- Main Content -->
-    <main class="dashboard-main">
-      
-      <!-- Header -->
-      <header class="dashboard-header">
-        <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu">
-          <span class="material-symbols-outlined">menu</span>
+  <div class="logo-wrapper">
+    <img src="assets/logo.png" alt="Logo" class="auth-logo">
+  </div>
+  <div class="card-container">
+    <div class="top-bar">
+      <h2 id="usernameDisplay">Welcome</h2>
+      <div class="top-bar-icons">
+        <button class="icon-btn" id="timesheetBtn" title="Timesheet">
+          <span class="material-symbols-outlined">schedule</span>
         </button>
-        
-        <div class="header-spacer"></div>
-        
-        <div class="header-actions">
-          <button class="header-icon-btn" id="notificationsBtn" title="Notifications">
-            <span class="material-symbols-outlined">notifications</span>
-          </button>
-          <div class="header-avatar" id="headerUserAvatar">
-            <div class="placeholder-avatar" id="headerAvatarPlaceholder">
-              <span class="material-symbols-outlined">person</span>
-            </div>
-            <img src="" alt="User" id="headerAvatarImg" style="display: none;">
-          </div>
-        </div>
-      </header>
-      
-      <!-- Content Area -->
-      <div class="dashboard-content">
-        
-        <!-- Welcome Section -->
-        <div class="welcome-section">
-          <h1 class="welcome-title" id="welcomeTitle">Welcome, User</h1>
-        </div>
-        
-        <!-- Events Section -->
-        <div class="events-section">
-          
-          <!-- Events Header with Tabs -->
-          <div class="events-header-dark">
-            <div class="events-tabs">
-              <button class="events-tab active" data-filter="upcoming">Upcoming</button>
-              <button class="events-tab" data-filter="live">Live</button>
-              <button class="events-tab" data-filter="past">Past</button>
-              <button class="events-tab" data-filter="all">All</button>
-            </div>
-            
-            <div class="events-filters">
-              <button class="filter-btn" id="statusFilterBtn">
-                <span class="material-symbols-outlined">filter_list</span>
-                <span id="statusFilterLabel">Active</span>
-                <span class="material-symbols-outlined">expand_more</span>
-              </button>
-              
-              <button class="filter-btn" id="dateFilterBtn">
-                <span class="material-symbols-outlined">calendar_today</span>
-                <span id="dateFilterLabel">All Dates</span>
-                <span class="material-symbols-outlined">expand_more</span>
-              </button>
-              
-              <button class="filter-btn admin-only-nav" id="ownerFilterBtn" style="display: none;">
-                <span class="material-symbols-outlined">person</span>
-                <span id="ownerFilterLabel">All Owners</span>
-                <span class="material-symbols-outlined">expand_more</span>
-              </button>
-              
-              
-              <button class="btn-create-event" id="createEventBtn">
-                CREATE EVENT
-              </button>
-            </div>
-          </div>
-          
-          <!-- Search Bar -->
-          <div class="events-search-bar">
-            <div class="search-input-wrapper">
-              <span class="material-symbols-outlined">search</span>
-              <input type="text" placeholder="Search events..." id="searchEventsInput">
-            </div>
-            
-            <div class="search-actions">
-              <button class="search-action-btn" title="AI Assistant" id="aiAssistantBtn">
-                <span class="material-symbols-outlined">auto_awesome</span>
-              </button>
-              <button class="search-action-btn" title="Settings" id="eventsSettingsBtn">
-                <span class="material-symbols-outlined">settings</span>
-              </button>
-            </div>
-          </div>
-          
-          <!-- Events Table -->
-          <div class="events-table-wrapper">
-            <table class="events-table">
-              <thead>
-                <tr>
-                  <th class="sortable" data-sort="name">
-                    Event <span class="material-symbols-outlined sort-icon">expand_more</span>
-                  </th>
-                  <th class="badges-col-header"></th>
-                  <th>Client</th>
-                  <th class="sortable" data-sort="date">
-                    Date <span class="material-symbols-outlined sort-icon">expand_more</span>
-                  </th>
-                  <th>Crew</th>
-                  <th>Tasks</th>
-                  <th>Owner</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody id="eventsTableBody">
-                <!-- Events will be dynamically inserted here -->
-              </tbody>
-            </table>
-          </div>
-          
-          <!-- Loading State -->
-          <div class="events-loading" id="eventsLoading" style="display: none;">
-            <div class="loading-spinner"></div>
-            <span>Loading events...</span>
-          </div>
-          
-          <!-- Empty State -->
-          <div class="events-empty" id="eventsEmpty" style="display: none;">
-            <span class="material-symbols-outlined empty-icon">event_busy</span>
-            <h3>No events found</h3>
-            <p>Create your first event to get started</p>
-            <button class="btn-create-event" onclick="showCreateModal()">CREATE EVENT</button>
-          </div>
-          
-          <!-- Footer -->
-          <div class="events-footer">
-            <span id="eventsCount">Showing 0 events</span>
-          </div>
-          
-        </div>
-        
+        <button class="icon-btn logout-btn" id="logoutBtn" title="Logout">
+          <span class="material-symbols-outlined">logout</span>
+        </button>
       </div>
-    </main>
-    
-  </div>
-</div>
+    </div>
 
-<!-- Status Filter Dropdown -->
-<div class="action-dropdown status-filter-dropdown" id="statusFilterDropdown">
-  <button class="action-item status-option active" data-status="active">
-    <span class="material-symbols-outlined">check_circle</span>
-    Active Events
-  </button>
-  <button class="action-item status-option" data-status="archived">
-    <span class="material-symbols-outlined">inventory_2</span>
-    Archived Events
-  </button>
-  <div class="dropdown-divider"></div>
-  <button class="action-item status-option" data-status="all">
-    <span class="material-symbols-outlined">select_all</span>
-    All Events
-  </button>
-</div>
+    <div class="events-header">
+      <div class="events-header-row1">
+        <h2>Your Events</h2>
+        <button id="calendarViewBtn" class="btn-calendar-toggle" title="Calendar View" style="background: transparent; border: none; color: #CC0007; border-radius: 10px; padding: 10px; display: flex; align-items: center; gap: 0; font-weight: 600; font-size: 22px; box-shadow: none; cursor: pointer; transition: background 0.2s, box-shadow 0.2s;">
+          <span class="material-symbols-outlined">calendar_month</span>
+        </button>
+      </div>
+      <div class="events-header-row2">
+        <div class="create-filter-group">
+          <select id="timeFilterDropdown" style="padding: 8px; font-size: 16px;">
+            <option value="all">All Events</option>
+            <option value="upcoming" selected>Upcoming</option>
+            <option value="past">Past</option>
+          </select>
+        <button class="btn-create">Create Event</button>
+        </div>
+        <div class="sort-search-group">
+          <select id="sortDropdown" style="padding: 8px; font-size: 16px;">
+            <option value="oldest" selected>Soonest First</option>
+            <option value="newest">Latest First</option>
+            <option value="title">Title A–Z</option>
+          </select>
+          <input id="searchEventsInput" type="text" placeholder="Search events..." style="padding: 8px; font-size: 16px; border-radius: 8px; border: 1px solid #ccc; min-width: 180px;" />
+        </div>
+        <button id="toggleArchivedBtn" class="btn-archived-toggle btn-outlined">Archived Events</button>
+      </div>
+    </div>
 
-<!-- Date Filter Dropdown -->
-<div class="action-dropdown date-filter-dropdown" id="dateFilterDropdown">
-  <button class="action-item date-option active" data-preset="all">
-    <span class="material-symbols-outlined">event_available</span>
-    All Dates
-  </button>
-  <button class="action-item date-option" data-preset="today">
-    <span class="material-symbols-outlined">today</span>
-    Today
-  </button>
-  <button class="action-item date-option" data-preset="week">
-    <span class="material-symbols-outlined">date_range</span>
-    This Week
-  </button>
-  <button class="action-item date-option" data-preset="month">
-    <span class="material-symbols-outlined">calendar_month</span>
-    This Month
-  </button>
-  <div class="dropdown-divider"></div>
-  <button class="action-item date-option" data-preset="custom" id="customDateToggle">
-    <span class="material-symbols-outlined">edit_calendar</span>
-    Custom Range
-  </button>
-  <div class="custom-date-inputs" id="customDateRange" style="display: none;">
-    <div class="date-input-group">
-      <label>Start</label>
-      <input id="dateFilterStart" type="date" autocomplete="off">
-    </div>
-    <div class="date-input-group">
-      <label>End</label>
-      <input id="dateFilterEnd" type="date" autocomplete="off">
-    </div>
-    <button class="apply-custom-date" onclick="applyCustomDateFilter()">Apply</button>
+    <div id="tableList" class="table-cards"></div>
+    <div id="calendarViewContainer" style="display: none; margin-top: 32px;"></div>
   </div>
-</div>
-
-<!-- Owner Filter Dropdown -->
-<div class="action-dropdown owner-filter-dropdown" id="ownerFilterDropdown">
-  <button class="action-item owner-option active" data-owner="all">
-    <span class="material-symbols-outlined">groups</span>
-    All Owners
-  </button>
-  <button class="action-item owner-option" data-owner="mine">
-    <span class="material-symbols-outlined">person</span>
-    My Events
-  </button>
-  <div class="dropdown-divider"></div>
-  <div id="ownerOptionsList">
-    <!-- Dynamic owner options will be inserted here -->
-  </div>
-</div>
-
-<!-- Create/Edit Event Modal -->
-<div id="createModal" class="dark-modal">
-  <div class="dark-modal-content">
-    <div class="modal-header-dark">
-      <h3 id="eventModalTitle">Create New Event</h3>
-      <button class="modal-close-btn" onclick="hideCreateModal()">
-        <span class="material-symbols-outlined">close</span>
-      </button>
-    </div>
-    <div class="modal-body-dark">
-      <input type="hidden" id="editEventId" value="">
-      <div class="form-group-dark">
-        <label for="newTitle">Event Name</label>
-        <input id="newTitle" type="text" placeholder="Enter event name" autocomplete="off">
-      </div>
-      <div class="form-group-dark">
-        <label for="newClient">Client Name</label>
-        <input id="newClient" type="text" list="clientDatalist" placeholder="Select or enter client name" autocomplete="off">
-        <datalist id="clientDatalist">
-          <!-- Populated dynamically with existing clients -->
-        </datalist>
-      </div>
-      <div class="form-row">
-        <div class="form-group-dark">
-          <label for="newCity">City</label>
-          <input id="newCity" type="text" placeholder="e.g. Los Angeles" autocomplete="off">
-        </div>
-        <div class="form-group-dark">
-          <label for="newState">State</label>
-          <input id="newState" type="text" placeholder="e.g. CA" autocomplete="off">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group-dark">
-          <label for="newStart">Start Date</label>
-          <input id="newStart" type="date">
-        </div>
-        <div class="form-group-dark">
-          <label for="newEnd">End Date</label>
-          <input id="newEnd" type="date">
-        </div>
-      </div>
-    </div>
-    <div class="modal-footer-dark">
-      <button class="btn-secondary" onclick="hideCreateModal()">Cancel</button>
-      <button class="btn-primary" id="eventModalSubmitBtn" onclick="submitCreate()">Create Event</button>
-    </div>
-  </div>
-</div>
 
 <!-- Share Modal -->
-<div id="shareModal" class="dark-modal">
-  <div class="dark-modal-content">
-    <div class="modal-header-dark">
-      <h3><span class="material-symbols-outlined" style="vertical-align: middle; margin-right: 8px; color: var(--brand-red);">group</span>Share Event</h3>
-      <button class="modal-close-btn" onclick="closeModal()">
-        <span class="material-symbols-outlined">close</span>
-      </button>
-    </div>
-    <div class="modal-body-dark">
-      <!-- Owners Section -->
-      <div class="share-section" id="ownerSection">
-        <div class="share-section-header">
-          <div class="share-section-icon owner">
-            <span class="material-symbols-outlined">shield_person</span>
-          </div>
-          <span class="share-section-title">Owners</span>
-          <span class="share-section-count" id="ownerCount">0</span>
-        </div>
-        <div id="ownerList" class="share-list">
-          <ul></ul>
-        </div>
+<div id="shareModal" class="modal">
+  <div class="modal-content">
+    <h3>Share Event</h3>
+
+    <!-- Owners List -->
+    <div id="ownerList" style="margin-bottom: 10px;">
+      <strong>Owners:</strong>
+      <ul style="margin: 5px 0; padding-left: 20px;"></ul>
     </div>
 
-      <!-- Leads Section -->
-      <div class="share-section" id="leadSection">
-        <div class="share-section-header">
-          <div class="share-section-icon lead">
-            <span class="material-symbols-outlined">star</span>
-          </div>
-          <span class="share-section-title">Leads</span>
-          <span class="share-section-count" id="leadCount">0</span>
-        </div>
-        <div id="leadList" class="share-list">
-          <ul></ul>
-        </div>
+    <!-- Leads List -->
+    <div id="leadList" style="margin-bottom: 10px;">
+      <strong>Leads:</strong>
+      <ul style="margin: 5px 0; padding-left: 20px;"></ul>
     </div>
 
-      <!-- Shared With Section -->
-      <div class="share-section" id="sharedSection">
-        <div class="share-section-header">
-          <div class="share-section-icon shared">
-            <span class="material-symbols-outlined">people</span>
-          </div>
-          <span class="share-section-title">Shared With</span>
-          <span class="share-section-count" id="sharedCount">0</span>
-        </div>
-        <div id="sharedList" class="share-list">
-          <ul></ul>
-        </div>
-      </div>
+    <!-- Shared With List -->
+    <div id="sharedList" style="margin-bottom: 10px;">
+      <strong>Shared With:</strong>
+      <ul style="margin: 5px 0; padding-left: 20px;"></ul>
     </div>
 
-    <!-- Add People Section -->
-    <div class="share-add-section">
-      <div class="form-group-dark">
-        <label>
-          <span class="material-symbols-outlined">person_add</span>
-          Add People
-        </label>
-        <div id="userDropdownContainer" class="share-user-dropdown">
-          <button type="button" class="share-dropdown-trigger" id="userDropdownTrigger">
-            <span class="dropdown-value placeholder">Select a person...</span>
-            <span class="material-symbols-outlined dropdown-arrow">expand_less</span>
-          </button>
-          <div class="share-dropdown-menu" id="userDropdownMenu">
-            <div class="share-dropdown-search">
-              <input type="text" id="userSearchInput" placeholder="Search by name or email..." autocomplete="off">
-            </div>
-            <div class="share-dropdown-options" id="userDropdownOptions">
-              <!-- Options populated by JS -->
-            </div>
-          </div>
-        </div>
+    <!-- User Input with Autofill -->
+    <div id="userAutofillContainer" style="position: relative; margin-bottom: 10px;">
+      <input id="shareEmail" placeholder="Type name or email to search users..." autocomplete="off">
+      <div id="userSuggestions" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ccc; border-top: none; border-radius: 0 0 4px 4px; max-height: 200px; overflow-y: auto; z-index: 1000; display: none; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
     </div>
     
     <!-- Selected Users Display -->
-      <div id="selectedUsersContainer">
-        <div id="selectedUsersList" class="selected-users"></div>
-      </div>
+    <div id="selectedUsersContainer" style="margin-bottom: 10px;">
+      <div id="selectedUsersList" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;"></div>
     </div>
 
-    <div class="modal-footer-dark">
-      <button class="btn-secondary" onclick="closeModal()">Cancel</button>
-      <button class="btn-crew-share" id="shareWithCrewBtn" onclick="shareWithCrew()">
-        <span class="material-symbols-outlined" style="font-size: 18px; margin-right: 6px;">groups</span>
-        Share with Crew
-      </button>
-      <button class="btn-primary" onclick="submitShare()">
-        <span class="material-symbols-outlined" style="font-size: 18px; margin-right: 6px;">send</span>
-        Share
-      </button>
-    </div>
+    <button onclick="submitShare()">Share</button>
+    <button onclick="closeModal()">Close</button>
   </div>
 </div>
 
-<!-- Toast Notification Container -->
-<div id="toastContainer" class="toast-container"></div>
-
-<!-- Confirmation Modal -->
-<div id="confirmModal" class="dark-modal confirm-modal">
-  <div class="dark-modal-content confirm-modal-content">
-    <div class="confirm-modal-icon" id="confirmModalIcon">
-      <span class="material-symbols-outlined">help</span>
-    </div>
-    <h3 id="confirmModalTitle">Confirm Action</h3>
-    <p id="confirmModalMessage">Are you sure you want to proceed?</p>
-    <div class="confirm-modal-actions">
-      <button class="btn-secondary" id="confirmModalCancel">Cancel</button>
-      <button class="btn-danger" id="confirmModalConfirm">Confirm</button>
+  <!-- Create Modal -->
+  <div id="createModal" class="modal">
+    <div class="modal-content">
+      <h3>Create New Event</h3>
+      <input id="newTitle" placeholder="Event Name">
+      <input id="newClient" placeholder="Client Name">
+      <input id="newStart" type="date">
+      <input id="newEnd" type="date">
+      <button onclick="submitCreate()">Create</button>
+      <button onclick="hideCreateModal()">Close</button>
     </div>
   </div>
-</div>
-
-<script>
-console.log('✅ events.html (dark theme) loaded');
-
-// Row accent colors for visual variety
-const rowAccentColors = [
-  'var(--accent-blue)',
-  'var(--accent-red)', 
-  'var(--accent-green)',
-  'var(--accent-orange)',
-  'var(--accent-purple)',
-  'var(--accent-cyan)'
-];
-
-// Initialize dark theme events page
-// Note: This runs on every SPA navigation since DOM elements are replaced each time
-
-// Call immediately for SPA navigation (DOM is already ready when script runs)
-setTimeout(initializeDarkTheme, 0);
-
-function initializeDarkTheme() {
-  console.log('🎨 Initializing dark theme dashboard...');
-  
-  // Setup event tabs with guards
-  const tabs = document.querySelectorAll('.events-tab');
-  tabs.forEach(tab => {
-    if (!tab._listenerAttached) {
-    tab.addEventListener('click', function() {
-      tabs.forEach(t => t.classList.remove('active'));
-      this.classList.add('active');
-      filterEvents(this.dataset.filter);
-    });
-      tab._listenerAttached = true;
-  }
-  });
-  
-  // Create event button is set up in events.js
-  
-  // Use shared dashboard sidebar component
-  if (typeof window.initDashboardSidebar === 'function') {
-    window.initDashboardSidebar();
-      }
-  
-  // Setup search with guard
-  const searchInput = document.getElementById('searchEventsInput');
-  if (searchInput && !searchInput._listenerAttached) {
-    searchInput.addEventListener('input', debounce(function() {
-      searchEvents(this.value);
-    }, 300));
-    searchInput._listenerAttached = true;
-  }
-}
-
-function filterEvents(filter) {
-  console.log('Filtering events by:', filter);
-  // This integrates with the existing events.js logic
-  if (typeof loadTables === 'function') {
-    loadTables();
-  }
-}
-
-function searchEvents(query) {
-  console.log('Searching events:', query);
-  // Implement search logic
-}
-
-function debounce(func, wait) {
-  let timeout;
-  return function executedFunction(...args) {
-    const later = () => {
-      clearTimeout(timeout);
-      func.apply(this, args);
-    };
-    clearTimeout(timeout);
-    timeout = setTimeout(later, wait);
-  };
-}
-
-// Render event row for the table
-function renderEventRow(event, index) {
-  const accentColor = rowAccentColors[index % rowAccentColors.length];
-  const crewCount = event.crewCount || event.crew?.length || 0;
-  const folderCount = event.folderCount || 0;
-  const documentCount = event.documentCount || 0;
-  
-  // Get owner names for display
-  const ownerNames = event.ownerNames || [];
-  const ownerDisplay = ownerNames.length > 0 ? ownerNames[0] : '—';
-  const hasMultipleOwners = ownerNames.length > 1;
-  const ownerListHtml = ownerNames.map(name => `<div class="owner-dropdown-item">${name}</div>`).join('');
-  
-  // Format date range
-  const startDate = event.startDate ? new Date(event.startDate) : null;
-  const endDate = event.endDate ? new Date(event.endDate) : null;
-  const dateStr = formatDateRange(startDate, endDate);
-  
-  return `
-    <tr class="event-row" style="--row-accent: ${accentColor};" data-event-id="${event._id}">
-      <td>
-        <div class="event-name-cell">
-          <div class="event-name">
-            <a href="#" class="event-name-link" onclick="openEvent('${event._id}'); return false;">
-              ${event.name || event.title || 'Untitled Event'}
-            </a>
-            <span class="material-symbols-outlined edit-icon">edit</span>
-          </div>
-          <div class="event-badges">
-            ${crewCount > 0 ? `
-              <span class="event-badge crew">
-                <span class="material-symbols-outlined">arrow_upward</span>
-                Crew
-              </span>
-            ` : ''}
-            <span class="event-badge folders">
-              <span class="material-symbols-outlined">folder</span>
-              ${folderCount}
-            </span>
-          </div>
-        </div>
-      </td>
-      <td>
-        <span class="event-client ${event.client ? 'clickable' : ''}" onclick="${event.client ? `filterByClient('${event.client.replace(/'/g, "\\'")}'); event.stopPropagation();` : ''}">${event.client || '—'}</span>
-        <div class="event-stats">
-          <span><span class="material-symbols-outlined">person</span> ${crewCount}</span>
-          <span><span class="material-symbols-outlined">folder</span> ${folderCount}</span>
-          <span><span class="material-symbols-outlined">description</span> ${documentCount}</span>
-        </div>
-      </td>
-      <td>
-        <span class="event-date">${dateStr}</span>
-      </td>
-      <td>
-        <div class="crew-avatars">
-          ${renderCrewAvatars(event.crew || [], crewCount)}
-        </div>
-      </td>
-      <td>
-        <div class="event-owner ${hasMultipleOwners ? 'has-dropdown' : ''}" onclick="${hasMultipleOwners ? 'event.stopPropagation(); toggleOwnerDropdown(this)' : ''}">
-          <span class="owner-name">${ownerDisplay}</span>
-          ${hasMultipleOwners ? `<span class="owner-more">+${ownerNames.length - 1}</span>` : ''}
-          ${hasMultipleOwners ? `<div class="owner-dropdown">${ownerListHtml}</div>` : ''}
-        </div>
-      </td>
-      <td>
-        <div class="event-actions">
-          <button class="action-menu-btn" onclick="toggleEventMenu(event, '${event._id}')">
-            <span class="material-symbols-outlined">more_horiz</span>
-          </button>
-          <div class="action-dropdown" id="menu-${event._id}">
-            <button class="action-item" onclick="openEvent('${event._id}')">
-              <span class="material-symbols-outlined">arrow_forward</span>
-              Open
-            </button>
-            <button class="action-item" onclick="addToCalendar('${event._id}')">
-              <span class="material-symbols-outlined">calendar_add_on</span>
-              Add to Calendar
-            </button>
-            <button class="action-item" onclick="archiveEvent('${event._id}')">
-              <span class="material-symbols-outlined">archive</span>
-              Archive
-            </button>
-            ${(() => {
-              try {
-                const tkn = localStorage.getItem('token');
-                const p = JSON.parse(atob(tkn.split('.')[1]));
-                const uid = p.id || p._id || p.userId;
-                const alreadyOwner = Array.isArray(event.owners) && event.owners.some(o => (typeof o === 'string' ? o : (o && o._id)) === uid);
-                if (p.role === 'admin' && !alreadyOwner) {
-                  return `<button class="action-item" onclick="addMeAsOwner('${event._id}')"><span class="material-symbols-outlined">person_add</span> Add Me as Owner</button>`;
-                }
-              } catch(e) {}
-              return '';
-            })()}
-          </div>
-        </div>
-      </td>
-    </tr>
-  `;
-}
-
-function getEventStatus(event) {
-  const now = new Date();
-  const start = event.startDate ? new Date(event.startDate) : null;
-  const end = event.endDate ? new Date(event.endDate) : null;
-  
-  if (event.isLive || (start && end && now >= start && now <= end)) {
-    return { label: 'LIVE', class: 'live' };
-  } else if (start && now < start) {
-    return { label: 'Upcoming', class: 'upcoming' };
-  } else {
-    return { label: 'Past', class: 'past' };
-  }
-}
-
-function formatDateRange(start, end) {
-  if (!start) return '—';
-  
-  const options = { weekday: 'short', month: 'short', day: 'numeric' };
-  const startStr = start.toLocaleDateString('en-US', options);
-  
-  if (!end || start.getTime() === end.getTime()) {
-    return startStr;
-  }
-  
-  const endOptions = { weekday: 'short', month: 'short', day: 'numeric' };
-  const endStr = end.toLocaleDateString('en-US', endOptions);
-  
-  return `${startStr} – ${endStr}`;
-}
-
-function renderCrewAvatars(crew, totalCount) {
-  const maxVisible = 4;
-  const visibleCrew = crew.slice(0, maxVisible);
-  const overflow = totalCount - maxVisible;
-  
-  let html = '<div class="avatar-stack">';
-  
-  if (visibleCrew.length === 0 && totalCount > 0) {
-    // Show placeholder avatars based on count
-    for (let i = 0; i < Math.min(totalCount, maxVisible); i++) {
-      html += `
-        <div class="crew-avatar placeholder">
-          <img src="https://ui-avatars.com/api/?name=C${i+1}&background=2a2a2a&color=888&size=32" alt="Crew">
-        </div>
-      `;
-    }
-  } else if (visibleCrew.length > 0) {
-    visibleCrew.forEach(member => {
-      const name = member.name || member.email || 'Crew';
-      html += `
-        <div class="crew-avatar">
-          <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=2a2a2a&color=fff&size=32" alt="${name}" title="${name}">
-        </div>
-      `;
-    });
-  }
-  
-  html += '</div>';
-  
-  if (overflow > 0) {
-    html += `
-      <span class="crew-overflow">
-        <span class="material-symbols-outlined">chevron_right</span>
-      </span>
-      <span class="crew-count">
-        <span class="material-symbols-outlined">folder</span>
-        ${totalCount}
-      </span>
-    `;
-  }
-  
-  return html;
-}
-
-function toggleEventMenu(e, eventId) {
-  e.stopPropagation();
-  
-  // Close all other menus
-  document.querySelectorAll('.action-dropdown').forEach(menu => {
-    if (menu.id !== `menu-${eventId}`) {
-      menu.classList.remove('show');
-    }
-  });
-  
-  // Toggle this menu
-  const menu = document.getElementById(`menu-${eventId}`);
-  if (menu) {
-    menu.classList.toggle('show');
-  }
-}
-
-function openEvent(eventId) {
-  // Navigate to the event
-  localStorage.setItem('eventId', eventId);
-  if (window.navigate) {
-    window.navigate('general', eventId);
-  } else {
-    window.location.href = `/dashboard.html#general?id=${eventId}`;
-  }
-}
-
-function addToCalendar(eventId) {
-  if (typeof showAddToCalendarModal === 'function') {
-    showAddToCalendarModal(eventId);
-  } else {
-    console.log('Add to calendar:', eventId);
-  }
-}
-
-function archiveEvent(eventId) {
-  if (typeof archiveTableCard === 'function') {
-    archiveTableCard(eventId);
-  } else {
-    console.log('Archive event:', eventId);
-  }
-}
-
-// Modal functions are defined in events.js
-
-// Close menus when clicking outside
-document.addEventListener('click', function() {
-  document.querySelectorAll('.action-dropdown:not(.user-menu-dropdown)').forEach(menu => {
-    menu.classList.remove('show');
-  });
-});
-
-// Close modal on escape key
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') {
-    hideCreateModal();
-    closeModal();
-    // Close any open dropdowns
-    document.querySelectorAll('.action-dropdown.show').forEach(d => d.classList.remove('show'));
-  }
-});
-
-async function addMeAsOwner(eventId) {
-  const token = localStorage.getItem('token');
-  const apiBase = typeof API_BASE !== 'undefined' ? API_BASE : (window.API_BASE || '');
-  try {
-    const res = await fetch(`${apiBase}/api/tables/${eventId}/add-me-as-owner`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: token
-      }
-    });
-    const data = await res.json();
-    if (res.ok) {
-      if (typeof showToast === 'function') showToast('You are now an owner of this event!', 'success');
-      if (typeof loadTables === 'function') loadTables();
-    } else {
-      if (typeof showToast === 'function') showToast(data.error || 'Failed to add as owner', 'error');
-    }
-  } catch (err) {
-    console.error('Error adding self as owner:', err);
-    if (typeof showToast === 'function') showToast('Failed to add as owner. Please try again.', 'error');
-  }
-}
-
-// Make functions globally available (modal functions are in events.js)
-window.renderEventRow = renderEventRow;
-window.openEvent = openEvent;
-window.toggleEventMenu = toggleEventMenu;
-window.archiveEvent = archiveEvent;
-window.addToCalendar = addToCalendar;
-window.addMeAsOwner = addMeAsOwner;
-
-// Initialize Luma AI chat for dashboard
-// Run immediately since this script runs after page injection in SPA
-setTimeout(() => {
-  if (typeof window.initGlobalChat === 'function') {
-    window.initGlobalChat();
-  } else if (typeof window.ensureChatInitialized === 'function') {
-    window.ensureChatInitialized();
-  }
-}, 300);
-
-// Also handle AI Assistant button in the search bar
-const aiAssistantBtn = document.getElementById('aiAssistantBtn');
-if (aiAssistantBtn) {
-  aiAssistantBtn.addEventListener('click', function() {
-    if (typeof window.toggleChat === 'function') {
-      window.toggleChat();
-    }
-  });
-}
-</script>
+  <script>console.log('✅ events.html loaded');</script>

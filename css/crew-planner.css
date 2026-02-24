@@ -324,29 +324,6 @@
   color: #495057;
 }
 
-/* Reorder buttons for moving events left/right */
-.crew-planner-page .reorder-btn {
-  color: #6c757d;
-  font-size: 18px;
-  padding: 2px;
-  min-width: 24px;
-  height: 24px;
-}
-
-.crew-planner-page .reorder-btn:hover:not(.disabled) {
-  background: rgba(108, 117, 125, 0.15);
-  color: #495057;
-}
-
-.crew-planner-page .reorder-btn.disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-
-.crew-planner-page .reorder-btn .material-symbols-outlined {
-  font-size: 20px;
-}
-
 .crew-planner-page .crew-delete-btn {
   font-size: 16px;
   padding: 2px;
@@ -396,37 +373,6 @@
   height: 100%;
   min-height: 32px;
   align-items: center;
-  overflow: hidden;
-}
-
-/* Fix for role dropdown text overflow */
-.crew-planner-page .crew-cell .custom-dropdown {
-  min-width: 0;
-  flex: 1;
-}
-
-.crew-planner-page .crew-cell .custom-dropdown-trigger {
-  min-width: 0;
-  padding: 6px 8px;
-}
-
-.crew-planner-page .crew-cell .custom-dropdown-trigger .dropdown-value {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  min-width: 0;
-}
-
-.crew-planner-page .crew-cell .custom-dropdown-trigger .dropdown-arrow {
-  font-size: 16px;
-  flex-shrink: 0;
-  margin-left: 4px;
-}
-
-/* Ensure delete button never gets pushed out */
-.crew-planner-page .crew-delete-btn {
-  flex-shrink: 0;
 }
 
 /* Empty State */
@@ -684,73 +630,4 @@
 .crew-planner-page .btn-crew-planner.btn-outlined:hover {
   background-color: rgba(0,0,0, 0.08);
   color: var(--md-sys-color-on-surface);
-}
-
-/* Crew Planner Dropdown Menu - ensure proper scrolling */
-.crew-planner-page .custom-dropdown-menu {
-  position: fixed;
-  z-index: 99999;
-  background: #1a1a1a;
-  border: 1px solid #333;
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.crew-planner-page .custom-dropdown-menu::-webkit-scrollbar {
-  width: 6px;
-}
-
-.crew-planner-page .custom-dropdown-menu::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.crew-planner-page .custom-dropdown-menu::-webkit-scrollbar-thumb {
-  background: #444;
-  border-radius: 3px;
-}
-
-.crew-planner-page .custom-dropdown-menu::-webkit-scrollbar-thumb:hover {
-  background: #555;
-}
-
-.crew-planner-page .custom-dropdown-search {
-  position: sticky;
-  top: 0;
-  background: #1a1a1a;
-  z-index: 1;
-  padding: 8px;
-  border-bottom: 1px solid #333;
-}
-
-.crew-planner-page .custom-dropdown-options {
-  padding: 4px 0;
-}
-
-.crew-planner-page .custom-dropdown-option {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  padding: 10px 14px;
-  background: transparent;
-  border: none;
-  color: #e0e0e0;
-  font-size: 14px;
-  cursor: pointer;
-  text-align: left;
-}
-
-.crew-planner-page .custom-dropdown-option:hover {
-  background: #2a2a2a;
-}
-
-.crew-planner-page .custom-dropdown-option.selected {
-  background: rgba(204, 0, 7, 0.15);
-  color: #cc0007;
-}
-
-.crew-planner-page .custom-dropdown-option.add-new {
-  border-top: 1px solid #333;
-  color: #cc0007;
 }

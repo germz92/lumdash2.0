@@ -343,4 +343,60 @@
   color: inherit !important;
   vertical-align: text-bottom !important;
 }
+
+/* Booked flight row styling */
+.travel-page tr.booked-row td {
+  background: #f8f9ff !important;
+  color: #555;
+}
+
+.travel-page tr.booked-row:hover td {
+  background: #eef1ff !important;
+}
+
+/* Source badge (Booked) */
+.source-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
+.source-badge.booked {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
+}
+
+/* Flight type badges (OUT/RET) */
+.flight-type-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  white-space: nowrap;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
+.flight-type-badge.outbound {
+  background: #e3f2fd;
+  color: #1565c0;
+  border: 1px solid #90caf9;
+}
+
+.flight-type-badge.return {
+  background: #fff3e0;
+  color: #e65100;
+  border: 1px solid #ffcc80;
+}
     

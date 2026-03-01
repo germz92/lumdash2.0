@@ -5726,11 +5726,14 @@ app.get('/api/gear-packages/event/:eventId', authenticate, async (req, res) => {
       });
     }
 
-    // If no valid items found, return empty result
+    // If no valid reserved items found, still return manual items
     if (!validItems || validItems.length === 0) {
-      console.log(`[GEAR LOAD] No valid reserved items found, returning empty array`);
+      console.log(`[GEAR LOAD] No valid reserved items found, checking for manual items`);
+      const currentGearList = table.gear?.gearLists?.find(list => list.name === (listName || 'Main List'));
+      const manualItems = currentGearList?.manualItems || [];
       return res.json({ 
         reservedItems: [],
+        manualItems: manualItems,
         userPermissions: {
           canReserve: table.owners.includes(userId) || req.user.role === 'admin',
           canManageLists: table.owners.includes(userId) || req.user.role === 'admin',
@@ -5767,6 +5770,70 @@ app.get('/api/gear-packages/event/:eventId', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Error getting reserved items for event:', error);
     res.status(500).json({ error: 'Failed to get reserved items' });
+  }
+});
+
+// Get packing progress for ALL gear lists in an event
+app.get('/api/gear-packages/event/:eventId/all-progress', authenticate, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+
+    const table = await Table.findById(eventId);
+    if (!table) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    if (!hasEventReadAccess(table, req.user)) {
+      return res.status(403).json({ error: 'Not authorized to access this event' });
+    }
+
+    const gearLists = table.gear?.gearLists || [];
+    const listNames = gearLists.map(l => l.name);
+
+    // If no lists exist, ensure Main List is included
+    if (listNames.length === 0) {
+      listNames.push('Main List');
+    }
+
+    // Aggregate reserved items progress per list
+    const progressAgg = await ReservedGearItem.aggregate([
+      { $match: { eventId: table._id } },
+      { $group: {
+        _id: '$listName',
+        total: { $sum: 1 },
+        packed: { $sum: { $cond: ['$isPacked', 1, 0] } }
+      }}
+    ]);
+
+    // Build a map from aggregation results
+    const progressMap = {};
+    progressAgg.forEach(item => {
+      progressMap[item._id] = { total: item.total, packed: item.packed };
+    });
+
+    // Build per-list progress including manual items
+    const lists = listNames.map(name => {
+      const reservedProgress = progressMap[name] || { total: 0, packed: 0 };
+      const gearList = gearLists.find(l => l.name === name);
+      const manualItems = gearList?.manualItems || [];
+      const manualTotal = manualItems.length;
+      const manualPacked = manualItems.filter(m => m.completed).length;
+
+      return {
+        name,
+        displayName: gearList?.displayName || null,
+        total: reservedProgress.total + manualTotal,
+        packed: reservedProgress.packed + manualPacked
+      };
+    });
+
+    const overallTotal = lists.reduce((sum, l) => sum + l.total, 0);
+    const overallPacked = lists.reduce((sum, l) => sum + l.packed, 0);
+
+    res.json({ lists, overallTotal, overallPacked });
+  } catch (error) {
+    console.error('Error getting all-lists progress:', error);
+    res.status(500).json({ error: 'Failed to get progress' });
   }
 });
 
@@ -6042,15 +6109,44 @@ app.put('/api/tables/:eventId/gear-lists/:listName', authenticate, async (req, r
       return res.status(404).json({ error: 'Gear list not found' });
     }
     
-    // Check if new name already exists
-    const existingList = table.gear.gearLists.find(list => list.name === newName.trim());
-    if (existingList && existingList.name !== listName) {
+    // For "Main List", only update the displayName alias (keeps backend stable)
+    if (listName === 'Main List') {
+      const trimmedName = newName.trim();
+      // Check display name doesn't clash with another list's real name or display name
+      const clash = table.gear.gearLists.find(list => 
+        list.name !== 'Main List' && (list.name === trimmedName || list.displayName === trimmedName)
+      );
+      if (clash) {
+        return res.status(409).json({ error: 'A list with this name already exists' });
+      }
+      
+      // If renaming back to "Main List", clear the displayName
+      table.gear.gearLists[listIndex].displayName = trimmedName === 'Main List' ? null : trimmedName;
+      await table.save();
+      
+      return res.json({ 
+        message: 'Gear list display name updated successfully', 
+        oldName: listName, 
+        newName: listName, // Internal name stays the same
+        displayName: table.gear.gearLists[listIndex].displayName 
+      });
+    }
+    
+    // For non-Main lists, rename normally
+    // Check if new name already exists (check both name and displayName)
+    const existingList = table.gear.gearLists.find(list => {
+      if (list.name === listName) return false; // Skip self
+      return list.name === newName.trim() || list.displayName === newName.trim();
+    });
+    if (existingList) {
       return res.status(409).json({ error: 'A list with this name already exists' });
     }
     
     // Update list name
     const oldName = table.gear.gearLists[listIndex].name;
     table.gear.gearLists[listIndex].name = newName.trim();
+    // Clear displayName since the real name is changing
+    table.gear.gearLists[listIndex].displayName = null;
     
     // Update current list if it was the renamed one
     if (table.gear.currentList === oldName) {

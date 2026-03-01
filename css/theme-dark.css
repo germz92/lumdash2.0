@@ -377,12 +377,57 @@ body:has(.events-page) {
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: box-shadow 0.2s ease;
+}
+
+.sidebar-user-avatar:hover {
+  box-shadow: 0 0 0 2px var(--accent-primary, #6366f1);
 }
 
 .sidebar-user-avatar img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* Avatar upload overlay */
+.avatar-upload-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  border-radius: var(--radius-full);
+  pointer-events: none;
+}
+
+.avatar-upload-overlay .material-symbols-outlined {
+  font-size: 18px;
+  color: #fff;
+}
+
+.sidebar-user-avatar:hover .avatar-upload-overlay {
+  opacity: 1;
+}
+
+/* Avatar uploading spinner */
+.sidebar-user-avatar.uploading .avatar-upload-overlay {
+  opacity: 1;
+}
+
+.sidebar-user-avatar.uploading .avatar-upload-overlay .material-symbols-outlined {
+  animation: avatar-spin 1s linear infinite;
+}
+
+@keyframes avatar-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .sidebar-user-info {
@@ -579,20 +624,6 @@ body:has(.events-page) {
 .header-icon-btn:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
-}
-
-.header-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-full);
-  overflow: hidden;
-  cursor: pointer;
-}
-
-.header-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
 }
 
 /* Content Area */
@@ -1807,22 +1838,6 @@ body:has(.events-page) {
 
 .crew-avatar .avatar-icon {
   font-size: 18px;
-  color: var(--text-tertiary);
-}
-
-/* Placeholder avatar for header and sidebar */
-.placeholder-avatar {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, var(--bg-active) 0%, var(--bg-hover) 100%);
-  border-radius: var(--radius-full);
-}
-
-.placeholder-avatar .material-symbols-outlined {
-  font-size: 20px;
   color: var(--text-tertiary);
 }
 
@@ -4968,6 +4983,14 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: box-shadow 0.2s ease;
+}
+
+.general-sidebar .sidebar-user-avatar:hover {
+  box-shadow: 0 0 0 2px var(--accent-primary, #6366f1);
 }
 
 .general-sidebar .sidebar-user-avatar img {
@@ -15087,28 +15110,6 @@ body:has(.shotlist-page.dark-theme) #bottomNav {
   border-color: var(--border-strong);
 }
 
-.users-page.dark-theme .header-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-default);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  cursor: pointer;
-}
-
-.users-page.dark-theme .placeholder-avatar {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-}
-
 .users-page.dark-theme .mobile-menu-btn {
   display: none;
   width: 40px;
@@ -15284,6 +15285,16 @@ body:has(.shotlist-page.dark-theme) #bottomNav {
   justify-content: center;
   flex-shrink: 0;
   overflow: hidden;
+  position: relative;
+}
+
+.users-page.dark-theme .user-avatar-upload {
+  cursor: pointer;
+  transition: box-shadow 0.2s ease;
+}
+
+.users-page.dark-theme .user-avatar-upload:hover {
+  box-shadow: 0 0 0 2px var(--accent-primary, #6366f1);
 }
 
 .users-page.dark-theme .user-avatar img {
@@ -15295,6 +15306,37 @@ body:has(.shotlist-page.dark-theme) #bottomNav {
 .users-page.dark-theme .user-avatar .material-symbols-outlined {
   font-size: 18px;
   color: var(--text-muted);
+}
+
+/* Avatar upload overlay */
+.users-page.dark-theme .user-avatar-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.users-page.dark-theme .user-avatar-overlay .material-symbols-outlined {
+  font-size: 16px;
+  color: #fff;
+}
+
+.users-page.dark-theme .user-avatar-upload:hover .user-avatar-overlay {
+  opacity: 1;
+}
+
+.users-page.dark-theme .user-avatar-upload.uploading .user-avatar-overlay {
+  opacity: 1;
+}
+
+.users-page.dark-theme .user-avatar-upload.uploading .user-avatar-overlay .material-symbols-outlined {
+  animation: avatar-spin 1s linear infinite;
 }
 
 .users-page.dark-theme .user-name {

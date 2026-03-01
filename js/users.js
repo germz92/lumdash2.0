@@ -356,12 +356,19 @@ function renderUsers() {
       userTableBody.innerHTML = users.map(user => {
         const roleClass = user.role === 'admin' ? 'admin' : user.role === 'owner' ? 'owner' : 'user';
         const initials = getInitials(user.name || user.email);
+        const hasPhoto = !!user.profilePhoto;
+        const avatarSrc = hasPhoto
+          ? user.profilePhoto
+          : `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=2a2a2a&color=fff&size=36`;
         return `
           <tr data-user-id="${user._id}">
             <td>
               <div class="user-cell">
-                <div class="user-avatar">
-                  <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=2a2a2a&color=fff&size=36" alt="${escapeHtml(user.name)}">
+                <div class="user-avatar user-avatar-upload" data-user-id="${user._id}" title="Click to upload photo">
+                  <img src="${avatarSrc}" alt="${escapeHtml(user.name)}"${hasPhoto ? '' : ' class="initials-fallback"'}>
+                  <div class="user-avatar-overlay">
+                    <span class="material-symbols-outlined">photo_camera</span>
+                  </div>
                 </div>
                 <span class="user-name">${escapeHtml(user.name)}</span>
               </div>
@@ -387,6 +394,9 @@ function renderUsers() {
           </tr>
         `;
       }).join('');
+      
+      // Attach avatar upload click handlers
+      setupUserAvatarUploads();
     } else {
   userTableBody.innerHTML = users.map(user => `
     <tr>
@@ -604,8 +614,91 @@ function escapeHtml(unsafe) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
-} 
-  
+}
+
+  // Setup clickable avatar upload for each user row
+  function setupUserAvatarUploads() {
+    const avatarElements = document.querySelectorAll('.user-avatar-upload');
+    
+    avatarElements.forEach(avatarEl => {
+      avatarEl.style.cursor = 'pointer';
+      avatarEl.onclick = function(e) {
+        e.stopPropagation();
+        const userId = avatarEl.getAttribute('data-user-id');
+        if (!userId) return;
+        
+        // Create a temporary file input
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/jpeg,image/jpg,image/png,image/webp';
+        fileInput.style.display = 'none';
+        document.body.appendChild(fileInput);
+        
+        fileInput.onchange = async function() {
+          const file = fileInput.files[0];
+          if (!file) {
+            fileInput.remove();
+            return;
+          }
+          
+          if (file.size > 5 * 1024 * 1024) {
+            showMessage('Photo must be under 5MB', 'error');
+            fileInput.remove();
+            return;
+          }
+          
+          const token = getUsersToken();
+          if (!token) {
+            showMessage('Not authenticated', 'error');
+            fileInput.remove();
+            return;
+          }
+          
+          // Show uploading state
+          avatarEl.classList.add('uploading');
+          
+          try {
+            const formData = new FormData();
+            formData.append('photo', file);
+            
+            const res = await fetch(`${window.API_BASE}/api/users/${userId}/profile-photo`, {
+              method: 'POST',
+              headers: {
+                'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`
+              },
+              body: formData
+            });
+            
+            const data = await res.json();
+            if (res.ok && data.profilePhoto) {
+              // Update the avatar image immediately
+              const img = avatarEl.querySelector('img');
+              if (img) {
+                img.src = data.profilePhoto;
+                img.classList.remove('initials-fallback');
+              }
+              showMessage('Profile photo updated!', 'success');
+              
+              // Update the user in our local array
+              const user = users.find(u => u._id === userId);
+              if (user) user.profilePhoto = data.profilePhoto;
+            } else {
+              showMessage(data.error || 'Failed to upload photo', 'error');
+            }
+          } catch (err) {
+            console.error('Error uploading user photo:', err);
+            showMessage('Failed to upload photo. Please try again.', 'error');
+          } finally {
+            avatarEl.classList.remove('uploading');
+            fileInput.remove();
+          }
+        };
+        
+        fileInput.click();
+      };
+    });
+  }
+
   // Expose functions globally for onclick handlers and SPA navigation
   window.initPage = initUsersPage;
   window._usersEditUser = editUser;

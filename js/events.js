@@ -19,6 +19,7 @@ let allOwners = []; // Store unique owners for the dropdown
 let allClients = []; // Store unique client names for the dropdown
 let allUsers = [];
 let selectedUsers = [];
+let userPhotoMap = {}; // Maps lowercase user name → profilePhoto URL
 let isInitialLoad = true; // Track if this is the first load to auto-switch to Live tab
 
 // Pagination state
@@ -896,10 +897,13 @@ function renderEventRowDark(table, index, userId) {
   const general = table.general || {};
   const accentColor = rowAccentColors[index % rowAccentColors.length];
   
-  // Get unique crew member names from rows
+  // Get unique crew member names from rows, with profile photos if available
   const rows = table.rows || [];
   const uniqueCrewNames = [...new Set(rows.map(r => r.name).filter(n => n && n.trim()))];
-  const crewMembers = uniqueCrewNames.map(name => ({ name }));
+  const crewMembers = uniqueCrewNames.map(name => {
+    const photo = userPhotoMap[name.toLowerCase().trim()] || null;
+    return photo ? { name, photo } : { name };
+  });
   const crewCount = crewMembers.length;
   
   // Count unassigned positions (rows with a real role but no name assigned)
@@ -1375,6 +1379,24 @@ async function loadTables(forceRefresh = false) {
     cacheTimestamp = now;
   }
   
+  // Fetch users with profile photos for crew avatars
+  try {
+    const usersRes = await fetch(`${API_BASE}/api/users`, {
+      headers: { Authorization: token }
+    });
+    if (usersRes.ok) {
+      const users = await usersRes.json();
+      userPhotoMap = {};
+      users.forEach(u => {
+        if (u.profilePhoto && u.name) {
+          userPhotoMap[u.name.toLowerCase().trim()] = u.profilePhoto;
+        }
+      });
+    }
+  } catch (err) {
+    console.error('Error fetching user photos:', err);
+  }
+
   // Always fetch passenger counts to ensure they're up to date
   const passengerCounts = await fetchFlightCounts();
   tables.forEach(table => {

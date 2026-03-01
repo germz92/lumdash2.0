@@ -708,9 +708,171 @@ function setupEventPageUserDropdown() {
       localStorage.removeItem('user');
       localStorage.removeItem('fullName');
       localStorage.removeItem('userId');
+      localStorage.removeItem('profilePhoto');
       window.location.href = '/index.html';
     };
   }
+
+  // Setup avatar upload and load profile photo for event pages
+  setupEventPageAvatarUpload();
+  loadEventPageProfilePhoto();
+}
+
+/**
+ * Get API base URL for event pages
+ */
+function getEventPageApiBase() {
+  if (window.API_BASE) return window.API_BASE;
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return `http://localhost:${window.location.port || 3000}`;
+  }
+  return window.location.origin;
+}
+
+/**
+ * Get user ID from JWT token
+ */
+function getEventPageUserId() {
+  const token = localStorage.getItem('token');
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.id || payload._id || payload.userId || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Load profile photo in event page sidebar
+ */
+async function loadEventPageProfilePhoto() {
+  const avatarImg = document.getElementById('sidebarAvatarImg');
+  const avatarIcon = document.getElementById('sidebarAvatarIcon');
+  if (!avatarImg || !avatarIcon) return;
+
+  // Show cached photo instantly
+  const cachedPhoto = localStorage.getItem('profilePhoto');
+  if (cachedPhoto) {
+    avatarImg.src = cachedPhoto;
+    avatarImg.style.display = 'block';
+    avatarIcon.style.display = 'none';
+  }
+
+  const userId = getEventPageUserId();
+  const token = localStorage.getItem('token');
+  if (!userId || !token) return;
+
+  try {
+    const res = await fetch(`${getEventPageApiBase()}/api/users/${userId}`, {
+      headers: { 'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}` }
+    });
+    if (res.ok) {
+      const userData = await res.json();
+      if (userData.profilePhoto) {
+        avatarImg.src = userData.profilePhoto;
+        avatarImg.style.display = 'block';
+        avatarIcon.style.display = 'none';
+        localStorage.setItem('profilePhoto', userData.profilePhoto);
+      } else {
+        avatarImg.style.display = 'none';
+        avatarIcon.style.display = '';
+        localStorage.removeItem('profilePhoto');
+      }
+    }
+  } catch (err) {
+    console.error('Error loading profile photo:', err);
+  }
+}
+
+/**
+ * Setup avatar click-to-upload for event page sidebar
+ */
+function setupEventPageAvatarUpload() {
+  const avatarEl = document.getElementById('sidebarUserAvatar');
+  if (!avatarEl) return;
+
+  // Add upload overlay hint
+  let overlay = avatarEl.querySelector('.avatar-upload-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.className = 'avatar-upload-overlay';
+    overlay.innerHTML = '<span class="material-symbols-outlined">photo_camera</span>';
+    avatarEl.appendChild(overlay);
+  }
+
+  // Create hidden file input
+  let fileInput = document.getElementById('avatarFileInput');
+  if (!fileInput) {
+    fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.id = 'avatarFileInput';
+    fileInput.accept = 'image/jpeg,image/jpg,image/png,image/webp';
+    fileInput.style.display = 'none';
+    document.body.appendChild(fileInput);
+  }
+
+  // Click avatar to open file picker
+  avatarEl.onclick = function(e) {
+    e.stopPropagation();
+    e.preventDefault();
+    fileInput.click();
+  };
+
+  // Handle file selection
+  fileInput.onchange = async function() {
+    const file = fileInput.files[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Photo must be under 5MB');
+      fileInput.value = '';
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+    if (!token) {
+      alert('Please log in to upload a profile photo');
+      return;
+    }
+
+    if (avatarEl) avatarEl.classList.add('uploading');
+
+    try {
+      const formData = new FormData();
+      formData.append('photo', file);
+
+      const res = await fetch(`${getEventPageApiBase()}/api/users/me/profile-photo`, {
+        method: 'POST',
+        headers: {
+          'Authorization': token.startsWith('Bearer ') ? token : `Bearer ${token}`
+        },
+        body: formData
+      });
+
+      const data = await res.json();
+      if (res.ok && data.profilePhoto) {
+        const avatarImg = document.getElementById('sidebarAvatarImg');
+        const avatarIcon = document.getElementById('sidebarAvatarIcon');
+        if (avatarImg) {
+          avatarImg.src = data.profilePhoto;
+          avatarImg.style.display = 'block';
+        }
+        if (avatarIcon) {
+          avatarIcon.style.display = 'none';
+        }
+        localStorage.setItem('profilePhoto', data.profilePhoto);
+      } else {
+        alert(data.error || 'Failed to upload photo');
+      }
+    } catch (err) {
+      console.error('Error uploading profile photo:', err);
+      alert('Failed to upload photo. Please try again.');
+    } finally {
+      if (avatarEl) avatarEl.classList.remove('uploading');
+      fileInput.value = '';
+    }
+  };
 }
 
 // Global dropdown state management

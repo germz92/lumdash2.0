@@ -4072,19 +4072,20 @@ app.delete('/api/tables/:id/rows/:index', authenticate, async (req, res) => {
 
 // USERS (all authenticated users can view)
 app.get('/api/users', authenticate, async (req, res) => {
-  const users = await User.find({}, 'fullName email role').sort({ fullName: 1 });
+  const users = await User.find({}, 'fullName email role profilePhoto').sort({ fullName: 1 });
   res.json(users.map(u => ({
     _id: u._id,
     name: u.fullName,
     email: u.email,
-    role: u.role || 'user'
+    role: u.role || 'user',
+    profilePhoto: u.profilePhoto || null
   })));
 });
 
 // Get single user by ID (for profile/photo display)
 app.get('/api/users/:id', authenticate, async (req, res) => {
   try {
-    const user = await User.findById(req.params.id, 'fullName email role photo');
+    const user = await User.findById(req.params.id, 'fullName email role profilePhoto');
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -4093,11 +4094,182 @@ app.get('/api/users/:id', authenticate, async (req, res) => {
       name: user.fullName,
       email: user.email,
       role: user.role || 'user',
-      photo: user.photo || null
+      profilePhoto: user.profilePhoto || null
     });
   } catch (error) {
     console.error('Error fetching user:', error);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Upload profile photo
+const profilePhotoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit for profile photos
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPG, PNG, and WebP images are allowed.'), false);
+    }
+  }
+});
+
+app.post('/api/users/me/profile-photo', authenticate, profilePhotoUpload.single('photo'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Delete old photo from Cloudinary if exists
+    if (user.profilePhotoPublicId) {
+      try {
+        await cloudinary.uploader.destroy(user.profilePhotoPublicId, { resource_type: 'image' });
+        console.log(`Deleted old profile photo from Cloudinary: ${user.profilePhotoPublicId}`);
+      } catch (deleteErr) {
+        console.error('Error deleting old profile photo from Cloudinary:', deleteErr);
+      }
+    }
+
+    // Upload to Cloudinary
+    const uploadResult = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          resource_type: 'image',
+          folder: 'lumdash/profile-photos',
+          public_id: `user_${req.user.id}_${Date.now()}`,
+          transformation: [
+            { width: 300, height: 300, crop: 'fill', gravity: 'face' },
+            { quality: 'auto', fetch_format: 'auto' }
+          ]
+        },
+        (error, result) => {
+          if (error) {
+            console.error('Cloudinary profile photo upload error:', error);
+            reject(error);
+          } else {
+            resolve(result);
+          }
+        }
+      );
+      uploadStream.end(req.file.buffer);
+    });
+
+    // Update user record
+    user.profilePhoto = uploadResult.secure_url;
+    user.profilePhotoPublicId = uploadResult.public_id;
+    await user.save();
+
+    console.log(`Profile photo uploaded for user ${req.user.id}: ${uploadResult.secure_url}`);
+
+    res.json({
+      success: true,
+      profilePhoto: uploadResult.secure_url
+    });
+  } catch (error) {
+    console.error('Error uploading profile photo:', error);
+    res.status(500).json({ error: 'Failed to upload profile photo' });
+  }
+});
+
+// Delete profile photo
+app.delete('/api/users/me/profile-photo', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Delete from Cloudinary if exists
+    if (user.profilePhotoPublicId) {
+      try {
+        await cloudinary.uploader.destroy(user.profilePhotoPublicId, { resource_type: 'image' });
+      } catch (deleteErr) {
+        console.error('Error deleting profile photo from Cloudinary:', deleteErr);
+      }
+    }
+
+    user.profilePhoto = null;
+    user.profilePhotoPublicId = null;
+    await user.save();
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting profile photo:', error);
+    res.status(500).json({ error: 'Failed to delete profile photo' });
+  }
+});
+
+// Admin: Upload profile photo for any user
+app.post('/api/users/:id/profile-photo', authenticate, profilePhotoUpload.single('photo'), async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Not authorized. Admin only.' });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const user = await User.findById(req.params.id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Delete old photo from Cloudinary if exists
+    if (user.profilePhotoPublicId) {
+      try {
+        await cloudinary.uploader.destroy(user.profilePhotoPublicId, { resource_type: 'image' });
+        console.log(`Deleted old profile photo from Cloudinary: ${user.profilePhotoPublicId}`);
+      } catch (deleteErr) {
+        console.error('Error deleting old profile photo from Cloudinary:', deleteErr);
+      }
+    }
+
+    // Upload to Cloudinary
+    const uploadResult = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          resource_type: 'image',
+          folder: 'lumdash/profile-photos',
+          public_id: `user_${req.params.id}_${Date.now()}`,
+          transformation: [
+            { width: 300, height: 300, crop: 'fill', gravity: 'face' },
+            { quality: 'auto', fetch_format: 'auto' }
+          ]
+        },
+        (error, result) => {
+          if (error) {
+            console.error('Cloudinary profile photo upload error:', error);
+            reject(error);
+          } else {
+            resolve(result);
+          }
+        }
+      );
+      uploadStream.end(req.file.buffer);
+    });
+
+    // Update user record
+    user.profilePhoto = uploadResult.secure_url;
+    user.profilePhotoPublicId = uploadResult.public_id;
+    await user.save();
+
+    console.log(`Admin uploaded profile photo for user ${req.params.id}: ${uploadResult.secure_url}`);
+
+    res.json({
+      success: true,
+      profilePhoto: uploadResult.secure_url
+    });
+  } catch (error) {
+    console.error('Error uploading profile photo for user:', error);
+    res.status(500).json({ error: 'Failed to upload profile photo' });
   }
 });
 

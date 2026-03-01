@@ -28,6 +28,14 @@ const userSchema = new mongoose.Schema({
   resetPasswordExpires: {
     type: Date
   },
+  profilePhoto: {
+    type: String,
+    default: null
+  },
+  profilePhotoPublicId: {
+    type: String,
+    default: null
+  },
   // Per-user archived events - stores event IDs that this user has archived
   archivedEvents: [{
     type: mongoose.Schema.Types.ObjectId,

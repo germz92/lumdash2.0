@@ -1,5 +1,16 @@
 <!-- Dark Theme Crew Schedule Page -->
 <link rel="stylesheet" href="css/theme-dark.css">
+<style>
+    /* Override #page-container styles for crew page (SPA host container)
+       Crew page handles its own scrolling via .crew-schedule-content,
+       so the host container must not scroll or add padding */
+    body:has(.crew-page) #page-container,
+    #page-container:has(.crew-page) {
+        padding: 0 !important;
+        overflow: hidden !important;
+        height: 100% !important;
+    }
+</style>
 
 <div class="dark-theme crew-page">
   <div class="crew-layout">

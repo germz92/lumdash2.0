@@ -1,4 +1,4 @@
-.card-log-page { font-family: Arial, sans-serif; background: #f4f4f4; min-height: 100%; padding-bottom: 100px; }
+.card-log-page { font-family: Arial, sans-serif; background: #f4f4f4; min-height: 100%; padding-bottom: 0; }
 .card-log-page .back-btn { margin-bottom: 20px; padding: 10px 16px; background: #ccc; border: none; border-radius: 6px; cursor: pointer; align-self: flex-start; }
 .card-log-page h2 { margin-bottom: 5px; text-align: center; }
 .card-log-page .header { margin-bottom: 5px; }

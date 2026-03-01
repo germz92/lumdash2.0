@@ -1,5 +1,23 @@
 <!-- Dark Theme Travel & Accommodation Page -->
 <link rel="stylesheet" href="css/theme-dark.css">
+<style>
+    body:has(.travel-page) #page-container,
+    #page-container:has(.travel-page) {
+        padding: 0 !important;
+        overflow: hidden !important;
+        height: 100% !important;
+    }
+    body:has(.travel-page.dark-theme) .bottom-nav-material,
+    body:has(.travel-page.dark-theme) #bottomNav {
+        display: none !important;
+    }
+    @media (max-width: 768px) {
+        body:has(.travel-page.dark-theme) .bottom-nav-material,
+        body:has(.travel-page.dark-theme) #bottomNav {
+            display: flex !important;
+        }
+    }
+</style>
 
 <div class="dark-theme travel-page">
   <div class="travel-layout">

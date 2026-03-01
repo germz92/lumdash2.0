@@ -1,4 +1,5 @@
-.gear-page { font-family: 'Roboto', Arial, sans-serif; background: linear-gradient(135deg, #f5f7fa 0%, #e9ecf3 100%); color: #333; min-height: 100%; padding-bottom: 100px; }
+.gear-page { font-family: 'Roboto', Arial, sans-serif; background: linear-gradient(135deg, #f5f7fa 0%, #e9ecf3 100%); color: #333; min-height: 100%; padding-bottom: 0; }
+.gear-page.dark-theme { padding-bottom: 0; background: #080808; }
 .gear-page h1, .gear-page h2 { text-align: center; font-weight: bold; margin-bottom: 10px; font-size: 22px; letter-spacing: 0.01em; }
 .gear-page .gear-controls { display: flex; justify-content: center; align-items: flex-end; gap: 24px; margin-bottom: 20px; flex-wrap: wrap; }
 .gear-page .top-controls { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }

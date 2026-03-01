@@ -12,6 +12,30 @@
         background: #080808 !important;
     }
 
+    /* Override #page-container styles for gear page (SPA host container) 
+       Gear page handles its own scrolling via .gear-content, 
+       so the host container must not scroll or add padding */
+    body:has(.gear-page) #page-container,
+    #page-container:has(.gear-page) {
+        padding: 0 !important;
+        overflow: hidden !important;
+        height: 100% !important;
+    }
+
+    /* Hide bottom nav on desktop - gear page has its own sidebar */
+    body:has(.gear-page.dark-theme) .bottom-nav-material,
+    body:has(.gear-page.dark-theme) #bottomNav {
+        display: none !important;
+    }
+
+    /* Show bottom nav on mobile */
+    @media (max-width: 768px) {
+        body:has(.gear-page.dark-theme) .bottom-nav-material,
+        body:has(.gear-page.dark-theme) #bottomNav {
+            display: flex !important;
+        }
+    }
+
     /* Categories Grid Layout */
     .gear-page.dark-theme .categories-grid {
         display: grid;
@@ -448,6 +472,124 @@
     .gear-page.dark-theme .manual-items-category .item-meta {
         font-size: 12px;
         color: #888 !important;
+    }
+
+    /* ---- All-Lists Expandable Progress ---- */
+    .gear-page.dark-theme .all-lists-progress {
+        margin-top: 14px;
+    }
+
+    .gear-page.dark-theme .expand-toggle {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        background: transparent;
+        border: 1px solid var(--border-subtle, rgba(255,255,255,0.08));
+        border-radius: var(--radius-md, 8px);
+        color: var(--text-secondary, #9ca3af);
+        font-size: 13px;
+        font-weight: 500;
+        padding: 6px 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        width: 100%;
+        justify-content: center;
+    }
+
+    .gear-page.dark-theme .expand-toggle:hover {
+        background: var(--bg-tertiary, rgba(255,255,255,0.04));
+        color: var(--text-primary, #e5e7eb);
+        border-color: var(--border-default, rgba(255,255,255,0.12));
+        transform: none;
+        box-shadow: none;
+    }
+
+    .gear-page.dark-theme .expand-toggle .expand-icon {
+        font-size: 20px;
+        transition: transform 0.25s ease;
+    }
+
+    .gear-page.dark-theme .expand-toggle.expanded .expand-icon {
+        transform: rotate(180deg);
+    }
+
+    .gear-page.dark-theme .lists-progress-details {
+        margin-top: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .gear-page.dark-theme .list-progress-item {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 10px 12px;
+        background: var(--bg-tertiary, rgba(255,255,255,0.03));
+        border: 1px solid var(--border-subtle, rgba(255,255,255,0.06));
+        border-radius: var(--radius-md, 8px);
+        transition: border-color 0.2s ease;
+    }
+
+    .gear-page.dark-theme .list-progress-item:hover {
+        border-color: var(--border-default, rgba(255,255,255,0.12));
+    }
+
+    .gear-page.dark-theme .list-progress-item.active-list {
+        border-color: var(--brand-red, #cc0007);
+        background: rgba(204, 0, 7, 0.05);
+    }
+
+    .gear-page.dark-theme .list-progress-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .gear-page.dark-theme .list-progress-name {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-primary, #e5e7eb);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .gear-page.dark-theme .list-progress-name .active-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--brand-red, #cc0007);
+        flex-shrink: 0;
+    }
+
+    .gear-page.dark-theme .list-progress-count {
+        font-size: 12px;
+        color: var(--text-secondary, #9ca3af);
+        font-weight: 500;
+    }
+
+    .gear-page.dark-theme .list-progress-bar {
+        width: 100%;
+        height: 6px;
+        background: var(--bg-primary, rgba(255,255,255,0.06));
+        border-radius: 3px;
+        overflow: hidden;
+    }
+
+    .gear-page.dark-theme .list-progress-fill {
+        height: 100%;
+        background: linear-gradient(90deg, var(--brand-red, #cc0007), #ff4444);
+        border-radius: 3px;
+        transition: width 0.4s ease;
+    }
+
+    .gear-page.dark-theme .list-progress-item.complete .list-progress-fill {
+        background: linear-gradient(90deg, #10b981, #34d399);
+    }
+
+    .gear-page.dark-theme .list-progress-item.complete .list-progress-count {
+        color: #10b981;
     }
 
     /* Responsive Styles */
@@ -1133,6 +1275,17 @@
                 <div class="progress-bar">
                     <div class="progress-fill" id="progressFill" style="width: 0%"></div>
                 </div>
+
+                <!-- Expandable All-Lists Progress -->
+                <div class="all-lists-progress" id="allListsProgress" style="display: none;">
+                    <button class="expand-toggle" id="expandProgressBtn" onclick="toggleAllListsProgress()">
+                        <span class="material-symbols-outlined expand-icon">expand_more</span>
+                        <span class="expand-label">Show all lists</span>
+                    </button>
+                    <div class="lists-progress-details" id="listsProgressDetails" style="display: none;">
+                        <!-- Per-list progress bars injected here -->
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -1353,6 +1506,12 @@
         let currentUser = null;
         let userPermissions = { canReserve: false, canManageLists: false, canPack: true };
 
+        // Helper: get the display name for a list (uses displayName alias if set, otherwise the real name)
+        function getListDisplayName(listName) {
+            const list = gearLists.find(l => l.name === listName);
+            return list?.displayName || listName;
+        }
+
         // Navigation function for sidebar
         function navigateToPage(page) {
             // Get eventId from various sources
@@ -1538,7 +1697,7 @@
                     const gearHeader = document.getElementById('eventTitle');
                     if (gearHeader) {
                         const eventName = currentEvent?.title || 'Event';
-                        gearHeader.textContent = `${eventName} - ${currentListName}`;
+                        gearHeader.textContent = `${eventName} - ${getListDisplayName(currentListName)}`;
                     }
                 }
             } catch (error) {
@@ -1648,20 +1807,22 @@
             const gearHeader = document.querySelector('.header h1');
             if (gearHeader) {
                 const eventName = currentEvent?.title || 'Event';
-                gearHeader.textContent = `${eventName} - ${currentListName}`;
+                gearHeader.textContent = `${eventName} - ${getListDisplayName(currentListName)}`;
             }
             
             if (currentGear.length === 0) {
                 const emptyMessage = userPermissions.canReserve 
                     ? 'Click "Add Items" below to start building your gear list.' 
                     : 'Event owners can add items to this list.';
-                    
+                
+                const manualItemsHTML = renderManualItems();
                 container.innerHTML = `
                     <div style="text-align: center; padding: 60px 20px; color: #666;">
                         <div style="font-size: 64px; color: #ccc; margin-bottom: 16px;">📦</div>
-                        <h3>No gear in "${currentListName}" yet</h3>
+                        <h3>No gear in "${getListDisplayName(currentListName)}" yet</h3>
                         <p>${emptyMessage}</p>
                     </div>
+                    ${manualItemsHTML}
                 `;
                 return;
             }
@@ -1827,7 +1988,22 @@
             `;
         }
 
-        // Update progress (including manual items)
+        // Cached all-lists progress data (populated by loadAllListsProgress)
+        let cachedAllListsData = null;
+
+        // Update the main progress bar to show current-list or overall stats
+        function setProgressBar(packed, total) {
+            const totalCountEl = document.getElementById('totalCount');
+            const packedCountEl = document.getElementById('packedCount');
+            const progressFillEl = document.getElementById('progressFill');
+            const pct = total > 0 ? Math.round((packed / total) * 100) : 0;
+
+            if (totalCountEl) totalCountEl.textContent = total;
+            if (packedCountEl) packedCountEl.textContent = packed;
+            if (progressFillEl) progressFillEl.style.width = `${pct}%`;
+        }
+
+        // Update progress (including manual items) — shows CURRENT list in main bar when collapsed
         function updateProgress() {
             const gearItems = currentGear.length;
             const packedGear = currentGear.filter(item => item.isPacked).length;
@@ -1837,15 +2013,142 @@
             
             const totalItems = gearItems + manualItemsCount;
             const totalPacked = packedGear + completedManualItems;
-            const percentage = totalItems > 0 ? Math.round((totalPacked / totalItems) * 100) : 0;
 
-            const totalCountEl = document.getElementById('totalCount');
-            const packedCountEl = document.getElementById('packedCount');
-            const progressFillEl = document.getElementById('progressFill');
-            
-            if (totalCountEl) totalCountEl.textContent = totalItems;
-            if (packedCountEl) packedCountEl.textContent = totalPacked;
-            if (progressFillEl) progressFillEl.style.width = `${percentage}%`;
+            const btn = document.getElementById('expandProgressBtn');
+            const isExpanded = btn && btn.classList.contains('expanded');
+
+            if (!isExpanded) {
+                // Collapsed: show current list progress in main bar
+                setProgressBar(totalPacked, totalItems);
+            }
+
+            // Refresh the expand section data if multiple lists exist
+            // (this also updates main bar to overall when expanded)
+            if (gearLists.length > 1) {
+                loadAllListsProgress();
+            } else {
+                const allListsEl = document.getElementById('allListsProgress');
+                if (allListsEl) allListsEl.style.display = 'none';
+            }
+        }
+
+        // Load packing progress for ALL lists (caches data, renders per-list cards)
+        async function loadAllListsProgress() {
+            const container = document.getElementById('allListsProgress');
+            if (!container) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/api/gear-packages/event/${eventId}/all-progress`, {
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+
+                if (!response.ok) return;
+
+                const data = await response.json();
+                cachedAllListsData = data;
+                const lists = data.lists || [];
+
+                if (lists.length <= 1) {
+                    container.style.display = 'none';
+                    return;
+                }
+
+                // Show the expand toggle
+                container.style.display = 'block';
+
+                // Check if currently expanded
+                const btn = document.getElementById('expandProgressBtn');
+                const isExpanded = btn && btn.classList.contains('expanded');
+
+                // If expanded, update main bar to show overall totals
+                if (isExpanded) {
+                    setProgressBar(data.overallPacked, data.overallTotal);
+                }
+
+                // Update the expand button label
+                const expandLabel = container.querySelector('.expand-label');
+                if (expandLabel) {
+                    expandLabel.textContent = isExpanded ? 'Hide list details' : `Show all ${lists.length} lists`;
+                }
+
+                // Build per-list progress HTML
+                const detailsEl = document.getElementById('listsProgressDetails');
+                if (detailsEl) {
+                    detailsEl.innerHTML = lists.map(list => {
+                        const pct = list.total > 0 ? Math.round((list.packed / list.total) * 100) : 0;
+                        const isActive = list.name === currentListName;
+                        const isComplete = list.total > 0 && list.packed === list.total;
+                        const listLabel = list.displayName || list.name;
+                        const classes = ['list-progress-item'];
+                        if (isActive) classes.push('active-list');
+                        if (isComplete) classes.push('complete');
+
+                        return `
+                            <div class="${classes.join(' ')}" onclick="switchToListFromProgress('${list.name.replace(/'/g, "\\'")}')" style="cursor: pointer;">
+                                <div class="list-progress-row">
+                                    <span class="list-progress-name">
+                                        ${isActive ? '<span class="active-dot"></span>' : ''}
+                                        ${listLabel}
+                                    </span>
+                                    <span class="list-progress-count">${list.packed}/${list.total} (${pct}%)</span>
+                                </div>
+                                <div class="list-progress-bar">
+                                    <div class="list-progress-fill" style="width: ${pct}%"></div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch (error) {
+                console.error('Error loading all-lists progress:', error);
+            }
+        }
+
+        // Toggle the expand/collapse of all-lists progress
+        function toggleAllListsProgress() {
+            const btn = document.getElementById('expandProgressBtn');
+            const details = document.getElementById('listsProgressDetails');
+            if (!btn || !details) return;
+
+            const titleEl = document.querySelector('.progress-title');
+            const isExpanded = btn.classList.contains('expanded');
+            if (isExpanded) {
+                // Collapsing — switch main bar back to current list progress
+                btn.classList.remove('expanded');
+                details.style.display = 'none';
+                const label = btn.querySelector('.expand-label');
+                if (label && cachedAllListsData) {
+                    label.textContent = `Show all ${cachedAllListsData.lists.length} lists`;
+                }
+                if (titleEl) titleEl.textContent = 'Packing Progress';
+
+                // Restore current-list progress in main bar
+                const gearItems = currentGear.length;
+                const packedGear = currentGear.filter(item => item.isPacked).length;
+                const manualItemsCount = manualItems.length;
+                const completedManualItems = manualItems.filter(item => item.completed).length;
+                setProgressBar(packedGear + completedManualItems, gearItems + manualItemsCount);
+            } else {
+                // Expanding — switch main bar to overall progress
+                btn.classList.add('expanded');
+                details.style.display = 'flex';
+                const label = btn.querySelector('.expand-label');
+                if (label) label.textContent = 'Hide list details';
+                if (titleEl) titleEl.textContent = 'Overall Progress';
+
+                // Show overall progress in main bar
+                if (cachedAllListsData) {
+                    setProgressBar(cachedAllListsData.overallPacked, cachedAllListsData.overallTotal);
+                }
+            }
+        }
+
+        // Switch to a list from the progress panel
+        function switchToListFromProgress(listName) {
+            if (listName === currentListName) return;
+            switchToList(listName);
         }
 
         // Toggle packed status
@@ -2187,7 +2490,7 @@
             gearLists.forEach(list => {
                 const option = document.createElement('option');
                 option.value = list.name;
-                option.textContent = list.name;
+                option.textContent = list.displayName || list.name;
                 option.selected = list.name === currentListName;
                 select.appendChild(option);
             });
@@ -2283,13 +2586,9 @@
         }
 
         async function renameCurrentList() {
-            if (currentListName === 'Main List') {
-                alert('Cannot rename the Main List');
-                return;
-            }
-
-            const newName = prompt(`Enter new name for "${currentListName}":`, currentListName);
-            if (!newName || !newName.trim() || newName.trim() === currentListName) {
+            const currentDisplayName = getListDisplayName(currentListName);
+            const newName = prompt(`Enter new name for "${currentDisplayName}":`, currentDisplayName);
+            if (!newName || !newName.trim() || newName.trim() === currentDisplayName) {
                 return;
             }
 
@@ -2304,8 +2603,13 @@
                 });
 
                 if (response.ok) {
-                    currentListName = newName.trim();
-                    await loadGearLists(); // Reload lists
+                    const result = await response.json();
+                    // For Main List, the internal name stays the same — only displayName changes
+                    // For other lists, the internal name changes
+                    if (currentListName !== 'Main List') {
+                        currentListName = newName.trim();
+                    }
+                    await loadGearLists(); // Reload lists to get updated displayName
                     renderGear(); // Update header
                     showToast(`Renamed to "${newName.trim()}"`, 'success');
                 } else {
@@ -2320,11 +2624,11 @@
 
         async function deleteCurrentList() {
             if (currentListName === 'Main List') {
-                alert('Cannot delete the Main List');
+                alert(`Cannot delete the ${getListDisplayName('Main List')}`);
                 return;
             }
 
-            if (!confirm(`Are you sure you want to delete "${currentListName}"?\n\nAll items in this list will be removed and their reservations released.`)) {
+            if (!confirm(`Are you sure you want to delete "${getListDisplayName(currentListName)}"?\n\nAll items in this list will be removed and their reservations released.`)) {
                 return;
             }
 
@@ -3973,6 +4277,8 @@
         window.deleteTemplateFromDetails = deleteTemplateFromDetails;
         window.openAddItemsModal = openAddItemsModal;
         window.handleSerialCheckbox = handleSerialCheckbox;
+        window.toggleAllListsProgress = toggleAllListsProgress;
+        window.switchToListFromProgress = switchToListFromProgress;
 
         })(); // End of IIFE
     </script>

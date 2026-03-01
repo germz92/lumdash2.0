@@ -5086,6 +5086,11 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
   line-height: 1.2;
 }
 
+/* Override general.css .general-page h1 { color: #333 } for dark theme */
+.dark-theme.general-page h1.event-title {
+  color: var(--text-primary);
+}
+
 .event-meta {
   display: flex;
   align-items: center;
@@ -6644,13 +6649,13 @@ body:has(.dark-theme.general-page) .bottom-nav-material {
 
 .dark-theme.crew-page {
   background: var(--bg-primary);
-  min-height: 100vh;
+  height: 100%;
   width: 100%;
 }
 
 .crew-layout {
   display: flex;
-  min-height: 100vh;
+  height: 100%;
   width: 100%;
   overflow: hidden;
 }
@@ -6661,7 +6666,9 @@ body:has(.dark-theme.general-page) .bottom-nav-material {
   flex-direction: column;
   margin-left: 260px;
   overflow: hidden;
-  height: 100vh;
+  height: 100%;
+  padding: 0;
+  max-width: none;
 }
 
 /* Crew Header */
@@ -7850,14 +7857,14 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   background: var(--bg-primary);
   color: var(--text-primary);
   font-family: var(--font-family);
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
 }
 
 /* Schedule Layout - uses general-sidebar */
 .schedule-layout {
   display: flex;
-  min-height: 100vh;
+  height: 100%;
   width: 100%;
   overflow: hidden;
 }
@@ -7869,7 +7876,7 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   flex-direction: column;
   margin-left: 240px;
   overflow: hidden;
-  height: 100vh;
+  height: 100%;
 }
 
 /* Schedule Header */
@@ -9896,7 +9903,7 @@ body:has(.shotlist-page.dark-theme) #bottomNav {
 
 .todos-page.dark-theme {
   background: var(--bg-primary);
-  min-height: 100vh;
+  height: 100%;
   font-family: var(--font-family);
   color: var(--text-primary);
   
@@ -9910,7 +9917,7 @@ body:has(.shotlist-page.dark-theme) #bottomNav {
 
 .todos-page.dark-theme .todos-layout {
   display: flex;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -9919,7 +9926,7 @@ body:has(.shotlist-page.dark-theme) #bottomNav {
   margin-left: 260px;
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -12097,14 +12104,15 @@ body:has(.shotlist-page.dark-theme) #bottomNav {
 
 .card-log-page.dark-theme {
   background: var(--bg-primary);
-  min-height: 100vh;
+  height: 100%;
   font-family: var(--font-family);
   color: var(--text-primary);
+  padding-bottom: 0;
 }
 
 .card-log-page.dark-theme .card-log-layout {
   display: flex;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -12113,7 +12121,7 @@ body:has(.shotlist-page.dark-theme) #bottomNav {
   margin-left: 260px;
   padding: 0;
   background: var(--bg-primary);
-  height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -12345,6 +12353,30 @@ body:has(.shotlist-page.dark-theme) #bottomNav {
 
 .card-log-page.dark-theme .calc-btn-dark .material-symbols-outlined {
   font-size: 18px;
+}
+
+/* Cards Needed Badge */
+.card-log-page.dark-theme .cards-needed-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--brand-red-muted);
+  border: 1px solid var(--brand-red);
+  border-radius: var(--radius-lg);
+  color: var(--brand-red);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.card-log-page.dark-theme .cards-needed-icon {
+  font-size: 16px;
+}
+
+.card-log-page.dark-theme .cards-needed-count {
+  font-size: 15px;
+  font-weight: 700;
 }
 
 /* Card Log Content - Scrollable area */
@@ -12741,7 +12773,7 @@ body:has(.shotlist-page.dark-theme) #bottomNav {
 @media (max-width: 1024px) {
   .card-log-page.dark-theme .card-log-main {
     margin-left: 0;
-    height: 100vh;
+    height: 100%;
   }
 
   .card-log-page.dark-theme .mobile-menu-btn {
@@ -12781,6 +12813,10 @@ body:has(.shotlist-page.dark-theme) #bottomNav {
 
   .card-log-page.dark-theme .calc-btn-dark span:not(.material-symbols-outlined) {
     display: none;
+  }
+
+  .card-log-page.dark-theme .cards-needed-badge .cards-needed-text {
+    font-size: 12px;
   }
 
   .card-log-page.dark-theme .card-log-content {
@@ -12824,18 +12860,29 @@ body:has(.shotlist-page.dark-theme) #bottomNav {
    SD CARD CALCULATOR MODAL
    ======================================== */
 
+#sdCardCalculatorModal {
+  background: rgba(0, 0, 0, 0.75) !important;
+  background: var(--surface-overlay, rgba(0, 0, 0, 0.75)) !important;
+}
+
 #sdCardCalculatorModal .dark-modal-content.calculator-modal {
   max-width: 600px;
   width: 90%;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
+  background: #18181c !important;
+  background: var(--bg-secondary, #18181c) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid var(--border-default, rgba(255, 255, 255, 0.1)) !important;
 }
 
 #sdCardCalculatorModal .calculator-body {
   flex: 1;
   overflow-y: auto;
   padding: 24px;
+  background: #18181c !important;
+  background: var(--bg-secondary, #18181c) !important;
 }
 
 #sdCardCalculatorModal .calculator-section {
@@ -12870,10 +12917,12 @@ body:has(.shotlist-page.dark-theme) #bottomNav {
   justify-content: center;
   width: 44px;
   height: 44px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-default);
+  background: #1e1e24 !important;
+  background: var(--bg-tertiary, #1e1e24) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid var(--border-default, rgba(255, 255, 255, 0.1)) !important;
   border-radius: var(--radius-lg);
-  color: var(--text-secondary);
+  color: var(--text-secondary, #a0a0b0);
   cursor: pointer;
   transition: var(--transition-fast);
 }
@@ -13029,6 +13078,44 @@ body:has(.shotlist-page.dark-theme) #bottomNav {
   border-color: var(--border-strong);
 }
 
+/* Auto Calculate Button */
+#sdCardCalculatorModal .calculator-actions .btn-auto-calc {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: var(--radius-lg);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  background: transparent;
+  border: 1px solid var(--brand-red);
+  color: var(--brand-red);
+}
+
+#sdCardCalculatorModal .calculator-actions .btn-auto-calc:hover {
+  background: var(--brand-red-muted);
+  border-color: var(--brand-red-hover);
+  color: var(--brand-red-hover);
+}
+
+#sdCardCalculatorModal .calculator-actions .btn-auto-calc:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+#sdCardCalculatorModal .calculator-actions .btn-auto-calc .rotating {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* Calculator Results */
 #sdCardCalculatorModal .calculator-results {
   margin-top: 0;
@@ -13148,14 +13235,14 @@ body:has(.shotlist-page.dark-theme) #bottomNav {
 
 .travel-page.dark-theme {
   background: var(--bg-primary);
-  min-height: 100vh;
+  height: 100%;
   font-family: var(--font-family);
   color: var(--text-primary);
 }
 
 .travel-page.dark-theme .travel-layout {
   display: flex;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -13164,7 +13251,7 @@ body:has(.shotlist-page.dark-theme) #bottomNav {
   margin-left: 260px;
   padding: 0;
   background: var(--bg-primary);
-  height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -13889,7 +13976,7 @@ body:has(.shotlist-page.dark-theme) #bottomNav {
 @media (max-width: 1024px) {
   .travel-page.dark-theme .travel-main {
     margin-left: 0;
-    height: 100vh;
+    height: 100%;
   }
 
   .travel-page.dark-theme .mobile-menu-btn {
@@ -14370,14 +14457,14 @@ body:has(.shotlist-page.dark-theme) #bottomNav {
 
 .maps-page.dark-theme {
   background: var(--bg-primary);
-  min-height: 100vh;
+  height: 100%;
   font-family: var(--font-family);
   color: var(--text-primary);
 }
 
 .maps-page.dark-theme .maps-layout {
   display: flex;
-  height: 100vh;
+  height: 100%;
   overflow: hidden;
 }
 
@@ -14386,7 +14473,7 @@ body:has(.shotlist-page.dark-theme) #bottomNav {
   margin-left: 260px;
   padding: 0;
   background: var(--bg-primary);
-  height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -18897,21 +18984,23 @@ body:has(.shotlist-page.dark-theme) #bottomNav {
    ============================================ */
 
 .admin-notes-page {
-  min-height: 100vh;
+  height: 100%;
   background: var(--bg-primary);
 }
 
 .admin-notes-layout {
   display: flex;
-  min-height: 100vh;
+  height: 100%;
+  overflow: hidden;
 }
 
 .admin-notes-main {
   flex: 1;
   margin-left: 260px;
-  min-height: 100vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 /* Header */

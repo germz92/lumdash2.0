@@ -955,6 +955,16 @@ function cleanupCardLogPage() {
     container.innerHTML = '';
   }
   
+  // Remove modals that were moved to document.body to prevent stale duplicates
+  const bodyModals = ['sdCardCalculatorModal', 'date-modal', 'card-entry-modal', 'cardLogDeleteModal', 'cardLogRowActionDropdown', 'cardLogDayActionDropdown'];
+  bodyModals.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.parentElement === document.body) {
+      el.remove();
+      console.log(`[CARD-LOG] Removed stale modal from body: ${id}`);
+    }
+  });
+  
   // Reset flags
   eventListenersAttached = false;
   processingSocketEvent = false;
@@ -2011,7 +2021,7 @@ async function openCalculatorModal() {
   const modal = document.getElementById('sdCardCalculatorModal');
   if (!modal) return;
   
-  // Ensure modal is in body
+  // Safety check: ensure modal is in body (should already be from setupCalculatorModal)
   if (modal.parentElement !== document.body) {
     document.body.appendChild(modal);
   }
@@ -2039,7 +2049,8 @@ async function loadCalculatorData() {
       return;
     }
     
-    const response = await fetch(`${API_BASE}/api/tables/${eventId}/sd-calculator`, {
+    const apiBase = window.API_BASE || API_BASE || '';
+    const response = await fetch(`${apiBase}/api/tables/${eventId}/sd-calculator`, {
       headers: { Authorization: localStorage.getItem('token') }
     });
     
@@ -2073,6 +2084,24 @@ async function loadCalculatorData() {
       }
       
       console.log('[SD-CALC] Loaded saved calculator data:', calcData);
+      
+      // Auto-calculate to show cards needed badge from saved data
+      if (Array.isArray(calcData.camerasPerDay) && calcData.camerasPerDay.some(c => c > 0)) {
+        let prevCameras = 0, prevExtraCards = 0, totalNewCards = 0;
+        for (let i = 0; i < calcData.camerasPerDay.length; i++) {
+          const cameras = calcData.camerasPerDay[i];
+          const cardsNeeded = cameras * 2;
+          const reuseAvailable = i === 0 ? 0 : prevCameras + prevExtraCards;
+          const newCards = Math.max(0, cardsNeeded - reuseAvailable);
+          const extraCards = reuseAvailable + newCards - cardsNeeded;
+          totalNewCards += newCards;
+          prevCameras = cameras;
+          prevExtraCards = extraCards;
+        }
+        const backupsNeeded = calcData.numDays * 2;
+        const totalWithBackups = totalNewCards + backupsNeeded;
+        updateCardsNeededBadge(totalWithBackups);
+      }
       } else {
       generateCamerasPerDay();
     }
@@ -2095,7 +2124,8 @@ async function saveCalculatorData() {
       camerasPerDay.push(cameras);
       }
     
-    const response = await fetch(`${API_BASE}/api/tables/${eventId}/sd-calculator`, {
+    const apiBase = window.API_BASE || API_BASE || '';
+    const response = await fetch(`${apiBase}/api/tables/${eventId}/sd-calculator`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
@@ -2241,19 +2271,161 @@ function calculateSDCards() {
     </div>
   `;
   
+  // Update the cards needed badge on the page
+  updateCardsNeededBadge(totalWithBackups);
+  
   // Save the calculator data for this event
   saveCalculatorData();
+}
+
+function updateCardsNeededBadge(total) {
+  const badge = document.getElementById('cardsNeededBadge');
+  const countEl = document.getElementById('cardsNeededCount');
+  if (badge && countEl) {
+    if (total > 0) {
+      countEl.textContent = total;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
 }
 
 function clearCalculator() {
   document.getElementById('calcNumDays').value = 1;
   generateCamerasPerDay();
   document.getElementById('calculatorResults').innerHTML = '';
+  // Clear the cards needed badge
+  updateCardsNeededBadge(0);
   // Save the cleared state
   saveCalculatorData();
 }
 
+// Camera count rules per role
+const ROLE_CAMERA_MAP = {
+  'lead photographer': 2,
+  'additional photographer': 2,
+  'lead videographer': 2,
+  'additional videographer': 2,
+  'headshot booth photographer': 1,
+  'headshot photographer': 1
+  // All other roles (assistant, custom) = 0
+};
+
+function getRoleCameraCount(role) {
+  if (!role) return 0;
+  const normalized = role.trim().toLowerCase();
+  return ROLE_CAMERA_MAP[normalized] || 0;
+}
+
+async function autoCalculateFromCrew() {
+  console.log('[SD-CALC] Auto Calculate button clicked');
+  
+  const eventId = localStorage.getItem('eventId');
+  if (!eventId) {
+    alert('Event ID missing. Cannot fetch crew data.');
+    return;
+  }
+
+  const apiBase = window.API_BASE || API_BASE || '';
+  const token = localStorage.getItem('token');
+  
+  if (!token) {
+    alert('Authentication token missing. Please log in again.');
+    return;
+  }
+
+  const autoBtn = document.getElementById('autoCalculateBtn');
+  if (autoBtn) {
+    autoBtn.disabled = true;
+    autoBtn.innerHTML = '<span class="material-symbols-outlined rotating">sync</span> Loading...';
+  }
+
+  try {
+    // Fetch crew data (table rows) from the API
+    console.log('[SD-CALC] Fetching crew data for event:', eventId);
+    const response = await fetch(`${apiBase}/api/tables/${eventId}`, {
+      headers: { Authorization: token }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch crew data: ${response.status}`);
+    }
+
+    const table = await response.json();
+    const rows = table.rows || [];
+    console.log('[SD-CALC] Found', rows.length, 'crew rows');
+
+    if (rows.length === 0) {
+      alert('No crew data found for this event. Please add crew members on the Crew page first.');
+      return;
+    }
+
+    // Group rows by date and count cameras per day
+    const dayMap = {};
+    rows.forEach(row => {
+      if (!row.date) return;
+      if (!dayMap[row.date]) {
+        dayMap[row.date] = 0;
+      }
+      dayMap[row.date] += getRoleCameraCount(row.role);
+    });
+
+    // Sort dates chronologically
+    const sortedDates = Object.keys(dayMap).sort((a, b) => new Date(a) - new Date(b));
+
+    if (sortedDates.length === 0) {
+      alert('No dated crew entries found. Please ensure crew members have dates assigned.');
+      return;
+    }
+
+    const numDays = sortedDates.length;
+
+    // Set the number of days
+    const numDaysInput = document.getElementById('calcNumDays');
+    if (numDaysInput) {
+      numDaysInput.value = numDays;
+    }
+
+    // Generate the day inputs
+    generateCamerasPerDay();
+
+    // Fill in cameras per day
+    sortedDates.forEach((date, index) => {
+      const input = document.getElementById(`dayCamera${index + 1}`);
+      if (input) {
+        input.value = dayMap[date];
+      }
+    });
+
+    // Auto-run the calculation
+    calculateSDCards();
+
+    console.log('[SD-CALC] Auto-calculated from crew data:', {
+      days: numDays,
+      camerasPerDay: sortedDates.map(d => ({ date: d, cameras: dayMap[d] }))
+    });
+
+  } catch (err) {
+    console.error('[SD-CALC] Error auto-calculating from crew:', err);
+    alert('Failed to fetch crew data. Please try again.');
+  } finally {
+    if (autoBtn) {
+      autoBtn.disabled = false;
+      autoBtn.innerHTML = '<span class="material-symbols-outlined">group</span> Auto Calculate';
+    }
+  }
+}
+
 function setupCalculatorModal() {
+  // Move calculator modal to body immediately so it's outside .card-log-page
+  // This prevents light theme CSS from card-log.css from interfering
+  const modal = document.getElementById('sdCardCalculatorModal');
+  if (modal && modal.parentElement !== document.body) {
+    document.body.appendChild(modal);
+    console.log('[SD-CALC] Moved calculator modal to body during setup');
+  }
+  
   // Open button
   const openBtn = document.getElementById('openCalculatorBtn');
   if (openBtn) {
@@ -2289,8 +2461,13 @@ function setupCalculatorModal() {
     clearBtn.addEventListener('click', clearCalculator);
   }
   
+  // Auto Calculate button
+  const autoCalcBtn = document.getElementById('autoCalculateBtn');
+  if (autoCalcBtn) {
+    autoCalcBtn.addEventListener('click', autoCalculateFromCrew);
+  }
+  
   // Close on backdrop click
-  const modal = document.getElementById('sdCardCalculatorModal');
   if (modal) {
     modal.addEventListener('click', function(e) {
       if (e.target === modal) {

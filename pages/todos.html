@@ -1,5 +1,30 @@
 <!-- Dark Theme To-Dos Page -->
 <link rel="stylesheet" href="css/theme-dark.css">
+<style>
+    /* Override #page-container styles for todos page (SPA host container)
+       Todos page handles its own scrolling internally,
+       so the host container must not scroll or add padding */
+    body:has(.todos-page) #page-container,
+    #page-container:has(.todos-page) {
+        padding: 0 !important;
+        overflow: hidden !important;
+        height: 100% !important;
+    }
+
+    /* Hide bottom nav on desktop - todos page has its own sidebar */
+    body:has(.todos-page.dark-theme) .bottom-nav-material,
+    body:has(.todos-page.dark-theme) #bottomNav {
+        display: none !important;
+    }
+
+    /* Show bottom nav on mobile */
+    @media (max-width: 768px) {
+        body:has(.todos-page.dark-theme) .bottom-nav-material,
+        body:has(.todos-page.dark-theme) #bottomNav {
+            display: flex !important;
+        }
+    }
+</style>
 
 <div class="dark-theme todos-page">
   <div class="todos-layout">

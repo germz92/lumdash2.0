@@ -1,5 +1,30 @@
 <!-- Dark Theme SD Card Log Page -->
 <link rel="stylesheet" href="css/theme-dark.css">
+<style>
+    /* Override #page-container styles for card-log page (SPA host container)
+       Card-log page handles its own scrolling via .card-log-content,
+       so the host container must not scroll or add padding */
+    body:has(.card-log-page) #page-container,
+    #page-container:has(.card-log-page) {
+        padding: 0 !important;
+        overflow: hidden !important;
+        height: 100% !important;
+    }
+
+    /* Hide bottom nav on desktop - card-log page has its own sidebar */
+    body:has(.card-log-page.dark-theme) .bottom-nav-material,
+    body:has(.card-log-page.dark-theme) #bottomNav {
+        display: none !important;
+    }
+
+    /* Show bottom nav on mobile */
+    @media (max-width: 768px) {
+        body:has(.card-log-page.dark-theme) .bottom-nav-material,
+        body:has(.card-log-page.dark-theme) #bottomNav {
+            display: flex !important;
+        }
+    }
+</style>
 
 <div class="dark-theme card-log-page">
   <div class="card-log-layout">
@@ -125,6 +150,12 @@
       <span class="material-symbols-outlined">calculate</span>
             <span>SD Card Calculator</span>
           </button>
+          <div class="cards-needed-badge" id="cardsNeededBadge" style="display: none;">
+            <span class="material-symbols-outlined cards-needed-icon">sd_card</span>
+            <span class="cards-needed-text">
+              <span class="cards-needed-count" id="cardsNeededCount">0</span> cards needed
+            </span>
+          </div>
         </div>
   </div>
 
@@ -300,6 +331,10 @@
       </div>
       
       <div class="calculator-actions">
+        <button type="button" class="btn-auto-calc" id="autoCalculateBtn" title="Auto-fill from crew page data">
+          <span class="material-symbols-outlined">group</span>
+          Auto Calculate
+        </button>
         <button type="button" class="btn-primary" id="calculateBtn">
           <span class="material-symbols-outlined">calculate</span>
           Calculate

@@ -337,6 +337,9 @@ function injectPageContent(html, page, id) {
     console.log('Bottom navigation element (bottomNav) not found.');
   }
 
+  // Setup user dropdown for event page sidebars (if not already present)
+  setupEventPageUserDropdown();
+
   // Re-initialize notification system for the new DOM
   if (window.notificationSystem && typeof window.notificationSystem.init === 'function') {
     window.notificationSystem.init();
@@ -532,6 +535,182 @@ function injectPageContent(html, page, id) {
       }
     }, 50);
   });
+}
+
+/**
+ * Setup user dropdown menu for event pages that have sidebarUserContainer
+ * but are missing the userMenuDropdown element.
+ * This runs after every page injection to ensure event page sidebars
+ * have the same user dropdown functionality as the main dashboard.
+ */
+function setupEventPageUserDropdown() {
+  const userContainer = document.getElementById('sidebarUserContainer');
+  if (!userContainer) return; // No sidebar user container on this page
+
+  // Remove any previously injected dropdown from body (SPA navigation cleanup)
+  const existingDropdown = document.getElementById('userMenuDropdown');
+  if (existingDropdown) {
+    // If the dropdown is inside a sidebar partial (dashboard pages), don't touch it
+    if (existingDropdown.closest('#page-container') || existingDropdown.parentElement === document.body) {
+      // If it's in page-container, it belongs to the old page and will be replaced.
+      // If it's appended to body by us, remove it so we can recreate for the new page.
+      if (existingDropdown.parentElement === document.body) {
+        existingDropdown.remove();
+      } else {
+        return; // It's managed by the page's own HTML, skip
+      }
+    } else {
+      return; // It's part of the dashboard sidebar, skip
+    }
+  }
+
+  // Ensure sidebarUserRole element exists (event pages are missing it)
+  if (!document.getElementById('sidebarUserRole')) {
+    const userInfoDiv = userContainer.querySelector('.sidebar-user-info');
+    if (userInfoDiv) {
+      const roleDiv = document.createElement('div');
+      roleDiv.className = 'sidebar-user-role';
+      roleDiv.id = 'sidebarUserRole';
+      roleDiv.textContent = 'User';
+      userInfoDiv.appendChild(roleDiv);
+    }
+  }
+
+  // Populate user name and role from token/localStorage
+  (function populateUserInfo() {
+    let userName = 'User';
+    let userRole = 'User';
+
+    const fullName = localStorage.getItem('fullName');
+    if (fullName) userName = fullName;
+
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      if (userName === 'User' && user.name) userName = user.name;
+      if (user.role) userRole = user.role;
+    } catch (e) {}
+
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (userName === 'User') {
+          userName = payload.name || payload.fullName || payload.email || 'User';
+        }
+        if (payload.role) userRole = payload.role;
+      } catch (e) {}
+    }
+
+    const displayRole = userRole.charAt(0).toUpperCase() + userRole.slice(1);
+
+    const nameEl = document.getElementById('sidebarUserName');
+    if (nameEl) nameEl.textContent = userName;
+
+    const roleEl = document.getElementById('sidebarUserRole');
+    if (roleEl) roleEl.textContent = displayRole;
+  })();
+
+  let dropdown;
+
+  // Create the dropdown HTML
+  dropdown = document.createElement('div');
+  dropdown.className = 'user-menu-dropdown action-dropdown';
+  dropdown.id = 'userMenuDropdown';
+  dropdown.innerHTML = `
+    <button class="user-menu-item" id="profileMenuItem">
+      <span class="material-symbols-outlined">person</span>
+      <span>Profile</span>
+    </button>
+    <button class="user-menu-item" id="settingsMenuItem">
+      <span class="material-symbols-outlined">settings</span>
+      <span>Settings</span>
+    </button>
+    <button class="user-menu-item danger" id="logoutMenuItem">
+      <span class="material-symbols-outlined">logout</span>
+      <span>Logout</span>
+    </button>
+  `;
+
+  // Append to document body so it can use position: fixed freely
+  document.body.appendChild(dropdown);
+
+  // Toggle dropdown on user container click
+  userContainer.onclick = function(e) {
+    e.stopPropagation();
+    e.preventDefault();
+
+    const menu = document.getElementById('userMenuDropdown');
+    if (!menu) return;
+
+    const isOpen = menu.classList.contains('show');
+
+    // Close all other dropdowns first
+    document.querySelectorAll('.action-dropdown.show').forEach(d => d.classList.remove('show'));
+
+    if (!isOpen) {
+      // Position above the user container
+      const rect = userContainer.getBoundingClientRect();
+      const sidebar = userContainer.closest('aside');
+      const sidebarRect = sidebar ? sidebar.getBoundingClientRect() : rect;
+      const dropdownWidth = sidebarRect.width - 24;
+
+      menu.style.position = 'fixed';
+      menu.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+      menu.style.top = 'auto';
+      menu.style.left = (sidebarRect.left + 12) + 'px';
+      menu.style.right = 'auto';
+      menu.style.width = dropdownWidth + 'px';
+      menu.style.maxWidth = dropdownWidth + 'px';
+      menu.classList.add('show');
+    } else {
+      menu.classList.remove('show');
+    }
+  };
+
+  // Close on outside click (only attach once)
+  if (!document._eventPageDropdownClickAttached) {
+    document.addEventListener('click', function(e) {
+      const menu = document.getElementById('userMenuDropdown');
+      const container = document.getElementById('sidebarUserContainer');
+      if (menu && menu.classList.contains('show')) {
+        if (!menu.contains(e.target) && (!container || !container.contains(e.target))) {
+          menu.classList.remove('show');
+        }
+      }
+    });
+    document._eventPageDropdownClickAttached = true;
+  }
+
+  // Profile button
+  const profileBtn = dropdown.querySelector('#profileMenuItem');
+  if (profileBtn) {
+    profileBtn.onclick = function(e) {
+      e.stopPropagation();
+      document.getElementById('userMenuDropdown')?.classList.remove('show');
+    };
+  }
+
+  // Settings button
+  const settingsBtn = dropdown.querySelector('#settingsMenuItem');
+  if (settingsBtn) {
+    settingsBtn.onclick = function(e) {
+      e.stopPropagation();
+      document.getElementById('userMenuDropdown')?.classList.remove('show');
+    };
+  }
+
+  // Logout button
+  const logoutBtn = dropdown.querySelector('#logoutMenuItem');
+  if (logoutBtn) {
+    logoutBtn.onclick = function(e) {
+      e.stopPropagation();
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      localStorage.removeItem('fullName');
+      localStorage.removeItem('userId');
+      window.location.href = '/index.html';
+    };
+  }
 }
 
 // Global dropdown state management

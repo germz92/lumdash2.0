@@ -302,8 +302,10 @@ function getInitials(name) {
 
 // Helper function to get user photo URL
 function getUserPhoto(name) {
-  const user = cachedUsers.find(u => u.name === name);
-  return user?.photo || null;
+  if (!name) return null;
+  const lowerName = name.toLowerCase().trim();
+  const user = cachedUsers.find(u => (u.name || '').toLowerCase().trim() === lowerName);
+  return user?.profilePhoto || user?.photo || null;
 }
 
 // Track currently selected row for action menu

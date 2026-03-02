@@ -20,7 +20,7 @@ let allClients = []; // Store unique client names for the dropdown
 let allUsers = [];
 let selectedUsers = [];
 let userPhotoMap = {}; // Maps lowercase user name → profilePhoto URL
-let isInitialLoad = true; // Track if this is the first load to auto-switch to Live tab
+let isInitialLoad = true; // Track if this is the first load
 
 // Pagination state
 let currentPage = 1;
@@ -1564,82 +1564,101 @@ async function loadTables(forceRefresh = false) {
       const activeTab = document.querySelector('.events-tab.active');
       const filter = activeTab ? activeTab.dataset.filter : 'upcoming';
       
-      // Filter by tab
+      // Separate live events from the rest
+      const liveEvents = filteredTables.filter(table => {
+        const status = getEventStatus(table);
+        return status.class === 'live';
+      });
+      
+      // Filter by tab (live events are excluded from tab filtering since they get their own section on Upcoming)
       let tabFilteredTables = filteredTables;
-      if (filter !== 'all') {
+      if (filter === 'upcoming') {
+        // For Upcoming tab: show only upcoming events (live events shown separately above)
+        tabFilteredTables = filteredTables.filter(table => {
+          const status = getEventStatus(table);
+          return status.class === 'upcoming';
+        });
+      } else if (filter !== 'all') {
         tabFilteredTables = filteredTables.filter(table => {
           const status = getEventStatus(table);
           return status.class === filter;
         });
       }
       
-      // Store total for pagination
-      totalFilteredEvents = tabFilteredTables.length;
-      const totalPages = Math.ceil(totalFilteredEvents / EVENTS_PER_PAGE);
+      // On the Upcoming tab, include live events in the total count
+      const liveCountForUpcoming = (filter === 'upcoming') ? liveEvents.length : 0;
+      
+      // Store total for pagination (upcoming events only, live section is always shown in full)
+      totalFilteredEvents = tabFilteredTables.length + liveCountForUpcoming;
+      const totalPages = Math.ceil(tabFilteredTables.length / EVENTS_PER_PAGE) || 1;
       
       // Ensure current page is valid
       if (currentPage > totalPages) currentPage = Math.max(1, totalPages);
       
-      // Paginate the results
+      // Paginate the upcoming results (live events are NOT paginated - always shown)
       const startIndex = (currentPage - 1) * EVENTS_PER_PAGE;
       const endIndex = startIndex + EVENTS_PER_PAGE;
       const paginatedTables = tabFilteredTables.slice(startIndex, endIndex);
       
-      // Populate owner dropdown with owners from currently visible events only
-      populateOwnerDropdown(paginatedTables);
+      // Populate owner dropdown with owners from currently visible events
+      const allVisibleTables = filter === 'upcoming' ? [...liveEvents, ...paginatedTables] : paginatedTables;
+      populateOwnerDropdown(allVisibleTables);
       
+      // If on the Upcoming tab and there are live events, render the Live Events section first
+      if (filter === 'upcoming' && liveEvents.length > 0) {
+        // Live section header row
+        const liveHeaderRow = document.createElement('tr');
+        liveHeaderRow.className = 'live-section-header-row';
+        liveHeaderRow.innerHTML = `
+          <td colspan="8">
+            <div class="live-section-header">
+              <span class="live-pulse-dot"></span>
+              <span class="live-section-title">Live Events</span>
+              <span class="live-section-count">${liveEvents.length}</span>
+            </div>
+          </td>
+        `;
+        tableBody.appendChild(liveHeaderRow);
+        
+        // Render live event rows
+        liveEvents.forEach((table, index) => {
+          const row = renderEventRowDark(table, index, userId);
+          row.classList.add('live-section-event');
+          tableBody.appendChild(row);
+        });
+        
+        // Divider row between live and upcoming sections
+        if (paginatedTables.length > 0) {
+          const dividerRow = document.createElement('tr');
+          dividerRow.className = 'live-section-divider-row';
+          dividerRow.innerHTML = `
+            <td colspan="8">
+              <div class="live-section-divider">
+                <span class="divider-label">Upcoming Events</span>
+              </div>
+            </td>
+          `;
+          tableBody.appendChild(dividerRow);
+        }
+      }
+      
+      // Render the main event rows
       paginatedTables.forEach((table, index) => {
         const row = renderEventRowDark(table, startIndex + index, userId);
         tableBody.appendChild(row);
       });
       
       if (eventsCount) {
-        const showingStart = totalFilteredEvents > 0 ? startIndex + 1 : 0;
-        const showingEnd = Math.min(endIndex, totalFilteredEvents);
-        eventsCount.textContent = `Showing ${showingStart}-${showingEnd} of ${totalFilteredEvents} events`;
+        const showingStart = totalFilteredEvents > 0 ? 1 : 0;
+        eventsCount.textContent = `Showing ${totalFilteredEvents} events`;
       }
       
       // Render pagination controls
       renderPagination(totalPages);
       
-      // On initial load, check if there are live events and switch to Live tab
+      // Mark initial load as complete
       if (isInitialLoad) {
         isInitialLoad = false;
-        
-        // Count live events from the full filtered list (not tab-filtered)
-        const liveEvents = filteredTables.filter(table => {
-          const status = getEventStatus(table);
-          return status.class === 'live';
-        });
-        
-        console.log(`[Events] Initial load - Found ${liveEvents.length} live events`);
-        
-        // If there are live events, switch to the Live tab
-        if (liveEvents.length > 0) {
-          const liveTab = document.querySelector('.events-tab[data-filter="live"]');
-          if (liveTab && !liveTab.classList.contains('active')) {
-            console.log('[Events] Switching to Live tab (has live events)');
-            // Remove active from all tabs
-            document.querySelectorAll('.events-tab').forEach(t => t.classList.remove('active'));
-            // Activate live tab
-            liveTab.classList.add('active');
-            // Re-render with live filter (paginated)
-            currentPage = 1;
-            totalFilteredEvents = liveEvents.length;
-            const liveTotalPages = Math.ceil(totalFilteredEvents / EVENTS_PER_PAGE);
-            const livePaginated = liveEvents.slice(0, EVENTS_PER_PAGE);
-            tableBody.innerHTML = '';
-            livePaginated.forEach((table, index) => {
-              const row = renderEventRowDark(table, index, userId);
-              tableBody.appendChild(row);
-            });
-            if (eventsCount) {
-              const showingEnd = Math.min(EVENTS_PER_PAGE, liveEvents.length);
-              eventsCount.textContent = `Showing 1-${showingEnd} of ${liveEvents.length} events`;
-            }
-            renderPagination(liveTotalPages);
-          }
-        }
       }
     }
     

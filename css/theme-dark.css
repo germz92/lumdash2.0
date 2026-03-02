@@ -1361,8 +1361,6 @@ body:has(.events-page) {
 .events-table th:first-child {
   padding-left: 24px;
   padding-right: 0;
-  width: 1%;
-  white-space: nowrap;
 }
 
 .events-table th:last-child {
@@ -1420,8 +1418,6 @@ body:has(.events-page) {
   padding-left: 20px;
   padding-right: 0;
   border-left: 4px solid var(--row-accent, var(--accent-blue));
-  width: 1%;
-  white-space: nowrap;
 }
 
 .event-row td:last-child {
@@ -1433,7 +1429,9 @@ body:has(.events-page) {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  white-space: nowrap;
+  white-space: normal;
+  min-width: 180px;
+  max-width: 420px;
 }
 
 .event-name {
@@ -1441,8 +1439,10 @@ body:has(.events-page) {
   font-weight: 600;
   color: var(--text-primary);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px;
+  word-break: break-word;
+  line-height: 1.35;
 }
 
 .event-name .event-name-link {
@@ -2170,6 +2170,98 @@ body:has(.events-page) {
 .status-badge.past {
   background: var(--status-past-bg);
   color: var(--status-past);
+}
+
+/* ============================================
+   Live Events Section (Upcoming tab)
+   ============================================ */
+
+.live-section-header-row td {
+  padding: 0 !important;
+  border-left: none !important;
+}
+
+.live-section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 24px 10px;
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, transparent 100%);
+  border-bottom: 1px solid var(--status-live-border);
+}
+
+.live-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-live);
+  animation: livePulse 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+@keyframes livePulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5); }
+  50% { opacity: 0.7; box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
+}
+
+.live-section-title {
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+  color: var(--status-live);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.live-section-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
+  border-radius: var(--radius-full);
+  background: var(--status-live-bg);
+  color: var(--status-live);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.live-section-event {
+  background: rgba(16, 185, 129, 0.03);
+}
+
+.live-section-event:hover {
+  background: rgba(16, 185, 129, 0.07) !important;
+}
+
+.live-section-divider-row td {
+  padding: 0 !important;
+  border-left: none !important;
+}
+
+.live-section-divider {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 24px 10px;
+  margin-top: 4px;
+}
+
+.live-section-divider::before,
+.live-section-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.divider-label {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
 }
 
 /* Owner Cell */

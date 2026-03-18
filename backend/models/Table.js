@@ -89,7 +89,9 @@ const tableSchema = new mongoose.Schema({
         name: String,
         number: String,
         email: String,
-        role: String
+        role: String,
+        company: String,
+        isMain: { type: Boolean, default: false }
       }
     ],
     locations: [
@@ -279,6 +281,27 @@ const tableSchema = new mongoose.Schema({
       updatedAt: { type: Date, default: Date.now }
     }
   ],
+  executiveSummary: {
+    accountManager: { type: String, default: '' },
+    accountManagerEmail: { type: String, default: '' },
+    projectManager: { type: String, default: '' },
+    projectManagerEmail: { type: String, default: '' },
+    clientContact: { type: String, default: '' },
+    company: { type: String, default: '' },
+    email: { type: String, default: '' },
+    phone: { type: String, default: '' },
+    contractLink: { type: String, default: '' },
+    signed: { type: String, enum: ['', 'Yes', 'No', 'Needs Revision'], default: '' },
+    invoiceLink: { type: String, default: '' },
+    paid: { type: String, enum: ['', 'Yes', 'No', 'Retainer Paid', 'Needs Revision'], default: '' },
+    services: [{ type: String }],
+    deliverables: [{
+      _id: { type: mongoose.Schema.Types.ObjectId, auto: true },
+      item: { type: String, default: '' },
+      dueDate: { type: String, default: '' }
+    }],
+    notes: { type: String, default: '' }
+  },
   // Event documents (PDFs, images) stored in Cloudinary
   documents: [
     {

@@ -195,7 +195,7 @@ function renderDarkThemeContacts(contacts) {
     card.innerHTML = `
       <div class="contact-avatar initials">${getInitials(contact.name)}</div>
       <div class="contact-info">
-        <div class="contact-name">${contact.name || 'Unknown'}</div>
+        <div class="contact-name">${contact.name || 'Unknown'}${contact.isMain ? '<span class="main-contact-badge">Main</span>' : ''}</div>
         <div class="contact-role">${contact.role || 'No role specified'}</div>
         <div class="contact-details">
           ${contact.number ? `<div class="contact-detail"><span class="material-symbols-outlined">call</span><span>${contact.number}</span></div>` : ''}
@@ -672,8 +672,11 @@ function openEditContactModal(index) {
   // Populate form with existing data
   document.getElementById('contactName').value = contact.name || '';
   document.getElementById('contactRole').value = contact.role || '';
+  document.getElementById('contactCompany').value = contact.company || '';
   document.getElementById('contactPhone').value = contact.number || '';
   document.getElementById('contactEmail').value = contact.email || '';
+  const isMainEl = document.getElementById('contactIsMain');
+  if (isMainEl) isMainEl.checked = !!contact.isMain;
   
   // Update modal title and button
   const modalTitle = document.querySelector('#addContactModal .modal-header-dark h3');
@@ -813,7 +816,11 @@ function resetContactModal() {
   if (roleEl) roleEl.value = '';
   if (phoneEl) phoneEl.value = '';
   if (emailEl) emailEl.value = '';
-  
+  const companyEl = document.getElementById('contactCompany');
+  if (companyEl) companyEl.value = '';
+  const isMainEl = document.getElementById('contactIsMain');
+  if (isMainEl) isMainEl.checked = false;
+
   const modalTitle = document.querySelector('#addContactModal .modal-header-dark h3');
   const saveBtn = document.getElementById('saveContactBtn');
   const deleteBtn = document.getElementById('deleteContactBtn');
@@ -2559,39 +2566,67 @@ async function saveDarkThemeContact(tableId) {
   }
   
   try {
+    const isMainChecked = document.getElementById('contactIsMain')?.checked || false;
+
     const contactData = {
       name: document.getElementById('contactName').value,
       role: document.getElementById('contactRole').value,
+      company: document.getElementById('contactCompany').value,
       number: document.getElementById('contactPhone').value,
-      email: document.getElementById('contactEmail').value
+      email: document.getElementById('contactEmail').value,
+      isMain: isMainChecked
     };
-    
+
     let contacts = [...(currentTableData?.general?.contacts || [])];
-    
+
+    if (isMainChecked) {
+      contacts = contacts.map(c => ({ ...c, isMain: false }));
+    }
+
     if (isEditing) {
-      // Update existing contact
       contacts[editingContactIndex] = contactData;
     } else {
-      // Add new contact
       contacts.push(contactData);
     }
-    
+
+    const updatePayload = {
+      general: {
+        ...currentTableData?.general,
+        contacts
+      }
+    };
+
     const res = await fetch(`${API_BASE}/api/tables/${tableId}/general`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': window.token
       },
-      body: JSON.stringify({
-        general: {
-          ...currentTableData?.general,
-          contacts
-        }
-      })
+      body: JSON.stringify(updatePayload)
     });
-    
+
     if (!res.ok) throw new Error('Failed to save contact');
-    
+
+    if (isMainChecked) {
+      try {
+        await fetch(`${API_BASE}/api/tables/${tableId}/executive-summary`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': window.token
+          },
+          body: JSON.stringify({
+            clientContact: contactData.name,
+            company: contactData.company,
+            email: contactData.email,
+            phone: contactData.number
+          })
+        });
+      } catch (e) {
+        console.error('Failed to sync main contact to executive summary:', e);
+      }
+    }
+
     resetContactModal();
     hideContactModal();
     initPageDarkTheme(tableId);

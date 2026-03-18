@@ -3988,6 +3988,36 @@ app.put('/api/tables/:id/travel', authenticate, async (req, res) => {
   res.json({ message: 'Travel and accommodation saved' });
 });
 
+// Executive Summary
+app.get('/api/tables/:id/executive-summary', authenticate, async (req, res) => {
+  try {
+    const table = await Table.findById(req.params.id);
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+    res.json({
+      executiveSummary: table.executiveSummary || {},
+      general: table.general || {},
+      rows: table.rows || [],
+      travel: table.travel || [],
+      accommodation: table.accommodation || [],
+      title: table.title
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/tables/:id/executive-summary', authenticate, async (req, res) => {
+  try {
+    const table = await Table.findById(req.params.id);
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+    table.executiveSummary = { ...table.executiveSummary?.toObject?.() || {}, ...req.body };
+    await table.save();
+    res.json({ message: 'Executive summary saved', executiveSummary: table.executiveSummary });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // DELETE
 app.delete('/api/tables/:id', authenticate, async (req, res) => {
   const table = await Table.findById(req.params.id);

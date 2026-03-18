@@ -30,6 +30,10 @@
           <span class="material-symbols-outlined">home</span>
           <span>Home</span>
         </a>
+        <a href="#" class="nav-item" data-page="executive-summary" onclick="event.preventDefault(); window.navigate && window.navigate('executive-summary');">
+          <span class="material-symbols-outlined">summarize</span>
+          <span>Executive Summary</span>
+        </a>
         <a href="#" class="nav-item" data-page="crew" onclick="event.preventDefault(); window.navigate && window.navigate('crew');">
           <span class="material-symbols-outlined">group</span>
           <span>Crew</span>
@@ -435,6 +439,10 @@
         <input type="text" id="contactRole" placeholder="e.g. Event Director" autocomplete="off">
       </div>
       <div class="form-group-dark">
+        <label for="contactCompany">Company</label>
+        <input type="text" id="contactCompany" placeholder="Enter company name" autocomplete="off">
+      </div>
+      <div class="form-group-dark">
         <label for="contactPhone">Phone</label>
         <input type="tel" id="contactPhone" placeholder="Enter phone number" autocomplete="off">
       </div>
@@ -442,6 +450,11 @@
         <label for="contactEmail">Email</label>
         <input type="email" id="contactEmail" placeholder="Enter email" autocomplete="off">
       </div>
+      <label class="checkbox-dark" for="contactIsMain">
+        <input type="checkbox" id="contactIsMain">
+        <span class="checkbox-label">Mark as Main</span>
+        <span class="checkbox-hint">This contact will appear as the Client Point of Contact on the Executive Summary</span>
+      </label>
     </div>
     <div class="modal-footer-dark">
       <button class="btn-secondary" onclick="hideContactModal()">Cancel</button>

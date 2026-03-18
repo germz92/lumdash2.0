@@ -86,7 +86,7 @@ console.log(' app.js loaded');
 })();
 
 const PAGE_CLASSES = [
-  'events-page', 'general-page', 'crew-page', 'travel-page', 'card-log-page', 'schedule-page', 'dashboard-page', 'login-page', 'register-page', 'users-page', 'crew-planner-page', 'crew-calendar-page', 'gear-page', 'todos-page'
+  'events-page', 'general-page', 'crew-page', 'travel-page', 'card-log-page', 'schedule-page', 'dashboard-page', 'login-page', 'register-page', 'users-page', 'crew-planner-page', 'crew-calendar-page', 'gear-page', 'todos-page', 'executive-summary-page'
 ];
 
 function setBodyPageClass(page) {
@@ -1000,6 +1000,7 @@ function loadPageCSS(page) {
     case 'shotlist': cssFile = 'css/shotlist.css'; break;
     case 'users': cssFile = 'css/users.css'; break;
     case 'gear': cssFile = 'css/gear.css'; break;
+    case 'executive-summary': cssFile = 'css/executive-summary.css'; break;
   }
   if (cssFile) {
     const link = document.createElement('link');

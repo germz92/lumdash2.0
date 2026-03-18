@@ -1,0 +1,400 @@
+<!-- Dark Theme Executive Summary Page -->
+<link rel="stylesheet" href="css/theme-dark.css">
+<style>
+    body:has(.exec-summary-page) #page-container,
+    #page-container:has(.exec-summary-page) {
+        padding: 0 !important;
+        overflow: hidden !important;
+        height: 100% !important;
+    }
+    body:has(.exec-summary-page.dark-theme) .bottom-nav-material,
+    body:has(.exec-summary-page.dark-theme) #bottomNav {
+        display: none !important;
+    }
+    @media (max-width: 768px) {
+        body:has(.exec-summary-page.dark-theme) .bottom-nav-material,
+        body:has(.exec-summary-page.dark-theme) #bottomNav {
+            display: flex !important;
+        }
+        .exec-summary-page .general-sidebar {
+            transform: translateX(-100%);
+            transition: transform 0.3s ease;
+        }
+        .exec-summary-page .general-sidebar.open {
+            transform: translateX(0);
+        }
+        .exec-summary-page .general-sidebar.open ~ .general-sidebar-overlay {
+            display: block;
+        }
+    }
+</style>
+
+<div class="dark-theme exec-summary-page">
+  <div class="exec-layout">
+
+    <!-- Sidebar Navigation -->
+    <aside class="general-sidebar" id="execSidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">
+          <img src="assets/Logo - Dark BG.png" alt="Lumetry Media" class="sidebar-logo-img">
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item" data-page="events" onclick="event.preventDefault(); window.navigate && window.navigate('events');">
+          <span class="material-symbols-outlined">arrow_back</span>
+          <span>Back to Events</span>
+        </a>
+
+        <div class="sidebar-event-info" id="sidebarEventInfo"></div>
+
+        <div class="nav-section-label">Event Pages</div>
+
+        <a href="#" class="nav-item" data-page="general" onclick="event.preventDefault(); window.navigate && window.navigate('general');">
+          <span class="material-symbols-outlined">home</span>
+          <span>Home</span>
+        </a>
+        <a href="#" class="nav-item active" data-page="executive-summary" onclick="event.preventDefault(); window.navigate && window.navigate('executive-summary');">
+          <span class="material-symbols-outlined">summarize</span>
+          <span>Executive Summary</span>
+        </a>
+        <a href="#" class="nav-item" data-page="crew" onclick="event.preventDefault(); window.navigate && window.navigate('crew');">
+          <span class="material-symbols-outlined">group</span>
+          <span>Crew</span>
+        </a>
+        <a href="#" class="nav-item" data-page="schedule" onclick="event.preventDefault(); window.navigate && window.navigate('schedule');">
+          <span class="material-symbols-outlined">calendar_today</span>
+          <span>Schedule</span>
+        </a>
+        <a href="#" class="nav-item" data-page="shotlist" onclick="event.preventDefault(); window.navigate && window.navigate('shotlist');">
+          <span class="material-symbols-outlined">checklist</span>
+          <span>Shotlist</span>
+        </a>
+        <a href="#" class="nav-item" data-page="todos" onclick="event.preventDefault(); window.navigate && window.navigate('todos');">
+          <span class="material-symbols-outlined">task_alt</span>
+          <span>To-Dos</span>
+        </a>
+        <a href="#" class="nav-item" data-page="travel-accommodation" onclick="event.preventDefault(); window.navigate && window.navigate('travel-accommodation');">
+          <span class="material-symbols-outlined">flight_takeoff</span>
+          <span>Travel</span>
+        </a>
+        <a href="#" class="nav-item" data-page="gear" onclick="event.preventDefault(); window.navigate && window.navigate('gear');">
+          <span class="material-symbols-outlined">photo_camera</span>
+          <span>Gear</span>
+        </a>
+        <a href="#" class="nav-item" data-page="card-log" onclick="event.preventDefault(); window.navigate && window.navigate('card-log');">
+          <span class="material-symbols-outlined">sd_card</span>
+          <span>Cards</span>
+        </a>
+        <a href="#" class="nav-item" data-page="documents" onclick="event.preventDefault(); window.navigate && window.navigate('documents');">
+          <span class="material-symbols-outlined">map</span>
+          <span>Map</span>
+        </a>
+
+        <div class="nav-section-label admin-only-section" id="adminSectionLabel" style="display: none;">Admin</div>
+        <a href="#" class="nav-item admin-only-nav" data-page="admin-notes" onclick="event.preventDefault(); window.navigate && window.navigate('admin-notes');" style="display: none;">
+          <span class="material-symbols-outlined">sticky_note_2</span>
+          <span>Notes</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-user" id="sidebarUserContainer">
+        <div class="sidebar-user-avatar" id="sidebarUserAvatar">
+          <img src="" alt="User" id="sidebarAvatarImg" style="display: none;">
+          <span class="material-symbols-outlined" id="sidebarAvatarIcon">person</span>
+        </div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name" id="sidebarUserName">Loading...</div>
+        </div>
+        <div class="sidebar-user-dropdown" id="userDropdownBtn">
+          <span class="material-symbols-outlined">expand_more</span>
+        </div>
+      </div>
+    </aside>
+
+    <div class="general-sidebar-overlay" id="execSidebarOverlay"></div>
+
+    <!-- Main Content -->
+    <main class="exec-main">
+
+      <!-- Header -->
+      <header class="exec-header">
+        <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+        <div class="exec-header-left">
+          <h1 class="exec-title" id="eventTitle">Loading Event...</h1>
+          <span class="exec-subtitle">Executive Summary</span>
+        </div>
+        <div class="exec-header-right">
+          <span id="saveStatus" class="save-status">All changes saved</span>
+          <button class="export-btn" id="copyEmailBtn" title="Copy for Email">
+            <span class="material-symbols-outlined">content_copy</span>
+            <span>Copy for Email</span>
+          </button>
+          <button class="export-btn" id="exportPdfBtn" title="Export as PDF">
+            <span class="material-symbols-outlined">picture_as_pdf</span>
+            <span>Export PDF</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Scrollable Content -->
+      <div class="exec-content">
+
+        <!-- Project Details -->
+        <section class="exec-section">
+          <div class="section-header-dark">
+            <div class="section-header-left">
+              <span class="material-symbols-outlined section-icon">business_center</span>
+              <h2>Project Details</h2>
+            </div>
+            <div class="section-header-actions">
+              <button class="section-edit-btn" id="editProjectBtn">
+                <span class="material-symbols-outlined">edit</span>
+                <span>Edit</span>
+              </button>
+              <button class="section-save-btn" id="saveProjectBtn" style="display: none;">
+                <span class="material-symbols-outlined">save</span>
+                <span>Save</span>
+              </button>
+            </div>
+          </div>
+          <div class="exec-card-body">
+            <div class="exec-fields-grid" id="projectDetailsGrid"></div>
+          </div>
+        </section>
+
+        <!-- Client Info -->
+        <section class="exec-section">
+          <div class="section-header-dark">
+            <div class="section-header-left">
+              <span class="material-symbols-outlined section-icon">person</span>
+              <h2>Client Info</h2>
+            </div>
+            <div class="section-header-actions">
+              <button class="section-edit-btn" id="editClientBtn">
+                <span class="material-symbols-outlined">edit</span>
+                <span>Edit</span>
+              </button>
+              <button class="section-save-btn" id="saveClientBtn" style="display: none;">
+                <span class="material-symbols-outlined">save</span>
+                <span>Save</span>
+              </button>
+            </div>
+          </div>
+          <div class="exec-card-body">
+            <div class="exec-fields-grid" id="clientInfoGrid"></div>
+          </div>
+        </section>
+
+        <!-- Overview -->
+        <section class="exec-section">
+          <div class="section-header-dark">
+            <div class="section-header-left">
+              <span class="material-symbols-outlined section-icon">info</span>
+              <h2>Overview</h2>
+            </div>
+          </div>
+          <div class="exec-card-body">
+            <div class="exec-fields-grid" id="overviewGrid">
+              <div class="exec-field">
+                <label>Event Name</label>
+                <span class="field-value" id="overviewEventName">—</span>
+              </div>
+              <div class="exec-field">
+                <label>Location</label>
+                <span class="field-value" id="overviewLocation">—</span>
+              </div>
+              <div class="exec-field">
+                <label>Address</label>
+                <span class="field-value" id="overviewAddress">—</span>
+              </div>
+              <div class="exec-field">
+                <label>Event Date</label>
+                <span class="field-value" id="overviewEventDate">—</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Crew -->
+        <section class="exec-section">
+          <div class="section-header-dark">
+            <div class="section-header-left">
+              <span class="material-symbols-outlined section-icon">group</span>
+              <h2>Crew</h2>
+            </div>
+          </div>
+          <div class="exec-card-body">
+            <div id="crewByDate" class="crew-date-list">
+            </div>
+          </div>
+        </section>
+
+        <!-- Services -->
+        <section class="exec-section">
+          <div class="section-header-dark">
+            <div class="section-header-left">
+              <span class="material-symbols-outlined section-icon">design_services</span>
+              <h2>Services</h2>
+            </div>
+            <div class="section-header-actions">
+              <button class="section-edit-btn" id="editServicesBtn">
+                <span class="material-symbols-outlined">edit</span>
+                <span>Edit</span>
+              </button>
+              <button class="section-save-btn" id="saveServicesBtn" style="display: none;">
+                <span class="material-symbols-outlined">save</span>
+                <span>Save</span>
+              </button>
+            </div>
+          </div>
+          <div class="exec-card-body">
+            <div id="servicesList" class="services-list">
+              <p class="empty-hint">No services added yet</p>
+            </div>
+            <div id="servicesEditArea" style="display: none;">
+              <div class="services-add-row">
+                <select id="serviceDropdown" class="exec-select">
+                  <option value="">Select a service...</option>
+                  <option value="Event Photography">Event Photography</option>
+                  <option value="Live Gallery">Live Gallery</option>
+                  <option value="Event Videography">Event Videography</option>
+                  <option value="AI Booth">AI Booth</option>
+                  <option value="AI Sticker Activation">AI Sticker Activation</option>
+                  <option value="Headshot Booth">Headshot Booth</option>
+                </select>
+                <button class="add-service-btn" id="addServiceBtn">
+                  <span class="material-symbols-outlined">add</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Deliverables -->
+        <section class="exec-section">
+          <div class="section-header-dark">
+            <div class="section-header-left">
+              <span class="material-symbols-outlined section-icon">task</span>
+              <h2>Deliverables</h2>
+            </div>
+            <div class="section-header-actions">
+              <button class="section-edit-btn" id="editDeliverablesBtn">
+                <span class="material-symbols-outlined">edit</span>
+                <span>Edit</span>
+              </button>
+              <button class="section-save-btn" id="saveDeliverablesBtn" style="display: none;">
+                <span class="material-symbols-outlined">save</span>
+                <span>Save</span>
+              </button>
+            </div>
+          </div>
+          <div class="exec-card-body">
+            <div class="table-wrapper-dark">
+              <table class="dark-table" id="deliverablesTable">
+                <thead>
+                  <tr>
+                    <th>Item</th>
+                    <th class="date-col">Due Date</th>
+                  </tr>
+                </thead>
+                <tbody id="deliverablesBody"></tbody>
+              </table>
+            </div>
+            <div id="deliverablesEmpty" class="empty-hint" style="display: none;">No deliverables added yet</div>
+            <div id="deliverablesEditActions" style="display: none;">
+              <button class="add-row-btn" id="addDeliverableBtn">
+                <span class="material-symbols-outlined">add</span>
+                <span>Add Row</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- Travel & Accommodation (read-only) -->
+        <section class="exec-section full-width">
+          <div class="section-header-dark">
+            <div class="section-header-left">
+              <span class="material-symbols-outlined section-icon">flight_takeoff</span>
+              <h2>Travel & Accommodation</h2>
+            </div>
+          </div>
+          <div class="exec-card-body">
+            <div id="execTravelContent" class="exec-travel-content">
+              <p class="empty-hint">No travel entries yet</p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Notes -->
+        <section class="exec-section full-width">
+          <div class="section-header-dark">
+            <div class="section-header-left">
+              <span class="material-symbols-outlined section-icon">sticky_note_2</span>
+              <h2>Notes</h2>
+            </div>
+            <div class="section-header-actions">
+              <button class="section-edit-btn" id="editNotesBtn">
+                <span class="material-symbols-outlined">edit</span>
+                <span>Edit</span>
+              </button>
+              <button class="section-save-btn" id="saveNotesBtn" style="display: none;">
+                <span class="material-symbols-outlined">save</span>
+                <span>Save</span>
+              </button>
+            </div>
+          </div>
+          <div class="exec-card-body">
+            <div id="notesDisplay" class="notes-display">
+              <p class="empty-hint">No notes added yet</p>
+            </div>
+            <div id="notesEditorWrapper" class="exec-quill-wrapper" style="display: none;">
+              <div id="notesQuillEditor"></div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+  const sidebar = document.getElementById('execSidebar');
+  const overlay = document.getElementById('execSidebarOverlay');
+
+  if (mobileMenuBtn && sidebar) {
+    mobileMenuBtn.addEventListener('click', function() {
+      sidebar.classList.toggle('open');
+      if (overlay) overlay.classList.toggle('show');
+    });
+
+    if (overlay) {
+      overlay.addEventListener('click', function() {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('show');
+      });
+    }
+
+    document.addEventListener('click', function(e) {
+      if (sidebar.classList.contains('open') &&
+          !sidebar.contains(e.target) &&
+          !mobileMenuBtn.contains(e.target)) {
+        sidebar.classList.remove('open');
+        if (overlay) overlay.classList.remove('show');
+      }
+    });
+
+    sidebar.querySelectorAll('.nav-item').forEach(item => {
+      item.addEventListener('click', function() {
+        sidebar.classList.remove('open');
+        if (overlay) overlay.classList.remove('show');
+      });
+    });
+  }
+});
+</script>

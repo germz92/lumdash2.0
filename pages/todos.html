@@ -10,20 +10,6 @@
         overflow: hidden !important;
         height: 100% !important;
     }
-
-    /* Hide bottom nav on desktop - todos page has its own sidebar */
-    body:has(.todos-page.dark-theme) .bottom-nav-material,
-    body:has(.todos-page.dark-theme) #bottomNav {
-        display: none !important;
-    }
-
-    /* Show bottom nav on mobile */
-    @media (max-width: 768px) {
-        body:has(.todos-page.dark-theme) .bottom-nav-material,
-        body:has(.todos-page.dark-theme) #bottomNav {
-            display: flex !important;
-        }
-    }
 </style>
 
 <div class="dark-theme todos-page">

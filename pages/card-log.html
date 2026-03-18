@@ -10,20 +10,6 @@
         overflow: hidden !important;
         height: 100% !important;
     }
-
-    /* Hide bottom nav on desktop - card-log page has its own sidebar */
-    body:has(.card-log-page.dark-theme) .bottom-nav-material,
-    body:has(.card-log-page.dark-theme) #bottomNav {
-        display: none !important;
-    }
-
-    /* Show bottom nav on mobile */
-    @media (max-width: 768px) {
-        body:has(.card-log-page.dark-theme) .bottom-nav-material,
-        body:has(.card-log-page.dark-theme) #bottomNav {
-            display: flex !important;
-        }
-    }
 </style>
 
 <div class="dark-theme card-log-page">
@@ -252,6 +238,30 @@
         <div class="form-group-dark">
           <label for="card-card2-input">Files</label>
           <input type="text" id="card-card2-input" placeholder="Enter file count">
+        </div>
+
+        <!-- Category Dropdown -->
+        <div class="form-group-dark">
+          <label>Category</label>
+          <div class="custom-dropdown-wrapper" id="categoryDropdownWrapper">
+            <button type="button" class="custom-dropdown-trigger" id="categoryDropdownTrigger">
+              <span class="dropdown-value" id="categoryDropdownValue">Select Category</span>
+              <span class="material-symbols-outlined dropdown-arrow">expand_more</span>
+            </button>
+            <div class="custom-dropdown-menu" id="categoryDropdownMenu">
+              <button type="button" class="custom-dropdown-option" data-value="Photo">Photo</button>
+              <button type="button" class="custom-dropdown-option" data-value="Video">Video</button>
+              <button type="button" class="custom-dropdown-option" data-value="Headshot">Headshot</button>
+              <button type="button" class="custom-dropdown-option" data-value="Other">Other</button>
+            </div>
+            <input type="hidden" id="card-category-select" value="">
+          </div>
+        </div>
+
+        <!-- Notes Input -->
+        <div class="form-group-dark">
+          <label for="card-notes-input">Notes</label>
+          <textarea id="card-notes-input" placeholder="Add notes (optional)" rows="3"></textarea>
         </div>
       </div>
     </div>

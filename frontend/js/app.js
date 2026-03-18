@@ -155,9 +155,6 @@ function navigate(page, id) {
     // Logging handled by the localStorage wrapper
   }
   
-  // Clean up dropdown listeners before page transition
-  cleanupDropdownListeners();
-  
   // Clean up any existing page content and scripts
   const pageContainer = document.getElementById('page-container');
   if (pageContainer) {
@@ -251,31 +248,6 @@ function injectPageContent(html, page, id) {
   // Add new content to the target element
   targetElement.innerHTML = html;
   
-  // Show/hide bottom nav based on page and set it up
-  const bottomNav = document.getElementById('bottomNav');
-  if (bottomNav) {
-    if (page === 'events') { // 'events' page usually doesn't show the main event-specific nav
-      bottomNav.style.display = 'none';
-    } else {
-      bottomNav.style.display = ''; // Ensure it's visible for other pages
-      // Centralized call to setup bottom navigation, including listeners and active state
-      if (window.setupBottomNavigation) {
-        console.log(`Calling window.setupBottomNavigation for page: ${page} with id: ${id}`);
-        // CRITICAL FIX: Only use the explicit id if provided, don't fall back to getTableId()
-        // The id should come from the navigation system and be reliable
-        if (id) {
-          window.setupBottomNavigation(bottomNav, id, page);
-        } else {
-          console.warn(`No event ID provided for page ${page}, setupBottomNavigation skipped`);
-        }
-      } else {
-        console.error('window.setupBottomNavigation is not defined. Ensure it is globally available.');
-      }
-    }
-  } else {
-    console.log('Bottom navigation element (bottomNav) not found.');
-  }
-
   // Initialize AI Chat Widget for pages with event ID
   if (id && typeof window.initChat === 'function') {
     console.log(`Initializing AI chat for page: ${page} with id: ${id}`);
@@ -284,15 +256,9 @@ function injectPageContent(html, page, id) {
     console.warn('Chat widget not available - window.initChat not found');
   }
 
-  // Lucide icons init should be called AFTER setupBottomNavigation has potentially changed data-lucide attributes
-  // Note: updateActiveNavigation, called by setupBottomNavigation, already calls lucide.createIcons().
-  // So, an additional call here might be redundant unless setupBottomNavigation might not run or not call it.
-  // For safety, and because lucide.createIcons() is idempotent, a call here is okay.
-  /* This is now removed as we are using Material Symbols
-  if (window.lucide) {
-    lucide.createIcons(); 
-  }
-  */
+  // Normalize event-page sidebar behavior (mobile toggle + nav links)
+  ensureEventSidebarAdminLinks();
+  setupEventPageSidebarNavigation();
 
   // Remove any existing page script with the same ID
   const existingScript = document.getElementById('page-script');
@@ -300,13 +266,14 @@ function injectPageContent(html, page, id) {
     existingScript.remove();
   }
   
-  // Also remove any duplicate scripts that might have been added
-  document.querySelectorAll(`script[src=\"js/${page}.js\"]`).forEach(script => {
+  // Also remove any duplicate scripts (with or without cache-busting params)
+  const pageScriptSelector = `script[src^="js/${page}.js"]`;
+  document.querySelectorAll(pageScriptSelector).forEach(script => {
     script.remove();
   });
   
   // Check if script is already being loaded
-  if (document.querySelector(`script[src="js/${page}.js"]`)) {
+  if (document.querySelector(pageScriptSelector)) {
     console.log(`[SCRIPT_LOAD] Script js/${page}.js is already being loaded, skipping`);
     return;
   }
@@ -348,6 +315,7 @@ function injectPageContent(html, page, id) {
     const cacheBuster = Date.now();
     
     const script = document.createElement('script');
+    script.id = 'page-script';
     script.src = `js/${page}.js?v=${cacheBuster}`;
     script.onload = callback;
     script.onerror = () => {
@@ -406,124 +374,153 @@ function injectPageContent(html, page, id) {
       } else {
         console.warn(`window.initPage is not defined after loading js/${page}.js`);
       }
+
+      // Re-apply shared event sidebar behavior after page-specific init hooks.
+      // Some page scripts bind their own handlers; this ensures consistent final behavior.
+      ensureEventSidebarAdminLinks();
+      setupEventPageSidebarNavigation();
     }, 50);
   });
 }
 
-// Global dropdown state management
-let dropdownEventListeners = {
-  toggle: null,
-  document: null,
-  links: []
-};
+/**
+ * Setup mobile sidebar toggle + sidebar nav links for event pages.
+ * This normalizes behavior across pages that currently use different class names.
+ */
+function setupEventPageSidebarNavigation() {
+  const sidebar = document.querySelector('.general-sidebar');
+  const overlay = document.querySelector('.general-sidebar-overlay');
+  const mobileMenuBtn = document.getElementById('mobileMenuBtn');
 
-function cleanupDropdownListeners() {
-  // Remove existing event listeners
-  if (dropdownEventListeners.toggle) {
-    const dropdownToggle = document.querySelector('.dropdown-toggle');
-    if (dropdownToggle && dropdownEventListeners.toggle) {
-      dropdownToggle.removeEventListener('click', dropdownEventListeners.toggle);
-    }
-  }
-  
-  if (dropdownEventListeners.document) {
-    document.removeEventListener('click', dropdownEventListeners.document);
-  }
-  
-  // Remove link event listeners
-  dropdownEventListeners.links.forEach(({ element, handler }) => {
-    if (element && handler) {
-      element.removeEventListener('click', handler);
-    }
-  });
-  
-  // Reset the listeners object
-  dropdownEventListeners = {
-    toggle: null,
-    document: null,
-    links: []
+  if (!sidebar || !mobileMenuBtn) return;
+
+  const applyMenuButtonVisibility = () => {
+    // Some page-specific CSS only enables this at 768px.
+    // Force consistent mobile/tablet behavior across event pages.
+    mobileMenuBtn.style.display = window.innerWidth <= 1024 ? 'flex' : '';
   };
-}
-
-function setupDropdownMenu(tableId) {
-  // Clean up any existing listeners first
-  cleanupDropdownListeners();
-  
-  console.log(`🎯 setupDropdownMenu called with tableId: ${tableId} - Looking for dropdown elements...`);
-  const dropdownToggle = document.querySelector('.dropdown-toggle');
-  const dropdownMenu = document.getElementById('dropdownMenu');
-  const dropdownLinks = document.querySelectorAll('.dropdown-menu a[data-page]');
-
-  console.log('Dropdown toggle found:', !!dropdownToggle);
-  console.log('Dropdown menu found:', !!dropdownMenu);
-  console.log('Dropdown links found:', dropdownLinks.length);
-
-  if (!dropdownToggle || !dropdownMenu) {
-    console.log('❌ Dropdown elements not found, skipping setup');
-    console.log('Available elements in document:');
-    console.log('- .dropdown-toggle:', document.querySelectorAll('.dropdown-toggle').length);
-    console.log('- #dropdownMenu:', document.querySelectorAll('#dropdownMenu').length);
-    return;
+  applyMenuButtonVisibility();
+  if (window.__eventSidebarResizeHandler) {
+    window.removeEventListener('resize', window.__eventSidebarResizeHandler);
   }
+  window.__eventSidebarResizeHandler = applyMenuButtonVisibility;
+  window.addEventListener('resize', applyMenuButtonVisibility);
 
-  console.log('✅ Setting up dropdown menu with', dropdownLinks.length, 'links');
+  const closeSidebar = () => {
+    sidebar.classList.remove('open', 'show');
+    if (overlay) overlay.classList.remove('show', 'visible');
+    document.body.style.overflow = '';
+  };
 
-  // Create toggle handler
-  const toggleHandler = function(e) {
+  const openSidebar = () => {
+    sidebar.classList.add('open', 'show');
+    if (overlay) overlay.classList.add('show', 'visible');
+    document.body.style.overflow = 'hidden';
+  };
+
+  // Use onclick assignment to avoid accumulating listeners during SPA navigation
+  mobileMenuBtn.onclick = function(e) {
     e.preventDefault();
-    e.stopPropagation();
-    console.log('🎯 Dropdown toggle clicked, current state:', dropdownMenu.classList.contains('show'));
-    dropdownMenu.classList.toggle('show');
-  };
-  
-  // Create document click handler
-  const documentHandler = function(e) {
-    // Only proceed if the dropdown menu is currently shown
-    if (dropdownMenu.classList.contains('show')) {
-      if (!dropdownToggle.contains(e.target) && !dropdownMenu.contains(e.target)) {
-        console.log('Clicking outside visible dropdown, closing');
-        dropdownMenu.classList.remove('show');
-      }
+    const isOpen = sidebar.classList.contains('open') || sidebar.classList.contains('show');
+    if (isOpen) {
+      closeSidebar();
+    } else {
+      openSidebar();
     }
   };
 
-  // Add toggle event listener
-  console.log('Adding click listener to dropdown toggle');
-  dropdownToggle.addEventListener('click', toggleHandler);
-  dropdownEventListeners.toggle = toggleHandler;
+  if (overlay) {
+    overlay.onclick = closeSidebar;
+  }
 
-  // Add document click listener
-  document.addEventListener('click', documentHandler);
-  dropdownEventListeners.document = documentHandler;
-
-  // Handle dropdown menu item clicks
-  dropdownLinks.forEach(link => {
-    const linkHandler = function(e) {
+  // Normalize event-page sidebar navigation links
+  const sidebarLinks = sidebar.querySelectorAll('.nav-item[data-page]');
+  sidebarLinks.forEach(link => {
+    link.onclick = function(e) {
       e.preventDefault();
-      const page = link.getAttribute('data-page');
-      // Always get the latest eventId from localStorage at click time
+      const targetPage = link.getAttribute('data-page');
+      if (!targetPage) return;
+      closeSidebar();
+      const externalHref = link.getAttribute('data-external-href');
+      if (externalHref) {
+        window.location.href = externalHref;
+        return;
+      }
       const currentEventId = localStorage.getItem('eventId');
-      console.log(`Dropdown link clicked: ${page}, using currentEventId: ${currentEventId}`);
-      dropdownMenu.classList.remove('show');
-      
-      // Special handling for gear page - redirect to new gear system
-      if (page === 'gear') {
-        if (currentEventId) {
-          window.location.href = `pages/gear.html?eventId=${currentEventId}`;
-        } else {
-          alert('No event selected. Please select an event first.');
-        }
-      } else {
-        window.navigate(page, currentEventId);
+      if (window.navigate) {
+        window.navigate(targetPage, currentEventId);
       }
     };
-    link.addEventListener('click', linkHandler);
-    dropdownEventListeners.links.push({ element: link, handler: linkHandler });
   });
-  
-  // Mark as set up
-  dropdownToggle.setAttribute('data-dropdown-setup', 'true');
-  console.log('✅ Dropdown menu setup complete');
+}
+
+/**
+ * Ensure event-page sidebars include admin/planner links seen on dashboard.
+ * These pages are injected per-view, so we add missing links dynamically.
+ */
+function ensureEventSidebarAdminLinks() {
+  const sidebarNav = document.querySelector('.general-sidebar .sidebar-nav');
+  if (!sidebarNav) return;
+
+  let role = 'user';
+  try {
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
+    if (user.role) role = String(user.role).toLowerCase();
+  } catch (_) {}
+
+  if (role === 'user') {
+    const token = localStorage.getItem('token');
+    if (token) {
+      try {
+        const normalizedToken = token.startsWith('Bearer ') ? token.slice(7) : token;
+        const payload = JSON.parse(atob(normalizedToken.split('.')[1]));
+        if (payload.role) role = String(payload.role).toLowerCase();
+      } catch (_) {}
+    }
+  }
+
+  const isAdmin = role === 'admin';
+  const isOwner = role === 'owner';
+  const isPlanner = role === 'planner';
+  const canSeeAdminLinks = isAdmin || isOwner;
+  const canSeePlannerLinks = isAdmin || isPlanner;
+  if (!canSeeAdminLinks && !canSeePlannerLinks) return;
+
+  const adminLabelSelector = '.nav-section-label.admin-only-section, #adminSectionLabel';
+  let adminSectionLabel = sidebarNav.querySelector(adminLabelSelector);
+  if (!adminSectionLabel) {
+    adminSectionLabel = document.createElement('div');
+    adminSectionLabel.className = 'nav-section-label admin-only-section';
+    adminSectionLabel.id = 'adminSectionLabel';
+    adminSectionLabel.textContent = 'Admin';
+    sidebarNav.appendChild(adminSectionLabel);
+  }
+  adminSectionLabel.style.display = 'block';
+
+  const linkDefs = [
+    { page: 'inventory-management', label: 'Inventory', icon: 'inventory_2', externalHref: '/inventory-management.html', adminOnly: true },
+    { page: 'crew-planner', label: 'Crew Planner', icon: 'groups', externalHref: '/pages/crew-planner.html', adminOnly: true },
+    { page: 'crew-calendar', label: 'Crew Calendar', icon: 'event_note', externalHref: '/pages/crew-calendar.html', adminOnly: true },
+    { page: 'flights', label: 'Flight Management', icon: 'flight', externalHref: '/pages/flights.html', plannerOrAdmin: true },
+    { page: 'admin-timesheets', label: 'Timesheets', icon: 'schedule', externalHref: '/pages/admin-timesheets.html', adminOnly: true }
+  ];
+
+  linkDefs.forEach(def => {
+    if (def.adminOnly && !canSeeAdminLinks) return;
+    if (def.plannerOrAdmin && !canSeePlannerLinks) return;
+    if (sidebarNav.querySelector(`.nav-item[data-page="${def.page}"]`)) return;
+
+    const link = document.createElement('a');
+    link.href = '#';
+    link.className = `nav-item ${def.adminOnly ? 'admin-only-nav' : 'planner-nav'}`;
+    link.setAttribute('data-page', def.page);
+    link.setAttribute('data-external-href', def.externalHref);
+    link.innerHTML = `
+      <span class="material-symbols-outlined">${def.icon}</span>
+      <span>${def.label}</span>
+    `;
+    sidebarNav.appendChild(link);
+  });
 }
 
 function loadPageCSS(page) {
@@ -582,7 +579,6 @@ window.addEventListener('hashchange', () => {
 window.addEventListener('DOMContentLoaded', () => {
   console.log('🔥 DOMContentLoaded fired, checking for elements...');
   console.log('page-container exists:', !!document.getElementById('page-container'));
-  console.log('bottomNav exists:', !!document.getElementById('bottomNav'));
   
   // Reset any state that might be lingering from previous sessions
   window.currentPage = null;
@@ -622,7 +618,6 @@ window.addEventListener('DOMContentLoaded', () => {
 
 // Expose navigate globally for nav links
 window.navigate = navigate;
-window.setupBottomNavigation = setupBottomNavigation;
 
 // PullToRefresh.js integration for PWA/mobile
 if (window.PullToRefresh) {
@@ -662,386 +657,6 @@ if (window.PullToRefresh) {
     distReload: 60,
     distThreshold: 60
   });
-}
-
-// Function to be called by pages after they load bottom navigation
-function setupBottomNavigation(navContainer, tableId, currentPage) {
-  if (!navContainer) {
-    console.error('No navigation container provided');
-    return;
-  }
-
-  console.log(`Setting up bottom navigation with explicit tableId: ${tableId} for page: ${currentPage}`);
-
-  // Track current navigation mode (like gear page)
-  let currentIsDesktop = window.innerWidth >= 768;
-  console.log(`Screen width: ${window.innerWidth}px, using ${currentIsDesktop ? 'desktop' : 'mobile'} navigation`);
-  
-  if (currentIsDesktop) {
-    setupDesktopNavigation(navContainer, tableId, currentPage);
-  } else {
-    setupMobileNavigation(navContainer, tableId, currentPage);
-  }
-  
-  // Handle window resize to switch between desktop and mobile navigation
-  const resizeHandler = () => {
-    const newIsDesktop = window.innerWidth >= 768;
-    if (newIsDesktop !== currentIsDesktop) {
-      console.log(`Screen size changed from ${currentIsDesktop ? 'desktop' : 'mobile'} to ${newIsDesktop ? 'desktop' : 'mobile'} navigation`);
-      currentIsDesktop = newIsDesktop; // Update the tracked state
-      if (newIsDesktop) {
-        setupDesktopNavigation(navContainer, tableId, currentPage);
-      } else {
-        setupMobileNavigation(navContainer, tableId, currentPage);
-      }
-    }
-  };
-  
-  // Remove any existing resize listener to avoid duplicates
-  if (window.__navigationResizeHandler) {
-    window.removeEventListener('resize', window.__navigationResizeHandler);
-  }
-  window.__navigationResizeHandler = resizeHandler;
-  window.addEventListener('resize', resizeHandler);
-  
-  console.log('Bottom navigation setup complete');
-}
-
-// Desktop navigation: show all buttons directly
-function setupDesktopNavigation(navContainer, tableId, currentPage) {
-  console.log('Setting up desktop navigation with all buttons visible');
-  
-  // Reset any mobile-specific styles (simple approach like gear page)
-  navContainer.style.display = '';
-  navContainer.style.gridTemplateColumns = '';
-  navContainer.style.gap = '';
-  
-  // Reset grid positioning for all navigation items
-  const allNavItems = navContainer.querySelectorAll('a, .nav-dropdown');
-  allNavItems.forEach(item => {
-    item.style.gridColumn = '';
-    item.style.display = '';
-  });
-  
-  // Show all regular navigation items and reset their mobile styles
-  const regularNavItems = navContainer.querySelectorAll('a[data-page]:not(.desktop-nav-item), .chat-button-nav');
-  regularNavItems.forEach(item => {
-    if (!item.closest('.dropdown-menu')) {
-      item.style.display = 'flex';
-      // Reset any mobile grid positioning
-      item.style.gridColumn = '';
-    }
-  });
-  
-  // Hide the dropdown container
-  const navDropdown = navContainer.querySelector('.nav-dropdown');
-  if (navDropdown) {
-    navDropdown.style.display = 'none';
-    navDropdown.style.gridColumn = '';
-  }
-  
-  // Remove any existing desktop nav items we added previously
-  navContainer.querySelectorAll('.desktop-nav-item').forEach(item => item.remove());
-  
-  // Create and add the dropdown items as direct navigation buttons
-  const dropdownItems = [
-    { page: 'travel-accommodation', icon: 'flight_takeoff', label: 'Travel' },
-    { page: 'gear', icon: 'photo_camera', label: 'Gear' },
-    { page: 'card-log', icon: 'sd_card', label: 'Cards' },
-    { page: 'documents', icon: 'map', label: 'Map' },
-    { page: 'events', icon: 'exit_to_app', label: 'Exit' }
-  ];
-  
-  // Add the dropdown items as direct navigation links
-  dropdownItems.forEach(item => {
-    const navLink = document.createElement('a');
-    navLink.href = '#';
-    navLink.setAttribute('data-page', item.page);
-    navLink.className = 'desktop-nav-item';
-    navLink.innerHTML = `
-      <span class="material-symbols-outlined">${item.icon}</span>
-      <span>${item.label}</span>
-    `;
-    
-    // Add click handler
-    navLink.addEventListener('click', function(e) {
-      e.preventDefault();
-      const page = navLink.getAttribute('data-page');
-      const currentEventId = localStorage.getItem('eventId');
-      console.log(`Desktop nav link clicked: ${page}, using currentEventId: ${currentEventId}`);
-      
-      // Special handling for gear page - redirect to new gear system
-      if (page === 'gear') {
-        if (currentEventId) {
-          window.location.href = `pages/gear.html?eventId=${currentEventId}`;
-        } else {
-          alert('No event selected. Please select an event first.');
-        }
-      } else {
-        window.navigate(page, currentEventId);
-      }
-    });
-    
-    navContainer.appendChild(navLink);
-  });
-  
-  // Set up navigation for existing regular nav links
-  setupRegularNavLinks(navContainer);
-  
-  // Update active navigation state
-  if (currentPage) {
-    updateActiveNavigation(currentPage);
-  }
-}
-
-// Mobile navigation: use dropdown menu
-function setupMobileNavigation(navContainer, tableId, currentPage) {
-  console.log('Setting up mobile navigation with dropdown menu');
-  
-  // Apply mobile grid layout (this will be handled by CSS media queries, but ensure it's not overridden)
-  navContainer.style.display = '';
-  navContainer.style.gridTemplateColumns = '';
-  navContainer.style.gap = '';
-  
-  // Reset grid positioning for all navigation items (let CSS handle positioning)
-  const allNavItems = navContainer.querySelectorAll('a, .nav-dropdown');
-  allNavItems.forEach(item => {
-    item.style.gridColumn = '';
-    item.style.display = '';
-  });
-  
-  // Show only specific navigation items for mobile
-  const regularNavItems = navContainer.querySelectorAll('a[data-page]:not(.desktop-nav-item)');
-  regularNavItems.forEach(item => {
-    if (!item.closest('.dropdown-menu')) {
-      // Show only core navigation items in mobile mode
-      const page = item.getAttribute('data-page');
-      if (['general', 'crew', 'schedule', 'shotlist'].includes(page) || item.classList.contains('chat-button-nav')) {
-        item.style.display = 'flex';
-      } else {
-        item.style.display = 'none';
-      }
-      // Reset any explicit grid column assignments (let CSS handle it)
-      item.style.gridColumn = '';
-    }
-  });
-  
-  // Show the dropdown container
-  const navDropdown = navContainer.querySelector('.nav-dropdown');
-  if (navDropdown) {
-    navDropdown.style.display = 'flex';
-    navDropdown.style.gridColumn = '';
-  }
-  
-  // Remove any desktop nav items we added
-  navContainer.querySelectorAll('.desktop-nav-item').forEach(item => item.remove());
-  
-  // Set up navigation for regular nav links
-  setupRegularNavLinks(navContainer);
-  
-  // Set up dropdown menu functionality
-  setupDropdownMenu(tableId);
-  
-  // Update active navigation state
-  if (currentPage) {
-    updateActiveNavigation(currentPage);
-  }
-}
-
-// Helper function to set up regular navigation links
-function setupRegularNavLinks(navContainer) {
-  const navLinks = navContainer.querySelectorAll('a[data-page]');
-  console.log('Found', navLinks.length, 'navigation links with data-page attribute');
-  
-  navLinks.forEach(link => {
-    // Skip if this is inside a dropdown menu (will be handled separately)
-    if (link.closest('.dropdown-menu')) {
-      console.log('Skipping dropdown menu link:', link.getAttribute('data-page'));
-      return;
-    }
-    
-    // Skip if this is a desktop nav item (already has handler)
-    if (link.classList.contains('desktop-nav-item')) {
-      return;
-    }
-    
-    console.log('Setting up navigation for:', link.getAttribute('data-page'));
-    
-    // Remove any existing click listeners to avoid duplicates
-    const newLink = link.cloneNode(true);
-    link.parentNode.replaceChild(newLink, link);
-    
-    newLink.addEventListener('click', function(e) {
-      e.preventDefault();
-      const page = newLink.getAttribute('data-page');
-      const currentEventId = localStorage.getItem('eventId');
-      console.log(`Regular nav link clicked: ${page}, using currentEventId: ${currentEventId}`);
-      
-      // Close dropdown menu if it's open
-      const dropdownMenu = document.getElementById('dropdownMenu');
-      if (dropdownMenu && dropdownMenu.classList.contains('show')) {
-        console.log('Closing dropdown menu due to regular nav link click');
-        dropdownMenu.classList.remove('show');
-      }
-      
-      // Special handling for gear page - redirect to new gear system
-      if (page === 'gear') {
-        if (currentEventId) {
-          window.location.href = `pages/gear.html?eventId=${currentEventId}`;
-        } else {
-          alert('No event selected. Please select an event first.');
-        }
-      } else {
-        window.navigate(page, currentEventId);
-      }
-    });
-  });
-  
-  // Set up the chat button in navbar (mobile only)
-  const chatNavButton = navContainer.querySelector('.chat-button-nav');
-  if (chatNavButton) {
-    console.log('Setting up chat button in navbar');
-    
-    // Remove any existing click listeners to avoid duplicates
-    const newChatButton = chatNavButton.cloneNode(true);
-    chatNavButton.parentNode.replaceChild(newChatButton, chatNavButton);
-    
-    newChatButton.addEventListener('click', function(e) {
-      e.preventDefault();
-      console.log('Chat navbar button clicked');
-      
-      // Close dropdown menu if it's open
-      const dropdownMenu = document.getElementById('dropdownMenu');
-      if (dropdownMenu && dropdownMenu.classList.contains('show')) {
-        console.log('Closing dropdown menu due to chat button click');
-        dropdownMenu.classList.remove('show');
-      }
-      
-      // Trigger the chat functionality (same as floating button)
-      if (window.chatWidget) {
-        window.chatWidget.toggleChat();
-      }
-    });
-  }
-}
-
-// Function to update active navigation state
-function updateActiveNavigation(currentPage) {
-  console.log('Updating active navigation for page:', currentPage);
-
-  const allNavItems = document.querySelectorAll('.bottom-nav-material a, .bottom-nav-material .dropdown-toggle');
-
-  // Map: data-page value or a special key for toggle -> Material Symbol INACTIVE icon name
-  const defaultInactiveIcons = {
-    'events': 'exit_to_app',  // Exit icon for events page
-    'dashboard': 'home', 
-    'general': 'home',        // Home icon for general page
-    'crew': 'group',
-    'schedule': 'calendar_today',
-    'more-toggle': 'more_horiz',
-    'travel-accommodation': 'flight_takeoff',
-    'gear': 'photo_camera',
-    'card-log': 'sd_card',
-    'shotlist': 'checklist',
-    'documents': 'map'
-  };
-
-  // Map: INACTIVE Material Symbol name -> ACTIVE Material Symbol name
-  // Most will rely on CSS to change to a "filled" state by keeping the same name.
-  // Only list icons here that change their actual name for the active state.
-  const activeIconMap = {
-    'more_horiz': 'more_vert' // More toggle changes name
-    // 'home': 'home', // Stays 'home', CSS will handle fill
-    // 'info': 'info', // Stays 'info', CSS will handle fill
-    // 'group': 'group', // Stays 'group', CSS will handle fill
-    // 'calendar_today': 'calendar_today', // Stays 'calendar_today', CSS will handle fill
-  };
-
-  allNavItems.forEach(item => {
-    item.classList.remove('active');
-    // Find Material Symbol span. Note: The class might change if we decide to dynamically change it for fill state.
-    // For now, assuming it's always present and we only change textContent or rely on a parent .active class.
-    const iconElement = item.querySelector('span.material-symbols-outlined'); 
-    if (iconElement) {
-      let canonicalInactiveIconName;
-      if (item.classList.contains('dropdown-toggle')) {
-        canonicalInactiveIconName = defaultInactiveIcons['more-toggle'];
-      } else if (item.dataset.page) {
-        canonicalInactiveIconName = defaultInactiveIcons[item.dataset.page];
-      }
-
-      if (canonicalInactiveIconName) {
-        // Store the canonical inactive name if needed (e.g. if we were to change it and revert)
-        // For Material Symbols, we primarily change textContent.
-        iconElement.dataset.inactiveIconName = canonicalInactiveIconName;
-
-        // Reset to this canonical inactive icon name if it's not already set
-        if (iconElement.textContent !== canonicalInactiveIconName) {
-          iconElement.textContent = canonicalInactiveIconName;
-        }
-      } else {
-        if (!iconElement.dataset.inactiveIconName) {
-          iconElement.dataset.inactiveIconName = iconElement.textContent;
-        }
-        if (iconElement.textContent !== iconElement.dataset.inactiveIconName) {
-            iconElement.textContent = iconElement.dataset.inactiveIconName;
-        }
-        console.log('[DEBUG] Could not determine canonical inactive Material Symbol for item:', item, 'using fallback textContent.');
-      }
-    }
-  });
-
-  let activeElement = null;
-  let finalActiveIconName = null; 
-  let baseInactiveIconForActiveElement = null;
-
-  // First check for regular nav items (direct children of bottom-nav-material)
-  let navItem = document.querySelector(`.bottom-nav-material > a[data-page="${currentPage}"]`);
-  
-  // If not found, also check for desktop nav items
-  if (!navItem) {
-    navItem = document.querySelector(`.bottom-nav-material .desktop-nav-item[data-page="${currentPage}"]`);
-  }
-  
-  if (navItem) {
-    activeElement = navItem;
-    const pageType = navItem.dataset.page;
-    baseInactiveIconForActiveElement = defaultInactiveIcons[pageType];
-    if (baseInactiveIconForActiveElement) {
-      // If there's a specific active name mapped, use it. Otherwise, it's the same name (CSS handles fill).
-      finalActiveIconName = activeIconMap[baseInactiveIconForActiveElement] || baseInactiveIconForActiveElement;
-    }
-  } else {
-    // Check if the page is in the dropdown menu (for mobile navigation)
-    const dropdownLink = document.querySelector(`.bottom-nav-material .dropdown-menu a[data-page="${currentPage}"]`);
-    if (dropdownLink) {
-      activeElement = document.querySelector('.bottom-nav-material .dropdown-toggle'); 
-      if (activeElement) {
-        baseInactiveIconForActiveElement = defaultInactiveIcons['more-toggle']; // This is 'more_horiz'
-        if (baseInactiveIconForActiveElement) {
-          finalActiveIconName = activeIconMap[baseInactiveIconForActiveElement] || baseInactiveIconForActiveElement; // Should be 'more_vert'
-        }
-      }
-    }
-  }
-
-  if (activeElement) {
-    activeElement.classList.add('active');
-    const iconElementToUpdate = activeElement.querySelector('span.material-symbols-outlined');
-    if (iconElementToUpdate && finalActiveIconName) {
-      if (!iconElementToUpdate.dataset.inactiveIconName && baseInactiveIconForActiveElement) {
-         iconElementToUpdate.dataset.inactiveIconName = baseInactiveIconForActiveElement;
-      }
-      iconElementToUpdate.textContent = finalActiveIconName;
-      console.log(`[DEBUG MS] Activated: ${currentPage}. Icon name for active state: '${finalActiveIconName}'. Base inactive: '${baseInactiveIconForActiveElement || 'unknown'}'. Stored inactive: '${iconElementToUpdate.dataset.inactiveIconName}'`);
-    } else if (iconElementToUpdate) {
-      console.log(`[DEBUG MS] Activated: ${currentPage}. Icon for ${iconElementToUpdate.dataset.inactiveIconName || iconElementToUpdate.textContent} relies on CSS active state (no specific active icon name mapping).`);
-    }
-  } else {
-    console.log('[DEBUG MS] No active element found for page:', currentPage);
-  }
-
-  // No need for lucide.createIcons(); Material Symbols with icon font render on textContent change.
 }
 
 // Function to save current page state for PWA restoration

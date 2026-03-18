@@ -44,32 +44,13 @@ class ChatWidget {
     }
   }
 
-  // Update chat position based on whether bottom nav is visible
   updatePosition() {
     const chatButton = document.getElementById('chatButton');
     const chatPanel = document.getElementById('chatPanel');
-    const bottomNav = document.getElementById('bottomNav');
-    
-    // Check if bottom nav exists and is visible
-    const hasVisibleBottomNav = bottomNav && 
-      bottomNav.style.display !== 'none' && 
-      getComputedStyle(bottomNav).display !== 'none';
-    
-    // Also check if we're on a dashboard-style page (no bottom nav)
-    const isDashboardPage = document.querySelector('.events-page') || 
-                           document.querySelector('.dashboard-layout') ||
-                           document.querySelector('.dashboard-sidebar') ||
-                           window.location.hash.includes('events') ||
-                           !bottomNav;
     
     if (chatButton && chatPanel) {
-      if (hasVisibleBottomNav && !isDashboardPage) {
-        chatButton.classList.add('above-nav');
-        chatPanel.classList.add('above-nav');
-      } else {
-        chatButton.classList.remove('above-nav');
-        chatPanel.classList.remove('above-nav');
-      }
+      chatButton.classList.remove('above-nav');
+      chatPanel.classList.remove('above-nav');
     }
   }
 

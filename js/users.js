@@ -230,10 +230,6 @@ let editingUserId = null;
       pageContainer.style.height = '100vh';
     }
     
-    const bottomNav = document.getElementById('bottomNav');
-    if (bottomNav) {
-      bottomNav.style.display = 'none';
-    }
   }
   
   // Setup external navigation links (since inline onclick doesn't work reliably in SPA)

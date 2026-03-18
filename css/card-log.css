@@ -157,7 +157,7 @@
   background-color: #a1a1a1; 
   color: white; 
 }
-.card-log-page td:last-child, .card-log-page th:last-child { text-align: center; white-space: nowrap; padding: 0 !important; }
+.card-log-page td:last-child, .card-log-page th:last-child { text-align: center; white-space: nowrap; }
 .card-log-page h1, .card-log-page h2 { text-align: center; }
 
 @media (max-width: 768px) { 
@@ -195,9 +195,7 @@
     width: 50px !important; 
     padding: 4px !important;
     text-align: center !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
+    vertical-align: middle !important;
   } 
   .card-log-page input[type="text"], .card-log-page select { 
     width: 100% !important; 

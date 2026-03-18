@@ -49,6 +49,11 @@
         gap: 16px;
       }
 
+      .crew-calendar-dark .page-header .mobile-menu-btn {
+        display: none;
+        flex-shrink: 0;
+      }
+
       .crew-calendar-dark .page-header-left {
         display: flex;
         flex-direction: column;
@@ -488,15 +493,36 @@
         background: rgba(239, 68, 68, 0.1);
       }
 
-      /* Mobile Responsive */
-      @media (max-width: 768px) {
-        .crew-calendar-dark .dashboard-sidebar {
-          display: none;
-        }
-
+      @media (max-width: 1024px) {
         .crew-calendar-dark .main-content {
           margin-left: 0;
           padding: 20px;
+        }
+
+        .crew-calendar-dark .page-header .mobile-menu-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 40px;
+          height: 40px;
+          background: transparent;
+          border: none;
+          color: var(--text-secondary);
+          cursor: pointer;
+          border-radius: var(--radius-md);
+          transition: all var(--transition-fast);
+        }
+
+        .crew-calendar-dark .page-header .mobile-menu-btn:hover {
+          background: var(--bg-hover);
+          color: var(--text-primary);
+        }
+      }
+
+      /* Mobile Responsive */
+      @media (max-width: 768px) {
+        .crew-calendar-dark .main-content {
+          padding: 16px;
         }
 
         .crew-calendar-dark .calendar-controls {
@@ -557,6 +583,9 @@
     <!-- Main Content -->
     <main class="main-content">
       <div class="page-header">
+        <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
         <div class="page-header-left">
           <h1>
             <span class="material-symbols-outlined">calendar_month</span>

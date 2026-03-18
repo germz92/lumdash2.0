@@ -1165,22 +1165,11 @@
 
   // Cleanup when leaving page
   window.cleanupTimesheet = function() {
-    // Show bottom nav again when leaving
-    const bottomNav = document.getElementById('bottomNav');
-    if (bottomNav) {
-      bottomNav.style.display = '';
-    }
   };
 
   // Initialize page
   window.initPage = function() {
     console.log('Timesheet page initialized');
-    
-    // Hide bottom nav on this page
-    const bottomNav = document.getElementById('bottomNav');
-    if (bottomNav) {
-      bottomNav.style.display = 'none';
-    }
     
     setupActionButtons();
     setupEventListeners();

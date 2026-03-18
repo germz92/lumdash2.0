@@ -8,12 +8,6 @@ body:has(.timesheet-page) #page-container {
   overflow-y: auto !important;
 }
 
-/* Hide bottom nav on timesheet page */
-body:has(.timesheet-page) #bottomNav,
-body:has(.timesheet-page) .bottom-nav-material {
-  display: none !important;
-}
-
 /* ===== TIMESHEET PAGE STYLES ===== */
 .timesheet-page {
   min-height: auto;

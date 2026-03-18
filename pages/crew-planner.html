@@ -49,7 +49,20 @@
       }
 
       .crew-planner-dark .page-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
         margin-bottom: 32px;
+      }
+
+      .crew-planner-dark .page-header .mobile-menu-btn {
+        display: none;
+        flex-shrink: 0;
+      }
+
+      .crew-planner-dark .page-header-text {
+        flex: 1;
+        min-width: 0;
       }
 
       .crew-planner-dark .page-header h1 {
@@ -893,15 +906,36 @@
         }
       }
 
-      /* Mobile Responsive */
-      @media (max-width: 768px) {
-        .crew-planner-dark .dashboard-sidebar {
-          display: none;
-        }
-
+      @media (max-width: 1024px) {
         .crew-planner-dark .main-content {
           margin-left: 0;
           padding: 20px;
+        }
+
+        .crew-planner-dark .page-header .mobile-menu-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 40px;
+          height: 40px;
+          background: transparent;
+          border: none;
+          color: var(--text-secondary);
+          cursor: pointer;
+          border-radius: var(--radius-md);
+          transition: all var(--transition-fast);
+        }
+
+        .crew-planner-dark .page-header .mobile-menu-btn:hover {
+          background: var(--bg-hover);
+          color: var(--text-primary);
+        }
+      }
+
+      /* Mobile Responsive */
+      @media (max-width: 768px) {
+        .crew-planner-dark .main-content {
+          padding: 16px;
         }
 
         .crew-planner-dark .controls-bar {
@@ -987,8 +1021,13 @@
     <!-- Main Content -->
     <main class="main-content">
       <div class="page-header">
-            <h1>Crew Planner</h1>
-            <p>Plan crew assignments across multiple events and conflicting dates</p>
+            <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu">
+              <span class="material-symbols-outlined">menu</span>
+            </button>
+            <div class="page-header-text">
+              <h1>Crew Planner</h1>
+              <p>Plan crew assignments across multiple events and conflicting dates</p>
+            </div>
         </div>
 
         <!-- Combined Controls Bar -->

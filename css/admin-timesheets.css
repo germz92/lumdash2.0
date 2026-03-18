@@ -55,6 +55,11 @@
   color: var(--text-secondary);
 }
 
+.timesheets-dark .page-header .mobile-menu-btn {
+  display: none;
+  flex-shrink: 0;
+}
+
 .timesheets-dark .page-header-right {
   display: flex;
   align-items: center;
@@ -589,10 +594,34 @@
   position: relative;
 }
 
+@media (max-width: 1024px) {
+  .timesheets-dark .main-content {
+    margin-left: 0;
+  }
+
+  .timesheets-dark .page-header .mobile-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+  }
+
+  .timesheets-dark .page-header .mobile-menu-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+}
+
 /* Mobile Responsive */
 @media (max-width: 768px) {
   .timesheets-dark .main-content {
-    margin-left: 0;
     padding: 20px;
   }
 

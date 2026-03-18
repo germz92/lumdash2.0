@@ -241,7 +241,7 @@
     const sidebar = document.getElementById('dashboardSidebar');
     let overlay = document.getElementById('dashboardSidebarOverlay') || document.querySelector('.sidebar-overlay');
     
-    if (!mobileMenuBtn || !sidebar) return;
+    if (!sidebar || !mobileMenuBtn) return;
     
     // Create overlay if it doesn't exist
     if (!overlay) {
@@ -525,11 +525,6 @@
       pageContainer.style.height = '100vh';
     }
     
-    // Hide bottom nav since dashboard uses sidebar
-    const bottomNav = document.getElementById('bottomNav');
-    if (bottomNav) {
-      bottomNav.style.display = 'none';
-    }
   }
   
   /**

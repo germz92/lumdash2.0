@@ -2829,31 +2829,6 @@ window.addEventListener("DOMContentLoaded", async () => {
         throw new Error("Missing configuration");
       }
 
-      // Load bottom navigation
-      const navContainer = document.getElementById('bottomNav');
-      if (navContainer) {
-        fetch('../bottom-nav.html?v=' + Date.now())
-          .then(response => response.text())
-          .then(html => {
-            // Extract the inner content from the fetched HTML
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = html;
-            const bottomNavContent = tempDiv.querySelector('.bottom-nav');
-            
-            if (bottomNavContent) {
-              navContainer.innerHTML = bottomNavContent.innerHTML;
-              
-              // Set up navigation using the centralized function from app.js
-              if (window.setupBottomNavigation) {
-                window.setupBottomNavigation(navContainer, id, 'gear');
-              }
-            }
-          })
-          .catch(error => {
-            console.error('Error loading bottom navigation:', error);
-          });
-      }
-
       // Load data
       loadGear();
       

@@ -3519,11 +3519,6 @@ function initPage(id) {
       
       // View Only indicator removed - not needed
       
-      // Set up navigation using the centralized function from app.js
-      if (window.setupBottomNavigation) {
-        window.setupBottomNavigation(null, tableId, 'general'); // Changed page to general
-      }
-      
       // Initialize clock functionality after DOM is ready
       // Use multiple attempts to ensure DOM elements are available
       console.log('[CLOCK] Starting clock initialization, isOwner:', isOwner, 'isAdmin:', isAdmin());

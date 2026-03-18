@@ -389,14 +389,14 @@
 
         .action-buttons {
             position: fixed;
-            bottom: 80px; /* Adjusted to be above bottom nav */
+            bottom: 80px;
             left: 0;
             right: 0;
             background: white;
             padding: 20px;
             box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.1);
             border-top: 1px solid #e0e0e0;
-            z-index: 999; /* Below bottom nav which is 1000 */
+            z-index: 999;
         }
 
         .action-buttons-content {
@@ -635,9 +635,8 @@
                 margin-top: 2px; /* Align with checkbox */
             }
             
-            /* Ensure action buttons don't overlap bottom nav on mobile */
             .action-buttons {
-                bottom: 100px; /* More space from bottom nav to avoid overlap */
+                bottom: 100px;
             }
             
             .container {
@@ -1091,167 +1090,6 @@
         let eventId = null;
         let currentUser = null;
 
-        // Load shared bottom navigation - SIMPLIFIED VERSION  
-        async function loadBottomNavigation() {
-            console.log('🚀 Starting bottom navigation setup...');
-            
-            const container = document.getElementById('bottomNavContainer');
-            if (!container) {
-                console.error('❌ bottomNavContainer element not found');
-                return;
-            }
-            
-            // Always use the direct navigation HTML (skip fetch complexity)
-            console.log('📝 Injecting navigation HTML directly...');
-            container.innerHTML = `
-                <!-- Bottom nav -->
-                <nav class="bottom-nav-material" id="bottomNav">
-                  <a href="#" id="navHome" data-page="general"><span class="material-symbols-outlined">home</span><span>Home</span></a>
-                  <a href="#" id="navCrew" data-page="crew"><span class="material-symbols-outlined">group</span><span>Crew</span></a>
-                  <a href="#" id="navLuma" class="chat-button-nav"><span class="material-symbols-outlined">lightbulb_2</span><span>Luma</span></a>
-                  <a href="#" id="navSchedule" data-page="schedule"><span class="material-symbols-outlined">calendar_today</span><span>Schedule</span></a>
-                  <a href="#" id="navShotlist" data-page="shotlist"><span class="material-symbols-outlined">checklist</span><span>Shotlist</span></a>
-                  
-                  <!-- Dropdown menu for Travel, Gear, Cards, Map, Shotlist (mobile), Exit -->
-                  <div class="nav-dropdown" id="navMore">
-                    <a href="#" class="dropdown-toggle">
-                      <span class="material-symbols-outlined">more_horiz</span>
-                      <span>More</span>
-                    </a>
-                    <div class="dropdown-menu" id="dropdownMenu">
-                      <a href="#" data-page="travel-accommodation">
-                        <span class="material-symbols-outlined">flight_takeoff</span>
-                        <span>Travel</span>
-                      </a>
-                      <a href="#" data-page="gear">
-                        <span class="material-symbols-outlined">photo_camera</span>
-                        <span>Gear</span>
-                      </a>
-                      <a href="#" data-page="card-log">
-                        <span class="material-symbols-outlined">sd_card</span>
-                        <span>Cards</span>
-                      </a>
-                      <a href="#" data-page="documents">
-                        <span class="material-symbols-outlined">map</span>
-                        <span>Map</span>
-                      </a>
-                      <a href="#" data-page="shotlist" class="mobile-shotlist-dropdown">
-                        <span class="material-symbols-outlined">checklist</span>
-                        <span>Shotlist</span>
-                      </a>
-                      <a href="#" id="navExit" data-page="events">
-                        <span class="material-symbols-outlined">exit_to_app</span>
-                        <span>Exit</span>
-                      </a>
-                    </div>
-                  </div>
-                </nav> 
-            `;
-            
-            const navContainer = document.getElementById('bottomNav');
-            if (!navContainer) {
-                console.error('❌ bottomNav element not found after injection');
-                return;
-            }
-            
-            console.log('✅ Navigation HTML injected successfully');
-            
-            // Simple setup without relying on complex SPA functions
-            setupGearPageNavigation(navContainer);
-        }
-        
-        // Standalone navigation setup specifically for gear page
-        function setupGearPageNavigation(navContainer) {
-            console.log('🔧 Setting up gear page navigation...');
-            
-            // Set up all navigation links
-            const navLinks = navContainer.querySelectorAll('a[data-page]');
-            navLinks.forEach(link => {
-                if (link.closest('.dropdown-menu')) return; // Skip dropdown items for now
-                
-                link.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    const page = link.getAttribute('data-page');
-                    console.log(`🖱️ Nav link clicked: ${page}`);
-                    
-                    if (page !== 'gear') {
-                        if (page === 'events') {
-                            window.location.href = `../dashboard.html#events`;
-                        } else {
-                            window.location.href = `../dashboard.html?eventId=${eventId}&page=${page}`;
-                        }
-                    }
-                });
-            });
-            
-            // Set up chat button
-            const chatButton = navContainer.querySelector('.chat-button-nav');
-            if (chatButton) {
-                chatButton.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    console.log('💬 Chat button clicked');
-                    
-                    // Try to open chat
-                    if (typeof openChat === 'function') {
-                        openChat();
-                    } else if (window.chatWidget) {
-                        window.chatWidget.toggleChat();
-                    } else {
-                        window.location.href = `../components/chat.html?eventId=${eventId}`;
-                    }
-                });
-            }
-            
-            // Set up dropdown menu
-            const dropdownToggle = navContainer.querySelector('.dropdown-toggle');
-            const dropdownMenu = navContainer.querySelector('.dropdown-menu');
-            
-            if (dropdownToggle && dropdownMenu) {
-                dropdownToggle.addEventListener('click', function(e) {
-                    e.preventDefault();
-                    dropdownMenu.classList.toggle('show');
-                });
-                
-                // Setup dropdown links
-                const dropdownLinks = dropdownMenu.querySelectorAll('a[data-page]');
-                dropdownLinks.forEach(link => {
-                    link.addEventListener('click', function(e) {
-                        e.preventDefault();
-                        const page = link.getAttribute('data-page');
-                        dropdownMenu.classList.remove('show');
-                        
-                        if (page !== 'gear') {
-                            if (page === 'events') {
-                                window.location.href = `../dashboard.html#events`;
-                            } else {
-                                window.location.href = `../dashboard.html?eventId=${eventId}&page=${page}`;
-                            }
-                        }
-                    });
-                });
-                
-                // Close dropdown when clicking outside
-                document.addEventListener('click', function(e) {
-                    if (!dropdownToggle.contains(e.target) && !dropdownMenu.contains(e.target)) {
-                        dropdownMenu.classList.remove('show');
-                    }
-                });
-            }
-            
-            // Mark gear as active
-            const gearLink = navContainer.querySelector('a[data-page="gear"]');
-            if (gearLink) {
-                gearLink.classList.add('active');
-            }
-            
-            const moreToggle = navContainer.querySelector('.dropdown-toggle');
-            if (moreToggle) {
-                moreToggle.classList.add('active');
-            }
-            
-            console.log('✅ Gear page navigation setup complete');
-        }
-
         // Initialize page
         document.addEventListener('DOMContentLoaded', async function() {
             eventId = new URLSearchParams(window.location.search).get('eventId');
@@ -1260,9 +1098,6 @@
                 window.history.back();
                 return;
             }
-
-            // Load the shared bottom navigation
-            await loadBottomNavigation();
 
             checkUserRole();
             loadEvent();

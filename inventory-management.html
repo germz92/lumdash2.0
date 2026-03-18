@@ -37,7 +37,20 @@
       }
 
       .inventory-dark .page-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
         margin-bottom: 32px;
+      }
+
+      .inventory-dark .page-header .mobile-menu-btn {
+        display: none;
+        flex-shrink: 0;
+      }
+
+      .inventory-dark .page-header-text {
+        flex: 1;
+        min-width: 0;
       }
 
       .inventory-dark .page-header h1 {
@@ -433,15 +446,36 @@
         background: rgba(239, 68, 68, 0.1);
         }
 
-      /* Mobile Responsive */
-        @media (max-width: 768px) {
-        .inventory-dark .dashboard-sidebar {
-          display: none;
-        }
-
+      @media (max-width: 1024px) {
         .inventory-dark .main-content {
           margin-left: 0;
           padding: 20px;
+        }
+
+        .inventory-dark .page-header .mobile-menu-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 40px;
+          height: 40px;
+          background: transparent;
+          border: none;
+          color: var(--text-secondary);
+          cursor: pointer;
+          border-radius: var(--radius-md);
+          transition: all var(--transition-fast);
+        }
+
+        .inventory-dark .page-header .mobile-menu-btn:hover {
+          background: var(--bg-hover);
+          color: var(--text-primary);
+        }
+      }
+
+      /* Mobile Responsive */
+        @media (max-width: 768px) {
+        .inventory-dark .main-content {
+          padding: 16px;
             }
 
         .inventory-dark .form-grid {
@@ -753,8 +787,13 @@
     <!-- Main Content -->
     <main class="main-content">
       <div class="page-header">
-            <h1>Inventory Management</h1>
-            <p>Add and manage gear inventory items. All fields are required.</p>
+            <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu">
+              <span class="material-symbols-outlined">menu</span>
+            </button>
+            <div class="page-header-text">
+              <h1>Inventory Management</h1>
+              <p>Add and manage gear inventory items. All fields are required.</p>
+            </div>
         </div>
 
         <div id="messageContainer"></div>

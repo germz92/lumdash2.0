@@ -379,7 +379,7 @@ class ChatWidget {
     if (hash.includes('/inventory')) return 'inventory-management';
     
     // Check active nav item
-    const activeNav = document.querySelector('.bottom-nav-material a.active, nav a.active');
+    const activeNav = document.querySelector('nav a.active');
     if (activeNav) {
       const dataPage = activeNav.getAttribute('data-page');
       if (dataPage) return dataPage;

@@ -282,7 +282,7 @@ async function saveToMongoDB() {
     const cardLog = Array.from(tables).map(dayTable => {
       const date = dayTable.querySelector('h3').textContent;
       const entries = Array.from(dayTable.querySelectorAll('tbody tr')).map(row => {
-        return {
+        const entry = {
           camera: row.querySelector('[data-field="camera"]').textContent || '',
           card1: row.querySelector('[data-field="card1"]').textContent || '',
           card2: row.querySelector('[data-field="card2"]').textContent || '',
@@ -292,6 +292,11 @@ async function saveToMongoDB() {
           createdAt: row.getAttribute('data-created-at') || new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
+        const category = row.getAttribute('data-category');
+        const notes = row.getAttribute('data-notes');
+        if (category) entry.category = category;
+        if (notes) entry.notes = notes;
+        return entry;
       });
       
       // Get the day ID from the DOM if it exists
@@ -554,7 +559,9 @@ function setupEventListeners() {
             card2: row.querySelector('[data-field="card2"]').textContent,
             user: row.querySelector('[data-field="user"]').textContent,
             createdBy: entryCreatedBy,
-            createdAt: row.getAttribute('data-created-at')
+            createdAt: row.getAttribute('data-created-at'),
+            category: row.getAttribute('data-category') || '',
+            notes: row.getAttribute('data-notes') || ''
           };
           
           openCardEntryModal(date, existingEntry);
@@ -563,33 +570,42 @@ function setupEventListeners() {
           alert('Not authorized - You can only edit card entries you created');
         }
       }
-      // Handle row action toggle (three-dot menu)
-      if (e.target.classList.contains('row-action-toggle') || e.target.closest('.row-action-toggle')) {
+      // Handle row delete button click
+      if (e.target.classList.contains('row-delete-btn') || e.target.closest('.row-delete-btn')) {
         e.stopPropagation();
-        console.log('[CARD-LOG] Row action toggle clicked');
-        const toggleBtn = e.target.closest('.row-action-toggle');
-        const row = toggleBtn.closest('tr');
+        const deleteBtn = e.target.closest('.row-delete-btn');
+        const row = deleteBtn.closest('tr');
         
         if (!row) return;
         
-        // Store reference to current row for delete action
-        window.currentCardLogRow = row;
-        console.log('[CARD-LOG] Stored current row:', row);
+        const entryCreatedBy = row.getAttribute('data-created-by');
+        const currentUserId = getUserIdFromToken();
         
-        // Show row action dropdown
-        const dropdown = document.getElementById('cardLogRowActionDropdown');
-        console.log('[CARD-LOG] Row dropdown element:', dropdown);
-        if (dropdown) {
-          // Close any other open dropdowns first
-          closeAllCardLogActionDropdowns();
-          
-          // Position the dropdown
-          const rect = toggleBtn.getBoundingClientRect();
-          dropdown.style.top = `${rect.bottom + 4}px`;
-          dropdown.style.left = `${rect.right - dropdown.offsetWidth}px`;
-          dropdown.classList.add('show');
-          console.log('[CARD-LOG] Row dropdown shown at:', { top: dropdown.style.top, left: dropdown.style.left });
+        if (!isOwner && entryCreatedBy !== currentUserId) {
+          alert('Not authorized - You can only delete card entries you created');
+          return;
         }
+        
+        const camera = row.querySelector('[data-field="camera"]')?.textContent || '';
+        const user = row.querySelector('[data-field="user"]')?.textContent || '';
+        let confirmMessage = 'Are you sure you want to delete this entry?';
+        if (camera) {
+          confirmMessage = `Delete entry for camera "${camera}"${user ? ` (${user})` : ''}?`;
+        }
+        
+        showCardLogDeleteModal(confirmMessage, async function() {
+          const tbody = row.closest('tbody');
+          const date = tbody ? tbody.id.replace('tbody-', '') : null;
+          row.remove();
+          if (date) updateDayEntryCount(date);
+          updateDateFilterOptions();
+          try {
+            await saveToMongoDB();
+          } catch (error) {
+            console.error('[CARD-LOG] Error deleting entry:', error);
+            alert('Error deleting entry. Please refresh the page.');
+          }
+        });
       }
       
       // Handle day action toggle (three-dot menu)
@@ -706,7 +722,9 @@ function setupEventListeners() {
           card1: row.querySelector('[data-field="card1"]')?.textContent || '',
           card2: row.querySelector('[data-field="card2"]')?.textContent || '',
           user: row.querySelector('[data-field="user"]')?.textContent || '',
-          createdBy: row.getAttribute('data-created-by')
+          createdBy: row.getAttribute('data-created-by'),
+          category: row.getAttribute('data-category') || '',
+          notes: row.getAttribute('data-notes') || ''
         };
         
         // Check if user can edit this entry
@@ -772,7 +790,7 @@ function setupEventListeners() {
     // Close dropdowns when clicking outside
     document.addEventListener('click', function(e) {
       if (!e.target.closest('.row-action-dropdown') && 
-          !e.target.closest('.row-action-toggle') && 
+          !e.target.closest('.row-delete-btn') && 
           !e.target.closest('.day-action-toggle')) {
         closeAllCardLogActionDropdowns();
       }
@@ -1207,28 +1225,6 @@ window.initPage = async function(id) {
   // Set up Socket.IO event listeners after everything is loaded
   setupSocketListeners();
 
-    // Load bottom nav HTML
-  let navContainer = document.getElementById('bottomNav');
-  if (!navContainer) {
-    navContainer = document.createElement('nav');
-    navContainer.className = 'bottom-nav';
-    navContainer.id = 'bottomNav';
-    document.body.appendChild(navContainer);
-  }
-          const navRes = await fetch('../bottom-nav.html?v=' + Date.now());
-    const navHTML = await navRes.text();
-  
-  // Extract just the nav content (without the outer nav tag)
-  const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = navHTML;
-  const navContent = tempDiv.querySelector('nav').innerHTML;
-  navContainer.innerHTML = navContent;
-
-  // Set up navigation using the centralized function from app.js
-  if (window.setupBottomNavigation) {
-    window.setupBottomNavigation(navContainer, tableId, 'card-log');
-  }
-
     // Inject hrefs with ?id=...
     const links = [
       { id: 'navGeneral', file: 'general.html' },
@@ -1495,11 +1491,11 @@ function addDaySection(date, entries = []) {
     </div>
     <table>
       <colgroup>
+        <col style="width: 25%;">
         <col style="width: 20%;">
-        <col style="width: 15%;">
-        <col style="width: 15%;">
-        <col style="width: 40%;">
-        <col style="width: 10%;">
+        <col style="width: 20%;">
+        <col style="width: 30%;">
+        <col style="width: 5%;">
       </colgroup>
       <thead>
         <tr>
@@ -1576,24 +1572,32 @@ function addRow(date, entry = {}) {
   row.setAttribute('data-user', entry.user || '');
   row.setAttribute('data-created-by', entryCreatedBy || '');
   row.setAttribute('data-created-at', entry.createdAt || '');
+  row.setAttribute('data-category', entry.category || '');
+  row.setAttribute('data-notes', entry.notes || '');
+
+  // Apply category-based row color
+  const category = (entry.category || '').toLowerCase();
+  if (category === 'video') {
+    row.classList.add('category-video');
+  } else if (category === 'headshot') {
+    row.classList.add('category-headshot');
+  }
+
+  const hasNotes = !!(entry.notes && entry.notes.trim());
+  const notesIndicator = hasNotes ? '<span class="notes-dot" title="Has notes"></span>' : '';
 
   // Create non-editable display cells with dark theme styling
   row.innerHTML = `
     <td>
-      <span class="display-value" data-field="camera">${entry.camera || ''}</span>
+      ${notesIndicator}<span class="display-value" data-field="camera">${entry.camera || ''}</span>
     </td>
     <td><span class="display-value" data-field="card1">${entry.card1 || ''}</span></td>
     <td><span class="display-value" data-field="card2">${entry.card2 || ''}</span></td>
     <td>
-      <div class="user-cell">
-        <div class="user-avatar">
-          <span class="material-symbols-outlined">person</span>
-        </div>
-        <span class="display-value" data-field="user">${entry.user || ''}</span>
-      </div>
+      <span class="display-value" data-field="user">${entry.user || ''}</span>
     </td>
     <td style="text-align:center;">
-      ${canDelete ? '<button class="row-action-toggle" title="Entry Options"><span class="material-symbols-outlined">more_vert</span></button>' : ''}
+      ${canDelete ? '<button class="row-delete-btn" title="Delete Entry"><span class="material-symbols-outlined">delete</span></button>' : ''}
     </td>
   `;
   
@@ -1633,6 +1637,8 @@ function openCardEntryModal(date, existingEntry = null) {
   const card1Input = document.getElementById('card-card1-input');
   const card2Input = document.getElementById('card-card2-input');
   const userHiddenInput = document.getElementById('card-user-select');
+  const categoryHiddenInput = document.getElementById('card-category-select');
+  const notesInput = document.getElementById('card-notes-input');
   const saveButton = document.getElementById('save-card-entry');
   
   // Custom dropdown elements
@@ -1734,9 +1740,13 @@ function openCardEntryModal(date, existingEntry = null) {
   // Pre-populate fields for editing or set defaults for new entries
   const currentUser = getCurrentUserName();
   
+  // Category dropdown elements
+  const categoryDropdownValue = document.getElementById('categoryDropdownValue');
+  
   if (existingEntry) {
     card1Input.value = existingEntry.card1 || '';
     card2Input.value = existingEntry.card2 || '';
+    notesInput.value = existingEntry.notes || '';
     
     if (existingEntry.camera) {
       cameraDropdownValue.textContent = existingEntry.camera;
@@ -1757,12 +1767,26 @@ function openCardEntryModal(date, existingEntry = null) {
       userDropdownValue.classList.add('placeholder');
       userHiddenInput.value = '';
     }
+    
+    if (existingEntry.category) {
+      categoryDropdownValue.textContent = existingEntry.category;
+      categoryDropdownValue.classList.remove('placeholder');
+      categoryHiddenInput.value = existingEntry.category;
+    } else {
+      categoryDropdownValue.textContent = 'Select Category';
+      categoryDropdownValue.classList.add('placeholder');
+      categoryHiddenInput.value = '';
+    }
   } else {
     card1Input.value = '';
     card2Input.value = '';
+    notesInput.value = '';
     cameraDropdownValue.textContent = 'Select Camera';
     cameraDropdownValue.classList.add('placeholder');
     cameraHiddenInput.value = '';
+    categoryDropdownValue.textContent = 'Select Category';
+    categoryDropdownValue.classList.add('placeholder');
+    categoryHiddenInput.value = '';
     
     // For new entries, always auto-select current user
     if (currentUser && users.includes(currentUser)) {
@@ -1820,6 +1844,10 @@ function setupCardLogDropdowns() {
   if (userMenu && userMenu.parentElement !== document.body) {
     document.body.appendChild(userMenu);
   }
+  const categoryMenu = document.getElementById('categoryDropdownMenu');
+  if (categoryMenu && categoryMenu.parentElement !== document.body) {
+    document.body.appendChild(categoryMenu);
+  }
   
   // Remove any existing click handlers and add new ones
   cameraDropdownTrigger.onclick = function(e) {
@@ -1851,6 +1879,32 @@ function setupCardLogDropdowns() {
       openDropdownMenu(userDropdownTrigger, menu);
     }
   };
+  
+  // Category dropdown
+  const categoryDropdownTrigger = document.getElementById('categoryDropdownTrigger');
+  if (categoryDropdownTrigger) {
+    const catMenu = document.getElementById('categoryDropdownMenu');
+    if (catMenu) {
+      catMenu.querySelectorAll('.custom-dropdown-option').forEach(opt => {
+        opt.onclick = function() {
+          selectDropdownOption('category', opt.getAttribute('data-value'), opt.textContent);
+        };
+      });
+    }
+
+    categoryDropdownTrigger.onclick = function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      const wrapper = document.getElementById('categoryDropdownWrapper');
+      const menu = document.getElementById('categoryDropdownMenu');
+      const isOpen = wrapper.classList.contains('open');
+      closeAllCardLogDropdowns();
+      if (!isOpen) {
+        wrapper.classList.add('open');
+        openDropdownMenu(categoryDropdownTrigger, menu);
+      }
+    };
+  }
   
   // Close dropdowns when clicking anywhere
   document.addEventListener('click', function(e) {
@@ -1930,12 +1984,15 @@ function positionDropdownMenu(trigger, menu) {
 function closeAllCardLogDropdowns() {
   document.getElementById('cameraDropdownWrapper')?.classList.remove('open');
   document.getElementById('userDropdownWrapper')?.classList.remove('open');
+  document.getElementById('categoryDropdownWrapper')?.classList.remove('open');
   
   // Hide the menus
   const cameraMenu = document.getElementById('cameraDropdownMenu');
   const userMenu = document.getElementById('userDropdownMenu');
+  const categoryMenu = document.getElementById('categoryDropdownMenu');
   if (cameraMenu) cameraMenu.style.display = 'none';
   if (userMenu) userMenu.style.display = 'none';
+  if (categoryMenu) categoryMenu.style.display = 'none';
 }
 
 // Close all action dropdowns (row and day three-dot menus)
@@ -2316,6 +2373,21 @@ function selectDropdownOption(type, value, displayText) {
         opt.classList.add('selected');
       }
     });
+  } else if (type === 'category') {
+    const hiddenInput = document.getElementById('card-category-select');
+    const displayValue = document.getElementById('categoryDropdownValue');
+    const menu = document.getElementById('categoryDropdownMenu');
+
+    hiddenInput.value = value;
+    displayValue.textContent = displayText;
+    displayValue.classList.remove('placeholder');
+
+    menu.querySelectorAll('.custom-dropdown-option').forEach(opt => {
+      opt.classList.remove('selected');
+      if (opt.getAttribute('data-value') === value) {
+        opt.classList.add('selected');
+      }
+    });
   }
   
   closeAllCardLogDropdowns();
@@ -2346,6 +2418,8 @@ async function saveCardEntry() {
   const card1Input = document.getElementById('card-card1-input');
   const card2Input = document.getElementById('card-card2-input');
   const userValue = document.getElementById('card-user-select').value;
+  const categoryValue = document.getElementById('card-category-select').value;
+  const notesValue = document.getElementById('card-notes-input').value.trim();
   
   // Validate required fields
   if (!userValue) {
@@ -2359,6 +2433,8 @@ async function saveCardEntry() {
     card1: card1Input.value.trim(),
     card2: card2Input.value.trim(),
     user: userValue,
+    category: categoryValue || '',
+    notes: notesValue || '',
     createdBy: getUserIdFromToken(),
     createdAt: currentEditingEntry ? currentEditingEntry.createdAt : new Date().toISOString(),
     updatedAt: new Date().toISOString()
@@ -2406,17 +2482,13 @@ async function addOrUpdateCardEntry(date, entryData) {
       const user = row.querySelector('[data-field="user"]').textContent;
       const createdBy = row.getAttribute('data-created-by');
       const createdAt = row.getAttribute('data-created-at');
+      const categoryVal = row.getAttribute('data-category');
+      const notesVal = row.getAttribute('data-notes');
       
-      return {
-        _id: rowId,
-        camera,
-        card1,
-        card2,
-        user,
-        createdBy,
-        createdAt,
-        updatedAt: new Date().toISOString()
-      };
+      const entryObj = { _id: rowId, camera, card1, card2, user, createdBy, createdAt, updatedAt: new Date().toISOString() };
+      if (categoryVal) entryObj.category = categoryVal;
+      if (notesVal) entryObj.notes = notesVal;
+      return entryObj;
     });
     
     const dayId = dayTable.getAttribute('data-id');
@@ -2519,12 +2591,34 @@ function updateExistingRowInDOM(date, entryData) {
   row.querySelector('[data-field="card1"]').textContent = entryData.card1 || '';
   row.querySelector('[data-field="card2"]').textContent = entryData.card2 || '';
   row.querySelector('[data-field="user"]').textContent = entryData.user || '';
-  
+
   // Update row attributes
   row.setAttribute('data-user', entryData.user || '');
   row.setAttribute('data-created-by', entryData.createdBy || '');
   row.setAttribute('data-created-at', entryData.createdAt || '');
-  
+  row.setAttribute('data-category', entryData.category || '');
+  row.setAttribute('data-notes', entryData.notes || '');
+
+  // Update category styling
+  row.classList.remove('category-video', 'category-headshot');
+  const updatedCategory = (entryData.category || '').toLowerCase();
+  if (updatedCategory === 'video') row.classList.add('category-video');
+  else if (updatedCategory === 'headshot') row.classList.add('category-headshot');
+
+  // Update notes indicator
+  const cameraCell = row.querySelector('td:first-child');
+  const existingDot = cameraCell.querySelector('.notes-dot');
+  if (entryData.notes && entryData.notes.trim()) {
+    if (!existingDot) {
+      const dot = document.createElement('span');
+      dot.className = 'notes-dot';
+      dot.title = 'Has notes';
+      cameraCell.insertBefore(dot, cameraCell.firstChild);
+    }
+  } else if (existingDot) {
+    existingDot.remove();
+  }
+
   console.log(`[CARD-LOG] Updated existing row in DOM for date ${date}`);
 }
 
@@ -3053,12 +3147,12 @@ function updateRowAccessControl(row, rowUser) {
   });
   
   // Update action toggle button - owners can delete any row, others can only delete their own rows
-  const actionToggle = row.querySelector('.row-action-toggle');
+  const actionToggle = row.querySelector('.row-delete-btn');
   if (!actionToggle && (isOwner || canEdit)) {
     // Add action toggle button if it doesn't exist
     const lastCell = row.querySelector('td:last-child');
     if (lastCell) {
-      lastCell.innerHTML = '<button class="row-action-toggle" title="Entry Options"><span class="material-symbols-outlined">more_vert</span></button>';
+      lastCell.innerHTML = '<button class="row-delete-btn" title="Delete Entry"><span class="material-symbols-outlined">delete</span></button>';
     }
   }
   

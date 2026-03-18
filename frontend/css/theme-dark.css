@@ -675,7 +675,6 @@ body:has(.events-page) {
   font-size: 18px;
 }
 
-
 .btn-create-event {
   display: flex;
   align-items: center;
@@ -1792,78 +1791,6 @@ body:has(.events-page) {
 }
 
 /* ========================================
-   DARK MODE BOTTOM NAVIGATION
-   Applied to all event pages on mobile
-   Uses :not(.events-page) to target all pages inside an event
-   ======================================== */
-
-/* Hide bottom nav on desktop for all event pages (sidebar handles navigation) */
-body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material {
-  display: none !important;
-}
-
-/* Show and style bottom nav on mobile for all event pages */
-@media (max-width: 768px) {
-  /* Show bottom nav on mobile */
-  body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material {
-    display: flex !important;
-  }
-  
-  /* Dark theme styling for bottom nav */
-  body:not(.events-page):not(.login-page):not(.register-page) #bottomNav {
-    background: #0d0d0d !important;
-    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
-    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5) !important;
-  }
-  
-  /* Nav items - dark theme colors */
-  body:not(.events-page):not(.login-page):not(.register-page) #bottomNav > a,
-  body:not(.events-page):not(.login-page):not(.register-page) #bottomNav .dropdown-toggle {
-    color: rgba(255, 255, 255, 0.6) !important;
-    background: transparent !important;
-  }
-  
-  /* Hover state */
-  body:not(.events-page):not(.login-page):not(.register-page) #bottomNav > a:hover,
-  body:not(.events-page):not(.login-page):not(.register-page) #bottomNav .dropdown-toggle:hover {
-    background: rgba(255, 255, 255, 0.08) !important;
-    color: #ffffff !important;
-  }
-  
-  /* Active state */
-  body:not(.events-page):not(.login-page):not(.register-page) #bottomNav > a.active,
-  body:not(.events-page):not(.login-page):not(.register-page) #bottomNav .dropdown-toggle.active {
-    color: #CC0007 !important;
-    background: rgba(204, 0, 7, 0.12) !important;
-  }
-  
-  /* Material icons inherit color */
-  body:not(.events-page):not(.login-page):not(.register-page) #bottomNav .material-symbols-outlined {
-    color: inherit !important;
-  }
-  
-  /* Dropdown menu - dark theme */
-  body:not(.events-page):not(.login-page):not(.register-page) #bottomNav .dropdown-menu {
-    background: #151515 !important;
-    border: 1px solid rgba(255, 255, 255, 0.12) !important;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important;
-  }
-  
-  body:not(.events-page):not(.login-page):not(.register-page) #bottomNav .dropdown-menu a {
-    color: rgba(255, 255, 255, 0.75) !important;
-  }
-  
-  body:not(.events-page):not(.login-page):not(.register-page) #bottomNav .dropdown-menu a:hover {
-    background: rgba(255, 255, 255, 0.08) !important;
-    color: #ffffff !important;
-  }
-  
-  body:not(.events-page):not(.login-page):not(.register-page) #bottomNav .dropdown-menu .material-symbols-outlined {
-    color: rgba(255, 255, 255, 0.5) !important;
-  }
-}
-
-/* ========================================
    SIDEBAR LOGO STYLING
    ======================================== */
 
@@ -2082,8 +2009,29 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
   outline: none;
 }
 
-.card-log-page.dark-theme .card-entry-form input[type="text"]::placeholder {
+.card-log-page.dark-theme .card-entry-form input[type="text"]::placeholder,
+.card-log-page.dark-theme .card-entry-form textarea::placeholder {
   color: var(--text-muted);
+}
+
+.card-log-page.dark-theme .card-entry-form textarea {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--bg-tertiary) !important;
+  border: 1px solid var(--border-default) !important;
+  border-radius: var(--radius-md);
+  color: var(--text-primary) !important;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  min-height: 70px;
+  transition: var(--transition-fast);
+}
+
+.card-log-page.dark-theme .card-entry-form textarea:focus {
+  border-color: var(--brand-red) !important;
+  box-shadow: 0 0 0 3px var(--brand-red-muted);
+  outline: none;
 }
 
 /* Custom Dropdown for Card Log Modal */
@@ -2147,7 +2095,8 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
 .card-log-page.dark-theme .custom-dropdown-menu,
 #card-entry-modal .custom-dropdown-menu,
 #cameraDropdownMenu,
-#userDropdownMenu {
+#userDropdownMenu,
+#categoryDropdownMenu {
   position: fixed;
   max-height: 250px;
   overflow-y: auto;
@@ -2181,7 +2130,8 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
 .card-log-page.dark-theme .custom-dropdown-option,
 #card-entry-modal .custom-dropdown-option,
 #cameraDropdownMenu .custom-dropdown-option,
-#userDropdownMenu .custom-dropdown-option {
+#userDropdownMenu .custom-dropdown-option,
+#categoryDropdownMenu .custom-dropdown-option {
   display: flex;
   align-items: center;
   width: 100%;
@@ -2198,14 +2148,16 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
 .card-log-page.dark-theme .custom-dropdown-option:hover,
 #card-entry-modal .custom-dropdown-option:hover,
 #cameraDropdownMenu .custom-dropdown-option:hover,
-#userDropdownMenu .custom-dropdown-option:hover {
+#userDropdownMenu .custom-dropdown-option:hover,
+#categoryDropdownMenu .custom-dropdown-option:hover {
   background: #2a2a2a !important;
 }
 
 .card-log-page.dark-theme .custom-dropdown-option.selected,
 #card-entry-modal .custom-dropdown-option.selected,
 #cameraDropdownMenu .custom-dropdown-option.selected,
-#userDropdownMenu .custom-dropdown-option.selected {
+#userDropdownMenu .custom-dropdown-option.selected,
+#categoryDropdownMenu .custom-dropdown-option.selected {
   background: rgba(204, 0, 7, 0.15) !important;
   color: #cc0007 !important;
 }
@@ -2213,7 +2165,8 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
 .card-log-page.dark-theme .custom-dropdown-option.add-new,
 #card-entry-modal .custom-dropdown-option.add-new,
 #cameraDropdownMenu .custom-dropdown-option.add-new,
-#userDropdownMenu .custom-dropdown-option.add-new {
+#userDropdownMenu .custom-dropdown-option.add-new,
+#categoryDropdownMenu .custom-dropdown-option.add-new {
   border-top: 1px solid #333;
   color: #cc0007 !important;
 }
@@ -2221,7 +2174,8 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
 .card-log-page.dark-theme .custom-dropdown-option.add-new:hover,
 #card-entry-modal .custom-dropdown-option.add-new:hover,
 #cameraDropdownMenu .custom-dropdown-option.add-new:hover,
-#userDropdownMenu .custom-dropdown-option.add-new:hover {
+#userDropdownMenu .custom-dropdown-option.add-new:hover,
+#categoryDropdownMenu .custom-dropdown-option.add-new:hover {
   background: rgba(204, 0, 7, 0.15) !important;
 }
 
@@ -4524,14 +4478,6 @@ body:not(.events-page):not(.login-page):not(.register-page) .bottom-nav-material
     gap: 24px;
   }
 }
-
-/* Hide bottom nav on desktop when in event pages (general page has sidebar nav) */
-.dark-theme.general-page ~ .bottom-nav-material,
-body.general-page .bottom-nav-material,
-body:has(.dark-theme.general-page) .bottom-nav-material {
-  display: none;
-}
-
 /* Mobile sidebar overlay */
 .general-sidebar-overlay {
   display: none;
@@ -4551,12 +4497,6 @@ body:has(.dark-theme.general-page) .bottom-nav-material {
 }
 
 @media (max-width: 768px) {
-  /* Show bottom nav on mobile for event pages */
-  .dark-theme.general-page ~ .bottom-nav-material,
-  body.general-page .bottom-nav-material,
-  body:has(.dark-theme.general-page) .bottom-nav-material {
-    display: flex;
-  }
   
   .general-sidebar {
     transform: translateX(-100%);
@@ -5337,14 +5277,6 @@ body:has(.dark-theme.general-page) .bottom-nav-material {
   animation: shimmer 1.5s infinite;
   border-radius: var(--radius-sm);
 }
-
-/* Hide bottom nav on desktop for crew page */
-.dark-theme.crew-page ~ .bottom-nav-material,
-body.crew-page .bottom-nav-material,
-body:has(.dark-theme.crew-page) .bottom-nav-material {
-  display: none;
-}
-
 /* Crew Page Responsive */
 @media (max-width: 1200px) {
   .crew-filter-bar {
@@ -5360,12 +5292,6 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 }
 
 @media (max-width: 768px) {
-  /* Show bottom nav on mobile */
-  .dark-theme.crew-page ~ .bottom-nav-material,
-  body.crew-page .bottom-nav-material,
-  body:has(.dark-theme.crew-page) .bottom-nav-material {
-    display: flex;
-  }
   
   .crew-main {
     margin-left: 0;
@@ -5697,7 +5623,8 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 
 /* Card log dropdown overrides - ensure visibility */
 #cameraDropdownMenu,
-#userDropdownMenu {
+#userDropdownMenu,
+#categoryDropdownMenu {
   opacity: 1 !important;
   visibility: visible !important;
   transform: none !important;
@@ -7757,7 +7684,8 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   padding: 24px 32px;
   background: var(--bg-primary);
   border-bottom: 1px solid var(--border-default);
-  z-index: 100;
+  z-index: 10;
+  position: relative;
 }
 
 .card-log-page.dark-theme .card-log-header-left {
@@ -8042,8 +7970,7 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   color: var(--text-muted);
 }
 
-.card-log-page.dark-theme .day-action-toggle,
-.card-log-page.dark-theme .row-action-toggle {
+.card-log-page.dark-theme .day-action-toggle {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -8057,14 +7984,46 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   transition: var(--transition-fast);
 }
 
-.card-log-page.dark-theme .day-action-toggle:hover,
-.card-log-page.dark-theme .row-action-toggle:hover {
+.card-log-page.dark-theme .day-action-toggle:hover {
   background: var(--bg-hover);
   color: var(--text-primary);
 }
 
-.card-log-page.dark-theme .row-action-toggle .material-symbols-outlined {
-  font-size: 20px;
+.card-log-page.dark-theme .row-delete-btn {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: none !important;
+  background-color: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  color: var(--text-muted) !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  width: auto !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  line-height: 1 !important;
+  vertical-align: middle !important;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.card-log-page.dark-theme .row-delete-btn:hover {
+  color: var(--accent-red, #ef4444) !important;
+  background: none !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.card-log-page.dark-theme .row-delete-btn .material-symbols-outlined {
+  font-size: 18px;
+  line-height: 1;
+  display: block;
 }
 
 /* Card Log Table */
@@ -8090,7 +8049,7 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  text-align: left;
+  text-align: center;
   border: none !important;
   border-bottom: 1px solid var(--border-default) !important;
 }
@@ -8105,6 +8064,7 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   color: var(--text-secondary) !important;
   font-size: var(--font-size-sm) !important;
   border: none !important;
+  vertical-align: middle !important;
   border-bottom: 1px solid var(--border-subtle) !important;
   vertical-align: middle;
 }
@@ -8162,6 +8122,33 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
 .card-log-page.dark-theme th:last-child,
 .card-log-page.dark-theme td:last-child {
   border-right: none !important;
+  vertical-align: middle !important;
+}
+
+/* Category row colors */
+.card-log-page.dark-theme tr.category-video td {
+  background: rgba(59, 130, 246, 0.08) !important;
+}
+.card-log-page.dark-theme tr.category-video:hover td {
+  background: rgba(59, 130, 246, 0.15) !important;
+}
+.card-log-page.dark-theme tr.category-headshot td {
+  background: rgba(34, 197, 94, 0.08) !important;
+}
+.card-log-page.dark-theme tr.category-headshot:hover td {
+  background: rgba(34, 197, 94, 0.15) !important;
+}
+
+/* Notes indicator dot */
+.card-log-page.dark-theme .notes-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ef4444;
+  margin-right: 6px;
+  vertical-align: middle;
+  flex-shrink: 0;
 }
 
 /* Camera color indicator */
@@ -8178,34 +8165,6 @@ body:has(.dark-theme.crew-page) .bottom-nav-material {
   background: var(--brand-red);
 }
 
-/* User cell with avatar */
-.card-log-page.dark-theme .user-cell {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.card-log-page.dark-theme .user-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--bg-tertiary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.card-log-page.dark-theme .user-avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.card-log-page.dark-theme .user-avatar .material-symbols-outlined {
-  font-size: 16px;
-  color: var(--text-muted);
-}
 
 /* Row action button */
 .card-log-page.dark-theme .row-action-btn {

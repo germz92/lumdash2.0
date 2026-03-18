@@ -136,7 +136,9 @@ const tableSchema = new mongoose.Schema({
           camera: String,
           card1: String,
           card2: String,
-          user: String
+          user: String,
+          category: String,
+          notes: String
         }
       ]
     }

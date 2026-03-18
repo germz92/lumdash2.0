@@ -55,6 +55,11 @@
   color: var(--text-secondary);
 }
 
+.flights-dark .page-header .mobile-menu-btn {
+  display: none;
+  flex-shrink: 0;
+}
+
 .flights-dark .page-header-right {
   display: flex;
   align-items: center;
@@ -1521,10 +1526,34 @@
   color: var(--text-tertiary);
 }
 
+@media (max-width: 1024px) {
+  .flights-dark .main-content {
+    margin-left: 0;
+  }
+
+  .flights-dark .page-header .mobile-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: var(--radius-md);
+    transition: all var(--transition-fast);
+  }
+
+  .flights-dark .page-header .mobile-menu-btn:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+}
+
 /* Mobile Responsive */
 @media (max-width: 768px) {
   .flights-dark .main-content {
-    margin-left: 0;
     padding: 20px;
   }
 

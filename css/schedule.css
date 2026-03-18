@@ -491,19 +491,15 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
         padding-right: 0 !important;
     }
 
-    .schedule-page .program-entry > div,
-    .schedule-page .program-entry > button,
-    .schedule-page .program-entry textarea,
-    .schedule-page .program-entry input,
-    .schedule-page .program-entry label {
-        width: 100% !important;
-        box-sizing: border-box;
-    }
-
     .schedule-page .program-entry {
         flex-direction: column !important;
         align-items: stretch !important;
         gap: 2px !important;
+    }
+
+    .schedule-page .program-entry > div {
+        width: 100% !important;
+        box-sizing: border-box;
     }
 
     /* Ensure the first row with times + checkbox stays horizontal even on mobile */
@@ -522,8 +518,8 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
         gap: 6px !important;
         flex-wrap: nowrap !important;
         min-width: 0 !important;
-        flex: 1 !important;
-        max-width: calc(100% - 25px) !important; /* Reserve space for checkbox */
+        flex: 1 1 0% !important;
+        overflow: hidden !important;
     }
 
     /* Second row with program name should span full width */
@@ -533,11 +529,12 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
         width: 100% !important;
     }
 
-    /* Time inputs on mobile - give them more space to prevent cutoff */
+    /* Time inputs on mobile - constrained width, don't stretch to 100% */
     .schedule-page .program-entry input[type="time"] {
-        width: 120px !important;
-        min-width: 120px !important;
-        max-width: 120px !important;
+        width: auto !important;
+        min-width: 100px !important;
+        max-width: 130px !important;
+        flex: 1 1 100px !important;
         font-size: 12px !important;
         padding: 6px 4px !important;
         border: 1px solid transparent !important;
@@ -545,6 +542,7 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
         background: transparent !important;
         text-align: left !important;
         transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s !important;
+        box-sizing: border-box !important;
     }
 
     /* Mobile focus and hover states */
@@ -618,11 +616,17 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
         align-self: center;
     }
 
-    .schedule-page input,
     .schedule-page textarea,
-    .schedule-page select,
-    .schedule-page button {
+    .schedule-page select {
         font-size: 16px !important;
+        width: 100% !important;
+        min-width: 0 !important;
+        box-sizing: border-box;
+    }
+
+    .schedule-page .program-entry input[type="text"],
+    .schedule-page .program-entry textarea {
+        font-size: 14px !important;
         width: 100% !important;
         min-width: 0 !important;
         box-sizing: border-box;
@@ -759,15 +763,6 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
         font-size: 16px !important;
     }
 
-    /* Make checkboxes bigger on mobile */
-    .schedule-page .done-checkbox {
-        width: 28px !important;
-        height: 28px !important;
-        min-width: 28px !important;
-        min-height: 28px !important;
-        accent-color: #CC0007;
-        margin: 0 8px 0 0;
-    }
 }
 
 .schedule-page input[type="time"] {

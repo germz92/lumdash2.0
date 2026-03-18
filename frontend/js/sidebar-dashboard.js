@@ -52,9 +52,9 @@
   function setupMobileMenu() {
     const mobileMenuBtn = document.getElementById('mobileMenuBtn');
     const sidebar = document.getElementById('dashboardSidebar');
-    
-    if (!mobileMenuBtn || !sidebar) return;
-    
+
+    if (!sidebar || !mobileMenuBtn) return;
+
     // Create overlay element
     let overlay = document.querySelector('.sidebar-overlay');
     if (!overlay) {
@@ -62,14 +62,14 @@
       overlay.className = 'sidebar-overlay';
       document.body.appendChild(overlay);
     }
-    
+
     // Use onclick property (simple, no accumulation)
     mobileMenuBtn.onclick = function() {
       sidebar.classList.toggle('open');
       overlay.classList.toggle('show');
       document.body.style.overflow = sidebar.classList.contains('open') ? 'hidden' : '';
     };
-    
+
     // Overlay click handler
     overlay.onclick = function() {
       sidebar.classList.remove('open');
@@ -319,11 +319,6 @@
       pageContainer.style.height = '100vh';
     }
     
-    // Hide bottom nav since dashboard uses sidebar
-    const bottomNav = document.getElementById('bottomNav');
-    if (bottomNav) {
-      bottomNav.style.display = 'none';
-    }
   }
   
   // Expose functions globally

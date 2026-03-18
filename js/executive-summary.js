@@ -296,7 +296,7 @@
 
     set('overviewEventName', currentData.title);
 
-    const locationVal = general.location || `${general.city || ''}${general.city && general.state ? ', ' : ''}${general.state || ''}` || '';
+    const locationName = loc.name || '';
     const addressVal = loc.address || '';
 
     const setMapLink = (id, text) => {
@@ -309,7 +309,7 @@
       }
     };
 
-    setMapLink('overviewLocation', locationVal);
+    set('overviewLocationName', locationName);
     setMapLink('overviewAddress', addressVal);
 
     const startStr = formatDate(general.start);
@@ -966,7 +966,7 @@
           ${section('Overview', 'info', `
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px 20px;">
               ${field('Event Name', title)}
-              ${field('Location', general.location || [general.city, general.state].filter(Boolean).join(', ') || '—')}
+              ${field('Location Name', loc.name)}
               ${field('Address', loc.address)}
               ${field('Event Date', dateRange)}
             </div>
@@ -1127,7 +1127,7 @@
           <td width="50%" valign="top" style="padding-right:12px;">
             <table width="100%" cellpadding="0" cellspacing="0">
               ${field('Event Name', title)}
-              ${field('Location', general.location || [general.city, general.state].filter(Boolean).join(', ') || '—')}
+              ${field('Location Name', loc.name)}
             </table>
           </td>
           <td width="50%" valign="top" style="padding-left:12px;">

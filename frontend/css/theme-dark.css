@@ -4015,7 +4015,7 @@ body:has(.events-page) {
 /* Contacts Grid */
 .contacts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   gap: 16px;
   margin-bottom: 16px;
 }
@@ -4551,10 +4551,9 @@ body:has(.events-page) {
   
   .general-content-grid {
     padding: 16px;
-    padding-bottom: 100px; /* Extra space for bottom nav */
     gap: 16px;
   }
-  
+
   .contacts-grid {
     grid-template-columns: 1fr;
   }

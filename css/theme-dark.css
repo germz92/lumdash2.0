@@ -5354,6 +5354,8 @@ body:has(.events-page) {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
   overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .general-card .card-header {
@@ -5420,6 +5422,8 @@ body:has(.events-page) {
 
 .general-card .card-content {
   padding: 20px;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .card-edit-btn,
@@ -5931,7 +5935,7 @@ body:has(.events-page) {
 /* Contacts Grid */
 .contacts-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
   gap: 16px;
   margin-bottom: 16px;
 }

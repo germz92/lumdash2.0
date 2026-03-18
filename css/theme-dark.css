@@ -1792,6 +1792,10 @@ body:has(.events-page) {
   white-space: nowrap;
 }
 
+.event-date .date-separator {
+  display: inline;
+}
+
 /* Crew Avatars Cell */
 .crew-avatars {
   display: flex;
@@ -2910,6 +2914,16 @@ body:has(.events-page) {
   
   .event-date {
     font-size: var(--font-size-sm);
+    white-space: normal;
+    line-height: 1.5;
+  }
+
+  .event-date .date-line {
+    display: block;
+  }
+
+  .event-date .date-separator {
+    display: none;
   }
   
   .status-badge {

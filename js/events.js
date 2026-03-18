@@ -1382,16 +1382,24 @@ function generateSkeletonRows(count) {
             <div class="skeleton" style="width: 100px; height: 14px;"></div>
           </div>
         </td>
+        <td>
+          <div style="display: flex; gap: 6px;">
+            <div class="skeleton" style="width: 28px; height: 28px; border-radius: 8px;"></div>
+            <div class="skeleton" style="width: 28px; height: 28px; border-radius: 8px;"></div>
+            <div class="skeleton" style="width: 28px; height: 28px; border-radius: 8px;"></div>
+          </div>
+        </td>
         <td><div class="skeleton" style="width: 120px; height: 16px;"></div></td>
         <td><div class="skeleton" style="width: 140px; height: 16px;"></div></td>
         <td>
-          <div style="display: flex; gap: -8px;">
+          <div style="display: flex;">
             <div class="skeleton" style="width: 32px; height: 32px; border-radius: 50%;"></div>
             <div class="skeleton" style="width: 32px; height: 32px; border-radius: 50%; margin-left: -8px;"></div>
             <div class="skeleton" style="width: 32px; height: 32px; border-radius: 50%; margin-left: -8px;"></div>
           </div>
         </td>
-        <td><div class="skeleton" style="width: 80px; height: 24px; border-radius: 12px;"></div></td>
+        <td><div class="skeleton" style="width: 60px; height: 24px; border-radius: 12px;"></div></td>
+        <td><div class="skeleton" style="width: 32px; height: 32px; border-radius: 50%;"></div></td>
         <td><div class="skeleton" style="width: 32px; height: 32px; border-radius: 8px;"></div></td>
       </tr>
     `;

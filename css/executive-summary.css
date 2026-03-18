@@ -117,6 +117,7 @@
 .exec-content {
   flex: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 24px 32px 80px;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -130,6 +131,7 @@
   background: var(--surface-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
+  min-width: 0;
 }
 
 .exec-section.full-width {
@@ -254,10 +256,22 @@
   line-height: 1.5;
 }
 
-.exec-field .field-value.field-link a {
+.exec-field .field-value.field-link a,
+.exec-field .field-value .maps-link {
   color: #5b9eff;
   text-decoration: none;
   word-break: break-all;
+}
+
+.exec-field .field-value .maps-link:hover,
+.exec-travel-table .maps-link:hover {
+  text-decoration: underline;
+}
+
+.exec-travel-table .maps-link {
+  color: #5b9eff;
+  text-decoration: none;
+  white-space: nowrap;
 }
 
 .exec-field .field-value.field-link a:hover {
@@ -456,6 +470,11 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  min-width: 0;
+}
+
+.exec-travel-scroll {
+  overflow-x: auto;
 }
 
 .exec-travel-section-label {
@@ -476,6 +495,7 @@
 
 .exec-travel-table {
   width: 100%;
+  min-width: 600px;
   border-collapse: collapse;
 }
 
@@ -736,7 +756,7 @@
 @media (max-width: 768px) {
   .exec-main {
     margin-left: 0;
-    padding-bottom: 80px;
+    padding-bottom: 20px;
   }
 
   .exec-header {
@@ -749,13 +769,13 @@
     grid-template-columns: 1fr;
   }
 
+  .exec-card-body {
+    padding: 14px 16px;
+  }
+
   .exec-fields-grid {
     grid-template-columns: 1fr;
     gap: 12px;
-  }
-
-  .exec-card-body {
-    padding: 14px 16px;
   }
 
   .exec-section .section-header-dark {

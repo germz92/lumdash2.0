@@ -162,6 +162,41 @@ async function toggleBadgeRequired(eventId, badgeType) {
   }
 }
 
+// Long-press handler for badge context menu on touch devices
+(function setupBadgeLongPress() {
+  let longPressTimer = null;
+  let longPressFired = false;
+
+  document.addEventListener('touchstart', function(e) {
+    const badge = e.target.closest('.badge-longpress');
+    if (!badge) return;
+
+    longPressFired = false;
+    const touch = e.touches[0];
+
+    longPressTimer = setTimeout(function() {
+      longPressFired = true;
+      e.preventDefault();
+      const eventId = badge.dataset.eventId;
+      const badgeType = badge.dataset.badgeType;
+      const isNotRequired = badge.dataset.notRequired === 'true';
+      const fakeEvent = { clientX: touch.clientX, clientY: touch.clientY, preventDefault: function(){}, stopPropagation: function(){} };
+      showBadgeContextMenu(fakeEvent, eventId, badgeType, isNotRequired);
+    }, 500);
+  }, { passive: false });
+
+  document.addEventListener('touchmove', function() {
+    clearTimeout(longPressTimer);
+  });
+
+  document.addEventListener('touchend', function(e) {
+    clearTimeout(longPressTimer);
+    if (longPressFired) {
+      e.preventDefault();
+    }
+  });
+})();
+
 // ========================================
 // TOAST NOTIFICATION SYSTEM
 // ========================================
@@ -955,26 +990,46 @@ function renderEventRowDark(table, index, userId) {
             ${cityState}
           </div>
           ` : ''}
+        <div class="event-badges event-badges-inline">
+          <span class="flight-badge badge-longpress ${getBadgeClass('flight', table.flightCount > 0, table.badgesNotRequired)}" data-event-id="${table._id}" data-badge-type="flight" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.flight)}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" title="${getBadgeTitle('flight', table.flightCount > 0, table.badgesNotRequired, table.flightCount)}">
+              <span class="material-symbols-outlined">flight</span>
+              ${table.flightCount > 0 && !table.badgesNotRequired?.flight ? `<span class="flight-count">${table.flightCount}</span>` : ''}
+            </span>
+          <span class="hotel-badge badge-longpress ${getBadgeClass('hotel', table.hotelCount > 0, table.badgesNotRequired)}" data-event-id="${table._id}" data-badge-type="hotel" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.hotel)}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" title="${getBadgeTitle('hotel', table.hotelCount > 0, table.badgesNotRequired, table.hotelCount)}">
+              <span class="material-symbols-outlined">hotel</span>
+              ${table.hotelCount > 0 && !table.badgesNotRequired?.hotel ? `<span class="hotel-count">${table.hotelCount}</span>` : ''}
+            </span>
+          <span class="share-badge badge-longpress ${getBadgeClass('share', table.shareCount > 0, table.badgesNotRequired)}" data-event-id="${table._id}" data-badge-type="share" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.share)}" onclick="event.stopPropagation(); openShareModal('${table._id}');" title="${getBadgeTitle('share', table.shareCount > 0, table.badgesNotRequired, table.shareCount)}">
+              <span class="material-symbols-outlined">send</span>
+              ${table.shareCount > 0 && !table.badgesNotRequired?.share ? `<span class="share-count">${table.shareCount}</span>` : ''}
+            </span>
+          <span class="schedule-badge badge-longpress ${getBadgeClass('schedule', table.hasSchedule, table.badgesNotRequired)}" data-event-id="${table._id}" data-badge-type="schedule" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.schedule)}" onclick="event.stopPropagation(); window.navigate('schedule', '${table._id}'); return false;" title="${getBadgeTitle('schedule', table.hasSchedule, table.badgesNotRequired)}">
+              <span class="material-symbols-outlined">calendar_month</span>
+            </span>
+          <span class="gear-badge badge-longpress ${getBadgeClass('gear', table.hasGear, table.badgesNotRequired)}" data-event-id="${table._id}" data-badge-type="gear" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.gear)}" onclick="event.stopPropagation(); window.navigate('gear', '${table._id}'); return false;" title="${getBadgeTitle('gear', table.hasGear, table.badgesNotRequired)}">
+              <span class="material-symbols-outlined">photo_camera</span>
+            </span>
+        </div>
       </div>
     </td>
     <td class="badges-cell">
       <div class="event-badges">
-          <span class="flight-badge ${getBadgeClass('flight', table.flightCount > 0, table.badgesNotRequired)}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'flight', ${!!(table.badgesNotRequired && table.badgesNotRequired.flight)});" title="${getBadgeTitle('flight', table.flightCount > 0, table.badgesNotRequired, table.flightCount)}">
+          <span class="flight-badge badge-longpress ${getBadgeClass('flight', table.flightCount > 0, table.badgesNotRequired)}" data-event-id="${table._id}" data-badge-type="flight" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.flight)}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'flight', ${!!(table.badgesNotRequired && table.badgesNotRequired.flight)});" title="${getBadgeTitle('flight', table.flightCount > 0, table.badgesNotRequired, table.flightCount)}">
               <span class="material-symbols-outlined">flight</span>
               ${table.flightCount > 0 && !table.badgesNotRequired?.flight ? `<span class="flight-count">${table.flightCount}</span>` : ''}
             </span>
-          <span class="hotel-badge ${getBadgeClass('hotel', table.hotelCount > 0, table.badgesNotRequired)}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'hotel', ${!!(table.badgesNotRequired && table.badgesNotRequired.hotel)});" title="${getBadgeTitle('hotel', table.hotelCount > 0, table.badgesNotRequired, table.hotelCount)}">
+          <span class="hotel-badge badge-longpress ${getBadgeClass('hotel', table.hotelCount > 0, table.badgesNotRequired)}" data-event-id="${table._id}" data-badge-type="hotel" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.hotel)}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'hotel', ${!!(table.badgesNotRequired && table.badgesNotRequired.hotel)});" title="${getBadgeTitle('hotel', table.hotelCount > 0, table.badgesNotRequired, table.hotelCount)}">
               <span class="material-symbols-outlined">hotel</span>
               ${table.hotelCount > 0 && !table.badgesNotRequired?.hotel ? `<span class="hotel-count">${table.hotelCount}</span>` : ''}
             </span>
-          <span class="share-badge ${getBadgeClass('share', table.shareCount > 0, table.badgesNotRequired)}" onclick="event.stopPropagation(); openShareModal('${table._id}');" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'share', ${!!(table.badgesNotRequired && table.badgesNotRequired.share)});" title="${getBadgeTitle('share', table.shareCount > 0, table.badgesNotRequired, table.shareCount)}">
+          <span class="share-badge badge-longpress ${getBadgeClass('share', table.shareCount > 0, table.badgesNotRequired)}" data-event-id="${table._id}" data-badge-type="share" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.share)}" onclick="event.stopPropagation(); openShareModal('${table._id}');" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'share', ${!!(table.badgesNotRequired && table.badgesNotRequired.share)});" title="${getBadgeTitle('share', table.shareCount > 0, table.badgesNotRequired, table.shareCount)}">
               <span class="material-symbols-outlined">send</span>
               ${table.shareCount > 0 && !table.badgesNotRequired?.share ? `<span class="share-count">${table.shareCount}</span>` : ''}
             </span>
-          <span class="schedule-badge ${getBadgeClass('schedule', table.hasSchedule, table.badgesNotRequired)}" onclick="event.stopPropagation(); window.navigate('schedule', '${table._id}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'schedule', ${!!(table.badgesNotRequired && table.badgesNotRequired.schedule)});" title="${getBadgeTitle('schedule', table.hasSchedule, table.badgesNotRequired)}">
+          <span class="schedule-badge badge-longpress ${getBadgeClass('schedule', table.hasSchedule, table.badgesNotRequired)}" data-event-id="${table._id}" data-badge-type="schedule" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.schedule)}" onclick="event.stopPropagation(); window.navigate('schedule', '${table._id}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'schedule', ${!!(table.badgesNotRequired && table.badgesNotRequired.schedule)});" title="${getBadgeTitle('schedule', table.hasSchedule, table.badgesNotRequired)}">
               <span class="material-symbols-outlined">calendar_month</span>
             </span>
-          <span class="gear-badge ${getBadgeClass('gear', table.hasGear, table.badgesNotRequired)}" onclick="event.stopPropagation(); window.navigate('gear', '${table._id}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'gear', ${!!(table.badgesNotRequired && table.badgesNotRequired.gear)});" title="${getBadgeTitle('gear', table.hasGear, table.badgesNotRequired)}">
+          <span class="gear-badge badge-longpress ${getBadgeClass('gear', table.hasGear, table.badgesNotRequired)}" data-event-id="${table._id}" data-badge-type="gear" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.gear)}" onclick="event.stopPropagation(); window.navigate('gear', '${table._id}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'gear', ${!!(table.badgesNotRequired && table.badgesNotRequired.gear)});" title="${getBadgeTitle('gear', table.hasGear, table.badgesNotRequired)}">
               <span class="material-symbols-outlined">photo_camera</span>
             </span>
       </div>

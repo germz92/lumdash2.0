@@ -497,30 +497,9 @@ function ensureEventSidebarAdminLinks() {
   }
   adminSectionLabel.style.display = 'block';
 
-  const linkDefs = [
-    { page: 'inventory-management', label: 'Inventory', icon: 'inventory_2', externalHref: '/inventory-management.html', adminOnly: true },
-    { page: 'crew-planner', label: 'Crew Planner', icon: 'groups', externalHref: '/pages/crew-planner.html', adminOnly: true },
-    { page: 'crew-calendar', label: 'Crew Calendar', icon: 'event_note', externalHref: '/pages/crew-calendar.html', adminOnly: true },
-    { page: 'flights', label: 'Flight Management', icon: 'flight', externalHref: '/pages/flights.html', plannerOrAdmin: true },
-    { page: 'admin-timesheets', label: 'Timesheets', icon: 'schedule', externalHref: '/pages/admin-timesheets.html', adminOnly: true }
-  ];
-
-  linkDefs.forEach(def => {
-    if (def.adminOnly && !canSeeAdminLinks) return;
-    if (def.plannerOrAdmin && !canSeePlannerLinks) return;
-    if (sidebarNav.querySelector(`.nav-item[data-page="${def.page}"]`)) return;
-
-    const link = document.createElement('a');
-    link.href = '#';
-    link.className = `nav-item ${def.adminOnly ? 'admin-only-nav' : 'planner-nav'}`;
-    link.setAttribute('data-page', def.page);
-    link.setAttribute('data-external-href', def.externalHref);
-    link.innerHTML = `
-      <span class="material-symbols-outlined">${def.icon}</span>
-      <span>${def.label}</span>
-    `;
-    sidebarNav.appendChild(link);
-  });
+  // Show the Notes link that already exists in the page HTML
+  const notesLink = sidebarNav.querySelector('.nav-item[data-page="admin-notes"]');
+  if (notesLink) notesLink.style.display = '';
 }
 
 function loadPageCSS(page) {

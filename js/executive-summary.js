@@ -6,6 +6,14 @@
 
   const API_BASE = window.API_BASE || 'http://localhost:3000';
 
+  function getMapsUrl(text) {
+    const encoded = encodeURIComponent(text);
+    const isApple = /iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent);
+    return isApple
+      ? `https://maps.apple.com/?q=${encoded}`
+      : `https://www.google.com/maps/search/?api=1&query=${encoded}`;
+  }
+
   function getToken() {
     return localStorage.getItem('token');
   }
@@ -279,8 +287,23 @@
     };
 
     set('overviewEventName', currentData.title);
-    set('overviewLocation', general.location || `${general.city || ''}${general.city && general.state ? ', ' : ''}${general.state || ''}` || '—');
-    set('overviewAddress', loc.address || '—');
+
+    const locationVal = general.location || `${general.city || ''}${general.city && general.state ? ', ' : ''}${general.state || ''}` || '';
+    const addressVal = loc.address || '';
+
+    const setMapLink = (id, text) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (text && text !== '—') {
+        el.innerHTML = `<a href="${getMapsUrl(text)}" target="_blank" rel="noopener noreferrer" class="maps-link">${text} <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">open_in_new</span></a>`;
+      } else {
+        el.textContent = '—';
+      }
+    };
+
+    setMapLink('overviewLocation', locationVal);
+    setMapLink('overviewAddress', addressVal);
+
     const startStr = formatDate(general.start);
     const endStr = formatDate(general.end);
     const dateRange = startStr && endStr ? `${startStr} – ${endStr}` : startStr || endStr || '—';
@@ -468,24 +491,26 @@
           <div class="exec-travel-section-label">
             <span class="material-symbols-outlined">flight</span> Travel
           </div>
-          <table class="exec-travel-table">
-            <thead>
-              <tr><th>Date</th><th>Depart</th><th>Arrive</th><th>Name</th><th>Airline</th><th>From/To</th><th>Ref</th></tr>
-            </thead>
-            <tbody>
-              ${travel.map(t => `
-                <tr>
-                  <td>${formatDate(t.date)}</td>
-                  <td>${t.depart || t.time || '—'}</td>
-                  <td>${t.arrive || '—'}</td>
-                  <td>${t.name || '—'}</td>
-                  <td>${t.airline || '—'}</td>
-                  <td>${t.fromTo || '—'}</td>
-                  <td>${t.ref || '—'}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
+          <div class="exec-travel-scroll">
+            <table class="exec-travel-table">
+              <thead>
+                <tr><th>Date</th><th>Depart</th><th>Arrive</th><th>Name</th><th>Airline</th><th>From/To</th><th>Ref</th></tr>
+              </thead>
+              <tbody>
+                ${travel.map(t => `
+                  <tr>
+                    <td>${formatDate(t.date)}</td>
+                    <td>${t.depart || t.time || '—'}</td>
+                    <td>${t.arrive || '—'}</td>
+                    <td>${t.name || '—'}</td>
+                    <td>${t.airline || '—'}</td>
+                    <td>${t.fromTo || '—'}</td>
+                    <td>${t.ref || '—'}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
         </div>`;
     }
 
@@ -495,22 +520,29 @@
           <div class="exec-travel-section-label">
             <span class="material-symbols-outlined">hotel</span> Accommodation
           </div>
-          <table class="exec-travel-table">
-            <thead>
-              <tr><th>Check-In</th><th>Check-Out</th><th>Name</th><th>Hotel</th><th>Ref</th></tr>
-            </thead>
-            <tbody>
-              ${accommodation.map(a => `
-                <tr>
-                  <td>${formatDate(a.checkin)}</td>
-                  <td>${formatDate(a.checkout)}</td>
-                  <td>${a.name || '—'}</td>
-                  <td>${a.hotel || '—'}</td>
-                  <td>${a.ref || '—'}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
+          <div class="exec-travel-scroll">
+            <table class="exec-travel-table">
+              <thead>
+                <tr><th>Check-In</th><th>Check-Out</th><th>Name</th><th>Hotel</th><th>Ref</th></tr>
+              </thead>
+              <tbody>
+                ${accommodation.map(a => {
+                  const hotelVal = a.hotel || '';
+                  const hotelCell = hotelVal
+                    ? `<a href="${getMapsUrl(hotelVal)}" target="_blank" rel="noopener noreferrer" class="maps-link">${hotelVal} <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">open_in_new</span></a>`
+                    : '—';
+                  return `
+                  <tr>
+                    <td>${formatDate(a.checkin)}</td>
+                    <td>${formatDate(a.checkout)}</td>
+                    <td>${a.name || '—'}</td>
+                    <td>${hotelCell}</td>
+                    <td>${a.ref || '—'}</td>
+                  </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
         </div>`;
     }
 

@@ -2146,25 +2146,7 @@
     if (userNameEl && currentUser) {
       userNameEl.textContent = currentUser.fullName;
     }
-    
-    // Mobile menu toggle
-    const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-    const sidebar = document.getElementById('todosSidebar');
-    const overlay = document.getElementById('todosSidebarOverlay');
-    
-    if (mobileMenuBtn && sidebar) {
-      mobileMenuBtn.addEventListener('click', () => {
-        sidebar.classList.toggle('open');
-        if (overlay) overlay.classList.toggle('open');
-      });
-    }
-    
-    if (overlay) {
-      overlay.addEventListener('click', () => {
-        sidebar.classList.remove('open');
-        overlay.classList.remove('open');
-      });
-    }
+    // Mobile menu toggle is handled by app.js setupEventPageSidebarNavigation()
   }
 
   // Setup status filter tabs

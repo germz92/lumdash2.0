@@ -1620,18 +1620,21 @@ body:has(.events-page) {
   
   .events-search-bar {
     padding: 12px 16px;
-    flex-direction: column;
-    gap: 12px;
+    flex-direction: row;
+    gap: 10px;
   }
-  
+
   .search-input-wrapper {
-    max-width: 100%;
+    max-width: none;
+    flex: 1;
+    min-width: 0;
   }
-  
-  .search-actions {
-    margin-left: 0;
-    justify-content: flex-end;
-    width: 100%;
+
+  .events-search-bar .btn-create-event {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 10px 16px;
+    font-size: var(--font-size-sm);
   }
   
   /* Table responsive - hide some columns */
@@ -1741,8 +1744,9 @@ body:has(.events-page) {
     display: none;
   }
   
-  .btn-create-event {
-    width: 100%;
+  .events-search-bar .btn-create-event {
+    flex-shrink: 0;
+    white-space: nowrap;
     padding: 10px 16px;
     font-size: var(--font-size-sm);
   }
@@ -4514,7 +4518,7 @@ body:has(.events-page) {
   
   .general-main {
     margin-left: 0;
-    padding-bottom: 80px; /* Space for bottom nav */
+    padding-bottom: 20px;
   }
   
   .event-header {
@@ -5295,7 +5299,7 @@ body:has(.events-page) {
   
   .crew-main {
     margin-left: 0;
-    padding-bottom: 80px;
+    padding-bottom: 20px;
   }
   
   .crew-header-dark {

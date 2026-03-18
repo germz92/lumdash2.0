@@ -1742,6 +1742,10 @@ body:has(.events-page) {
   font-size: var(--font-size-sm);
 }
 
+.event-badges-inline {
+  display: none;
+}
+
 .event-location-info .material-symbols-outlined {
   font-size: 14px;
   color: var(--text-tertiary);
@@ -2820,34 +2824,55 @@ body:has(.events-page) {
   
   .events-search-bar {
     padding: 12px 16px;
-    flex-direction: column;
-    gap: 12px;
+    flex-direction: row;
+    gap: 10px;
   }
   
   .search-input-wrapper {
-    max-width: 100%;
+    max-width: none;
+    flex: 1;
+    min-width: 0;
   }
   
-  .search-actions {
-    margin-left: 0;
-    justify-content: flex-end;
-    width: 100%;
+  .events-search-bar .btn-create-event {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 10px 16px;
+    font-size: var(--font-size-sm);
   }
   
   /* Table responsive - hide some columns */
   .events-table th:nth-child(2),
   .events-table td:nth-child(2) {
-    display: none; /* Hide Badges column */
+    display: none; /* Hide Badges column — shown inline under event name */
   }
 
   .events-table th:nth-child(3),
   .events-table td:nth-child(3) {
     display: none; /* Hide Client column */
   }
-  
-  .events-table th:nth-child(5),
-  .events-table td:nth-child(5) {
-    display: none; /* Hide Crew column */
+
+  .events-table th:nth-child(6),
+  .events-table td:nth-child(6) {
+    display: none; /* Hide Tasks column */
+  }
+
+  .event-badges-inline {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    margin-top: 4px;
+  }
+
+  .event-badges-inline .flight-badge,
+  .event-badges-inline .hotel-badge,
+  .event-badges-inline .share-badge {
+    width: 32px;
+  }
+
+  .event-badges-inline .schedule-badge,
+  .event-badges-inline .gear-badge {
+    width: 24px;
   }
   
   .events-table th,
@@ -2973,16 +2998,11 @@ body:has(.events-page) {
     overflow: hidden;
   }
   
-  .btn-create-event {
-    width: 100%;
+  .events-search-bar .btn-create-event {
+    flex-shrink: 0;
+    white-space: nowrap;
     padding: 10px 16px;
     font-size: var(--font-size-sm);
-  }
-  
-  /* Even more compact table on very small screens */
-  .events-table th:nth-child(4),
-  .events-table td:nth-child(4) {
-    display: none; /* Hide Date column too */
   }
   
   .event-name {
@@ -6714,7 +6734,7 @@ body:has(.events-page) {
   
   .general-main {
     margin-left: 0;
-    padding-bottom: 80px; /* Space for bottom nav */
+    padding-bottom: 20px;
   }
   
   .event-header {
@@ -7497,7 +7517,7 @@ body:has(.events-page) {
   
   .crew-main {
     margin-left: 0;
-    padding-bottom: 80px;
+    padding-bottom: 20px;
   }
   
   .crew-header-dark {
@@ -12162,6 +12182,10 @@ body:has(.events-page) {
   .todos-page.dark-theme .search-section {
     width: 100%;
   }
+
+  .todos-page.dark-theme .search-icon {
+    display: none;
+  }
   
   .todos-filter-bar .status-filter-tabs {
     width: 100%;
@@ -12179,13 +12203,149 @@ body:has(.events-page) {
   }
   
   .todos-page.dark-theme .todos-list-container {
-    overflow-x: auto;
+    overflow-x: visible;
   }
   
   .todos-page.dark-theme .todos-table {
-    min-width: 700px;
+    min-width: 0;
+    width: 100%;
+    display: block;
   }
-  
+
+  .todos-page.dark-theme .todos-table thead {
+    display: none;
+  }
+
+  .todos-page.dark-theme .todos-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .todos-page.dark-theme .todos-table .todo-row {
+    display: flex;
+    flex-wrap: wrap;
+    position: relative;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    padding: 14px 16px;
+    gap: 4px 0;
+  }
+
+  .todos-page.dark-theme .todos-table .todo-row.overdue-row {
+    border-left: 3px solid var(--status-error, #ef4444);
+  }
+
+  .todos-page.dark-theme .todos-table .todo-row.selected {
+    border-color: var(--brand-red);
+    background: rgba(239, 68, 68, 0.06);
+  }
+
+  /* Task — full width, prominent */
+  .todos-page.dark-theme .todo-row .col-task {
+    display: block;
+    width: 100%;
+    font-size: 15px;
+    font-weight: var(--font-weight-semibold);
+    padding: 0 32px 8px 0;
+    border: none;
+  }
+
+  /* Status + Due Date — share one line */
+  .todos-page.dark-theme .todo-row .col-status,
+  .todos-page.dark-theme .todo-row .col-due {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    width: auto;
+    padding: 2px 0;
+    border: none;
+    margin-right: 16px;
+  }
+
+  .todos-page.dark-theme .todo-row .col-status::before {
+    content: 'Status:';
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: var(--font-weight-medium);
+  }
+
+  .todos-page.dark-theme .todo-row .col-due::before {
+    content: 'Due:';
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: var(--font-weight-medium);
+  }
+
+  /* Owner — full width row */
+  .todos-page.dark-theme .todo-row .col-owner {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 4px 0;
+    border: none;
+  }
+
+  .todos-page.dark-theme .todo-row .col-owner::before {
+    content: 'Owner:';
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: var(--font-weight-medium);
+    flex-shrink: 0;
+  }
+
+  /* Notes — full width, visible, wrapping */
+  .todos-page.dark-theme .todo-row .col-notes {
+    display: block;
+    width: 100%;
+    padding: 6px 0 0 0;
+    border: none;
+    border-top: 1px solid var(--border-subtle);
+    margin-top: 4px;
+  }
+
+  .todos-page.dark-theme .todo-row .col-notes::before {
+    content: 'Notes:';
+    display: block;
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: var(--font-weight-medium);
+    margin-bottom: 4px;
+  }
+
+  .todos-page.dark-theme .todo-row .col-notes .notes-input {
+    width: 100%;
+    min-height: 36px;
+    white-space: normal;
+    word-wrap: break-word;
+  }
+
+  /* Actions — top-right corner of card */
+  .todos-page.dark-theme .todo-row .col-actions {
+    position: absolute;
+    top: 10px;
+    right: 8px;
+    width: auto;
+    padding: 0;
+    border: none;
+  }
+
+  /* Checkbox — top-left when in multi-select mode */
+  .todos-page.dark-theme .todo-row .col-checkbox {
+    position: absolute;
+    top: 14px;
+    left: 16px;
+    width: auto;
+    padding: 0;
+    border: none;
+  }
+
+  .todos-page.dark-theme .todo-row .col-checkbox[style*="display"] ~ .col-task {
+    padding-left: 30px;
+  }
+
   .todos-page.dark-theme .add-task-section {
     padding: 12px;
   }

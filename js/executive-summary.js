@@ -251,9 +251,17 @@
     { key: 'paid', label: 'Paid', type: 'select', options: ['', 'Yes', 'No', 'Retainer Paid', 'Needs Revision'] }
   ];
 
+  function getProjectDetailsWithFallback() {
+    const exec = { ...(currentData.executiveSummary || {}) };
+    const general = currentData.general || {};
+    if (!exec.contractLink && general.contractUrl) exec.contractLink = general.contractUrl;
+    if (!exec.invoiceLink && general.invoiceUrl) exec.invoiceLink = general.invoiceUrl;
+    return exec;
+  }
+
   function renderProjectDetails() {
     const grid = document.getElementById('projectDetailsGrid');
-    if (grid) renderFieldsGrid(grid, projectFields, currentData.executiveSummary || {});
+    if (grid) renderFieldsGrid(grid, projectFields, getProjectDetailsWithFallback());
   }
 
   // ---- Client Info ----
@@ -755,7 +763,7 @@
     editBtn.addEventListener('click', () => {
       editBtn.style.display = 'none';
       saveBtn.style.display = 'inline-flex';
-      const exec = currentData.executiveSummary || {};
+      const exec = getProjectDetailsWithFallback();
       enterFieldsEdit(grid, projectEditFields, exec);
 
       const checkbox = document.createElement('div');
@@ -812,7 +820,7 @@
   }
 
   function buildPdfContent() {
-    const exec = currentData.executiveSummary || {};
+    const exec = getProjectDetailsWithFallback();
     const general = currentData.general || {};
     const title = currentData.title || 'Untitled Event';
 
@@ -1027,7 +1035,7 @@
 
   // ---- Copy for Email (Gmail-friendly) ----
   function buildEmailContent() {
-    const exec = currentData.executiveSummary || {};
+    const exec = getProjectDetailsWithFallback();
     const general = currentData.general || {};
     const title = currentData.title || 'Untitled Event';
 

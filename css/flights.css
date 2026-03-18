@@ -1608,10 +1608,32 @@
     max-width: 100%;
   }
 
+  .flights-dark .dark-modal {
+    padding: 8px;
+  }
+
   .flights-dark .dark-modal-content {
     max-width: 100%;
     max-height: 95vh;
+    max-height: 95dvh;
     border-radius: var(--radius-lg);
+  }
+
+  .flights-dark .modal-header {
+    padding: 14px 16px;
+  }
+
+  .flights-dark .modal-header h2 {
+    font-size: var(--font-size-base);
+  }
+
+  .flights-dark .modal-body {
+    padding: 16px;
+  }
+
+  .flights-dark .form-row,
+  .flights-dark .dark-modal .form-row {
+    grid-template-columns: 1fr !important;
   }
 
   .flights-dark .passenger-form-grid {
@@ -1635,6 +1657,67 @@
 
   .flights-dark .trip-type-display {
     display: none;
+  }
+
+  .flights-dark .modal-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .flights-dark .modal-actions .btn-cancel,
+  .flights-dark .modal-actions .btn-submit,
+  .flights-dark .modal-actions .btn-save {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+  }
+
+  .flights-dark .modal-actions-right {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .flights-dark .modal-actions:has(.btn-delete-passenger) {
+    flex-direction: column;
+  }
+
+  .flights-dark .modal-actions .btn-delete-passenger {
+    width: 100%;
+    justify-content: center;
+    order: 1;
+  }
+
+  .flights-dark .booking-flight-section {
+    padding: 12px;
+  }
+
+  .flights-dark .booked-flight-edit-section {
+    padding: 14px;
+  }
+
+  .flights-dark .flight-route-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .flights-dark .route-arrow {
+    padding: 0;
+    transform: rotate(90deg);
+    justify-self: center;
+  }
+
+  .flights-dark .rewards-entry {
+    grid-template-columns: 1fr;
+  }
+
+  .flights-dark .view-route-display {
+    padding: 14px;
+  }
+
+  .flights-dark .form-section-header {
+    padding: 10px 12px;
   }
 }
 

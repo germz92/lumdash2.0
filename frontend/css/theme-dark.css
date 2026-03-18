@@ -4025,6 +4025,8 @@ body:has(.events-page) {
   align-items: flex-start;
   gap: 12px;
   padding: 16px;
+  overflow: hidden;
+  min-width: 0;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
@@ -4071,12 +4073,15 @@ body:has(.events-page) {
 .contact-info {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
 }
 
 .contact-name {
   font-weight: var(--font-weight-semibold);
   color: var(--text-primary);
   margin-bottom: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .contact-role {
@@ -4097,6 +4102,14 @@ body:has(.events-page) {
   gap: 6px;
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
+  min-width: 0;
+}
+
+.contact-detail span:not(.material-symbols-outlined) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .contact-detail .material-symbols-outlined {

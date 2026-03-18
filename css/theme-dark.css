@@ -5959,6 +5959,8 @@ body:has(.events-page) {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   transition: all 0.2s ease;
+  overflow: hidden;
+  min-width: 0;
 }
 
 .contact-card.clickable {
@@ -6001,6 +6003,7 @@ body:has(.events-page) {
 .contact-info {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
 }
 
 .contact-name {
@@ -6009,6 +6012,8 @@ body:has(.events-page) {
   margin-bottom: 2px;
   display: flex;
   align-items: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
   gap: 8px;
 }
 
@@ -6040,6 +6045,14 @@ body:has(.events-page) {
   gap: 6px;
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
+  min-width: 0;
+}
+
+.contact-detail span:not(.material-symbols-outlined) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .contact-detail .material-symbols-outlined {
@@ -6768,7 +6781,6 @@ body:has(.events-page) {
   
   .general-content-grid {
     padding: 16px;
-    padding-bottom: 100px; /* Extra space for bottom nav */
     gap: 16px;
   }
   

@@ -302,7 +302,8 @@ const tableSchema = new mongoose.Schema({
       item: { type: String, default: '' },
       dueDate: { type: String, default: '' }
     }],
-    notes: { type: String, default: '' }
+    notes: { type: String, default: '' },
+    hideContractInvoiceFromExport: { type: Boolean, default: false }
   },
   // Event documents (PDFs, images) stored in Cloudinary
   documents: [

@@ -755,11 +755,23 @@
     editBtn.addEventListener('click', () => {
       editBtn.style.display = 'none';
       saveBtn.style.display = 'inline-flex';
-      enterFieldsEdit(grid, projectEditFields, currentData.executiveSummary || {});
+      const exec = currentData.executiveSummary || {};
+      enterFieldsEdit(grid, projectEditFields, exec);
+
+      const checkbox = document.createElement('div');
+      checkbox.className = 'exec-export-toggle';
+      checkbox.innerHTML = `
+        <label class="exec-checkbox-label">
+          <input type="checkbox" id="hideContractInvoiceExport" ${exec.hideContractInvoiceFromExport ? 'checked' : ''}>
+          <span>Hide contract and invoice from export</span>
+        </label>`;
+      grid.appendChild(checkbox);
     });
 
     saveBtn.addEventListener('click', async () => {
       const data = collectFields(grid);
+      const hideCheckbox = document.getElementById('hideContractInvoiceExport');
+      if (hideCheckbox) data.hideContractInvoiceFromExport = hideCheckbox.checked;
       await saveExecSummary(data);
       saveBtn.style.display = 'none';
       editBtn.style.display = 'inline-flex';
@@ -925,10 +937,12 @@
               ${emailField('Account Manager Email', exec.accountManagerEmail)}
               ${field('Project Manager', exec.projectManager)}
               ${emailField('Project Manager Email', exec.projectManagerEmail)}
+              ${exec.hideContractInvoiceFromExport ? '' : `
               ${linkField('Contract Link', exec.contractLink)}
               <div style="margin-bottom:10px;"><div style="font-size:10px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.03em;margin-bottom:2px;">Signed</div><div style="font-size:13px;">${statusBadgePdf(exec.signed)}</div></div>
               ${linkField('Invoice Link', exec.invoiceLink)}
               <div style="margin-bottom:10px;"><div style="font-size:10px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.03em;margin-bottom:2px;">Paid</div><div style="font-size:13px;">${statusBadgePdf(exec.paid)}</div></div>
+              `}
             </div>
           `)}
 
@@ -1066,6 +1080,7 @@
               ${emailLink('Project Manager Email', exec.projectManagerEmail)}
             </table>
           </td>
+          ${exec.hideContractInvoiceFromExport ? '' : `
           <td width="50%" valign="top" style="padding-left:12px;">
             <table width="100%" cellpadding="0" cellspacing="0">
               ${linkVal('Contract Link', exec.contractLink)}
@@ -1074,6 +1089,7 @@
               ${field('Paid', statusBadge(exec.paid))}
             </table>
           </td>
+          `}
         </tr>
       </table>`;
 

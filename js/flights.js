@@ -1388,38 +1388,36 @@
     
     card.innerHTML = `
       <div class="booked-flight-header">
-        <div class="booked-event-info">
-          <span class="booked-event-name">${getEventDisplayName(flight)}</span>
-          <span class="flight-direction-badge ${isReturn ? 'return' : 'outbound'}">${directionLabel}</span>
-        </div>
-        <div class="booked-header-right">
-          <div class="confirmation-code">
-            <strong>${confirmationCode || 'N/A'}</strong>
-            ${confirmationCode ? `
-              <button class="copy-btn" title="Copy confirmation code">
-                <span class="material-symbols-outlined">content_copy</span>
-              </button>
-            ` : ''}
-          </div>
-          <div class="booked-menu-wrapper">
-            <button class="booked-menu-btn" title="More options">
-              <span class="material-symbols-outlined">more_vert</span>
+        <span class="booked-event-name">${getEventDisplayName(flight)}</span>
+        <div class="booked-menu-wrapper">
+          <button class="booked-menu-btn" title="More options">
+            <span class="material-symbols-outlined">more_vert</span>
+          </button>
+          <div class="booked-menu-dropdown">
+            <button class="booked-menu-item" data-action="request-change">
+              <span class="material-symbols-outlined">edit_calendar</span>
+              <span>Request Change</span>
             </button>
-            <div class="booked-menu-dropdown">
-              <button class="booked-menu-item" data-action="request-change">
-                <span class="material-symbols-outlined">edit_calendar</span>
-                <span>Request Change</span>
-              </button>
-              <button class="booked-menu-item" data-action="edit">
-                <span class="material-symbols-outlined">edit</span>
-                <span>Edit</span>
-              </button>
-              <button class="booked-menu-item delete" data-action="delete">
-                <span class="material-symbols-outlined">delete</span>
-                <span>Delete</span>
-              </button>
-            </div>
+            <button class="booked-menu-item" data-action="edit">
+              <span class="material-symbols-outlined">edit</span>
+              <span>Edit</span>
+            </button>
+            <button class="booked-menu-item delete" data-action="delete">
+              <span class="material-symbols-outlined">delete</span>
+              <span>Delete</span>
+            </button>
           </div>
+        </div>
+      </div>
+      <div class="booked-flight-subheader">
+        <span class="flight-direction-badge ${isReturn ? 'return' : 'outbound'}">${directionLabel}</span>
+        <div class="confirmation-code">
+          <strong>${confirmationCode || 'N/A'}</strong>
+          ${confirmationCode ? `
+            <button class="copy-btn" title="Copy confirmation code">
+              <span class="material-symbols-outlined">content_copy</span>
+            </button>
+          ` : ''}
         </div>
       </div>
       <div class="booked-flight-body">

@@ -1589,6 +1589,24 @@ body:has(.events-page) {
 }
 
 @media (max-width: 768px) {
+  .dark-theme {
+    height: 100vh;
+    height: -webkit-fill-available;
+    height: 100dvh;
+  }
+
+  .dashboard-layout {
+    height: 100vh;
+    height: -webkit-fill-available;
+    height: 100dvh;
+  }
+
+  .dashboard-main {
+    height: 100vh;
+    height: -webkit-fill-available;
+    height: 100dvh;
+  }
+
   .dashboard-content {
     padding: 16px 12px;
   }
@@ -4532,6 +4550,21 @@ body:has(.events-page) {
   .general-main {
     margin-left: 0;
     padding-bottom: 20px;
+    height: 100vh;
+    height: -webkit-fill-available;
+    height: 100dvh;
+  }
+
+  .dark-theme.general-page {
+    height: 100vh;
+    height: -webkit-fill-available;
+    height: 100dvh;
+  }
+
+  .general-layout {
+    height: 100vh;
+    height: -webkit-fill-available;
+    height: 100dvh;
   }
   
   .event-header {
@@ -7610,6 +7643,14 @@ body:has(.events-page) {
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
+  .shotlist-page.dark-theme,
+  .shotlist-page.dark-theme .shotlist-layout,
+  .shotlist-page.dark-theme .shotlist-main {
+    height: 100vh;
+    height: -webkit-fill-available;
+    height: 100dvh;
+  }
+
   .shotlist-page.dark-theme .shotlist-main {
     margin-left: 0;
   }
@@ -10746,6 +10787,14 @@ body:has(.events-page) {
 }
 
 @media (max-width: 768px) {
+  .users-page.dark-theme,
+  .users-page.dark-theme .dashboard-layout,
+  .users-page.dark-theme .dashboard-main {
+    height: 100vh;
+    height: -webkit-fill-available;
+    height: 100dvh;
+  }
+
   .users-page.dark-theme .dashboard-header {
     padding: 16px 20px;
   }
@@ -12026,6 +12075,14 @@ body:has(.events-page) {
 
 /* Mobile responsiveness */
 @media (max-width: 768px) {
+  .gear-page.dark-theme,
+  .gear-page.dark-theme .gear-layout,
+  .gear-page.dark-theme .gear-main {
+    height: 100vh;
+    height: -webkit-fill-available;
+    height: 100dvh;
+  }
+
   .gear-page.dark-theme .general-sidebar {
     left: calc(-1 * var(--sidebar-width));
     transition: left var(--transition-normal);

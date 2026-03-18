@@ -1562,8 +1562,17 @@
 
 /* Mobile Responsive */
 @media (max-width: 768px) {
+  .flights-dark {
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    min-height: 100dvh;
+  }
+
   .flights-dark .main-content {
     padding: 20px;
+    min-height: 100vh;
+    min-height: -webkit-fill-available;
+    min-height: 100dvh;
   }
 
   .flights-dark .page-header {

@@ -780,9 +780,18 @@
 
 /* Mobile */
 @media (max-width: 768px) {
+  .exec-summary-page {
+    height: 100vh;
+    height: -webkit-fill-available;
+    height: 100dvh;
+  }
+
   .exec-main {
     margin-left: 0;
     padding-bottom: 20px;
+    height: 100vh;
+    height: -webkit-fill-available;
+    height: 100dvh;
   }
 
   .exec-header {

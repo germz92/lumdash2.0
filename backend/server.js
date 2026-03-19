@@ -8867,8 +8867,8 @@ app.get('/api/flights/booked', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
     }
 
-    // Build query
-    const query = { status: 'booked' };
+    // Build query - include both booked and cancelled flights
+    const query = { status: { $in: ['booked', 'cancelled'] } };
     
     // Prefer filtering by eventId (source of truth), fall back to eventName for backward compat
     if (eventId) {
@@ -9250,7 +9250,8 @@ app.post('/api/flights/:id/request-change', authenticate, async (req, res) => {
           returnDate: requestedChanges?.returnDate || null,
           departTimePreference: requestedChanges?.departTimePreference || null,
           returnTimePreference: requestedChanges?.returnTimePreference || null,
-          notes: requestedChanges?.notes || null
+          notes: requestedChanges?.notes || null,
+          cancelFlight: requestedChanges?.cancelFlight || false
         }
       }
     });

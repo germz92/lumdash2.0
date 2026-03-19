@@ -1219,6 +1219,7 @@
     if (isChangeRequest && request.changeDetails) {
       const changes = request.changeDetails.requestedChanges || {};
       const changedItems = [];
+      if (changes.cancelFlight) changedItems.push('Cancel Flight');
       if (changes.departDate) changedItems.push('Outbound Date');
       if (changes.returnDate) changedItems.push('Return Date');
       if (changes.departTimePreference) changedItems.push('Outbound Time');
@@ -1226,10 +1227,10 @@
 
       changeInfoHTML = `
         <div class="change-request-info">
-          <span class="material-symbols-outlined">edit_calendar</span>
+          <span class="material-symbols-outlined">${changes.cancelFlight ? 'flight_land' : 'edit_calendar'}</span>
           <div class="change-request-details">
-            <span class="change-request-label">Changes Requested:</span>
-            <span class="change-request-fields">${changedItems.join(', ') || 'See details'}</span>
+            <span class="change-request-label">${changes.cancelFlight ? 'Cancellation Requested' : 'Changes Requested:'}</span>
+            <span class="change-request-fields">${changes.cancelFlight ? '' : (changedItems.join(', ') || 'See details')}</span>
           </div>
         </div>
         ${request.changeDetails.changeReason ? `
@@ -1347,7 +1348,8 @@
    */
   function createBookedFlightCard(flight, isReturn = false) {
     const card = document.createElement('div');
-    card.className = 'booked-flight-card';
+    const isCancelled = flight.status === 'cancelled';
+    card.className = `booked-flight-card${isCancelled ? ' cancelled' : ''}`;
     
     // Get the correct flight leg details
     const mainBookedDetails = flight.bookedDetails || {};
@@ -1394,6 +1396,12 @@
             <span class="material-symbols-outlined">more_vert</span>
           </button>
           <div class="booked-menu-dropdown">
+            ${isCancelled ? `
+            <button class="booked-menu-item restore" data-action="restore">
+              <span class="material-symbols-outlined">undo</span>
+              <span>Restore Flight</span>
+            </button>
+            ` : `
             <button class="booked-menu-item" data-action="request-change">
               <span class="material-symbols-outlined">edit_calendar</span>
               <span>Request Change</span>
@@ -1402,6 +1410,11 @@
               <span class="material-symbols-outlined">edit</span>
               <span>Edit</span>
             </button>
+            <button class="booked-menu-item cancel-flight" data-action="cancel">
+              <span class="material-symbols-outlined">block</span>
+              <span>Mark as Cancelled</span>
+            </button>
+            `}
             <button class="booked-menu-item delete" data-action="delete">
               <span class="material-symbols-outlined">delete</span>
               <span>Delete</span>
@@ -1410,7 +1423,10 @@
         </div>
       </div>
       <div class="booked-flight-subheader">
-        <span class="flight-direction-badge ${isReturn ? 'return' : 'outbound'}">${directionLabel}</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="flight-direction-badge ${isReturn ? 'return' : 'outbound'}">${directionLabel}</span>
+          ${isCancelled ? '<span class="flight-cancelled-badge">Cancelled</span>' : ''}
+        </div>
         <div class="confirmation-code">
           <strong>${confirmationCode || 'N/A'}</strong>
           ${confirmationCode ? `
@@ -1505,6 +1521,10 @@
             openRequestChangeModal(flight);
           } else if (action === 'edit') {
             openEditBookedFlightModal(flight);
+          } else if (action === 'cancel') {
+            handleCancelBookedFlight(flight);
+          } else if (action === 'restore') {
+            handleUncancelBookedFlight(flight);
           } else if (action === 'delete') {
             handleDeleteBookedFlight(flight);
           }
@@ -3322,6 +3342,52 @@
   }
 
   /**
+   * Handle marking a booked flight as cancelled
+   */
+  async function handleCancelBookedFlight(flight) {
+    const confirmed = confirm(`Are you sure you want to mark this flight as cancelled?\n\nEvent: ${getEventDisplayName(flight)}\nConfirmation: ${flight.bookedDetails?.confirmationCode || 'N/A'}`);
+
+    if (!confirmed) return;
+
+    try {
+      const updated = await apiRequest(`/api/flights/${flight._id}/cancel`, {
+        method: 'PATCH'
+      });
+
+      const idx = bookedFlights.findIndex(f => f._id === flight._id);
+      if (idx !== -1) {
+        bookedFlights[idx] = { ...bookedFlights[idx], status: 'cancelled' };
+      }
+      renderBookedFlights();
+
+      console.log('✅ Booked flight cancelled:', flight._id);
+    } catch (error) {
+      console.error('Failed to cancel booked flight:', error);
+      alert('Failed to cancel flight. Please try again.');
+    }
+  }
+
+  async function handleUncancelBookedFlight(flight) {
+    try {
+      await apiRequest(`/api/flights/${flight._id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: 'booked' })
+      });
+
+      const idx = bookedFlights.findIndex(f => f._id === flight._id);
+      if (idx !== -1) {
+        bookedFlights[idx] = { ...bookedFlights[idx], status: 'booked' };
+      }
+      renderBookedFlights();
+
+      console.log('✅ Booked flight restored:', flight._id);
+    } catch (error) {
+      console.error('Failed to restore flight:', error);
+      alert('Failed to restore flight. Please try again.');
+    }
+  }
+
+  /**
    * Handle delete booked flight
    */
   async function handleDeleteBookedFlight(flight) {
@@ -3665,6 +3731,11 @@
     // Reset form
     elements.requestChangeForm?.reset();
     document.querySelectorAll('.change-field-group').forEach(g => g.style.display = 'none');
+    const allCheckboxes = document.querySelectorAll('input[name="changeField"]');
+    allCheckboxes.forEach(cb => {
+      cb.disabled = false;
+      cb.closest('.change-checkbox-option').style.opacity = '1';
+    });
 
     // Pre-fill dates with current values
     if (elements.changeDepartDate) elements.changeDepartDate.value = formatDateForInput(flight.departDate);
@@ -3686,6 +3757,22 @@
    */
   function handleChangeFieldToggle(e) {
     const field = e.target.value;
+
+    if (field === 'cancelFlight') {
+      const isCancel = e.target.checked;
+      const otherCheckboxes = document.querySelectorAll('input[name="changeField"]:not([value="cancelFlight"])');
+      otherCheckboxes.forEach(cb => {
+        cb.checked = false;
+        cb.disabled = isCancel;
+        cb.closest('.change-checkbox-option').style.opacity = isCancel ? '0.4' : '1';
+      });
+      document.querySelectorAll('.change-field-group').forEach(g => g.style.display = 'none');
+      return;
+    }
+
+    const cancelCb = document.getElementById('changeCancelFlightCheckbox');
+    if (cancelCb?.checked) return;
+
     const groupMap = {
       'departDate': 'changeDepartDateGroup',
       'returnDate': 'changeReturnDateGroup',
@@ -3713,6 +3800,9 @@
     }
 
     const requestedChanges = {};
+    if (checkedFields.includes('cancelFlight')) {
+      requestedChanges.cancelFlight = true;
+    }
     if (checkedFields.includes('departDate')) {
       requestedChanges.departDate = elements.changeDepartDate?.value || null;
     }

@@ -116,7 +116,8 @@ const flightRequestSchema = new mongoose.Schema({
       returnDate: { type: Date, default: null },
       departTimePreference: { type: String, default: null },
       returnTimePreference: { type: String, default: null },
-      notes: { type: String, default: null }
+      notes: { type: String, default: null },
+      cancelFlight: { type: Boolean, default: false }
     }
   },
 

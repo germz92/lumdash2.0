@@ -14,6 +14,18 @@
       : `https://www.google.com/maps/search/?api=1&query=${encoded}`;
   }
 
+  function formatTime12h(timeStr) {
+    if (!timeStr) return '';
+    const parts = timeStr.split(':');
+    if (parts.length < 2) return timeStr;
+    let h = parseInt(parts[0], 10);
+    const m = parts[1];
+    if (isNaN(h)) return timeStr;
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${h}:${m} ${ampm}`;
+  }
+
   function getToken() {
     return localStorage.getItem('token');
   }
@@ -508,8 +520,8 @@
                 ${travel.map(t => `
                   <tr>
                     <td>${formatDate(t.date)}</td>
-                    <td>${t.depart || t.time || '—'}</td>
-                    <td>${t.arrive || '—'}</td>
+                    <td>${formatTime12h(t.depart || t.time) || '—'}</td>
+                    <td>${formatTime12h(t.arrive) || '—'}</td>
                     <td>${t.name || '—'}</td>
                     <td>${t.airline || '—'}</td>
                     <td>${t.fromTo || '—'}</td>

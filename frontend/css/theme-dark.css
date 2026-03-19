@@ -4585,6 +4585,17 @@ body:has(.events-page) {
   .general-content-grid {
     padding: 16px;
     gap: 16px;
+    grid-template-columns: 1fr;
+  }
+
+  .general-sidebar-column {
+    grid-template-columns: 1fr;
+  }
+
+  .general-card {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 
   .contacts-grid {

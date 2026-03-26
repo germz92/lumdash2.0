@@ -379,10 +379,22 @@
 
 .crew-date-names {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px 16px;
+  flex-direction: column;
+  gap: 0;
   font-size: 0.9rem;
   line-height: 1.6;
+}
+
+.crew-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border-subtle, rgba(255,255,255,0.06));
+}
+
+.crew-row:last-child {
+  border-bottom: none;
 }
 
 .crew-member {
@@ -400,6 +412,14 @@
 .crew-role::before {
   content: '·';
   margin-right: 4px;
+}
+
+.crew-time {
+  color: var(--text-tertiary);
+  font-size: 0.78rem;
+  font-weight: 400;
+  white-space: nowrap;
+  margin-left: 12px;
 }
 
 /* Services */

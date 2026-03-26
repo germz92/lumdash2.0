@@ -158,6 +158,17 @@
     if (el) el.textContent = text;
   }
 
+  function formatTime12(timeStr) {
+    if (!timeStr) return '?';
+    const parts = timeStr.match(/^(\d{1,2}):(\d{2})/);
+    if (!parts) return timeStr;
+    let h = parseInt(parts[1]);
+    const m = parts[2];
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return `${h}:${m} ${ampm}`;
+  }
+
   function formatDate(dateStr) {
     if (!dateStr) return '—';
     const match = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -346,8 +357,7 @@
       if (!r.name || r.name === 'TBD' || r.name.startsWith('__')) return;
       const date = r.date || 'Unassigned';
       if (!grouped[date]) grouped[date] = [];
-      const role = (r.role && !r.role.startsWith('__')) ? `<span class="crew-role">${r.role}</span>` : '';
-      grouped[date].push(`<span class="crew-member">${r.name}${role}</span>`);
+      grouped[date].push(r);
     });
 
     const sortedDates = Object.keys(grouped).filter(d => grouped[d].length > 0).sort((a, b) => {
@@ -364,7 +374,15 @@
     container.innerHTML = sortedDates.map(date => `
       <div class="crew-date-group">
         <div class="crew-date-label">${formatDate(date)}</div>
-        <div class="crew-date-names">${grouped[date].join(', ')}</div>
+        <div class="crew-date-names">
+          ${grouped[date].map(r => {
+            const role = (r.role && !r.role.startsWith('__')) ? `<span class="crew-role">${r.role}</span>` : '';
+            const time = (r.startTime || r.endTime)
+              ? `<span class="crew-time">${formatTime12(r.startTime)}–${formatTime12(r.endTime)}${r.totalHours ? ` (${r.totalHours}h)` : ''}</span>`
+              : '';
+            return `<div class="crew-row"><span class="crew-member">${r.name}${role}</span>${time}</div>`;
+          }).join('')}
+        </div>
       </div>
     `).join('');
   }
@@ -848,8 +866,7 @@
         if (!r.name || r.name === 'TBD' || r.name.startsWith('__')) return;
         const date = r.date || 'Unassigned';
         if (!grouped[date]) grouped[date] = [];
-        const role = (r.role && !r.role.startsWith('__')) ? ` — ${r.role}` : '';
-        grouped[date].push(`${r.name}${role}`);
+        grouped[date].push(r);
       });
       const dates = Object.keys(grouped).filter(d => grouped[d].length > 0).sort((a, b) => {
         if (a === 'Unassigned') return 1;
@@ -860,7 +877,13 @@
       return dates.map(d => `
         <div style="margin-bottom:10px;">
           <div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin-bottom:4px;">${formatDate(d)}</div>
-          ${grouped[d].map(member => `<div style="padding:4px 0;font-size:13px;color:#333;border-bottom:1px solid #f0f0f0;">${member}</div>`).join('')}
+          ${grouped[d].map(r => {
+            const role = (r.role && !r.role.startsWith('__')) ? `<div style="font-size:11px;color:#888;margin-top:1px;">${r.role}</div>` : '';
+            const time = (r.startTime || r.endTime)
+              ? `<span style="color:#888;font-size:11px;white-space:nowrap;">${formatTime12(r.startTime)}–${formatTime12(r.endTime)}${r.totalHours ? ` (${r.totalHours}h)` : ''}</span>`
+              : '';
+            return `<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:5px 0;font-size:13px;color:#333;border-bottom:1px solid #f0f0f0;"><div>${r.name}${role}</div>${time}</div>`;
+          }).join('')}
         </div>
       `).join('');
     })();
@@ -1159,8 +1182,7 @@
         if (!r.name || r.name === 'TBD' || r.name.startsWith('__')) return;
         const date = r.date || 'Unassigned';
         if (!grouped[date]) grouped[date] = [];
-        const role = (r.role && !r.role.startsWith('__')) ? ` — ${r.role}` : '';
-        grouped[date].push(`${r.name}${role}`);
+        grouped[date].push(r);
       });
       const dates = Object.keys(grouped).filter(d => grouped[d].length > 0).sort((a, b) => {
         if (a === 'Unassigned') return 1;
@@ -1171,7 +1193,18 @@
       return dates.map(d => `
         <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:8px;">
           <tr><td style="font-size:11px;font-weight:600;color:#888888;text-transform:uppercase;padding-bottom:4px;">${formatDate(d)}</td></tr>
-          ${grouped[d].map(m => `<tr><td style="padding:4px 0;font-size:13px;color:#333333;border-bottom:1px solid #f0f0f0;">${m}</td></tr>`).join('')}
+          ${grouped[d].map(r => {
+            const role = (r.role && !r.role.startsWith('__')) ? ` — ${r.role}` : '';
+            const time = (r.startTime || r.endTime)
+              ? `${formatTime12(r.startTime)}–${formatTime12(r.endTime)}${r.totalHours ? ` (${r.totalHours}h)` : ''}`
+              : '';
+            return `<tr><td style="padding:4px 0;font-size:13px;border-bottom:1px solid #f0f0f0;">
+              <table width="100%" cellpadding="0" cellspacing="0"><tr>
+                <td style="color:#333333;">${r.name}${role}</td>
+                ${time ? `<td align="right" style="color:#888888;font-size:11px;white-space:nowrap;">${time}</td>` : ''}
+              </tr></table>
+            </td></tr>`;
+          }).join('')}
         </table>`).join('');
     })();
 

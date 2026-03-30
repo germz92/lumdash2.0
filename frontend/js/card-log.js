@@ -1277,9 +1277,10 @@ window.initPage = async function(id) {
   // Set up event listeners AFTER modals are in place
   setupEventListeners();
   
-  // Set up calculator modal
+  // Set up calculator modal and load saved cards-needed badge
   setupCalculatorModal();
-  
+  loadCardsNeededBadge();
+
   // Load collaborative system
   await loadCardLogCollaborativeSystem();
   
@@ -2089,16 +2090,13 @@ async function loadCalculatorData() {
     const calcData = data.sdCardCalculator;
       
     if (calcData && calcData.numDays) {
-      // Set the number of days
       const numDaysInput = document.getElementById('calcNumDays');
       if (numDaysInput) {
         numDaysInput.value = calcData.numDays;
       }
       
-      // Generate the day inputs
       generateCamerasPerDay();
       
-      // Set the cameras per day values
       if (Array.isArray(calcData.camerasPerDay)) {
         calcData.camerasPerDay.forEach((cameras, index) => {
           const input = document.getElementById(`dayCamera${index + 1}`);
@@ -2109,7 +2107,14 @@ async function loadCalculatorData() {
       }
       
       console.log('[SD-CALC] Loaded saved calculator data:', calcData);
-      } else {
+
+      if (calcData.cardsNeeded > 0) {
+        updateCardsNeededBadge(calcData.cardsNeeded);
+      }
+      if (Array.isArray(calcData.camerasPerDay) && calcData.camerasPerDay.some(c => c > 0)) {
+        renderCalculatorResults(calcData.numDays, calcData.camerasPerDay);
+      }
+    } else {
       generateCamerasPerDay();
     }
   } catch (err) {
@@ -2129,7 +2134,18 @@ async function saveCalculatorData() {
     for (let i = 1; i <= numDays; i++) {
       const cameras = parseInt(document.getElementById(`dayCamera${i}`)?.value || 0);
       camerasPerDay.push(cameras);
-      }
+    }
+
+    let prevCam = 0, prevExtra = 0, totalNew = 0;
+    for (let i = 0; i < camerasPerDay.length; i++) {
+      const need = camerasPerDay[i] * 2;
+      const reuse = i === 0 ? 0 : prevCam + prevExtra;
+      const fresh = Math.max(0, need - reuse);
+      totalNew += fresh;
+      prevExtra = reuse + fresh - need;
+      prevCam = camerasPerDay[i];
+    }
+    const cardsNeeded = totalNew + numDays * 2;
     
     const response = await fetch(`${API_BASE}/api/tables/${eventId}/sd-calculator`, {
       method: 'PUT',
@@ -2137,11 +2153,11 @@ async function saveCalculatorData() {
         'Content-Type': 'application/json',
         Authorization: localStorage.getItem('token')
       },
-      body: JSON.stringify({ numDays, camerasPerDay })
+      body: JSON.stringify({ numDays, camerasPerDay, cardsNeeded })
     });
     
     if (response.ok) {
-      console.log('[SD-CALC] Calculator data saved successfully');
+      console.log('[SD-CALC] Calculator data saved successfully, cardsNeeded:', cardsNeeded);
     } else {
       console.error('[SD-CALC] Failed to save calculator data');
     }
@@ -2206,29 +2222,24 @@ function decrementCalcDays() {
   }
 }
 
-function calculateSDCards() {
-  const numDays = parseInt(document.getElementById('calcNumDays')?.value || 1);
+function renderCalculatorResults(numDays, camerasPerDayArr) {
   const resultsContainer = document.getElementById('calculatorResults');
-  if (!resultsContainer) return;
-  
+  if (!resultsContainer) return 0;
+
   let tableRows = '';
-  let prevCameras = 0;
-  let prevExtraCards = 0;
-  let totalCardsNeeded = 0;
-  
-  for (let i = 1; i <= numDays; i++) {
-    const cameras = parseInt(document.getElementById(`dayCamera${i}`)?.value || 0);
+  let prevCameras = 0, prevExtraCards = 0, totalNewCards = 0;
+
+  for (let i = 0; i < numDays; i++) {
+    const cameras = camerasPerDayArr[i] || 0;
     const cardsNeeded = cameras * 2;
-    totalCardsNeeded += cardsNeeded;
-    
-    // For the first day, reuseAvailable is 0. For subsequent days, it's prevCameras + prevExtraCards
-    const reuseAvailable = i === 1 ? 0 : prevCameras + prevExtraCards;
+    const reuseAvailable = i === 0 ? 0 : prevCameras + prevExtraCards;
     const newCards = Math.max(0, cardsNeeded - reuseAvailable);
     const extraCards = reuseAvailable + newCards - cardsNeeded;
-    
+    totalNewCards += newCards;
+
     tableRows += `
       <tr>
-        <td>${i}</td>
+        <td>${i + 1}</td>
         <td>${cameras}</td>
         <td>${cardsNeeded}</td>
         <td>${reuseAvailable}</td>
@@ -2236,14 +2247,13 @@ function calculateSDCards() {
         <td>${extraCards}</td>
       </tr>
     `;
-    
     prevCameras = cameras;
     prevExtraCards = extraCards;
   }
-  
+
   const backupsNeeded = numDays * 2;
-  const totalWithBackups = totalCardsNeeded + backupsNeeded;
-  
+  const totalWithBackups = totalNewCards + backupsNeeded;
+
   resultsContainer.innerHTML = `
     <table class="calculator-results-table">
       <thead>
@@ -2263,8 +2273,8 @@ function calculateSDCards() {
     
     <div class="calculator-summary">
       <div class="summary-row">
-        <span class="summary-label">Total Cards Needed</span>
-        <span class="summary-value">${totalCardsNeeded}</span>
+        <span class="summary-label">Cards Needed</span>
+        <span class="summary-value">${totalNewCards}</span>
       </div>
       <div class="summary-row">
         <span class="summary-label">Backups (2/day)</span>
@@ -2276,16 +2286,74 @@ function calculateSDCards() {
       </div>
     </div>
   `;
-  
-  // Save the calculator data for this event
+
+  return totalWithBackups;
+}
+
+function calculateSDCards() {
+  const numDays = parseInt(document.getElementById('calcNumDays')?.value || 1);
+  const camerasPerDay = [];
+  for (let i = 1; i <= numDays; i++) {
+    camerasPerDay.push(parseInt(document.getElementById(`dayCamera${i}`)?.value || 0));
+  }
+
+  const totalWithBackups = renderCalculatorResults(numDays, camerasPerDay);
+  updateCardsNeededBadge(totalWithBackups);
   saveCalculatorData();
+}
+
+function updateCardsNeededBadge(total) {
+  const badge = document.getElementById('cardsNeededBadge');
+  const countEl = document.getElementById('cardsNeededCount');
+  if (badge && countEl) {
+    if (total > 0) {
+      countEl.textContent = total;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+}
+
+async function loadCardsNeededBadge() {
+  try {
+    const eventId = localStorage.getItem('eventId');
+    if (!eventId) return;
+    const res = await fetch(`${API_BASE}/api/tables/${eventId}/sd-calculator`, {
+      headers: { Authorization: localStorage.getItem('token') }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const saved = data.sdCardCalculator;
+    if (!saved) return;
+
+    let total = saved.cardsNeeded;
+    if ((!total || total <= 0) && Array.isArray(saved.camerasPerDay) && saved.camerasPerDay.some(c => c > 0)) {
+      let prevCam = 0, prevExtra = 0, totalNew = 0;
+      for (let i = 0; i < saved.camerasPerDay.length; i++) {
+        const need = saved.camerasPerDay[i] * 2;
+        const reuse = i === 0 ? 0 : prevCam + prevExtra;
+        const fresh = Math.max(0, need - reuse);
+        totalNew += fresh;
+        prevExtra = reuse + fresh - need;
+        prevCam = saved.camerasPerDay[i];
+      }
+      total = totalNew + (saved.numDays || saved.camerasPerDay.length) * 2;
+    }
+
+    if (total > 0) {
+      updateCardsNeededBadge(total);
+    }
+  } catch (e) {
+    console.error('[SD-CALC] Error loading badge:', e);
+  }
 }
 
 function clearCalculator() {
   document.getElementById('calcNumDays').value = 1;
   generateCamerasPerDay();
   document.getElementById('calculatorResults').innerHTML = '';
-  // Save the cleared state
+  updateCardsNeededBadge(0);
   saveCalculatorData();
 }
 

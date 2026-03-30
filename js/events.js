@@ -593,7 +593,7 @@ function formatDateRangeDark(start, end) {
   if (!start) return '—';
   
   const startDate = parseLocalDate(start);
-  const options = { month: 'short', day: 'numeric' };
+  const options = { weekday: 'short', month: 'short', day: 'numeric' };
   const startStr = startDate.toLocaleDateString('en-US', options);
   
   if (!end || start === end) {

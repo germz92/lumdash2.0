@@ -86,7 +86,7 @@ console.log(' app.js loaded');
 })();
 
 const PAGE_CLASSES = [
-  'events-page', 'general-page', 'crew-page', 'travel-page', 'card-log-page', 'schedule-page', 'dashboard-page', 'login-page', 'register-page', 'users-page', 'crew-planner-page', 'crew-calendar-page'
+  'events-page', 'general-page', 'crew-page', 'travel-page', 'card-log-page', 'schedule-page', 'dashboard-page', 'login-page', 'register-page', 'users-page', 'crew-planner-page', 'crew-calendar-page', 'gear-page', 'todos-page', 'executive-summary-page', 'call-times-page', 'notes-page', 'maps-page', 'documents-page', 'shotlist-page'
 ];
 
 function setBodyPageClass(page) {
@@ -180,8 +180,14 @@ function navigate(page, id) {
           console.error(`Error in ${cleanupFunctionName}:`, err);
         }
       }
+
+      // Universal cleanup: reset body overflow and dismiss any lingering overlays
+      document.body.style.overflow = '';
+      document.querySelectorAll('.sidebar-overlay').forEach(el => el.classList.remove('show', 'visible'));
+      const dashSidebar = document.getElementById('dashboardSidebar');
+      if (dashSidebar) dashSidebar.classList.remove('show', 'open');
     }
-  
+
     // Remove all page scripts
     const oldScript = document.getElementById('page-script');
     if (oldScript) {
@@ -572,11 +578,7 @@ window.addEventListener('DOMContentLoaded', () => {
   }
   
   // Reset body classes
-  const PAGE_CLASSES_RESET = [
-    'events-page', 'general-page', 'crew-page', 'travel-page', 
-    'card-log-page', 'schedule-page', 'dashboard-page', 'login-page', 'register-page'
-  ];
-  PAGE_CLASSES_RESET.forEach(cls => document.body.classList.remove(cls));
+  PAGE_CLASSES.forEach(cls => document.body.classList.remove(cls));
   
   // Get page from hash or default to events
   const page = location.hash.replace('#', '') || 'events';

@@ -2932,8 +2932,9 @@ body:has(.events-page) {
   
   .event-date {
     font-size: var(--font-size-sm);
-    white-space: normal;
+    white-space: nowrap;
     line-height: 1.5;
+    min-width: 105px;
   }
 
   .event-date .date-line {

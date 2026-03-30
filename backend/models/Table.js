@@ -199,6 +199,7 @@ const tableSchema = new mongoose.Schema({
   sdCardCalculator: {
     numDays: { type: Number, default: 1 },
     camerasPerDay: [{ type: Number }],
+    cardsNeeded: { type: Number, default: 0 },
     lastUpdated: { type: Date }
   },
   programSchedule: {

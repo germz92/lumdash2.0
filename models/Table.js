@@ -126,6 +126,13 @@ const tableSchema = new mongoose.Schema({
       ref: String
     }
   ],
+  // SD Card Calculator saved state
+  sdCardCalculator: {
+    numDays: { type: Number, default: 1 },
+    camerasPerDay: [{ type: Number }],
+    cardsNeeded: { type: Number, default: 0 },
+    lastUpdated: { type: Date }
+  },
   cardLog: [
     {
       _id: { type: mongoose.Schema.Types.ObjectId, auto: true },

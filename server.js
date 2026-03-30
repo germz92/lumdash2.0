@@ -3447,7 +3447,7 @@ app.put('/api/tables/:id/sd-calculator', authenticate, async (req, res) => {
   }
   
   try {
-    const { numDays, camerasPerDay } = req.body;
+    const { numDays, camerasPerDay, cardsNeeded } = req.body;
     
     const table = await Table.findById(req.params.id);
     if (!table) {
@@ -3463,6 +3463,7 @@ app.put('/api/tables/:id/sd-calculator', authenticate, async (req, res) => {
     table.sdCardCalculator = {
       numDays: numDays || 1,
       camerasPerDay: Array.isArray(camerasPerDay) ? camerasPerDay : [],
+      cardsNeeded: cardsNeeded || 0,
       lastUpdated: new Date()
     };
     

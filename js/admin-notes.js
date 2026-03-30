@@ -581,20 +581,8 @@ async function deleteNote(noteId) {
 }
 
 // Setup sidebar
+// Mobile menu toggle + overlay is handled by setupEventPageSidebarNavigation() in app.js
 function setupSidebar() {
-  const mobileMenuBtn = document.getElementById('mobileMenuBtn');
-  const sidebar = document.getElementById('notesSidebar');
-  const overlay = document.getElementById('notesSidebarOverlay');
-  
-  mobileMenuBtn?.addEventListener('click', () => {
-    sidebar?.classList.toggle('open');
-    overlay?.classList.toggle('show');
-  });
-  
-  overlay?.addEventListener('click', () => {
-    sidebar?.classList.remove('open');
-    overlay?.classList.remove('show');
-  });
 }
 
 // Load sidebar user

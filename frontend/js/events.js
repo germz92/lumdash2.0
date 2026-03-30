@@ -374,14 +374,13 @@ function formatDateRangeDark(start, end) {
   const startStr = startDate.toLocaleDateString('en-US', options);
   
   if (!end || start === end) {
-    return startStr;
+    return `<span class="date-line">${startStr}</span>`;
   }
   
   const endDate = new Date(end);
-  const endOptions = { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' };
-  const endStr = endDate.toLocaleDateString('en-US', endOptions);
+  const endStr = endDate.toLocaleDateString('en-US', options);
   
-  return `${startStr} – ${endStr}`;
+  return `<span class="date-line">${startStr}</span><span class="date-separator"> – </span><span class="date-line">${endStr}</span>`;
 }
 
 // Render crew avatars for dark theme

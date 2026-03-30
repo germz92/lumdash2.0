@@ -3893,9 +3893,17 @@ body:has(.events-page) {
 /* Quill Rich Text Editor Dark Theme */
 .inline-quill-container {
   border-radius: var(--radius-md);
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--border-strong);
   background: var(--bg-tertiary);
+}
+
+.inline-quill-container .ql-toolbar.ql-snow {
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+.inline-quill-container .ql-container.ql-snow {
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
 }
 
 .inline-quill-container .ql-toolbar.ql-snow {
@@ -3992,23 +4000,126 @@ body:has(.events-page) {
   color: var(--brand-red);
 }
 
-.inline-quill-container .ql-snow .ql-tooltip {
+/* Hide default Quill tooltip — replaced by custom link popup */
+.inline-quill-container .ql-snow .ql-tooltip,
+.modal-quill-container .ql-snow .ql-tooltip {
+  display: none !important;
+}
+
+/* Custom Link Popup (appended to body, escapes overflow:hidden) */
+.quill-link-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  animation: qlpFadeIn 0.15s ease;
+}
+
+@keyframes qlpFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.quill-link-popup {
   background: var(--bg-elevated);
   border: 1px solid var(--border-default);
-  color: var(--text-primary);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  border-radius: var(--radius-sm);
+  padding: 20px;
+  width: 340px;
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
-.inline-quill-container .ql-snow .ql-tooltip input[type=text] {
-  background: var(--surface-input);
-  border: 1px solid var(--border-default);
+.qlp-title {
+  font-size: 15px;
+  font-weight: 600;
   color: var(--text-primary);
-  border-radius: var(--radius-sm);
 }
 
-.inline-quill-container .ql-snow .ql-tooltip a.ql-action::after,
-.inline-quill-container .ql-snow .ql-tooltip a.ql-remove::before {
+.qlp-url {
+  background: var(--surface-input) !important;
+  border: 1px solid var(--border-default) !important;
+  color: var(--text-primary) !important;
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.qlp-url:focus {
+  border-color: var(--brand-red) !important;
+}
+
+.qlp-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.qlp-checkbox input[type="checkbox"] {
+  accent-color: var(--brand-red);
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.qlp-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 2px;
+}
+
+.qlp-btn {
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: background 0.15s, color 0.15s;
+}
+
+.qlp-save {
+  background: var(--brand-red);
+  color: #fff;
+}
+
+.qlp-save:hover {
+  filter: brightness(1.15);
+}
+
+.qlp-cancel {
+  background: var(--bg-hover);
+  color: var(--text-secondary);
+}
+
+.qlp-cancel:hover {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.qlp-remove {
+  background: transparent;
+  color: var(--text-muted);
+  margin-right: auto;
+}
+
+.qlp-remove:hover {
   color: var(--brand-red);
 }
 
@@ -4028,6 +4139,113 @@ body:has(.events-page) {
 
 .inline-quill-container .ql-editor::-webkit-scrollbar-thumb:hover {
   background: var(--text-muted);
+}
+
+/* Quill in Modal (Edit Event modal summary field) */
+.modal-quill-container {
+  border-radius: var(--radius-md);
+  overflow: visible;
+  border: 1px solid var(--border-default);
+  background: var(--bg-tertiary);
+}
+
+.modal-quill-container .ql-toolbar.ql-snow {
+  background: var(--bg-secondary);
+  border: none;
+  border-bottom: 1px solid var(--border-default);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  padding: 8px;
+}
+
+.modal-quill-container .ql-toolbar .ql-stroke {
+  stroke: var(--text-secondary);
+}
+
+.modal-quill-container .ql-toolbar .ql-fill {
+  fill: var(--text-secondary);
+}
+
+.modal-quill-container .ql-toolbar .ql-picker {
+  color: var(--text-secondary);
+}
+
+.modal-quill-container .ql-toolbar .ql-picker-label {
+  color: var(--text-secondary);
+}
+
+.modal-quill-container .ql-toolbar .ql-picker-options {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  z-index: 100001;
+}
+
+.modal-quill-container .ql-toolbar .ql-picker-item {
+  color: var(--text-secondary);
+}
+
+.modal-quill-container .ql-toolbar .ql-picker-item:hover {
+  color: var(--text-primary);
+}
+
+.modal-quill-container .ql-toolbar button:hover .ql-stroke,
+.modal-quill-container .ql-toolbar button.ql-active .ql-stroke {
+  stroke: var(--brand-red);
+}
+
+.modal-quill-container .ql-toolbar button:hover .ql-fill,
+.modal-quill-container .ql-toolbar button.ql-active .ql-fill {
+  fill: var(--brand-red);
+}
+
+.modal-quill-container .ql-container.ql-snow {
+  border: none;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  font-family: var(--font-family);
+  font-size: var(--font-size-base);
+}
+
+.modal-quill-container .ql-editor {
+  min-height: 120px;
+  max-height: 250px;
+  overflow-y: auto;
+  color: var(--text-primary);
+  padding: 12px 16px;
+  line-height: 1.6;
+}
+
+.modal-quill-container .ql-editor.ql-blank::before {
+  color: var(--text-muted);
+  font-style: normal;
+}
+
+.modal-quill-container .ql-editor h1,
+.modal-quill-container .ql-editor h2,
+.modal-quill-container .ql-editor h3 {
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.modal-quill-container .ql-editor p {
+  margin-bottom: 8px;
+}
+
+.modal-quill-container .ql-editor a {
+  color: var(--brand-red);
+}
+
+.modal-quill-container .ql-editor::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-quill-container .ql-editor::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.modal-quill-container .ql-editor::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
 }
 
 /* Contacts Grid */
@@ -8468,6 +8686,36 @@ body:has(.events-page) {
    SD CARD CALCULATOR MODAL
    ======================================== */
 
+/* Reset generic .card-log-page styles that leak in via body.card-log-page */
+#sdCardCalculatorModal button {
+  background: transparent !important;
+  color: var(--text-secondary) !important;
+  border: none !important;
+  margin: 0 !important;
+  padding: 6px !important;
+  font-size: 14px !important;
+  border-radius: var(--radius-md) !important;
+}
+
+#sdCardCalculatorModal button:hover {
+  background: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+}
+
+#sdCardCalculatorModal .modal-close-btn {
+  background: transparent !important;
+  color: var(--text-tertiary) !important;
+  border: none !important;
+  width: 32px !important;
+  height: 32px !important;
+  padding: 0 !important;
+}
+
+#sdCardCalculatorModal .modal-close-btn:hover {
+  background: var(--bg-hover) !important;
+  color: var(--text-primary) !important;
+}
+
 #sdCardCalculatorModal .dark-modal-content.calculator-modal {
   max-width: 600px;
   width: 90%;
@@ -8514,18 +8762,21 @@ body:has(.events-page) {
   justify-content: center;
   width: 44px;
   height: 44px;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-default);
+  background: var(--bg-tertiary) !important;
+  border: 1px solid var(--border-default) !important;
   border-radius: var(--radius-lg);
-  color: var(--text-secondary);
+  color: var(--text-secondary) !important;
   cursor: pointer;
   transition: var(--transition-fast);
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: inherit !important;
 }
 
 #sdCardCalculatorModal .stepper-btn:hover {
-  background: var(--brand-red);
-  border-color: var(--brand-red);
-  color: white;
+  background: var(--brand-red) !important;
+  border-color: var(--brand-red) !important;
+  color: white !important;
 }
 
 #sdCardCalculatorModal .stepper-btn .material-symbols-outlined {
@@ -8536,13 +8787,13 @@ body:has(.events-page) {
 #sdCardCalculatorModal .calculator-stepper input {
   width: 50px;
   text-align: center;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
-  font-size: 20px;
+  background: var(--bg-tertiary) !important;
+  border: 1px solid var(--border-default) !important;
+  border-radius: var(--radius-md) !important;
+  color: var(--text-primary) !important;
+  font-size: 20px !important;
   font-weight: 700;
-  padding: 8px 0;
+  padding: 8px 0 !important;
   appearance: textfield;
   -moz-appearance: textfield;
 }
@@ -8570,6 +8821,7 @@ body:has(.events-page) {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
   padding: 12px 16px;
+  overflow: hidden;
   flex: 0 0 auto;
 }
 
@@ -8588,6 +8840,7 @@ body:has(.events-page) {
   background: var(--bg-tertiary);
   border-radius: var(--radius-md);
   overflow: hidden;
+  max-width: 100%;
 }
 
 #sdCardCalculatorModal .day-stepper-btn {
@@ -8596,16 +8849,19 @@ body:has(.events-page) {
   justify-content: center;
   width: 28px;
   height: 28px;
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
+  background: transparent !important;
+  border: none !important;
+  color: var(--text-secondary) !important;
   cursor: pointer;
   transition: var(--transition-fast);
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: inherit !important;
 }
 
 #sdCardCalculatorModal .day-stepper-btn:hover {
-  background: var(--brand-red);
-  color: white;
+  background: var(--brand-red) !important;
+  color: white !important;
 }
 
 #sdCardCalculatorModal .day-stepper-btn .material-symbols-outlined {
@@ -8615,11 +8871,12 @@ body:has(.events-page) {
 #sdCardCalculatorModal .day-stepper input {
   width: 32px;
   text-align: center;
-  background: transparent;
-  border: none;
-  color: var(--text-primary);
-  font-size: 16px;
+  background: transparent !important;
+  border: none !important;
+  color: var(--text-primary) !important;
+  font-size: 16px !important;
   font-weight: 700;
+  padding: 4px 0 !important;
   appearance: textfield;
   -moz-appearance: textfield;
 }
@@ -8644,33 +8901,68 @@ body:has(.events-page) {
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 12px 20px;
-  border-radius: var(--radius-lg);
-  font-size: 14px;
+  padding: 12px 20px !important;
+  border-radius: var(--radius-lg) !important;
+  font-size: 14px !important;
   font-weight: 500;
   cursor: pointer;
   transition: var(--transition-fast);
+  margin: 0 !important;
 }
 
 #sdCardCalculatorModal .calculator-actions .btn-primary {
-  background: var(--brand-red);
-  border: none;
-  color: white;
+  background: var(--brand-red) !important;
+  border: none !important;
+  color: white !important;
 }
 
 #sdCardCalculatorModal .calculator-actions .btn-primary:hover {
-  background: var(--brand-red-hover);
+  background: var(--brand-red-hover) !important;
 }
 
 #sdCardCalculatorModal .calculator-actions .btn-secondary {
-  background: transparent;
-  border: 1px solid var(--border-default);
-  color: var(--text-primary);
+  background: transparent !important;
+  border: 1px solid var(--border-default) !important;
+  color: var(--text-primary) !important;
 }
 
 #sdCardCalculatorModal .calculator-actions .btn-secondary:hover {
-  background: var(--bg-hover);
-  border-color: var(--border-strong);
+  background: var(--bg-hover) !important;
+  border-color: var(--border-strong) !important;
+}
+
+/* Auto Calculate Button */
+#sdCardCalculatorModal .calculator-actions .btn-auto-calc {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px !important;
+  border-radius: var(--radius-lg) !important;
+  font-size: 14px !important;
+  font-weight: 500;
+  cursor: pointer;
+  transition: var(--transition-fast);
+  background: transparent !important;
+  border: 1px solid var(--brand-red) !important;
+  color: var(--brand-red) !important;
+  margin: 0 !important;
+}
+
+#sdCardCalculatorModal .calculator-actions .btn-auto-calc:hover {
+  background: var(--brand-red-muted) !important;
+  border-color: var(--brand-red-hover) !important;
+  color: var(--brand-red-hover) !important;
+}
+
+#sdCardCalculatorModal .calculator-actions .btn-auto-calc:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+#sdCardCalculatorModal .calculator-actions .btn-auto-calc .rotating {
+  animation: spin 1s linear infinite;
 }
 
 /* Calculator Results */
@@ -8679,38 +8971,48 @@ body:has(.events-page) {
 }
 
 #sdCardCalculatorModal .calculator-results-table {
-  width: 100%;
-  border-collapse: collapse;
+  width: 100% !important;
+  border-collapse: collapse !important;
+  border-spacing: 0 !important;
   margin-bottom: 20px;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-lg);
+  background: var(--bg-secondary) !important;
+  border-radius: var(--radius-lg) !important;
   overflow: hidden;
+  border: 1px solid var(--border-default) !important;
+  box-shadow: none !important;
+  table-layout: auto !important;
 }
 
 #sdCardCalculatorModal .calculator-results-table th {
-  background: var(--brand-red);
-  color: white;
+  background: var(--brand-red) !important;
+  color: white !important;
   padding: 12px 8px;
-  font-size: 12px;
+  font-size: 12px !important;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  border-bottom: none !important;
 }
 
 #sdCardCalculatorModal .calculator-results-table td {
   padding: 12px 8px;
   text-align: center;
-  font-size: 14px;
-  color: var(--text-primary);
-  border-bottom: 1px solid var(--border-subtle);
+  font-size: 14px !important;
+  color: var(--text-primary) !important;
+  background: var(--bg-secondary) !important;
+  border-bottom: 1px solid var(--border-subtle) !important;
 }
 
 #sdCardCalculatorModal .calculator-results-table tr:last-child td {
-  border-bottom: none;
+  border-bottom: none !important;
 }
 
 #sdCardCalculatorModal .calculator-results-table tr:nth-child(even) td {
-  background: var(--bg-tertiary);
+  background: var(--bg-tertiary) !important;
+}
+
+#sdCardCalculatorModal .calculator-results-table tr:hover td {
+  background: var(--bg-hover) !important;
 }
 
 #sdCardCalculatorModal .calculator-summary {
@@ -8760,28 +9062,206 @@ body:has(.events-page) {
   color: var(--brand-red);
 }
 
-/* Mobile responsive */
-@media (max-width: 600px) {
+/* Tablet responsive */
+@media (max-width: 768px) {
   #sdCardCalculatorModal .dark-modal-content.calculator-modal {
     max-width: 100%;
     width: 100%;
     height: 100%;
     max-height: 100%;
-    border-radius: 0;
+    border-radius: 0 !important;
+    border: none !important;
   }
-  
+
   #sdCardCalculatorModal .calculator-body {
-    padding: 16px;
+    padding: 20px 16px;
   }
-  
+
+  #sdCardCalculatorModal .calculator-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  #sdCardCalculatorModal .calculator-actions .btn-auto-calc,
+  #sdCardCalculatorModal .calculator-actions .btn-primary,
+  #sdCardCalculatorModal .calculator-actions .btn-secondary {
+    padding: 10px 16px !important;
+    font-size: 13px !important;
+  }
+}
+
+/* Mobile responsive */
+@media (max-width: 480px) {
+  #sdCardCalculatorModal {
+    padding: 0 !important;
+    align-items: stretch !important;
+  }
+
+  #sdCardCalculatorModal .dark-modal-content.calculator-modal {
+    max-width: 100%;
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    border-radius: 0 !important;
+    border: none !important;
+  }
+
+  #sdCardCalculatorModal .modal-header-dark {
+    padding: 16px !important;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--bg-secondary) !important;
+  }
+
+  #sdCardCalculatorModal .modal-header-dark h3 {
+    font-size: 16px !important;
+  }
+
+  #sdCardCalculatorModal .calculator-body {
+    padding: 16px 14px;
+  }
+
+  #sdCardCalculatorModal .calculator-section {
+    margin-bottom: 20px;
+  }
+
+  #sdCardCalculatorModal .calculator-section label,
+  #sdCardCalculatorModal .section-label {
+    font-size: 13px !important;
+    margin-bottom: 10px;
+  }
+
+  #sdCardCalculatorModal .calculator-input-group {
+    gap: 12px;
+  }
+
+  #sdCardCalculatorModal .stepper-btn {
+    width: 40px !important;
+    height: 40px !important;
+  }
+
+  #sdCardCalculatorModal .calculator-stepper input {
+    width: 44px !important;
+    font-size: 18px !important;
+  }
+
+  /* Cameras Per Day grid - 2 per row on mobile */
   #sdCardCalculatorModal .cameras-per-day-grid {
-    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    justify-content: center;
   }
-  
-  #sdCardCalculatorModal .calculator-results-table th,
+
+  #sdCardCalculatorModal .day-camera-input {
+    padding: 10px 12px;
+    gap: 6px;
+    min-width: 0;
+    flex: 1 1 calc(50% - 5px);
+    max-width: calc(50% - 5px);
+    overflow: hidden;
+  }
+
+  #sdCardCalculatorModal .day-camera-input label {
+    font-size: 11px !important;
+    letter-spacing: 0.3px;
+  }
+
+  #sdCardCalculatorModal .day-stepper-btn {
+    width: 26px !important;
+    height: 26px !important;
+  }
+
+  #sdCardCalculatorModal .day-stepper-btn .material-symbols-outlined {
+    font-size: 14px !important;
+  }
+
+  #sdCardCalculatorModal .day-stepper input {
+    width: 26px !important;
+    font-size: 14px !important;
+  }
+
+  #sdCardCalculatorModal .calculator-actions {
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+
+  #sdCardCalculatorModal .calculator-actions .btn-auto-calc,
+  #sdCardCalculatorModal .calculator-actions .btn-primary,
+  #sdCardCalculatorModal .calculator-actions .btn-secondary {
+    flex: none !important;
+    width: 100%;
+    padding: 12px 16px !important;
+    font-size: 14px !important;
+  }
+
+  #sdCardCalculatorModal .calculator-results {
+    margin: 0 -14px;
+    padding: 0 14px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  #sdCardCalculatorModal .calculator-results-table {
+    min-width: 360px;
+    font-size: 12px !important;
+  }
+
+  #sdCardCalculatorModal .calculator-results-table th {
+    padding: 10px 4px !important;
+    font-size: 10px !important;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+
   #sdCardCalculatorModal .calculator-results-table td {
-    padding: 8px 4px;
-    font-size: 11px;
+    padding: 10px 4px !important;
+    font-size: 13px !important;
+  }
+
+  #sdCardCalculatorModal .calculator-summary {
+    padding: 14px;
+    margin-top: 16px;
+  }
+
+  #sdCardCalculatorModal .summary-label {
+    font-size: 13px !important;
+  }
+
+  #sdCardCalculatorModal .summary-value {
+    font-size: 13px !important;
+  }
+
+  #sdCardCalculatorModal .summary-row.total .summary-label {
+    font-size: 14px !important;
+  }
+
+  #sdCardCalculatorModal .summary-row.total .summary-value {
+    font-size: 20px !important;
+  }
+}
+
+/* Very small screens */
+@media (max-width: 360px) {
+  #sdCardCalculatorModal .day-camera-input {
+    flex: 1 1 calc(50% - 5px);
+    max-width: calc(50% - 5px);
+    padding: 10px 8px;
+    overflow: hidden;
+  }
+
+  #sdCardCalculatorModal .calculator-results-table {
+    min-width: 320px;
+  }
+
+  #sdCardCalculatorModal .calculator-results-table th {
+    font-size: 9px !important;
+    padding: 8px 2px !important;
+  }
+
+  #sdCardCalculatorModal .calculator-results-table td {
+    font-size: 12px !important;
+    padding: 8px 2px !important;
   }
 }
 

@@ -584,11 +584,46 @@ function renderDarkThemeWeather(weather) {
 }
 
 // Modal show/hide functions for dark theme
-function showEditModal() {
+async function showEditModal() {
   const modal = document.getElementById('editEventModal');
   if (modal) {
     modal.classList.add('show');
     document.body.style.overflow = 'hidden';
+  }
+
+  if (!modalQuillEditor) {
+    const container = document.getElementById('editSummaryQuill');
+    if (container) {
+      try {
+        await loadQuill();
+        modalQuillEditor = new Quill('#editSummaryQuill', {
+          theme: 'snow',
+          placeholder: 'Enter event summary...',
+          modules: {
+            toolbar: [
+              ['bold', 'italic', 'underline'],
+              [{ 'header': [1, 2, 3, false] }],
+              [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+              [{ 'color': [] }],
+              ['link'],
+              ['clean']
+            ]
+          }
+        });
+        setupQuillLinkHandler(modalQuillEditor);
+      } catch (err) {
+        console.error('Failed to load Quill for modal:', err);
+      }
+    }
+  }
+
+  if (modalQuillEditor && currentTableData) {
+    const summary = currentTableData.general?.summary || '';
+    if (summary) {
+      modalQuillEditor.root.innerHTML = summary;
+    } else {
+      modalQuillEditor.setContents([]);
+    }
   }
 }
 
@@ -830,70 +865,174 @@ let isInlineEditMode = false;
 let isInfoEditMode = false;
 let isStatsEditMode = false;
 let notesQuillEditor = null;
+let modalQuillEditor = null;
 let quillLoaded = false;
 
-// Load Quill dynamically
+// ── Custom Link Popup (appended to body to escape overflow:hidden) ──
+function showLinkPopup(quillInstance, existingUrl, existingTarget) {
+  closeLinkPopup();
+
+  const range = quillInstance.getSelection(true);
+  if (!range) return;
+
+  const isEdit = !!existingUrl;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'quillLinkOverlay';
+  overlay.className = 'quill-link-overlay';
+
+  const popup = document.createElement('div');
+  popup.className = 'quill-link-popup';
+  popup.innerHTML = `
+    <div class="qlp-title">${isEdit ? 'Edit Link' : 'Insert Link'}</div>
+    <input type="text" class="qlp-url" placeholder="https://example.com" value="${existingUrl || ''}" />
+    <label class="qlp-checkbox">
+      <input type="checkbox" class="qlp-newtab" ${existingTarget === '_blank' ? 'checked' : ''} />
+      <span>Open in new tab</span>
+    </label>
+    <div class="qlp-actions">
+      ${isEdit ? '<button class="qlp-btn qlp-remove">Remove</button>' : ''}
+      <button class="qlp-btn qlp-cancel">Cancel</button>
+      <button class="qlp-btn qlp-save">Save</button>
+    </div>
+  `;
+
+  overlay.appendChild(popup);
+  document.body.appendChild(overlay);
+
+  const urlInput = popup.querySelector('.qlp-url');
+  const newTabCheck = popup.querySelector('.qlp-newtab');
+
+  setTimeout(() => { urlInput.focus(); urlInput.select(); }, 50);
+
+  function save() {
+    let url = urlInput.value.trim();
+    if (!url) { closeLinkPopup(); return; }
+    if (!/^https?:\/\//i.test(url) && !url.startsWith('/') && !url.startsWith('mailto:')) {
+      url = 'https://' + url;
+    }
+    const openNew = newTabCheck.checked;
+    quillInstance.focus();
+    if (range.length === 0 && !isEdit) {
+      quillInstance.insertText(range.index, url, 'link', url);
+      quillInstance.setSelection(range.index, url.length);
+    } else {
+      quillInstance.format('link', url);
+    }
+    if (openNew) {
+      setTimeout(() => {
+        const editorEl = quillInstance.root;
+        editorEl.querySelectorAll('a[href]').forEach(a => {
+          if (a.getAttribute('href') === url) {
+            a.setAttribute('target', '_blank');
+            a.setAttribute('rel', 'noopener noreferrer');
+          }
+        });
+      }, 10);
+    }
+    closeLinkPopup();
+  }
+
+  function remove() {
+    quillInstance.focus();
+    quillInstance.format('link', false);
+    closeLinkPopup();
+  }
+
+  popup.querySelector('.qlp-save').addEventListener('click', save);
+  popup.querySelector('.qlp-cancel').addEventListener('click', closeLinkPopup);
+  if (popup.querySelector('.qlp-remove')) {
+    popup.querySelector('.qlp-remove').addEventListener('click', remove);
+  }
+
+  urlInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); save(); }
+    if (e.key === 'Escape') { e.preventDefault(); closeLinkPopup(); }
+  });
+
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) closeLinkPopup();
+  });
+}
+
+function closeLinkPopup() {
+  const el = document.getElementById('quillLinkOverlay');
+  if (el) el.remove();
+}
+
+function setupQuillLinkHandler(quillInstance) {
+  const toolbar = quillInstance.getModule('toolbar');
+  toolbar.addHandler('link', () => {
+    const range = quillInstance.getSelection();
+    if (!range) return;
+    const [leaf] = quillInstance.getLeaf(range.index);
+    const linkBlot = leaf?.parent;
+    if (linkBlot?.domNode?.tagName === 'A') {
+      const href = linkBlot.domNode.getAttribute('href') || '';
+      const target = linkBlot.domNode.getAttribute('target') || '';
+      showLinkPopup(quillInstance, href, target);
+    } else {
+      showLinkPopup(quillInstance, '', '');
+    }
+  });
+
+  quillInstance.root.addEventListener('click', (e) => {
+    const anchor = e.target.closest('a');
+    if (anchor && quillInstance.hasFocus()) {
+      e.preventDefault();
+      const href = anchor.getAttribute('href') || '';
+      const target = anchor.getAttribute('target') || '';
+      const blot = Quill.find(anchor);
+      if (blot) {
+        const index = quillInstance.getIndex(blot);
+        const length = blot.length();
+        quillInstance.setSelection(index, length);
+      }
+      showLinkPopup(quillInstance, href, target);
+    }
+  });
+}
+
+// Load Quill — preloaded in dashboard.html, dynamic fallback if needed
 function loadQuill() {
   return new Promise((resolve, reject) => {
-    // Check if Quill is already available
     if (typeof Quill !== 'undefined') {
       quillLoaded = true;
       resolve();
       return;
     }
-    
-    // Load CSS first
-    if (!document.querySelector('link[href*="quill.snow.css"]')) {
+
+    // Ensure CSS is in <head>
+    if (!document.head.querySelector('link[href*="quill.snow.css"]')) {
       const link = document.createElement('link');
       link.rel = 'stylesheet';
       link.href = 'https://cdn.quilljs.com/1.3.7/quill.snow.css';
-      link.crossOrigin = 'anonymous';
       document.head.appendChild(link);
     }
-    
-    // Remove any existing quill script that may have failed
-    const existingScript = document.querySelector('script[src*="quill.min.js"]');
-    if (existingScript) {
-      existingScript.remove();
-    }
-    
-    // Load JS
+
+    // Remove stale non-executing script tags (e.g. from innerHTML injection)
+    document.querySelectorAll('script[src*="quill"]').forEach(s => s.remove());
+
     const script = document.createElement('script');
     script.src = 'https://cdn.quilljs.com/1.3.7/quill.min.js';
-    script.crossOrigin = 'anonymous';
-    
-    let resolved = false;
-    
-    script.onload = () => {
-      if (resolved) return;
-      resolved = true;
-      
-      // Wait a bit for Quill to be defined
-      setTimeout(() => {
-        if (typeof Quill !== 'undefined') {
-          quillLoaded = true;
-          resolve();
-        } else {
-          reject(new Error('Quill loaded but not defined'));
-        }
-      }, 100);
+
+    let done = false;
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      if (ok && typeof Quill !== 'undefined') {
+        quillLoaded = true;
+        resolve();
+      } else {
+        reject(new Error('Quill failed to load'));
+      }
     };
-    
-    script.onerror = (e) => {
-      if (resolved) return;
-      resolved = true;
-      console.error('Failed to load Quill script:', e);
-      reject(new Error('Failed to load Quill script'));
-    };
-    
+
+    script.onload = () => setTimeout(() => finish(true), 50);
+    script.onerror = () => finish(false);
     document.head.appendChild(script);
-    
-    // Timeout after 10 seconds
-    setTimeout(() => {
-      if (resolved) return;
-      resolved = true;
-      reject(new Error('Quill load timeout'));
-    }, 10000);
+
+    setTimeout(() => finish(false), 10000);
   });
 }
 
@@ -1046,7 +1185,15 @@ function populateEditModal(table) {
   document.getElementById('editState').value = general.state || '';
   document.getElementById('editAttendees').value = general.attendees || '';
   document.getElementById('editBudget').value = general.budget || '';
-  document.getElementById('editSummary').value = general.summary || '';
+
+  if (modalQuillEditor) {
+    const summary = general.summary || '';
+    if (summary) {
+      modalQuillEditor.root.innerHTML = summary;
+    } else {
+      modalQuillEditor.setContents([]);
+    }
+  }
 }
 
 async function switchToInlineEditMode(tableId) {
@@ -1098,8 +1245,9 @@ async function switchToInlineEditMode(tableId) {
           ]
         }
       });
-      
-      // Set initial content
+
+      setupQuillLinkHandler(notesQuillEditor);
+
       const initialContent = general.summary || '';
       if (initialContent) {
         notesQuillEditor.root.innerHTML = initialContent;
@@ -1684,6 +1832,12 @@ async function saveDarkThemeEvent(tableId) {
   }
   
   try {
+    let summaryValue = '';
+    if (modalQuillEditor) {
+      summaryValue = modalQuillEditor.root.innerHTML;
+      if (summaryValue === '<p><br></p>') summaryValue = '';
+    }
+
     const eventData = {
       title: document.getElementById('editEventName').value,
       general: {
@@ -1696,7 +1850,7 @@ async function saveDarkThemeEvent(tableId) {
         state: document.getElementById('editState').value,
         attendees: document.getElementById('editAttendees').value,
         budget: document.getElementById('editBudget').value,
-        summary: document.getElementById('editSummary').value
+        summary: summaryValue
       }
     };
     

@@ -1,14 +1,15 @@
 /* Reimbursements Page */
 .reimbursements-page {
-  width: 100%;
-  min-height: 100vh;
+  height: 100vh;
   background: var(--bg-primary);
   color: var(--text-primary);
+  overflow: hidden;
 }
 
 .reimb-layout {
   display: flex;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .reimb-main {
@@ -16,22 +17,90 @@
   margin-left: var(--sidebar-width);
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  height: 100vh;
+  background: var(--bg-primary);
+  overflow: hidden;
+}
+
+/* Sidebar positioning */
+.reimbursements-page .dashboard-sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  height: 100vh;
+  width: var(--sidebar-width);
+  z-index: 100;
 }
 
 .reimb-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 12px;
   padding: 20px 32px;
   border-bottom: 1px solid var(--border-default);
   background: var(--bg-secondary);
+}
+
+.reimb-header .mobile-menu-btn {
+  display: none;
+  width: 40px;
+  height: 40px;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  border-radius: var(--radius-md);
+}
+
+.reimb-header-left {
+  flex: 1;
 }
 
 .reimb-header h1 {
   font-size: 1.4rem;
   font-weight: 700;
   margin: 0;
+}
+
+/* View toggle */
+.reimb-view-toggle {
+  display: flex;
+  gap: 2px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  border: 1px solid var(--border-default);
+}
+
+.reimb-view-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 30px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: calc(var(--radius-md) - 2px);
+  transition: all 0.15s;
+}
+
+.reimb-view-btn:hover {
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+}
+
+.reimb-view-btn.active {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.reimb-view-btn .material-symbols-outlined {
+  font-size: 18px;
 }
 
 .reimb-header-subtitle {
@@ -558,10 +627,116 @@
   margin-bottom: 6px;
 }
 
+/* ---- Card View ---- */
+.reimb-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.reimb-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 16px 18px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.reimb-card:hover {
+  border-color: var(--border-hover, var(--border-default));
+  background: var(--bg-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.reimb-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.reimb-card-user {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.reimb-card-event {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reimb-card-desc {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.reimb-card-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 4px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-default);
+}
+
+.reimb-card-amount {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.reimb-card-date {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
-  .reimb-main {
+  .reimbursements-page .dashboard-sidebar {
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    z-index: 200;
+  }
+
+  .reimbursements-page .dashboard-sidebar.show,
+  .reimbursements-page .dashboard-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .reimbursements-page .reimb-main {
     margin-left: 0;
+  }
+
+  .reimb-header .mobile-menu-btn {
+    display: flex;
+  }
+
+  .reimbursements-page .sidebar-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 150;
+  }
+
+  .reimbursements-page .sidebar-overlay.show {
+    display: block;
   }
 }
 
@@ -571,6 +746,10 @@
   .reimb-content {
     padding-left: 16px;
     padding-right: 16px;
+  }
+
+  .reimb-view-toggle {
+    display: none;
   }
 
   .reimb-toolbar {
@@ -586,6 +765,10 @@
     flex-wrap: wrap;
   }
 
+  .reimb-cards {
+    grid-template-columns: 1fr;
+  }
+
   .reimb-info-grid {
     grid-template-columns: 1fr;
   }
@@ -594,5 +777,10 @@
   .reimb-table thead th {
     padding: 10px 12px;
     font-size: 0.78rem;
+  }
+
+  .reimb-count {
+    padding-left: 0;
+    padding-right: 0;
   }
 }

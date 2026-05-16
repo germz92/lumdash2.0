@@ -1,15 +1,35 @@
 <link rel="stylesheet" href="css/theme-dark.css">
 <link rel="stylesheet" href="css/reimbursements.css">
+<style>
+  body:has(.reimbursements-page) #page-container,
+  #page-container:has(.reimbursements-page) {
+    padding: 0 !important;
+    overflow: hidden !important;
+    height: 100% !important;
+  }
+</style>
 
-<div class="reimbursements-page">
-  <div class="reimb-layout">
-    <div id="sidebar-container"></div>
+<div class="dark-theme reimbursements-page">
+  <div class="reimb-layout" id="reimbPageLayout">
 
-    <div class="reimb-main">
+    <!-- Sidebar will be injected here by sidebar-dashboard.js -->
+
+    <main class="reimb-main">
       <header class="reimb-header">
-        <div>
+        <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+        <div class="reimb-header-left">
           <h1>Reimbursements</h1>
           <div class="reimb-header-subtitle">Review and manage expense reimbursement requests</div>
+        </div>
+        <div class="reimb-view-toggle" id="viewToggle">
+          <button class="reimb-view-btn active" data-view="table" title="Table view">
+            <span class="material-symbols-outlined">table_rows</span>
+          </button>
+          <button class="reimb-view-btn" data-view="cards" title="Card view">
+            <span class="material-symbols-outlined">grid_view</span>
+          </button>
         </div>
       </header>
 
@@ -38,7 +58,7 @@
           <div style="text-align:center;padding:60px;color:var(--text-muted);">Loading...</div>
         </div>
       </div>
-    </div>
+    </main>
   </div>
 </div>
 

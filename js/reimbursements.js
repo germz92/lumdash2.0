@@ -13,6 +13,8 @@
   let currentDetail = null;
   let sortColumn = 'dateSubmitted';
   let sortDir = 'desc';
+  let viewMode = 'table';
+  const MOBILE_BREAKPOINT = 768;
 
   function fmtDate(d) {
     if (!d) return '—';
@@ -169,6 +171,14 @@
       return;
     }
 
+    if (viewMode === 'cards') {
+      renderCards(container);
+    } else {
+      renderTable(container);
+    }
+  }
+
+  function renderTable(container) {
     container.innerHTML = `
       <div class="reimb-table-wrap">
         <table class="reimb-table">
@@ -204,6 +214,49 @@
     container.querySelectorAll('tr[data-id]').forEach(row => {
       row.addEventListener('click', () => openDetail(row.dataset.id));
     });
+  }
+
+  function renderCards(container) {
+    container.innerHTML = `
+      <div class="reimb-cards">
+        ${filteredRequests.map(r => `
+          <div class="reimb-card" data-id="${r._id}">
+            <div class="reimb-card-top">
+              <div class="reimb-card-user">${r.userName || '—'}</div>
+              ${statusBadge(r.status)}
+            </div>
+            <div class="reimb-card-event">${r.eventName || '—'}</div>
+            ${r.description ? `<div class="reimb-card-desc">${r.description}</div>` : ''}
+            <div class="reimb-card-bottom">
+              <span class="reimb-card-amount">${fmtCurrency(r.totalAmount)}</span>
+              <span class="reimb-card-date">${fmtDate(r.dateSubmitted)}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>`;
+
+    container.querySelectorAll('.reimb-card[data-id]').forEach(card => {
+      card.addEventListener('click', () => openDetail(card.dataset.id));
+    });
+  }
+
+  function setViewMode(mode) {
+    viewMode = mode;
+    document.querySelectorAll('.reimb-view-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.view === mode);
+    });
+    render();
+  }
+
+  function checkResponsiveView() {
+    const isMobile = window.innerWidth <= MOBILE_BREAKPOINT;
+    const toggle = document.getElementById('viewToggle');
+    if (isMobile) {
+      if (viewMode !== 'cards') setViewMode('cards');
+      if (toggle) toggle.style.display = 'none';
+    } else {
+      if (toggle) toggle.style.display = '';
+    }
   }
 
   // ---- Detail modal ----
@@ -408,18 +461,51 @@
       currentUserFilter = e.target.value;
       applyFilters();
     });
+
+    document.querySelectorAll('.reimb-view-btn').forEach(btn => {
+      btn.addEventListener('click', () => setViewMode(btn.dataset.view));
+    });
+
+    window.addEventListener('resize', checkResponsiveView);
+  }
+
+  function setupMobileMenu() {
+    const menuBtn = document.getElementById('mobileMenuBtn');
+    const sidebar = document.getElementById('dashboardSidebar');
+    const overlay = document.querySelector('.sidebar-overlay');
+
+    if (menuBtn && sidebar) {
+      menuBtn.onclick = () => {
+        sidebar.classList.toggle('show');
+        if (overlay) overlay.classList.toggle('show');
+      };
+    }
+
+    if (overlay) {
+      overlay.onclick = () => {
+        if (sidebar) sidebar.classList.remove('show');
+        overlay.classList.remove('show');
+      };
+    }
   }
 
   // ---- Init ----
   window.initPage = async function() {
-    setupListeners();
-    await Promise.all([loadRequests(), loadFilters()]);
+    // Inject dashboard sidebar
+    const layoutContainer = document.getElementById('reimbPageLayout');
 
-    if (typeof window.populateSidebarEventInfo === 'function') {
-      window.populateSidebarEventInfo();
+    if (layoutContainer && typeof window.injectDashboardSidebar === 'function') {
+      await window.injectDashboardSidebar(layoutContainer, {
+        position: 'prepend',
+        activePage: 'reimbursements'
+      });
+    } else if (typeof window.initDashboardSidebar === 'function') {
+      window.initDashboardSidebar();
     }
-    if (typeof window.setupSidebarUser === 'function') {
-      window.setupSidebarUser();
-    }
+
+    setupMobileMenu();
+    setupListeners();
+    checkResponsiveView();
+    await Promise.all([loadRequests(), loadFilters()]);
   };
 })();

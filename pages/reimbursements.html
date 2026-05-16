@@ -1,0 +1,55 @@
+<link rel="stylesheet" href="css/theme-dark.css">
+<link rel="stylesheet" href="css/reimbursements.css">
+
+<div class="reimbursements-page">
+  <div class="reimb-layout">
+    <div id="sidebar-container"></div>
+
+    <div class="reimb-main">
+      <header class="reimb-header">
+        <div>
+          <h1>Reimbursements</h1>
+          <div class="reimb-header-subtitle">Review and manage expense reimbursement requests</div>
+        </div>
+      </header>
+
+      <div class="reimb-toolbar">
+        <div class="reimb-search">
+          <span class="material-symbols-outlined">search</span>
+          <input type="text" id="reimbSearch" placeholder="Search by name, event, or description...">
+        </div>
+
+        <div class="reimb-status-tabs" id="statusTabs">
+          <button class="reimb-status-tab active" data-status="all">All</button>
+          <button class="reimb-status-tab" data-status="submitted">Pending</button>
+          <button class="reimb-status-tab" data-status="approved">Approved</button>
+          <button class="reimb-status-tab" data-status="rejected">Rejected</button>
+        </div>
+
+        <div class="reimb-filter-group">
+          <select id="filterEvent"><option value="">All Events</option></select>
+          <select id="filterUser"><option value="">All Users</option></select>
+        </div>
+      </div>
+
+      <div class="reimb-content">
+        <div id="reimbCount" class="reimb-count"></div>
+        <div id="reimbContainer">
+          <div style="text-align:center;padding:60px;color:var(--text-muted);">Loading...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="reimb-modal-overlay" id="reimbModal">
+  <div class="reimb-modal">
+    <div class="reimb-modal-header">
+      <h2 id="modalTitle">Request Details</h2>
+      <button class="reimb-modal-close" id="modalClose">&times;</button>
+    </div>
+    <div class="reimb-modal-body" id="modalBody"></div>
+    <div class="reimb-modal-footer" id="modalFooter"></div>
+  </div>
+</div>

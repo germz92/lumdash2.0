@@ -86,7 +86,7 @@ console.log(' app.js loaded');
 })();
 
 const PAGE_CLASSES = [
-  'events-page', 'general-page', 'crew-page', 'travel-page', 'card-log-page', 'schedule-page', 'dashboard-page', 'login-page', 'register-page', 'users-page', 'crew-planner-page', 'crew-calendar-page', 'gear-page', 'todos-page', 'executive-summary-page', 'call-times-page', 'notes-page', 'maps-page', 'documents-page', 'shotlist-page'
+  'events-page', 'general-page', 'crew-page', 'travel-page', 'card-log-page', 'schedule-page', 'dashboard-page', 'login-page', 'register-page', 'users-page', 'crew-planner-page', 'crew-calendar-page', 'gear-page', 'todos-page', 'executive-summary-page', 'call-times-page', 'notes-page', 'maps-page', 'documents-page', 'shotlist-page', 'reimbursements-page'
 ];
 
 function setBodyPageClass(page) {
@@ -162,7 +162,7 @@ function navigate(page, id) {
   window.currentNavigatingPage = page; // Track for debugging
   
   // Only require an ID for pages that need it
-  const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management', 'my-tasks', 'call-times'].includes(page);
+  const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management', 'my-tasks', 'call-times', 'reimbursements'].includes(page);
   
   // CRITICAL FIX: Determine the final tableId to use consistently throughout navigation
   let finalId = id;
@@ -478,7 +478,7 @@ function injectPageContent(html, page, id) {
       if (window.initPage) {
         try {
           // CRITICAL FIX: Always call initPage if it exists, but only pass ID for pages that need it
-          const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management', 'my-tasks', 'call-times'].includes(page);
+          const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management', 'my-tasks', 'call-times', 'reimbursements'].includes(page);
           
           if (needsId && id) {
             console.log(`[INIT_PAGE] Calling initPage with explicit id: ${id}`);
@@ -990,6 +990,7 @@ function loadPageCSS(page) {
     case 'users': cssFile = 'css/users.css'; break;
     case 'gear': cssFile = 'css/gear.css'; break;
     case 'executive-summary': cssFile = 'css/executive-summary.css'; break;
+    case 'reimbursements': cssFile = 'css/reimbursements.css'; break;
   }
   if (cssFile) {
     const link = document.createElement('link');
@@ -1014,7 +1015,7 @@ window.addEventListener('hashchange', () => {
   
   // For hash changes (back/forward navigation), we need to be more careful about event IDs
   // Only pass an event ID if the page actually needs one
-  const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management', 'my-tasks', 'call-times'].includes(page);
+  const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management', 'my-tasks', 'call-times', 'reimbursements'].includes(page);
   
   if (needsId) {
     // Prefer hash ID, fall back to localStorage
@@ -1048,7 +1049,7 @@ window.addEventListener('popstate', (event) => {
   
   // For popstate navigation, use state if available, otherwise parse from hash
   const stateId = event.state?.id;
-  const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management', 'my-tasks', 'call-times'].includes(page);
+  const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management', 'my-tasks', 'call-times', 'reimbursements'].includes(page);
   
   if (needsId) {
     const eventId = stateId || hashId || localStorage.getItem('eventId');
@@ -1089,7 +1090,7 @@ window.addEventListener('DOMContentLoaded', () => {
   console.log(`[INITIAL_LOAD] Initial page load: ${page}, hash ID: ${hashId}`);
   
   // Use the same logic as hashchange handler for consistency
-  const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management', 'my-tasks', 'call-times'].includes(page);
+  const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management', 'my-tasks', 'call-times', 'reimbursements'].includes(page);
   
   if (needsId) {
     // Prefer hash ID, fall back to localStorage
@@ -1329,7 +1330,7 @@ function restoreLastPageState() {
     }
     
     // Restore the page if it's valid and we have the required eventId for pages that need it
-    const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management', 'my-tasks'].includes(pageState.page);
+    const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management', 'my-tasks', 'call-times', 'reimbursements'].includes(pageState.page);
     
     if (needsId && !pageState.eventId) {
       console.log('[PWA] Cannot restore page state - missing eventId for page:', pageState.page);

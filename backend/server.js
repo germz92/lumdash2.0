@@ -809,6 +809,7 @@ const ManualReservation = require('./models/ManualReservation');
 const FlightRequest = require('./models/FlightRequest');
 const Passenger = require('./models/Passenger');
 const Notification = require('./models/Notification');
+const ReimbursementRequest = require('./models/ReimbursementRequest');
 
 
 
@@ -4589,17 +4590,14 @@ app.put('/api/tables/:id/folder-logs', authenticate, async (req, res) => {
   }
 });
 
-// Serve SPA shell and root
-app.use(express.static(path.join(__dirname, '../frontend')));
+// Serve SPA shell and root from project root
+app.use(express.static(path.join(__dirname, '..')));
 
-// Serve static frontend assets
-app.use('/pages', express.static(path.join(__dirname, '../frontend/pages')));
-app.use('/js', express.static(path.join(__dirname, '../frontend/js')));
-app.use('/css', express.static(path.join(__dirname, '../frontend/css')));
-app.use('/assets', express.static(path.join(__dirname, '../frontend/assets')));
-
-// Serve SPA shell and root
-app.use(express.static(path.join(__dirname, '../frontend')));
+// Serve static frontend assets from project root
+app.use('/pages', express.static(path.join(__dirname, '../pages')));
+app.use('/js', express.static(path.join(__dirname, '../js')));
+app.use('/css', express.static(path.join(__dirname, '../css')));
+app.use('/assets', express.static(path.join(__dirname, '../assets')));
 
 // VERIFY TOKEN
 app.get('/api/verify-token', authenticate, (req, res) => {
@@ -9678,20 +9676,178 @@ app.delete('/api/timesheets/entry', authenticate, async (req, res) => {
 
 // ========= END TIMESHEETS API =========
 
+// ========= REIMBURSEMENT REQUESTS API =========
+
+// List reimbursement requests (admin only, excludes drafts)
+app.get('/api/reimbursements', authenticate, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    const { status, eventId, userId, sort } = req.query;
+    const query = { status: { $ne: 'draft' } };
+    if (status && status !== 'all') query.status = status;
+    if (eventId) query.eventId = eventId;
+    if (userId) query.userId = userId;
+
+    let sortObj = { dateSubmitted: -1 };
+    if (sort === 'date_asc') sortObj = { dateSubmitted: 1 };
+    else if (sort === 'date_desc') sortObj = { dateSubmitted: -1 };
+    else if (sort === 'amount_desc') sortObj = { totalAmount: -1 };
+    else if (sort === 'amount_asc') sortObj = { totalAmount: 1 };
+
+    let requests = await ReimbursementRequest.find(query).sort(sortObj).lean();
+
+    // Backfill userName/userEmail from the users collection for any docs missing them
+    const needsUser = requests.filter(r => !r.userName && r.userId);
+    if (needsUser.length > 0) {
+      const userIds = [...new Set(needsUser.map(r => r.userId.toString()))];
+      const users = await User.find({ _id: { $in: userIds } }, 'fullName email').lean();
+      const userMap = {};
+      users.forEach(u => { userMap[u._id.toString()] = u; });
+      requests = requests.map(r => {
+        if (!r.userName && r.userId) {
+          const u = userMap[r.userId.toString()];
+          if (u) {
+            r.userName = u.fullName || u.email || '—';
+            r.userEmail = r.userEmail || u.email || '';
+          }
+        }
+        return r;
+      });
+    }
+
+    res.json(requests);
+  } catch (err) {
+    console.error('Error fetching reimbursements:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get single reimbursement request detail (admin only)
+app.get('/api/reimbursements/:id', authenticate, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    const request = await ReimbursementRequest.findById(req.params.id).lean();
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    if (request.status === 'draft') return res.status(404).json({ error: 'Request not found' });
+
+    // Backfill userName/userEmail if missing
+    if (!request.userName && request.userId) {
+      const user = await User.findById(request.userId, 'fullName email').lean();
+      if (user) {
+        request.userName = user.fullName || user.email || '—';
+        request.userEmail = request.userEmail || user.email || '';
+      }
+    }
+
+    res.json(request);
+  } catch (err) {
+    console.error('Error fetching reimbursement:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Approve reimbursement request (admin only)
+app.put('/api/reimbursements/:id/approve', authenticate, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    const request = await ReimbursementRequest.findById(req.params.id);
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    if (request.status !== 'submitted') {
+      return res.status(400).json({ error: `Cannot approve a request with status "${request.status}"` });
+    }
+
+    request.status = 'approved';
+    request.reviewedBy = req.user.id;
+    request.reviewedAt = new Date();
+    request.reviewNotes = req.body.reviewNotes || '';
+    await request.save();
+
+    res.json({ message: 'Request approved', request });
+  } catch (err) {
+    console.error('Error approving reimbursement:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Reject reimbursement request (admin only)
+app.put('/api/reimbursements/:id/reject', authenticate, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    const request = await ReimbursementRequest.findById(req.params.id);
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    if (request.status !== 'submitted') {
+      return res.status(400).json({ error: `Cannot reject a request with status "${request.status}"` });
+    }
+    if (!req.body.reviewNotes) {
+      return res.status(400).json({ error: 'Rejection reason is required' });
+    }
+
+    request.status = 'rejected';
+    request.reviewedBy = req.user.id;
+    request.reviewedAt = new Date();
+    request.reviewNotes = req.body.reviewNotes;
+    await request.save();
+
+    res.json({ message: 'Request rejected', request });
+  } catch (err) {
+    console.error('Error rejecting reimbursement:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Get unique events and users for filter dropdowns (admin only)
+app.get('/api/reimbursements-filters', authenticate, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    const [events, storedNames] = await Promise.all([
+      ReimbursementRequest.distinct('eventName', { status: { $ne: 'draft' } }),
+      ReimbursementRequest.distinct('userName', { status: { $ne: 'draft' } })
+    ]);
+
+    let userNames = storedNames.filter(Boolean);
+
+    // If most docs lack userName, resolve from userId
+    if (userNames.length === 0) {
+      const userIds = await ReimbursementRequest.distinct('userId', { status: { $ne: 'draft' } });
+      if (userIds.length > 0) {
+        const usersFromDb = await User.find({ _id: { $in: userIds } }, 'fullName').lean();
+        userNames = usersFromDb.map(u => u.fullName).filter(Boolean);
+      }
+    }
+
+    res.json({ events: events.filter(Boolean).sort(), users: userNames.sort() });
+  } catch (err) {
+    console.error('Error fetching reimbursement filters:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ========= END REIMBURSEMENT REQUESTS API =========
+
 // SERVER
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => console.log(`Server started on port ${PORT}`));
 
 // Catch-all for SPA routing (should be last!)
 app.get('/folder-logs.html', (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend', 'folder-logs.html'));
+  res.sendFile(path.join(__dirname, '../folder-logs.html'));
 });
 
 app.get('*', (req, res) => {
   if (req.path.startsWith('/api/')) {
     return res.status(404).json({ error: 'API route not found' });
   }
-  res.sendFile(path.join(__dirname, '../frontend', 'dashboard.html'));
+  res.sendFile(path.join(__dirname, '../dashboard.html'));
 });
 
 // --- SHARE TABLE WITH USER (OWNER/LEAD/SHARED) ---

@@ -306,6 +306,56 @@ const tableSchema = new mongoose.Schema({
     notes: { type: String, default: '' },
     hideContractInvoiceFromExport: { type: Boolean, default: false }
   },
+  // Event expenses (admin) — synced from crew/travel/accommodation with editable overrides
+  expenses: {
+    crew: [{
+      sourceId: { type: String, default: '' },
+      name: { type: String, default: '' },
+      role: { type: String, default: '' },
+      hours: { type: Number, default: 0 },
+      rate: { type: Number, default: 0 },
+      additionalCost: { type: Number, default: 0 },
+      total: { type: Number, default: 0 },
+      notes: { type: String, default: '' },
+      imported: { type: Boolean, default: false }
+    }],
+    flights: [{
+      sourceKey: { type: String, default: '' },
+      sourceIndex: { type: Number, default: null },
+      passengerName: { type: String, default: '' },
+      date: { type: String, default: '' },
+      airline: { type: String, default: '' },
+      refNumber: { type: String, default: '' },
+      cost: { type: Number, default: 0 },
+      notes: { type: String, default: '' },
+      imported: { type: Boolean, default: false }
+    }],
+    accommodation: [{
+      sourceIndex: { type: Number, default: null },
+      name: { type: String, default: '' },
+      checkIn: { type: String, default: '' },
+      checkOut: { type: String, default: '' },
+      hotel: { type: String, default: '' },
+      refNumber: { type: String, default: '' },
+      cost: { type: Number, default: 0 },
+      notes: { type: String, default: '' },
+      imported: { type: Boolean, default: false }
+    }],
+    misc: [{
+      item: { type: String, default: '' },
+      description: { type: String, default: '' },
+      cost: { type: Number, default: 0 },
+      notes: { type: String, default: '' }
+    }],
+    reimbursements: [{
+      sourceId: { type: String, default: '' },
+      submittedBy: { type: String, default: '' },
+      dateSubmitted: { type: String, default: '' },
+      description: { type: String, default: '' },
+      amount: { type: Number, default: 0 },
+      imported: { type: Boolean, default: true }
+    }]
+  },
   // Event documents (PDFs, images) stored in Cloudinary
   documents: [
     {

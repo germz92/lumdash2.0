@@ -1189,6 +1189,15 @@
   margin: 0;
 }
 
+.flights-dark .flight-cost-section {
+  margin-top: 20px;
+}
+
+.flights-dark .booking-section .flight-cost-section {
+  margin-top: 16px;
+  margin-bottom: 12px;
+}
+
 .flights-dark .section-label {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-semibold);

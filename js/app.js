@@ -86,7 +86,7 @@ console.log(' app.js loaded');
 })();
 
 const PAGE_CLASSES = [
-  'events-page', 'general-page', 'crew-page', 'travel-page', 'card-log-page', 'schedule-page', 'dashboard-page', 'login-page', 'register-page', 'users-page', 'crew-planner-page', 'crew-calendar-page', 'gear-page', 'todos-page', 'executive-summary-page', 'call-times-page', 'notes-page', 'maps-page', 'documents-page', 'shotlist-page', 'reimbursements-page'
+  'events-page', 'general-page', 'crew-page', 'travel-page', 'card-log-page', 'schedule-page', 'dashboard-page', 'login-page', 'register-page', 'users-page', 'crew-planner-page', 'crew-calendar-page', 'gear-page', 'todos-page', 'executive-summary-page', 'call-times-page', 'notes-page', 'maps-page', 'documents-page', 'shotlist-page', 'reimbursements-page', 'expenses-page'
 ];
 
 function setBodyPageClass(page) {
@@ -991,6 +991,7 @@ function loadPageCSS(page) {
     case 'gear': cssFile = 'css/gear.css'; break;
     case 'executive-summary': cssFile = 'css/executive-summary.css'; break;
     case 'reimbursements': cssFile = 'css/reimbursements.css'; break;
+    case 'expenses': cssFile = 'css/expenses.css'; break;
   }
   if (cssFile) {
     const link = document.createElement('link');
@@ -1237,14 +1238,12 @@ async function checkAdminNotesAccess() {
     console.log('[SIDEBAR] Admin notes access check:', { userId, userRole, isAdmin, isOwner, owners: table.owners });
     
     if (isAdmin || isOwner) {
-      // Show admin notes section
       const adminSectionLabel = document.getElementById('adminSectionLabel');
-      const adminNotesLink = document.querySelector('.admin-only-nav[data-page="admin-notes"]');
-      
       if (adminSectionLabel) adminSectionLabel.style.display = 'block';
-      if (adminNotesLink) adminNotesLink.style.display = 'flex';
-      
-      console.log('[SIDEBAR] Admin notes link shown');
+      document.querySelectorAll('.admin-only-nav').forEach(link => {
+        link.style.display = 'flex';
+      });
+      console.log('[SIDEBAR] Admin section links shown');
     }
     
   } catch (err) {

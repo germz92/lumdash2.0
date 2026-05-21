@@ -27,6 +27,12 @@
   let pendingViewType = 'cards'; // 'cards' or 'table'
   let bookedViewType = 'cards'; // 'cards' or 'table'
 
+  function parseFlightCost(value) {
+    const n = parseFloat(String(value == null ? '' : value).replace(/[^0-9.-]/g, ''));
+    if (!Number.isFinite(n) || n < 0) return 0;
+    return Math.round(n * 100) / 100;
+  }
+
   // Debounce utility for search
   function debounce(func, wait) {
     let timeout;
@@ -1943,6 +1949,7 @@
       returnDate: tripType === 'roundtrip' ? document.getElementById('bookingReturnDate').value : null,
       passengers: bookingSelectedPassengers,
       notes: document.getElementById('bookingNotes')?.value?.trim() || '',
+      cost: parseFlightCost(document.getElementById('bookingCost')?.value),
       status: 'booked',
       bookedDetails: {
         confirmationCode: confirmationNumber,
@@ -2823,7 +2830,9 @@
       document.getElementById('viewBookingReturnDepartTime').value = '';
       document.getElementById('viewBookingReturnArriveTime').value = '';
       document.getElementById('viewBookingReturnFlightNumber').value = '';
-      
+      const viewCostEl = document.getElementById('viewRequestBookingCost');
+      if (viewCostEl) viewCostEl.value = '';
+
       // Show/hide return section based on trip type
       const tripType = document.querySelector('.trip-type-btn.active')?.dataset.type || 'roundtrip';
       if (returnSection) {
@@ -2892,7 +2901,11 @@
       
       const bookedFlight = await apiRequest(`/api/flights/${currentEditingRequest._id}/book`, {
         method: 'PATCH',
-        body: JSON.stringify({ bookedDetails, returnBookedDetails })
+        body: JSON.stringify({
+          bookedDetails,
+          returnBookedDetails,
+          cost: parseFlightCost(document.getElementById('viewRequestBookingCost')?.value)
+        })
       });
 
       // Remove from pending, add to booked
@@ -3120,6 +3133,12 @@
     }
 
     // Populate notes
+    const editBookedCostEl = document.getElementById('editBookedCost');
+    if (editBookedCostEl) {
+      const costVal = parseFloat(flight.cost);
+      editBookedCostEl.value = Number.isFinite(costVal) && costVal > 0 ? costVal.toFixed(2) : '';
+    }
+
     const editBookedNotesEl = document.getElementById('editBookedNotes');
     if (editBookedNotesEl) editBookedNotesEl.value = flight.notes || '';
 
@@ -3285,6 +3304,7 @@
       from: fromAirport,
       to: toAirport,
       notes: document.getElementById('editBookedNotes')?.value?.trim() || '',
+      cost: parseFlightCost(document.getElementById('editBookedCost')?.value),
       passengers: editBookedSelectedPassengers,
       bookedDetails: {
         confirmationCode: document.getElementById('editBookedConfirmation').value,
@@ -3912,6 +3932,12 @@
       document.getElementById('approveReturnArriveTime').value = existingReturn.arriveTime || '';
     }
 
+    const approveCostEl = document.getElementById('approveChangeCost');
+    if (approveCostEl) {
+      const costVal = parseFloat(originalFlight?.cost);
+      approveCostEl.value = Number.isFinite(costVal) && costVal > 0 ? costVal.toFixed(2) : '';
+    }
+
     // Close the view modal if open, then open approve modal
     closeViewModal();
     elements.approveChangeModal?.classList.add('show');
@@ -3952,7 +3978,8 @@
         method: 'PATCH',
         body: JSON.stringify({
           updatedBookedDetails,
-          updatedReturnBookedDetails
+          updatedReturnBookedDetails,
+          cost: parseFlightCost(document.getElementById('approveChangeCost')?.value)
         })
       });
 

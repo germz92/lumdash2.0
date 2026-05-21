@@ -1014,9 +1014,25 @@ async function canReviewReimbursements(user, request = null) {
 /**
  * Notify reviewers when a reimbursement request is submitted.
  * Submissions come from an external app writing to MongoDB (see change stream watcher).
+ * @param {Object} options.force — skip duplicate check (admin resend only)
  */
-async function notifyReimbursementSubmitted(request) {
+async function notifyReimbursementSubmitted(request, options = {}) {
+  const { force = false } = options;
   try {
+    const requestId = request._id.toString();
+
+    if (!force) {
+      const NotificationModel = require('./models/Notification');
+      const alreadyNotified = await NotificationModel.exists({
+        type: 'reimbursement_submitted',
+        'metadata.reimbursementId': requestId
+      });
+      if (alreadyNotified) {
+        console.log(`📋 Reimbursement ${requestId} already notified — skipping duplicate (hook + change stream)`);
+        return;
+      }
+    }
+
     const reviewers = await getReimbursementReviewerUsers(request);
     if (!reviewers.length) return;
 
@@ -1028,7 +1044,6 @@ async function notifyReimbursementSubmitted(request) {
       ? `$${request.totalAmount.toFixed(2)}`
       : '';
     const message = [userName, eventName, amountStr].filter(Boolean).join(' — ');
-    const requestId = request._id.toString();
     const recipientIds = reviewers.map(u => u._id.toString());
 
     await createNotificationBulk(recipientIds, {
@@ -1061,11 +1076,14 @@ async function notifyReimbursementSubmitted(request) {
   }
 }
 
+let reimbursementChangeStreamStarted = false;
+
 /**
  * Watch reimbursementrequests collection for external-app submissions.
  * Fires when status becomes 'submitted' (insert or update).
  */
 function setupReimbursementChangeStream() {
+  if (reimbursementChangeStreamStarted) return;
   try {
     const collection = mongoose.connection.collection('reimbursementrequests');
     const pipeline = [
@@ -1092,6 +1110,7 @@ function setupReimbursementChangeStream() {
       console.error('📋 Reimbursement change stream error:', err);
     });
 
+    reimbursementChangeStreamStarted = true;
     console.log('📋 Reimbursement change stream watcher started');
   } catch (err) {
     console.warn('📋 Could not start reimbursement change stream (requires replica set):', err.message);
@@ -4335,6 +4354,601 @@ app.get('/api/tables/:id/travel', authenticate, async (req, res) => {
     travel: table.travel || [],
     accommodation: table.accommodation || []
   });
+});
+
+/** Admin/owner access for event expenses page */
+function canAccessEventExpenses(table, user) {
+  if (!table || !user) return false;
+  if (user.role === 'admin') return true;
+  const uid = user.id.toString();
+  return (table.owners || []).some(id => id.toString() === uid);
+}
+
+/** Hours from crew call times (startTime → endTime), same logic as crew page */
+function calculateCrewCallHours(start, end) {
+  if (!start || !end) return 0;
+  const [sh, sm] = String(start).trim().split(':').map(Number);
+  const [eh, em] = String(end).trim().split(':').map(Number);
+  if (Number.isNaN(sh) || Number.isNaN(eh)) return 0;
+  const startDate = new Date(0, 0, 0, sh, sm || 0);
+  let endDate = new Date(0, 0, 0, eh, em || 0);
+  let diff = (endDate - startDate) / (1000 * 60 * 60);
+  if (diff < 0) diff += 24;
+  return Math.max(Math.round(diff * 100) / 100, 0);
+}
+
+function getCrewRowHours(row) {
+  if (row.startTime && row.endTime) {
+    return calculateCrewCallHours(row.startTime, row.endTime);
+  }
+  return parseFloat(row.totalHours) || 0;
+}
+
+/** Same key format as crew page cost calculator (name||role) */
+function crewExpenseKey(name, role) {
+  return `${(name || '').trim()}||${(role || '').trim()}`;
+}
+
+function recalcCrewExpenseRow(c) {
+  const hours = Math.round((parseFloat(c.hours) || 0) * 100) / 100;
+  const rate = parseFloat(c.rate) || 0;
+  const additionalCost = parseFloat(c.additionalCost) || 0;
+  const labor = Math.round(hours * rate * 100) / 100;
+  return {
+    ...c,
+    hours,
+    rate,
+    additionalCost: Math.round(additionalCost * 100) / 100,
+    total: Math.round((labor + additionalCost) * 100) / 100
+  };
+}
+
+/** Match travel page: manual table.travel + booked Flight Management rows */
+function transformFlightRequestToTravelRow(flight, passenger, isReturn = false) {
+  const mainBookedDetails = flight.bookedDetails || {};
+  const returnBookedDetails = flight.returnBookedDetails || {};
+  const flightDetails = isReturn ? returnBookedDetails : mainBookedDetails;
+  const fromCode = isReturn ? (flight.to?.code || '') : (flight.from?.code || '');
+  const toCode = isReturn ? (flight.from?.code || '') : (flight.to?.code || '');
+  const rawDate = isReturn ? flight.returnDate : flight.departDate;
+  const dateStr = rawDate
+    ? (rawDate instanceof Date ? rawDate.toISOString() : String(rawDate)).split('T')[0]
+    : '';
+
+  const flightCost = parseFloat(flight.cost);
+  return {
+    date: dateStr,
+    depart: flightDetails.departTime || '',
+    arrive: flightDetails.arriveTime || '',
+    name: passenger.name || '',
+    airline: mainBookedDetails.airline || '',
+    fromTo: `${fromCode} → ${toCode}`,
+    ref: mainBookedDetails.confirmationCode || '',
+    cost: Number.isFinite(flightCost) && flightCost > 0 ? flightCost : 0,
+    _fromFlightManagement: true,
+    _flightId: flight._id ? flight._id.toString() : '',
+    _isReturn: !!isReturn
+  };
+}
+
+async function getEventTravelRows(table) {
+  const manual = [...(table.travel || [])];
+  const eventId = table._id;
+  const title = (table.title || '').trim();
+
+  const flightQuery = {
+    status: { $in: ['booked', 'cancelled'] },
+    $or: [{ eventId }]
+  };
+  if (title) {
+    flightQuery.$or.push({ eventName: new RegExp(`^${escapeRegex(title)}$`, 'i') });
+  }
+
+  const bookedFlights = await FlightRequest.find(flightQuery).lean();
+  const fmRows = [];
+
+  bookedFlights.forEach(flight => {
+    const passengers = flight.passengers || [];
+    passengers.forEach(passenger => {
+      fmRows.push(transformFlightRequestToTravelRow(flight, passenger, false));
+    });
+    if (flight.tripType === 'roundtrip' && flight.returnBookedDetails) {
+      passengers.forEach(passenger => {
+        fmRows.push(transformFlightRequestToTravelRow(flight, passenger, true));
+      });
+    }
+  });
+
+  return [...fmRows, ...manual];
+}
+
+function flightExpenseSourceKey(t, manualIdx) {
+  if (t._flightId) {
+    return `fm:${t._flightId}:${t._isReturn ? 'return' : 'out'}:${(t.name || '').trim()}`;
+  }
+  return `travel:${manualIdx}`;
+}
+
+function travelRowToExpenseFlight(t, manualIdx) {
+  const idx = manualIdx == null ? null : manualIdx;
+  const rowCost = parseFloat(t.cost);
+  const cost = Number.isFinite(rowCost) && rowCost >= 0 ? rowCost : 0;
+  return {
+    sourceKey: flightExpenseSourceKey(t, idx == null ? 0 : idx),
+    sourceIndex: idx,
+    passengerName: t.name || '',
+    date: t.date || '',
+    airline: t.airline || '',
+    refNumber: (t.ref || '').trim(),
+    cost: Math.round(cost * 100) / 100,
+    notes: '',
+    imported: true
+  };
+}
+
+function normalizeFlightRef(ref) {
+  return String(ref || '').trim().toUpperCase();
+}
+
+/** Legacy sync used to stuff route/times into flight notes — drop on merge */
+function isLikelyAutoImportedFlightNotes(notes) {
+  const t = String(notes || '').trim();
+  if (!t) return false;
+  return (
+    (/→|->|\bto\b/i.test(t) && /\d{1,2}:\d{2}/.test(t)) ||
+    /\b(DEP|ARR|Depart|Arrive)\b/i.test(t)
+  );
+}
+
+function mergeSavedFlightNotes(savedNotes, freshNotes) {
+  const n = savedNotes != null ? savedNotes : freshNotes;
+  return isLikelyAutoImportedFlightNotes(n) ? '' : (n || '');
+}
+
+/** Imported flight rows always use cost from Flight Management on sync */
+function mergeSavedFlightCost(savedCost, freshCost, imported) {
+  const fresh = parseFloat(freshCost);
+  const freshRounded = Number.isFinite(fresh) ? Math.round(fresh * 100) / 100 : 0;
+  if (imported !== false) return freshRounded;
+  if (freshRounded > 0) return freshRounded;
+  const saved = parseFloat(savedCost);
+  if (Number.isFinite(saved) && saved >= 0) return Math.round(saved * 100) / 100;
+  return 0;
+}
+
+/** Booked Flight Management costs keyed by confirmation REF */
+async function getFlightManagementCostsByRef(table) {
+  const eventId = table._id;
+  const title = (table.title || '').trim();
+  const flightQuery = {
+    status: { $in: ['booked', 'cancelled'] },
+    $or: [{ eventId }]
+  };
+  if (title) {
+    flightQuery.$or.push({ eventName: new RegExp(`^${escapeRegex(title)}$`, 'i') });
+  }
+
+  const bookedFlights = await FlightRequest.find(flightQuery)
+    .select('cost bookedDetails.confirmationCode')
+    .lean();
+
+  const byRef = new Map();
+  bookedFlights.forEach(flight => {
+    const refNorm = normalizeFlightRef(flight.bookedDetails?.confirmationCode);
+    if (!refNorm) return;
+    const cost = parseFloat(flight.cost);
+    if (!Number.isFinite(cost) || cost < 0) return;
+    const rounded = Math.round(cost * 100) / 100;
+    byRef.set(refNorm, Math.max(byRef.get(refNorm) || 0, rounded));
+  });
+  return byRef;
+}
+
+function applyFlightManagementCostsToExpenseFlights(flightRows, costsByRef) {
+  return flightRows.map(row => {
+    if (row.imported === false) return row;
+    const refNorm = normalizeFlightRef(row.refNumber);
+    if (!refNorm) return row;
+    const fmCost = costsByRef.get(refNorm);
+    if (fmCost == null || fmCost <= 0) return row;
+    return {
+      ...row,
+      cost: fmCost,
+      imported: true
+    };
+  });
+}
+
+function parseFlightCostInput(value) {
+  const n = parseFloat(String(value == null ? '' : value).replace(/[^0-9.-]/g, ''));
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.round(n * 100) / 100;
+}
+
+/** One expense row per confirmation (REF); legs/passengers on same ref are booked together */
+function groupFlightsByRefNumber(flightRows) {
+  const byRef = new Map();
+  const withoutRef = [];
+
+  flightRows.forEach(row => {
+    const refNorm = normalizeFlightRef(row.refNumber);
+    if (!refNorm) {
+      withoutRef.push({ ...row });
+      return;
+    }
+
+    if (!byRef.has(refNorm)) {
+      byRef.set(refNorm, {
+        sourceKey: `ref:${refNorm}`,
+        refNumber: row.refNumber.trim(),
+        passengerNames: new Set(),
+        dates: [],
+        airlines: new Set(),
+        cost: 0,
+        imported: true
+      });
+    }
+    const g = byRef.get(refNorm);
+    const name = (row.passengerName || '').trim();
+    if (name) {
+      name.split(',').map(n => n.trim()).filter(Boolean).forEach(n => g.passengerNames.add(n));
+    }
+    if (row.date && !g.dates.includes(row.date)) g.dates.push(row.date);
+    if (row.airline) g.airlines.add(row.airline.trim());
+    g.cost = Math.max(g.cost, parseFloat(row.cost) || 0);
+    if (row.imported === false) g.imported = false;
+  });
+
+  const grouped = [...byRef.entries()].map(([, g]) => {
+    g.dates.sort();
+    const dateDisplay = g.dates.length === 0
+      ? ''
+      : g.dates.length === 1
+        ? g.dates[0]
+        : `${g.dates[0]} – ${g.dates[g.dates.length - 1]}`;
+    const airlines = [...g.airlines];
+    const airline = airlines.length === 1 ? airlines[0] : airlines.join(', ');
+    const passengers = [...g.passengerNames].sort((a, b) => a.localeCompare(b)).join(', ');
+
+    return {
+      sourceKey: g.sourceKey,
+      sourceIndex: null,
+      passengerName: passengers,
+      date: dateDisplay,
+      airline,
+      refNumber: g.refNumber,
+      cost: Math.round(g.cost * 100) / 100,
+      notes: '',
+      imported: g.imported !== false
+    };
+  });
+
+  grouped.sort((a, b) => a.refNumber.localeCompare(b.refNumber));
+  return [...grouped, ...withoutRef];
+}
+
+function getSavedFlightBooking(flightRows, refNorm) {
+  const matching = (flightRows || []).filter(f => normalizeFlightRef(f.refNumber) === refNorm);
+  if (!matching.length) return null;
+
+  const grouped = matching.find(f => f.sourceKey === `ref:${refNorm}`);
+  if (grouped) {
+    return { cost: parseFloat(grouped.cost) || 0, notes: grouped.notes || '' };
+  }
+
+  const costs = matching.map(f => parseFloat(f.cost) || 0).filter(c => c > 0);
+  return {
+    cost: costs.length ? Math.max(...costs) : 0,
+    notes: matching.find(f => f.notes)?.notes || ''
+  };
+}
+
+async function buildExpensesFromSources(table) {
+  const crewRates = table.crewRates || {};
+  const crewMap = {};
+
+  (table.rows || []).forEach(row => {
+    if (!row.name || row.role === '__placeholder__') return;
+    const name = (row.name || '').trim();
+    const role = (row.role || '').trim();
+    const key = crewExpenseKey(name, role);
+    if (!crewMap[key]) {
+      const rateKey = crewExpenseKey(name, role);
+      const rate = parseFloat(crewRates[rateKey] ?? crewRates[`${name}|${role}`]) || 0;
+      crewMap[key] = {
+        sourceId: row._id ? row._id.toString() : '',
+        name,
+        role,
+        hours: 0,
+        rate,
+        additionalCost: 0,
+        total: 0,
+        notes: '',
+        imported: true
+      };
+    }
+    crewMap[key].hours += getCrewRowHours(row);
+    if (row.notes && !crewMap[key].notes) crewMap[key].notes = row.notes;
+  });
+
+  const crew = Object.values(crewMap)
+    .map(recalcCrewExpenseRow)
+    .sort((a, b) => {
+      const nc = a.name.localeCompare(b.name);
+      return nc !== 0 ? nc : a.role.localeCompare(b.role);
+    });
+
+  const travelRows = await getEventTravelRows(table);
+  let manualIdx = 0;
+  const flatFlights = travelRows.map((t) => {
+    if (t._flightId) {
+      return travelRowToExpenseFlight(t, null);
+    }
+    const row = travelRowToExpenseFlight(t, manualIdx);
+    manualIdx += 1;
+    return row;
+  });
+  const costsByRef = await getFlightManagementCostsByRef(table);
+  const flights = applyFlightManagementCostsToExpenseFlights(
+    groupFlightsByRefNumber(flatFlights),
+    costsByRef
+  );
+
+  const accommodation = (table.accommodation || []).map((a, i) => ({
+    sourceIndex: i,
+    name: a.name || '',
+    checkIn: a.checkin || '',
+    checkOut: a.checkout || '',
+    hotel: a.hotel || '',
+    refNumber: a.ref || '',
+    cost: 0,
+    notes: '',
+    imported: true
+  }));
+
+  const reimbursements = await getApprovedReimbursementsForEvent(table);
+
+  return { crew, flights, accommodation, misc: [], reimbursements };
+}
+
+function formatExpenseDateSubmitted(d) {
+  if (!d) return '';
+  const date = new Date(d);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toISOString().split('T')[0];
+}
+
+/** Approved reimbursement requests linked to this event (by eventId or event name) */
+async function getApprovedReimbursementsForEvent(table) {
+  const eventId = table._id;
+  const title = (table.title || '').trim();
+
+  const query = {
+    status: 'approved',
+    $or: [{ eventId }]
+  };
+  if (title) {
+    query.$or.push({ eventName: new RegExp(`^${escapeRegex(title)}$`, 'i') });
+  }
+
+  let requests = await ReimbursementRequest.find(query)
+    .sort({ dateSubmitted: -1 })
+    .lean();
+
+  const needsUser = requests.filter(r => !r.userName && r.userId);
+  if (needsUser.length > 0) {
+    const userIds = [...new Set(needsUser.map(r => r.userId.toString()))];
+    const users = await User.find({ _id: { $in: userIds } }, 'fullName email').lean();
+    const userMap = {};
+    users.forEach(u => { userMap[u._id.toString()] = u; });
+    requests = requests.map(r => {
+      if (!r.userName && r.userId) {
+        const u = userMap[r.userId.toString()];
+        if (u) r.userName = u.fullName || u.email || '—';
+      }
+      return r;
+    });
+  }
+
+  const rows = [];
+  for (const r of requests) {
+    const submitter = await resolveReimbursementSubmitter(r);
+    const amount = parseFloat(r.totalAmount);
+    rows.push({
+      sourceId: r._id ? r._id.toString() : '',
+      submittedBy: submitter.userName || '—',
+      dateSubmitted: formatExpenseDateSubmitted(r.dateSubmitted),
+      description: (r.description || '').trim(),
+      amount: Number.isFinite(amount) ? Math.round(amount * 100) / 100 : 0,
+      imported: true
+    });
+  }
+
+  return rows;
+}
+
+async function mergeExpensesWithSources(table, existing) {
+  const fresh = await buildExpensesFromSources(table);
+  const prev = existing || {};
+  const prevCrewByKey = {};
+  (prev.crew || []).forEach(c => {
+    prevCrewByKey[crewExpenseKey(c.name, c.role)] = c;
+  });
+  fresh.crew = fresh.crew.map(c => {
+    const old = prevCrewByKey[crewExpenseKey(c.name, c.role)];
+    if (!old) return c;
+    return recalcCrewExpenseRow({
+      ...c,
+      rate: old.rate != null ? old.rate : c.rate,
+      additionalCost: old.additionalCost != null ? old.additionalCost : c.additionalCost,
+      notes: old.notes != null ? old.notes : c.notes
+    });
+  });
+
+  const prevFlightsList = prev.flights || [];
+  fresh.flights = fresh.flights.map(f => {
+    const refNorm = normalizeFlightRef(f.refNumber);
+    if (!refNorm) {
+      const legacy = prevFlightsList.find(
+        p => !normalizeFlightRef(p.refNumber) && p.sourceKey === f.sourceKey
+      );
+      if (!legacy) return f;
+      return {
+        ...f,
+        cost: mergeSavedFlightCost(legacy.cost, f.cost, f.imported !== false),
+        notes: mergeSavedFlightNotes(legacy.notes, f.notes)
+      };
+    }
+    const saved = getSavedFlightBooking(prevFlightsList, refNorm);
+    if (!saved) return f;
+    return {
+      ...f,
+      cost: mergeSavedFlightCost(saved.cost, f.cost, f.imported !== false),
+      notes: mergeSavedFlightNotes(saved.notes, f.notes)
+    };
+  });
+
+  const prevAcc = {};
+  (prev.accommodation || []).forEach(a => {
+    if (a.sourceIndex != null) prevAcc[a.sourceIndex] = a;
+  });
+  fresh.accommodation = fresh.accommodation.map(a => {
+    const old = prevAcc[a.sourceIndex];
+    if (!old) return a;
+    return {
+      ...a,
+      cost: old.cost != null ? old.cost : a.cost,
+      notes: old.notes != null ? old.notes : a.notes
+    };
+  });
+
+  fresh.misc = Array.isArray(prev.misc) ? prev.misc : [];
+  fresh.reimbursements = await getApprovedReimbursementsForEvent(table);
+  return fresh;
+}
+
+function normalizeExpensesPayload(body) {
+  const num = (v) => {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const str = (v) => (v == null ? '' : String(v));
+
+  return {
+    crew: (body.crew || []).map(c => recalcCrewExpenseRow({
+      sourceId: str(c.sourceId),
+      name: str(c.name),
+      role: str(c.role),
+      hours: num(c.hours),
+      rate: num(c.rate),
+      additionalCost: num(c.additionalCost),
+      total: num(c.total),
+      notes: str(c.notes),
+      imported: !!c.imported
+    })),
+    flights: groupFlightsByRefNumber((body.flights || []).map(f => ({
+      sourceKey: str(f.sourceKey),
+      sourceIndex: f.sourceIndex != null ? Number(f.sourceIndex) : null,
+      passengerName: str(f.passengerName),
+      date: str(f.date),
+      airline: str(f.airline),
+      refNumber: str(f.refNumber).trim(),
+      cost: num(f.cost),
+      notes: str(f.notes),
+      imported: !!f.imported
+    }))),
+    accommodation: (body.accommodation || []).map(a => ({
+      sourceIndex: a.sourceIndex != null ? Number(a.sourceIndex) : null,
+      name: str(a.name),
+      checkIn: str(a.checkIn),
+      checkOut: str(a.checkOut),
+      hotel: str(a.hotel),
+      refNumber: str(a.refNumber),
+      cost: num(a.cost),
+      notes: str(a.notes),
+      imported: !!a.imported
+    })),
+    misc: (body.misc || []).map(m => ({
+      item: str(m.item),
+      description: str(m.description),
+      cost: num(m.cost),
+      notes: str(m.notes)
+    })),
+    reimbursements: (body.reimbursements || []).map(r => ({
+      sourceId: str(r.sourceId),
+      submittedBy: str(r.submittedBy),
+      dateSubmitted: str(r.dateSubmitted),
+      description: str(r.description),
+      amount: num(r.amount),
+      imported: r.imported !== false
+    }))
+  };
+}
+
+app.get('/api/tables/:id/expenses', authenticate, async (req, res) => {
+  try {
+    const table = await Table.findById(req.params.id);
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+    if (!canAccessEventExpenses(table, req.user)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const saved = table.expenses && (
+      (table.expenses.crew && table.expenses.crew.length) ||
+      (table.expenses.flights && table.expenses.flights.length) ||
+      (table.expenses.accommodation && table.expenses.accommodation.length) ||
+      (table.expenses.misc && table.expenses.misc.length) ||
+      (table.expenses.reimbursements && table.expenses.reimbursements.length)
+    );
+
+    const expenses = saved
+      ? await mergeExpensesWithSources(table, table.expenses.toObject ? table.expenses.toObject() : table.expenses)
+      : await buildExpensesFromSources(table);
+
+    res.json({
+      title: table.title,
+      expenses,
+      crewRates: table.crewRates || {}
+    });
+  } catch (err) {
+    console.error('Error fetching expenses:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.put('/api/tables/:id/expenses', authenticate, async (req, res) => {
+  try {
+    const table = await Table.findById(req.params.id);
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+    if (!canAccessEventExpenses(table, req.user)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    table.expenses = normalizeExpensesPayload(req.body.expenses || req.body);
+    await table.save();
+    res.json({ message: 'Expenses saved', expenses: table.expenses });
+  } catch (err) {
+    console.error('Error saving expenses:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/tables/:id/expenses/sync', authenticate, async (req, res) => {
+  try {
+    const table = await Table.findById(req.params.id);
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+    if (!canAccessEventExpenses(table, req.user)) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const existing = table.expenses && (table.expenses.toObject ? table.expenses.toObject() : table.expenses);
+    table.expenses = await mergeExpensesWithSources(table, existing);
+    await table.save();
+    res.json({ message: 'Synced from crew and travel', expenses: table.expenses });
+  } catch (err) {
+    console.error('Error syncing expenses:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 app.put('/api/tables/:id/travel', authenticate, async (req, res) => {
@@ -9338,6 +9952,10 @@ app.post('/api/flights', authenticate, async (req, res) => {
       }
     }
 
+    if (flightData.cost !== undefined) {
+      flightData.cost = parseFlightCostInput(flightData.cost);
+    }
+
     // If status is 'booked', add bookedBy and bookedAt to bookedDetails
     if (flightData.status === 'booked' && flightData.bookedDetails) {
       flightData.bookedDetails.bookedBy = req.user.id;
@@ -9409,6 +10027,10 @@ app.put('/api/flights/:id', authenticate, async (req, res) => {
 
     const updateData = { ...req.body };
 
+    if (updateData.cost !== undefined) {
+      updateData.cost = parseFlightCostInput(updateData.cost);
+    }
+
     // Auto-sync eventName from eventId (eventId is the source of truth)
     if (updateData.eventId) {
       try {
@@ -9456,7 +10078,7 @@ app.patch('/api/flights/:id/book', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Access denied. Planner or Admin privileges required.' });
     }
 
-    const { bookedDetails, returnBookedDetails } = req.body;
+    const { bookedDetails, returnBookedDetails, cost } = req.body;
 
     const updateData = {
       status: 'booked',
@@ -9466,6 +10088,10 @@ app.patch('/api/flights/:id/book', authenticate, async (req, res) => {
         bookedBy: req.user.id
       }
     };
+
+    if (cost !== undefined) {
+      updateData.cost = parseFlightCostInput(cost);
+    }
 
     // If roundtrip and return details provided
     if (returnBookedDetails) {
@@ -9668,7 +10294,7 @@ app.patch('/api/flights/:id/approve-change', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'No original flight linked to this change request' });
     }
 
-    const { updatedBookedDetails, updatedReturnBookedDetails } = req.body;
+    const { updatedBookedDetails, updatedReturnBookedDetails, cost } = req.body;
 
     // Build update object from the change request's top-level fields (which already have the new values)
     const updateData = {
@@ -9678,6 +10304,10 @@ app.patch('/api/flights/:id/approve-change', authenticate, async (req, res) => {
       returnTimePreference: changeRequest.returnTimePreference,
       notes: changeRequest.notes
     };
+
+    if (cost !== undefined) {
+      updateData.cost = parseFlightCostInput(cost);
+    }
 
     // If new booking details were provided, merge them into the existing booked details
     if (updatedBookedDetails) {
@@ -10243,7 +10873,7 @@ app.post('/api/reimbursements/submitted-hook', async (req, res) => {
     }
 
     await notifyReimbursementSubmitted(request);
-    res.json({ message: 'Notifications sent', requestId: request._id.toString() });
+    res.json({ message: 'Notifications sent (duplicates skipped if already sent)', requestId: request._id.toString() });
   } catch (err) {
     console.error('Reimbursement submitted-hook error:', err);
     res.status(500).json({ error: 'Server error' });
@@ -10287,8 +10917,8 @@ app.post('/api/reimbursements/:id/resend-notifications', authenticate, async (re
     if (request.status === 'draft') {
       return res.status(400).json({ error: 'Cannot notify for draft requests' });
     }
-    await notifyReimbursementSubmitted(request);
-    res.json({ message: 'Notifications sent' });
+    await notifyReimbursementSubmitted(request, { force: true });
+    res.json({ message: 'Notifications resent' });
   } catch (err) {
     console.error('Error resending reimbursement notifications:', err);
     res.status(500).json({ error: 'Server error' });

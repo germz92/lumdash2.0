@@ -109,6 +109,13 @@ const flightRequestSchema = new mongoose.Schema({
   notes: {
     type: String,
     default: ''
+  },
+
+  /** Total booking cost (USD) — imported into event expenses */
+  cost: {
+    type: Number,
+    default: 0,
+    min: 0
   }
 }, {
   timestamps: true

@@ -1,0 +1,250 @@
+<link rel="stylesheet" href="css/theme-dark.css">
+<style>
+  body:has(.expenses-page) #page-container,
+  #page-container:has(.expenses-page) {
+    padding: 0 !important;
+    overflow: hidden !important;
+    height: 100% !important;
+  }
+</style>
+
+<div class="dark-theme expenses-page">
+  <div class="expenses-layout">
+
+    <aside class="general-sidebar" id="expensesSidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-logo">
+          <img src="assets/Logo - Dark BG.png" alt="Lumetry Media" class="sidebar-logo-img">
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item" data-page="events" onclick="event.preventDefault(); window.navigate && window.navigate('events');">
+          <span class="material-symbols-outlined">arrow_back</span>
+          <span>Back to Events</span>
+        </a>
+
+        <div class="sidebar-event-info" id="sidebarEventInfo"></div>
+
+        <div class="nav-section-label">Event Pages</div>
+
+        <a href="#" class="nav-item" data-page="general" onclick="event.preventDefault(); window.navigate && window.navigate('general');">
+          <span class="material-symbols-outlined">home</span>
+          <span>Home</span>
+        </a>
+        <a href="#" class="nav-item" data-page="executive-summary" onclick="event.preventDefault(); window.navigate && window.navigate('executive-summary');">
+          <span class="material-symbols-outlined">summarize</span>
+          <span>Executive Summary</span>
+        </a>
+        <a href="#" class="nav-item" data-page="crew" onclick="event.preventDefault(); window.navigate && window.navigate('crew');">
+          <span class="material-symbols-outlined">group</span>
+          <span>Crew</span>
+        </a>
+        <a href="#" class="nav-item" data-page="schedule" onclick="event.preventDefault(); window.navigate && window.navigate('schedule');">
+          <span class="material-symbols-outlined">calendar_today</span>
+          <span>Schedule</span>
+        </a>
+        <a href="#" class="nav-item" data-page="shotlist" onclick="event.preventDefault(); window.navigate && window.navigate('shotlist');">
+          <span class="material-symbols-outlined">checklist</span>
+          <span>Shotlist</span>
+        </a>
+        <a href="#" class="nav-item" data-page="todos" onclick="event.preventDefault(); window.navigate && window.navigate('todos');">
+          <span class="material-symbols-outlined">task_alt</span>
+          <span>To-Dos</span>
+        </a>
+        <a href="#" class="nav-item" data-page="travel-accommodation" onclick="event.preventDefault(); window.navigate && window.navigate('travel-accommodation');">
+          <span class="material-symbols-outlined">flight_takeoff</span>
+          <span>Travel</span>
+        </a>
+        <a href="#" class="nav-item" data-page="gear" onclick="event.preventDefault(); window.navigate && window.navigate('gear');">
+          <span class="material-symbols-outlined">photo_camera</span>
+          <span>Gear</span>
+        </a>
+        <a href="#" class="nav-item" data-page="card-log" onclick="event.preventDefault(); window.navigate && window.navigate('card-log');">
+          <span class="material-symbols-outlined">sd_card</span>
+          <span>Cards</span>
+        </a>
+        <a href="#" class="nav-item" data-page="documents" onclick="event.preventDefault(); window.navigate && window.navigate('documents');">
+          <span class="material-symbols-outlined">map</span>
+          <span>Map</span>
+        </a>
+
+        <div class="nav-section-label admin-only-section" id="adminSectionLabel">Admin</div>
+        <a href="#" class="nav-item active" data-page="expenses" onclick="event.preventDefault(); window.navigate && window.navigate('expenses');">
+          <span class="material-symbols-outlined">payments</span>
+          <span>Expenses</span>
+        </a>
+        <a href="#" class="nav-item" data-page="admin-notes" onclick="event.preventDefault(); window.navigate && window.navigate('admin-notes');">
+          <span class="material-symbols-outlined">sticky_note_2</span>
+          <span>Notes</span>
+        </a>
+      </nav>
+
+      <div class="sidebar-user" id="sidebarUserContainer">
+        <div class="sidebar-user-avatar" id="sidebarUserAvatar">
+          <img src="" alt="User" id="sidebarAvatarImg" style="display: none;">
+          <span class="material-symbols-outlined" id="sidebarAvatarIcon">person</span>
+        </div>
+        <div class="sidebar-user-info">
+          <div class="sidebar-user-name" id="sidebarUserName">Loading...</div>
+        </div>
+        <div class="sidebar-user-dropdown" id="userDropdownBtn">
+          <span class="material-symbols-outlined">expand_more</span>
+        </div>
+      </div>
+    </aside>
+
+    <div class="general-sidebar-overlay" id="expensesSidebarOverlay"></div>
+
+    <main class="expenses-main">
+      <header class="expenses-header">
+        <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+        <div class="expenses-header-text">
+          <h1 id="expensesPageTitle">Event Expenses</h1>
+          <p class="expenses-subtitle" id="expensesEventSubtitle"></p>
+        </div>
+        <div class="expenses-header-actions">
+          <span class="expenses-save-status" id="saveStatus">All changes saved</span>
+          <button type="button" class="expenses-btn expenses-btn-secondary" id="syncBtn" title="Pull latest crew, flights, hotels, and approved reimbursements">
+            <span class="material-symbols-outlined">sync</span>
+            Refresh from Sources
+          </button>
+          <button type="button" class="expenses-btn expenses-btn-primary" id="saveBtn">Save</button>
+        </div>
+      </header>
+
+      <div class="expenses-content" id="expensesContent">
+        <div class="expenses-grand-total">
+          <span class="expenses-grand-total-label">Grand Total</span>
+          <span class="expenses-grand-total-value" id="grandTotal">$0.00</span>
+        </div>
+
+        <section class="expenses-section" id="crewSection">
+          <div class="expenses-section-header">
+            <h2><span class="material-symbols-outlined">group</span> Crew</h2>
+            <button type="button" class="expenses-add-row" data-section="crew"><span class="material-symbols-outlined">add</span> Add row</button>
+          </div>
+          <div class="expenses-table-wrap">
+            <table class="expenses-table" id="crewTable">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Role</th>
+                  <th>Hours</th>
+                  <th>Rate</th>
+                  <th>Additional</th>
+                  <th>Total</th>
+                  <th>Notes</th>
+                  <th class="action-col"></th>
+                </tr>
+              </thead>
+              <tbody id="crewTableBody"></tbody>
+            </table>
+          </div>
+          <p class="expenses-section-total">Section total: <strong id="crewSectionTotal">$0.00</strong></p>
+        </section>
+
+        <section class="expenses-section" id="flightsSection">
+          <div class="expenses-section-header">
+            <h2><span class="material-symbols-outlined">flight</span> Flights</h2>
+            <button type="button" class="expenses-add-row" data-section="flights"><span class="material-symbols-outlined">add</span> Add row</button>
+          </div>
+          <div class="expenses-table-wrap">
+            <table class="expenses-table" id="flightsTable">
+              <thead>
+                <tr>
+                  <th>Passenger(s)</th>
+                  <th>Date</th>
+                  <th>Airline</th>
+                  <th>REF Number</th>
+                  <th>Cost</th>
+                  <th>Notes</th>
+                  <th class="action-col"></th>
+                </tr>
+              </thead>
+              <tbody id="flightsTableBody"></tbody>
+            </table>
+          </div>
+          <p class="expenses-section-total">Section total: <strong id="flightsSectionTotal">$0.00</strong></p>
+        </section>
+
+        <section class="expenses-section" id="accommodationSection">
+          <div class="expenses-section-header">
+            <h2><span class="material-symbols-outlined">hotel</span> Accommodation</h2>
+            <button type="button" class="expenses-add-row" data-section="accommodation"><span class="material-symbols-outlined">add</span> Add row</button>
+          </div>
+          <div class="expenses-table-wrap">
+            <table class="expenses-table" id="accommodationTable">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Check In</th>
+                  <th>Check Out</th>
+                  <th>Hotel</th>
+                  <th>REF Number</th>
+                  <th>Cost</th>
+                  <th>Notes</th>
+                  <th class="action-col"></th>
+                </tr>
+              </thead>
+              <tbody id="accommodationTableBody"></tbody>
+            </table>
+          </div>
+          <p class="expenses-section-total">Section total: <strong id="accommodationSectionTotal">$0.00</strong></p>
+        </section>
+
+        <section class="expenses-section" id="reimbursementsSection">
+          <div class="expenses-section-header">
+            <h2><span class="material-symbols-outlined">receipt</span> Reimbursements</h2>
+            <span class="expenses-section-hint">Approved requests only</span>
+          </div>
+          <div class="expenses-table-wrap">
+            <table class="expenses-table" id="reimbursementsTable">
+              <thead>
+                <tr>
+                  <th>Submitted By</th>
+                  <th>Date Submitted</th>
+                  <th>Description</th>
+                  <th>Amount</th>
+                  <th class="action-col"></th>
+                </tr>
+              </thead>
+              <tbody id="reimbursementsTableBody"></tbody>
+            </table>
+          </div>
+          <p class="expenses-section-total">Section total: <strong id="reimbursementsSectionTotal">$0.00</strong></p>
+        </section>
+
+        <section class="expenses-section" id="miscSection">
+          <div class="expenses-section-header">
+            <h2><span class="material-symbols-outlined">receipt_long</span> Misc</h2>
+            <button type="button" class="expenses-add-row" data-section="misc"><span class="material-symbols-outlined">add</span> Add row</button>
+          </div>
+          <div class="expenses-table-wrap">
+            <table class="expenses-table" id="miscTable">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Description</th>
+                  <th>Cost</th>
+                  <th>Notes</th>
+                  <th class="action-col"></th>
+                </tr>
+              </thead>
+              <tbody id="miscTableBody"></tbody>
+            </table>
+          </div>
+          <p class="expenses-section-total">Section total: <strong id="miscSectionTotal">$0.00</strong></p>
+        </section>
+      </div>
+
+      <div class="expenses-access-denied" id="accessDenied" style="display: none;">
+        <span class="material-symbols-outlined">lock</span>
+        <h2>Access denied</h2>
+        <p>Only admins and event owners can view event expenses.</p>
+      </div>
+    </main>
+  </div>
+</div>

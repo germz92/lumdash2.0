@@ -65,6 +65,10 @@
         </a>
         
         <div class="nav-section-label admin-only-section" id="adminSectionLabel" style="display: none;">Admin</div>
+        <a href="#" class="nav-item admin-only-nav" data-page="expenses" onclick="event.preventDefault(); window.navigate && window.navigate('expenses');" style="display: none;">
+          <span class="material-symbols-outlined">payments</span>
+          <span>Expenses</span>
+        </a>
         <a href="#" class="nav-item admin-only-nav" data-page="admin-notes" onclick="event.preventDefault(); window.navigate && window.navigate('admin-notes');" style="display: none;">
           <span class="material-symbols-outlined">sticky_note_2</span>
           <span>Notes</span>
@@ -201,53 +205,6 @@
                 <span class="material-symbols-outlined">add</span>
                 Add Location
               </button>
-            </div>
-          </div>
-          
-          <!-- FTP Folder Names Card -->
-          <div class="general-card folder-names-card collapsible-card" id="folderNamesCard" data-card-id="folderNames">
-            <div class="card-header" onclick="window.toggleCardCollapse(this.parentElement)">
-              <h2>
-                <span class="material-symbols-outlined">folder</span>
-                FTP Folder Names
-              </h2>
-              <div class="card-header-actions">
-                <button class="card-edit-btn" id="editFolderNamesBtn" title="Edit" onclick="event.stopPropagation()">
-                  <span class="material-symbols-outlined">edit</span>
-                </button>
-                <span class="material-symbols-outlined collapse-icon">expand_more</span>
-              </div>
-            </div>
-            <div class="card-content">
-              <div class="folder-names-table-wrapper">
-                <table class="folder-names-table" id="folderNamesTable">
-                  <thead>
-                    <tr>
-                      <th>Date</th>
-                      <th>Folder Name</th>
-                      <th>Description</th>
-                      <th class="action-col"></th>
-                    </tr>
-                  </thead>
-                  <tbody id="folderNamesTableBody">
-                    <!-- Rows will be rendered here by JS -->
-                  </tbody>
-                </table>
-              </div>
-              <div class="folder-names-empty" id="folderNamesEmpty" style="display: none;">
-                <span class="material-symbols-outlined">folder_off</span>
-                <p>No folder names added yet</p>
-              </div>
-              <div class="folder-names-edit-actions" id="folderNamesEditActions" style="display: none;">
-                <button class="add-folder-row-btn" id="addFolderRowBtn">
-                  <span class="material-symbols-outlined">add</span>
-                  Add Row
-                </button>
-                <div class="folder-names-actions">
-                  <button class="btn-secondary" id="cancelFolderNamesBtn">Cancel</button>
-                  <button class="btn-primary" id="saveFolderNamesBtn">Save</button>
-                </div>
-              </div>
             </div>
           </div>
           

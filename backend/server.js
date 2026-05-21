@@ -178,9 +178,10 @@ io.on('connection', (socket) => {
   // Join user-specific room for targeted notifications
   socket.on('joinUserRoom', (userId) => {
     if (userId) {
-      socket.join(`user-${userId}`);
-      socket.userId = userId;
-      console.log(`Socket.IO: Client ${socket.id} joined user room: user-${userId}`);
+      const roomId = userId.toString();
+      socket.join(`user-${roomId}`);
+      socket.userId = roomId;
+      console.log(`Socket.IO: Client ${socket.id} joined user room: user-${roomId}`);
     }
   });
   
@@ -744,12 +745,18 @@ function notifyDataChange(eventType, additionalData = null, tableId = null) {
  */
 async function createNotification({ recipientId, type, title, message = '', link = {}, actorId = null, eventId = null, metadata = {} }) {
   try {
+    const recipientStr = recipientId?.toString();
+    if (!recipientStr) return null;
+
     // Don't notify yourself
-    if (actorId && recipientId && actorId.toString() === recipientId.toString()) return null;
+    if (actorId && recipientStr && actorId.toString() === recipientStr) {
+      console.log(`🔔 Notification skipped (self): [${type}] → user ${recipientStr}`);
+      return null;
+    }
 
     const NotificationModel = require('./models/Notification');
     const notification = await NotificationModel.create({
-      recipient: recipientId,
+      recipient: recipientStr,
       type,
       title,
       message,
@@ -763,7 +770,7 @@ async function createNotification({ recipientId, type, title, message = '', link
     await notification.populate('actor', 'fullName');
 
     // Push via Socket.IO (instant delivery if user is online)
-    io.to(`user-${recipientId}`).emit('new-notification', {
+    io.to(`user-${recipientStr}`).emit('new-notification', {
       _id: notification._id,
       type: notification.type,
       title: notification.title,
@@ -776,7 +783,7 @@ async function createNotification({ recipientId, type, title, message = '', link
       createdAt: notification.createdAt
     });
 
-    console.log(`🔔 Notification created: [${type}] "${title}" → user ${recipientId}`);
+    console.log(`🔔 Notification created: [${type}] "${title}" → user ${recipientStr}`);
     return notification;
   } catch (err) {
     console.error('🔔 Failed to create notification:', err);
@@ -794,7 +801,301 @@ async function createNotificationBulk(recipientIds, opts) {
   const results = await Promise.allSettled(
     uniqueIds.map(id => createNotification({ ...opts, recipientId: id }))
   );
+  results.forEach((r, i) => {
+    const id = uniqueIds[i];
+    if (r.status === 'rejected') {
+      console.error(`🔔 Notification FAILED for user ${id}:`, r.reason?.message || r.reason);
+    } else if (r.status === 'fulfilled' && !r.value) {
+      console.log(`🔔 Notification skipped for user ${id}`);
+    }
+  });
   return results.filter(r => r.status === 'fulfilled' && r.value).map(r => r.value);
+}
+
+/** Normalize user id for notification queries */
+function toRecipientId(userId) {
+  if (!userId) return null;
+  const str = userId.toString();
+  return mongoose.Types.ObjectId.isValid(str) ? new mongoose.Types.ObjectId(str) : str;
+}
+
+/** Find all system admin users (case-insensitive role match) */
+async function findSystemAdminUsers() {
+  return User.find({ role: { $regex: /^admin$/i } }).select('_id email fullName role').lean();
+}
+
+/** Escape string for safe use inside MongoDB $regex */
+function escapeRegex(str) {
+  return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Resolve LumDash event from reimbursement (by eventId or matching eventName → Table.title).
+ */
+async function resolveReimbursementEvent(request) {
+  if (!request) return null;
+
+  if (request.eventId) {
+    const byId = await Table.findById(request.eventId).select('_id title owners').lean();
+    if (byId) return byId;
+  }
+
+  const eventName = (request.eventName || '').trim();
+  if (!eventName) return null;
+
+  const exact = await Table.findOne({
+    title: { $regex: new RegExp(`^${escapeRegex(eventName)}$`, 'i') }
+  }).select('_id title owners').lean();
+  if (exact) return exact;
+
+  return Table.findOne({
+    title: { $regex: escapeRegex(eventName), $options: 'i' }
+  }).select('_id title owners').lean();
+}
+
+/**
+ * Resolve real submitter name/email from reimbursement doc + User collection.
+ */
+function normalizeReimbursementUserId(request) {
+  const raw = request?.userId || request?.user_id;
+  if (!raw) return null;
+  if (raw instanceof mongoose.Types.ObjectId) return raw;
+  const str = String(raw).trim();
+  return mongoose.Types.ObjectId.isValid(str) ? new mongoose.Types.ObjectId(str) : null;
+}
+
+async function resolveReimbursementSubmitter(request) {
+  const PLACEHOLDER = /^(submitter|someone|unknown|user)$/i;
+  let userName = (request.userName || '').trim();
+  let userEmail = (request.userEmail || '').trim() || null;
+
+  const userId = normalizeReimbursementUserId(request);
+  if (userId) {
+    const user = await User.findById(userId).select('fullName email').lean();
+    if (user) {
+      if (!userName || PLACEHOLDER.test(userName)) {
+        userName = (user.fullName || user.email || '').trim();
+      }
+      userEmail = userEmail || user.email || null;
+    }
+  }
+
+  if ((!userName || PLACEHOLDER.test(userName)) && userEmail) {
+    const user = await User.findOne({ email: userEmail.toLowerCase() }).select('fullName email').lean();
+    if (user) userName = (user.fullName || user.email || '').trim();
+  }
+
+  if (!userName || PLACEHOLDER.test(userName)) {
+    userName = userEmail || 'Unknown submitter';
+  }
+
+  return { userName, userEmail };
+}
+
+/**
+ * Users who should be notified about a new reimbursement submission.
+ * All system admins + owners of the event (matched by eventId or eventName).
+ */
+async function getReimbursementReviewerUsers(request) {
+  const recipientIds = new Set();
+
+  const admins = await findSystemAdminUsers();
+  admins.forEach(u => recipientIds.add(u._id.toString()));
+
+  const table = await resolveReimbursementEvent(request);
+  if (table?.owners?.length) {
+    table.owners.forEach(id => recipientIds.add(id.toString()));
+    console.log(`📋 Event owners for "${table.title}": ${table.owners.length} owner(s)`);
+  } else if (request?.eventName) {
+    console.warn(`📋 No LumDash event matched for reimbursement event name: "${request.eventName}"`);
+  }
+
+  if (!recipientIds.size) return [];
+
+  const users = await User.find({ _id: { $in: [...recipientIds] } })
+    .select('_id email fullName')
+    .lean();
+
+  const withEmail = users.filter(u => u.email);
+  console.log(
+    `📋 Reimbursement reviewers (${withEmail.length}):`,
+    withEmail.map(u => `${u.fullName} <${u.email}> [${u._id}]`).join('; ') || '(none)'
+  );
+
+  return withEmail;
+}
+
+/** @returns {string[]} User ids for in-app notifications */
+async function getReimbursementNotificationRecipients(request) {
+  const users = await getReimbursementReviewerUsers(request);
+  return users.map(u => u._id.toString());
+}
+
+/**
+ * Send reimbursement submitted emails to reviewers (non-blocking per recipient).
+ */
+async function sendReimbursementSubmittedEmails(request, reviewers, submitter) {
+  if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) {
+    console.warn('📧 Reimbursement emails skipped: SendGrid not configured');
+    return;
+  }
+
+  if (!reviewers.length) return;
+
+  const {
+    buildReimbursementSubmittedSubject,
+    buildReimbursementSubmittedEmail,
+    buildReimbursementSubmittedText
+  } = require('./emails/reimbursementSubmittedEmail');
+
+  const requestId = request._id.toString();
+  const appUrl = (process.env.APP_URL || 'https://beta.lumdash.app').replace(/\/$/, '');
+  const reviewUrl = `${appUrl}/dashboard.html#reimbursements?reimbursementId=${requestId}`;
+
+  const baseData = {
+    submitterName: submitter.userName,
+    submitterEmail: submitter.userEmail || null,
+    eventName: request.eventName || 'Unknown event',
+    totalAmount: request.totalAmount,
+    dateSubmitted: request.dateSubmitted || request.createdAt,
+    description: request.description
+      || (Array.isArray(request.items) && request.items[0]?.notes)
+      || '',
+    itemCount: Array.isArray(request.items) ? request.items.length : null,
+    reviewUrl
+  };
+
+  const results = await Promise.allSettled(
+    reviewers.map(async (reviewer) => {
+      const to = reviewer.email.trim().toLowerCase();
+      const data = {
+        ...baseData,
+        recipientName: reviewer.fullName || reviewer.email
+      };
+
+      await sgMail.send({
+        to,
+        from: process.env.SENDGRID_FROM_EMAIL,
+        subject: buildReimbursementSubmittedSubject(data),
+        html: buildReimbursementSubmittedEmail(data),
+        text: buildReimbursementSubmittedText(data)
+      });
+
+      console.log(`📧 Reimbursement email sent to ${to}`);
+    })
+  );
+
+  results.forEach((r, i) => {
+    if (r.status === 'rejected') {
+      const email = reviewers[i]?.email || 'unknown';
+      console.error(`📧 Reimbursement email failed for ${email}:`, r.reason?.response?.body || r.reason?.message || r.reason);
+    }
+  });
+}
+
+/** Event IDs this user may review reimbursements for (null = all events, admin) */
+async function getReimbursementEventScope(user) {
+  if (!user) return [];
+  if (user.role === 'admin') return null;
+  const tables = await Table.find({ owners: user.id }).select('_id').lean();
+  return tables.map(t => t._id);
+}
+
+/** Whether the user can access reimbursement review APIs (admins + event owners only) */
+async function canReviewReimbursements(user, request = null) {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  const table = await resolveReimbursementEvent(request);
+  if (!table) return false;
+  const uid = user.id.toString();
+  return (table.owners || []).some(id => id.toString() === uid);
+}
+
+/**
+ * Notify reviewers when a reimbursement request is submitted.
+ * Submissions come from an external app writing to MongoDB (see change stream watcher).
+ */
+async function notifyReimbursementSubmitted(request) {
+  try {
+    const reviewers = await getReimbursementReviewerUsers(request);
+    if (!reviewers.length) return;
+
+    const { userName, userEmail } = await resolveReimbursementSubmitter(request);
+
+    const table = await resolveReimbursementEvent(request);
+    const eventName = request.eventName || table?.title || 'Unknown event';
+    const amountStr = typeof request.totalAmount === 'number'
+      ? `$${request.totalAmount.toFixed(2)}`
+      : '';
+    const message = [userName, eventName, amountStr].filter(Boolean).join(' — ');
+    const requestId = request._id.toString();
+    const recipientIds = reviewers.map(u => u._id.toString());
+
+    await createNotificationBulk(recipientIds, {
+      type: 'reimbursement_submitted',
+      title: 'New Reimbursement Request',
+      message,
+      // actorId omitted so event owners who submitted still receive the alert
+      eventId: request.eventId || table?._id || null,
+      link: { page: 'reimbursements', params: { reimbursementId: requestId } },
+      metadata: {
+        reimbursementId: requestId,
+        eventName,
+        userName,
+        totalAmount: request.totalAmount
+      }
+    });
+
+    try {
+      await sendReimbursementSubmittedEmails(request, reviewers, {
+        userName,
+        userEmail
+      });
+    } catch (emailErr) {
+      console.error('📧 Reimbursement email batch failed (in-app notifications still sent):', emailErr);
+    }
+
+    console.log(`📋 Reimbursement alerts sent to ${recipientIds.length} reviewer(s) (in-app + email)`);
+  } catch (err) {
+    console.error('🔔 Failed to notify reviewers about reimbursement submission:', err);
+  }
+}
+
+/**
+ * Watch reimbursementrequests collection for external-app submissions.
+ * Fires when status becomes 'submitted' (insert or update).
+ */
+function setupReimbursementChangeStream() {
+  try {
+    const collection = mongoose.connection.collection('reimbursementrequests');
+    const pipeline = [
+      {
+        $match: {
+          $or: [
+            { operationType: 'insert', 'fullDocument.status': 'submitted' },
+            { operationType: 'update', 'updateDescription.updatedFields.status': 'submitted' }
+          ]
+        }
+      }
+    ];
+
+    const changeStream = collection.watch(pipeline, { fullDocument: 'updateLookup' });
+
+    changeStream.on('change', async (change) => {
+      const doc = change.fullDocument;
+      if (!doc || doc.status !== 'submitted') return;
+      console.log('📋 Reimbursement submitted:', doc._id);
+      await notifyReimbursementSubmitted(doc);
+    });
+
+    changeStream.on('error', (err) => {
+      console.error('📋 Reimbursement change stream error:', err);
+    });
+
+    console.log('📋 Reimbursement change stream watcher started');
+  } catch (err) {
+    console.warn('📋 Could not start reimbursement change stream (requires replica set):', err.message);
+  }
 }
 
 const User = require('./models/User');
@@ -826,6 +1127,12 @@ mongoose.connect(MONGO_URI)
     // Fix the serial number index issue
     const { fixSerialIndex } = require('./fix-index-on-startup');
     await fixSerialIndex(mongoose);
+    const startupAdmins = await findSystemAdminUsers();
+    console.log(
+      '🔔 System admins at startup:',
+      startupAdmins.map(a => `${a.fullName} <${a.email}> [${a._id}]`).join('; ') || '(none)'
+    );
+    setupReimbursementChangeStream();
   })
   .catch(err => {
     console.error('MongoDB connection error:', err);
@@ -841,6 +1148,7 @@ function authenticate(req, res, next) {
   
   jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
     if (err) return res.status(403).json({ error: 'Invalid token' });
+    if (user?.id) user.id = user.id.toString();
     req.user = user;
     next();
   });
@@ -897,7 +1205,10 @@ app.post('/api/auth/login', async (req, res) => {
     return res.status(401).json({ error: 'Invalid credentials' });
   }
 
-  const token = jwt.sign({ id: user._id, fullName: user.fullName, role: user.role }, process.env.JWT_SECRET);
+  const token = jwt.sign(
+    { id: user._id.toString(), fullName: user.fullName, role: user.role },
+    process.env.JWT_SECRET
+  );
   res.json({ token, fullName: user.fullName, role: user.role });
 });
 
@@ -1020,12 +1331,60 @@ app.post('/api/auth/reset-password', async (req, res) => {
 // NOTIFICATION ENDPOINTS
 // ========================================
 
+// GET /api/users/me/notification-debug — Diagnose notification delivery for current user
+app.get('/api/users/me/notification-debug', authenticate, async (req, res) => {
+  try {
+    const dbUser = await User.findById(req.user.id).select('_id email fullName role').lean();
+    const admins = await findSystemAdminUsers();
+    const adminIds = admins.map(a => a._id.toString());
+    const recipientId = toRecipientId(req.user.id);
+
+    const [myReimbNotifs, totalNotifs] = await Promise.all([
+      Notification.find({ recipient: recipientId, type: 'reimbursement_submitted' })
+        .sort({ createdAt: -1 }).limit(5).lean(),
+      Notification.countDocuments({ recipient: recipientId })
+    ]);
+
+    res.json({
+      sessionUserId: req.user.id,
+      sessionRole: req.user.role,
+      dbUser: dbUser ? {
+        id: dbUser._id.toString(),
+        email: dbUser.email,
+        fullName: dbUser.fullName,
+        role: dbUser.role
+      } : null,
+      isListedAsSystemAdmin: adminIds.includes(req.user.id.toString()),
+      systemAdmins: admins.map(a => ({
+        id: a._id.toString(),
+        email: a.email,
+        fullName: a.fullName,
+        role: a.role
+      })),
+      reimbursementNotificationsForYou: myReimbNotifs.length,
+      totalNotificationsForYou: totalNotifs,
+      recentReimbursementNotifications: myReimbNotifs.map(n => ({
+        id: n._id,
+        title: n.title,
+        createdAt: n.createdAt
+      }))
+    });
+  } catch (err) {
+    console.error('Notification debug error:', err);
+    res.status(500).json({ error: 'Debug failed', details: err.message });
+  }
+});
+
 // GET /api/notifications — Fetch current user's notifications
 app.get('/api/notifications', authenticate, async (req, res) => {
   try {
     const { unreadOnly, limit = 50, offset = 0 } = req.query;
-    
-    const filter = { recipient: req.user.id };
+    const recipientId = toRecipientId(req.user.id);
+    if (!recipientId) {
+      return res.status(400).json({ error: 'Invalid user id in session' });
+    }
+
+    const filter = { recipient: recipientId };
     if (unreadOnly === 'true') filter.read = false;
 
     const [notifications, unreadCount] = await Promise.all([
@@ -1035,7 +1394,7 @@ app.get('/api/notifications', authenticate, async (req, res) => {
         .limit(Number(limit))
         .populate('actor', 'fullName')
         .lean(),
-      Notification.countDocuments({ recipient: req.user.id, read: false })
+      Notification.countDocuments({ recipient: recipientId, read: false })
     ]);
 
     res.json({ notifications, unreadCount });
@@ -1050,7 +1409,7 @@ app.get('/api/notifications', authenticate, async (req, res) => {
 app.patch('/api/notifications/read-all', authenticate, async (req, res) => {
   try {
     const result = await Notification.updateMany(
-      { recipient: req.user.id, read: false },
+      { recipient: toRecipientId(req.user.id), read: false },
       { read: true }
     );
     res.json({ message: 'All notifications marked as read', modified: result.modifiedCount });
@@ -1064,7 +1423,7 @@ app.patch('/api/notifications/read-all', authenticate, async (req, res) => {
 app.patch('/api/notifications/:id/read', authenticate, async (req, res) => {
   try {
     const notification = await Notification.findOneAndUpdate(
-      { _id: req.params.id, recipient: req.user.id },
+      { _id: req.params.id, recipient: toRecipientId(req.user.id) },
       { read: true },
       { new: true }
     );
@@ -1079,7 +1438,10 @@ app.patch('/api/notifications/:id/read', authenticate, async (req, res) => {
 // DELETE /api/notifications/:id — Delete a single notification
 app.delete('/api/notifications/:id', authenticate, async (req, res) => {
   try {
-    const result = await Notification.findOneAndDelete({ _id: req.params.id, recipient: req.user.id });
+    const result = await Notification.findOneAndDelete({
+      _id: req.params.id,
+      recipient: toRecipientId(req.user.id)
+    });
     if (!result) return res.status(404).json({ error: 'Notification not found' });
     res.json({ message: 'Notification deleted' });
   } catch (err) {
@@ -1091,7 +1453,9 @@ app.delete('/api/notifications/:id', authenticate, async (req, res) => {
 // DELETE /api/notifications — Delete all notifications for current user
 app.delete('/api/notifications', authenticate, async (req, res) => {
   try {
-    const result = await Notification.deleteMany({ recipient: req.user.id });
+    const result = await Notification.deleteMany({
+      recipient: toRecipientId(req.user.id)
+    });
     res.json({ message: 'All notifications deleted', deleted: result.deletedCount });
   } catch (err) {
     console.error('Error deleting all notifications:', err);
@@ -4600,8 +4964,18 @@ app.use('/css', express.static(path.join(__dirname, '../css')));
 app.use('/assets', express.static(path.join(__dirname, '../assets')));
 
 // VERIFY TOKEN
-app.get('/api/verify-token', authenticate, (req, res) => {
-  res.json({ valid: true, user: req.user });
+app.get('/api/verify-token', authenticate, async (req, res) => {
+  try {
+    const dbUser = await User.findById(req.user.id).select('role fullName email').lean();
+    res.json({
+      valid: true,
+      user: req.user,
+      dbRole: dbUser?.role || null,
+      roleMismatch: !!(dbUser && dbUser.role !== req.user.role)
+    });
+  } catch (err) {
+    res.json({ valid: true, user: req.user });
+  }
 });
 
 // GEAR INVENTORY API
@@ -9678,16 +10052,28 @@ app.delete('/api/timesheets/entry', authenticate, async (req, res) => {
 
 // ========= REIMBURSEMENT REQUESTS API =========
 
-// List reimbursement requests (admin only, excludes drafts)
+// List reimbursement requests (admins + event owners, excludes drafts)
 app.get('/api/reimbursements', authenticate, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Admin access required' });
+    const eventScope = await getReimbursementEventScope(req.user);
+    if (Array.isArray(eventScope) && eventScope.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
     }
+
     const { status, eventId, userId, sort } = req.query;
     const query = { status: { $ne: 'draft' } };
+    if (eventScope) {
+      if (eventId) {
+        const allowed = eventScope.some(id => id.toString() === eventId);
+        if (!allowed) return res.status(403).json({ error: 'Access denied' });
+        query.eventId = eventId;
+      } else {
+        query.eventId = { $in: eventScope };
+      }
+    } else if (eventId) {
+      query.eventId = eventId;
+    }
     if (status && status !== 'all') query.status = status;
-    if (eventId) query.eventId = eventId;
     if (userId) query.userId = userId;
 
     let sortObj = { dateSubmitted: -1 };
@@ -9724,15 +10110,15 @@ app.get('/api/reimbursements', authenticate, async (req, res) => {
   }
 });
 
-// Get single reimbursement request detail (admin only)
+// Get single reimbursement request detail
 app.get('/api/reimbursements/:id', authenticate, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
     const request = await ReimbursementRequest.findById(req.params.id).lean();
     if (!request) return res.status(404).json({ error: 'Request not found' });
     if (request.status === 'draft') return res.status(404).json({ error: 'Request not found' });
+    if (!(await canReviewReimbursements(req.user, request))) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
 
     // Backfill userName/userEmail if missing
     if (!request.userName && request.userId) {
@@ -9750,14 +10136,14 @@ app.get('/api/reimbursements/:id', authenticate, async (req, res) => {
   }
 });
 
-// Approve reimbursement request (admin only)
+// Approve reimbursement request
 app.put('/api/reimbursements/:id/approve', authenticate, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
     const request = await ReimbursementRequest.findById(req.params.id);
     if (!request) return res.status(404).json({ error: 'Request not found' });
+    if (!(await canReviewReimbursements(req.user, request))) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     if (request.status !== 'submitted') {
       return res.status(400).json({ error: `Cannot approve a request with status "${request.status}"` });
     }
@@ -9775,14 +10161,14 @@ app.put('/api/reimbursements/:id/approve', authenticate, async (req, res) => {
   }
 });
 
-// Reject reimbursement request (admin only)
+// Reject reimbursement request
 app.put('/api/reimbursements/:id/reject', authenticate, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
     const request = await ReimbursementRequest.findById(req.params.id);
     if (!request) return res.status(404).json({ error: 'Request not found' });
+    if (!(await canReviewReimbursements(req.user, request))) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
     if (request.status !== 'submitted') {
       return res.status(400).json({ error: `Cannot reject a request with status "${request.status}"` });
     }
@@ -9803,22 +10189,27 @@ app.put('/api/reimbursements/:id/reject', authenticate, async (req, res) => {
   }
 });
 
-// Get unique events and users for filter dropdowns (admin only)
+// Get unique events and users for filter dropdowns
 app.get('/api/reimbursements-filters', authenticate, async (req, res) => {
   try {
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Admin access required' });
+    const eventScope = await getReimbursementEventScope(req.user);
+    if (Array.isArray(eventScope) && eventScope.length === 0) {
+      return res.status(403).json({ error: 'Access denied' });
     }
+
+    const scopeFilter = { status: { $ne: 'draft' } };
+    if (eventScope) scopeFilter.eventId = { $in: eventScope };
+
     const [events, storedNames] = await Promise.all([
-      ReimbursementRequest.distinct('eventName', { status: { $ne: 'draft' } }),
-      ReimbursementRequest.distinct('userName', { status: { $ne: 'draft' } })
+      ReimbursementRequest.distinct('eventName', scopeFilter),
+      ReimbursementRequest.distinct('userName', scopeFilter)
     ]);
 
     let userNames = storedNames.filter(Boolean);
 
     // If most docs lack userName, resolve from userId
     if (userNames.length === 0) {
-      const userIds = await ReimbursementRequest.distinct('userId', { status: { $ne: 'draft' } });
+      const userIds = await ReimbursementRequest.distinct('userId', scopeFilter);
       if (userIds.length > 0) {
         const usersFromDb = await User.find({ _id: { $in: userIds } }, 'fullName').lean();
         userNames = usersFromDb.map(u => u.fullName).filter(Boolean);
@@ -9828,6 +10219,78 @@ app.get('/api/reimbursements-filters', authenticate, async (req, res) => {
     res.json({ events: events.filter(Boolean).sort(), users: userNames.sort() });
   } catch (err) {
     console.error('Error fetching reimbursement filters:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Webhook for external reimbursement app to trigger notifications (optional secret)
+app.post('/api/reimbursements/submitted-hook', async (req, res) => {
+  try {
+    const secret = req.headers['x-reimbursement-hook-secret'] || req.body?.secret;
+    if (process.env.REIMBURSEMENT_HOOK_SECRET && secret !== process.env.REIMBURSEMENT_HOOK_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    const requestId = req.body?.requestId || req.body?._id;
+    if (!requestId) {
+      return res.status(400).json({ error: 'requestId is required' });
+    }
+
+    const request = await ReimbursementRequest.findById(requestId).lean();
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    if (request.status !== 'submitted') {
+      return res.status(400).json({ error: 'Request is not submitted' });
+    }
+
+    await notifyReimbursementSubmitted(request);
+    res.json({ message: 'Notifications sent', requestId: request._id.toString() });
+  } catch (err) {
+    console.error('Reimbursement submitted-hook error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Delete reimbursement request (admin only)
+app.delete('/api/reimbursements/:id', authenticate, async (req, res) => {
+  try {
+    if (!/^admin$/i.test(req.user.role || '')) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const requestId = req.params.id;
+    const request = await ReimbursementRequest.findByIdAndDelete(requestId);
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+
+    await Notification.deleteMany({
+      $or: [
+        { 'metadata.reimbursementId': requestId },
+        { 'link.params.reimbursementId': requestId }
+      ]
+    });
+
+    console.log(`📋 Reimbursement deleted by admin ${req.user.id}: ${requestId}`);
+    res.json({ message: 'Reimbursement deleted' });
+  } catch (err) {
+    console.error('Error deleting reimbursement:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Resend reimbursement notifications (admin only — for testing or missed alerts)
+app.post('/api/reimbursements/:id/resend-notifications', authenticate, async (req, res) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    const request = await ReimbursementRequest.findById(req.params.id).lean();
+    if (!request) return res.status(404).json({ error: 'Request not found' });
+    if (request.status === 'draft') {
+      return res.status(400).json({ error: 'Cannot notify for draft requests' });
+    }
+    await notifyReimbursementSubmitted(request);
+    res.json({ message: 'Notifications sent' });
+  } catch (err) {
+    console.error('Error resending reimbursement notifications:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

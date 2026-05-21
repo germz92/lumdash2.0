@@ -176,6 +176,14 @@ console.log('✅ Config loaded - Version:', window.LUMDASH_VERSION);
       console.warn('[config.js] Invalid token. Logging out...');
       localStorage.clear();
       window.location.href = 'index.html';
+    } else if (data.roleMismatch) {
+      console.warn(
+        '[config.js] Your session role is out of date (token:',
+        data.user?.role,
+        'database:',
+        data.dbRole,
+        '). Log out and log back in to receive notifications correctly.'
+      );
     }
   } catch (err) {
     console.error('[config.js] Auth check failed:', err);

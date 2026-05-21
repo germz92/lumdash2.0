@@ -14,7 +14,19 @@
   let sortColumn = 'dateSubmitted';
   let sortDir = 'desc';
   let viewMode = 'table';
+  let isAdmin = false;
   const MOBILE_BREAKPOINT = 768;
+
+  function checkAdminRole() {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return false;
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      return /^admin$/i.test(payload.role || '');
+    } catch {
+      return false;
+    }
+  }
 
   function fmtDate(d) {
     if (!d) return '—';
@@ -35,6 +47,67 @@
 
   function categoryBadge(cat) {
     return `<span class="reimb-category-badge ${cat || 'misc'}">${cat || 'misc'}</span>`;
+  }
+
+  function renderReceiptCell(item) {
+    if (!item.attachmentUrl) return '—';
+    return `<a href="${item.attachmentUrl}" target="_blank" rel="noopener" class="reimb-receipt-link">${item.attachmentName || 'View'}</a>`;
+  }
+
+  function renderLineItems(items) {
+    const tableRows = items.map(item => `
+      <tr>
+        <td>${fmtDate(item.date)}</td>
+        <td>${categoryBadge(item.category)}</td>
+        <td class="item-amount">${fmtCurrency(item.amount)}</td>
+        <td style="max-width:180px;white-space:normal;word-break:break-word;">${item.notes || '—'}</td>
+        <td>${renderReceiptCell(item)}</td>
+      </tr>
+    `).join('');
+
+    const cards = items.map(item => `
+      <div class="reimb-item-card">
+        <div class="reimb-item-card-row">
+          <span class="reimb-item-card-label">Date</span>
+          <span class="reimb-item-card-value">${fmtDate(item.date)}</span>
+        </div>
+        <div class="reimb-item-card-row">
+          <span class="reimb-item-card-label">Category</span>
+          <span class="reimb-item-card-value">${categoryBadge(item.category)}</span>
+        </div>
+        <div class="reimb-item-card-row">
+          <span class="reimb-item-card-label">Amount</span>
+          <span class="reimb-item-card-value reimb-item-card-amount">${fmtCurrency(item.amount)}</span>
+        </div>
+        <div class="reimb-item-card-row">
+          <span class="reimb-item-card-label">Notes</span>
+          <span class="reimb-item-card-value">${item.notes || '—'}</span>
+        </div>
+        <div class="reimb-item-card-row">
+          <span class="reimb-item-card-label">Receipt</span>
+          <span class="reimb-item-card-value">${renderReceiptCell(item)}</span>
+        </div>
+      </div>
+    `).join('');
+
+    return `
+      <div class="reimb-items-title">
+        <span class="material-symbols-outlined" style="font-size:18px;">receipt</span>
+        Line Items (${items.length})
+      </div>
+      <table class="reimb-items-table reimb-items-table--desktop">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>Category</th>
+            <th>Amount</th>
+            <th>Notes</th>
+            <th>Receipt</th>
+          </tr>
+        </thead>
+        <tbody>${tableRows}</tbody>
+      </table>
+      <div class="reimb-item-cards">${cards}</div>`;
   }
 
   // ---- Fetch data ----
@@ -287,38 +360,7 @@
 
     document.getElementById('modalTitle').textContent = `${r.userName}'s Reimbursement`;
 
-    let itemsHtml = '';
-    if (r.items && r.items.length > 0) {
-      itemsHtml = `
-        <div class="reimb-items-title">
-          <span class="material-symbols-outlined" style="font-size:18px;">receipt</span>
-          Line Items (${r.items.length})
-        </div>
-        <table class="reimb-items-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Category</th>
-              <th>Amount</th>
-              <th>Notes</th>
-              <th>Receipt</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${r.items.map(item => `
-              <tr>
-                <td>${fmtDate(item.date)}</td>
-                <td>${categoryBadge(item.category)}</td>
-                <td class="item-amount">${fmtCurrency(item.amount)}</td>
-                <td style="max-width:180px;white-space:normal;word-break:break-word;">${item.notes || '—'}</td>
-                <td>${item.attachmentUrl
-                  ? `<a href="${item.attachmentUrl}" target="_blank" rel="noopener" class="reimb-receipt-link">${item.attachmentName || 'View'}</a>`
-                  : '—'}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>`;
-    }
+    const itemsHtml = (r.items && r.items.length > 0) ? renderLineItems(r.items) : '';
 
     body.innerHTML = `
       <div class="reimb-info-grid">
@@ -358,9 +400,14 @@
         <button class="reimb-btn reimb-btn-reject" id="confirmRejectBtn">Confirm Rejection</button>
       </div>`;
 
+    const deleteBtnHtml = isAdmin
+      ? '<button class="reimb-btn reimb-btn-delete" id="deleteBtn" type="button">Delete</button>'
+      : '';
+
     // Footer
     if (r.status === 'submitted') {
       footer.innerHTML = `
+        ${deleteBtnHtml}
         <div class="review-info"></div>
         <button class="reimb-btn reimb-btn-reject" id="rejectBtn">Reject</button>
         <button class="reimb-btn reimb-btn-approve" id="approveBtn">Approve</button>`;
@@ -370,14 +417,47 @@
         document.getElementById('rejectArea').classList.toggle('show');
       });
       document.getElementById('confirmRejectBtn').addEventListener('click', () => rejectRequest(r._id));
+      if (isAdmin) {
+        document.getElementById('deleteBtn').addEventListener('click', () => deleteRequest(r._id));
+      }
     } else if (r.status === 'approved' || r.status === 'rejected') {
       footer.innerHTML = `
+        ${deleteBtnHtml}
         <div class="review-info">
           ${r.reviewedAt ? `Reviewed on ${fmtDate(r.reviewedAt)}` : ''}
           ${r.reviewNotes ? ` — "${r.reviewNotes}"` : ''}
         </div>`;
+      if (isAdmin) {
+        document.getElementById('deleteBtn').addEventListener('click', () => deleteRequest(r._id));
+      }
     } else {
-      footer.innerHTML = '';
+      footer.innerHTML = deleteBtnHtml;
+      if (isAdmin) {
+        document.getElementById('deleteBtn').addEventListener('click', () => deleteRequest(r._id));
+      }
+    }
+  }
+
+  async function deleteRequest(id) {
+    const label = currentDetail?.eventName || 'this reimbursement';
+    if (!confirm(`Permanently delete ${label}? This cannot be undone.`)) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/reimbursements/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: getToken() }
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.error || 'Failed to delete');
+        return;
+      }
+      allRequests = allRequests.filter(r => r._id !== id && r._id?.toString() !== id);
+      closeModal();
+      applyFilters();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to delete request');
     }
   }
 
@@ -491,6 +571,8 @@
 
   // ---- Init ----
   window.initPage = async function() {
+    isAdmin = checkAdminRole();
+
     // Inject dashboard sidebar
     const layoutContainer = document.getElementById('reimbPageLayout');
 
@@ -507,5 +589,11 @@
     setupListeners();
     checkResponsiveView();
     await Promise.all([loadRequests(), loadFilters()]);
+
+    const openId = sessionStorage.getItem('openReimbursementId');
+    if (openId) {
+      sessionStorage.removeItem('openReimbursementId');
+      openDetail(openId);
+    }
   };
 })();

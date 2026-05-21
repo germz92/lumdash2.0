@@ -24,6 +24,7 @@
     owner_request_approved: { icon: 'check_circle',     color: '#22c55e' },
     owner_request_denied:   { icon: 'cancel',           color: '#ef4444' },
     event_shared:           { icon: 'group_add',        color: '#06b6d4' },
+    reimbursement_submitted:{ icon: 'receipt_long',     color: '#10b981' },
     general:                { icon: 'notifications',    color: '#6b7280' }
   };
 
@@ -53,6 +54,7 @@
       const data = await res.json();
       notifications = data.notifications || [];
       unreadCount = data.unreadCount || 0;
+      console.log(`🔔 Loaded ${notifications.length} notifications (${unreadCount} unread)`);
       updateBadge();
       if (dropdownOpen) renderDropdown();
     } catch (err) {
@@ -87,7 +89,8 @@
 
   // ── Real-time push handler ──────────────────────────
   function setupSocketListener() {
-    if (!window.socket) return;
+    if (!window.socket || window.socket._reimbursementNotifListenerAttached) return;
+    window.socket._reimbursementNotifListenerAttached = true;
 
     window.socket.on('new-notification', (notification) => {
       console.log('🔔 Real-time notification received:', notification.type, notification.title);
@@ -274,6 +277,9 @@
         }
         window.location.href = url;
       } else if (typeof window.navigate === 'function') {
+        if (notification.link.params?.reimbursementId) {
+          sessionStorage.setItem('openReimbursementId', notification.link.params.reimbursementId);
+        }
         window.navigate(page, notification.link.eventId || null);
       }
     }
@@ -444,7 +450,7 @@
     if (initialized) {
       // Re-attach to new DOM elements after SPA navigation
       attachButton();
-      updateBadge();
+      fetchNotifications();
       return;
     }
 
@@ -454,6 +460,28 @@
     attachButton();
     setupSocketListener();
     fetchNotifications();
+    logNotificationDebug();
+  }
+
+  async function logNotificationDebug() {
+    try {
+      const token = getToken();
+      if (!token) return;
+      const res = await fetch(`${API_BASE}/api/users/me/notification-debug`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      console.log('🔔 Notification debug:', data);
+      if (!data.isListedAsSystemAdmin && data.sessionRole === 'admin') {
+        console.warn('🔔 Your JWT says admin but you are NOT in the system admin list. Log out and back in, or check for duplicate accounts.');
+      }
+      if (data.isListedAsSystemAdmin && data.reimbursementNotificationsForYou === 0) {
+        console.warn('🔔 You are a system admin but have no reimbursement notifications. Submit a new test or call resend-notifications.');
+      }
+    } catch (err) {
+      console.warn('🔔 Notification debug failed:', err);
+    }
   }
 
   function attachButton() {

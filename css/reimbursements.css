@@ -58,6 +58,12 @@
   flex: 1;
 }
 
+.reimb-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .reimb-header h1 {
   font-size: 1.4rem;
   font-weight: 700;
@@ -506,6 +512,60 @@
   text-decoration: underline;
 }
 
+/* Line item cards (modal, mobile) */
+.reimb-item-cards {
+  display: none;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.reimb-item-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: 12px 14px;
+}
+
+.reimb-item-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.reimb-item-card-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.reimb-item-card-row:first-child {
+  padding-top: 0;
+}
+
+.reimb-item-card-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.reimb-item-card-value {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  text-align: right;
+  word-break: break-word;
+}
+
+.reimb-item-card-amount {
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
 .reimb-category-badge {
   display: inline-block;
   padding: 2px 8px;
@@ -573,6 +633,17 @@
 
 .reimb-btn-reject:hover {
   background: #dc2626;
+}
+
+.reimb-btn-delete {
+  background: transparent;
+  color: var(--accent-red);
+  border: 1px solid var(--accent-red);
+  margin-right: auto;
+}
+
+.reimb-btn-delete:hover {
+  background: rgba(204, 0, 7, 0.12);
 }
 
 .reimb-btn-secondary {
@@ -771,6 +842,14 @@
 
   .reimb-info-grid {
     grid-template-columns: 1fr;
+  }
+
+  .reimb-items-table--desktop {
+    display: none;
+  }
+
+  .reimb-item-cards {
+    display: flex;
   }
 
   .reimb-table td,

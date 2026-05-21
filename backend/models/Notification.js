@@ -22,6 +22,7 @@ const notificationSchema = new mongoose.Schema({
       'owner_request_approved',  // Owner approved the request
       'owner_request_denied',    // Owner denied the request
       'event_shared',            // You were added to an event
+      'reimbursement_submitted', // New reimbursement request submitted (for admins)
       'general'                  // Catch-all for future types
     ]
   },

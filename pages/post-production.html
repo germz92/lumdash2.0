@@ -12,17 +12,12 @@
           <span class="material-symbols-outlined">movie_edit</span>
           Post Production
         </h1>
-        <div class="post-production-legend">
-          <span class="legend-item legend-overdue">Overdue</span>
-          <span class="legend-item legend-soon">Due within 3 days</span>
-          <span class="legend-item legend-done">Completed</span>
-        </div>
       </header>
 
       <div class="post-production-toolbar">
         <div class="search-box">
           <span class="material-symbols-outlined">search</span>
-          <input type="text" id="ppSearch" placeholder="Search items, projects, editors, owners, notes...">
+          <input type="text" id="ppSearch" placeholder="Search..." aria-label="Search deliverables">
         </div>
         <div class="pp-view-toggle" id="ppViewToggle" role="group" aria-label="View mode">
           <button type="button" class="pp-view-btn active" data-view="table" title="Table view">
@@ -44,6 +39,18 @@
 
         <div class="post-production-table-wrap">
           <table class="post-production-table" id="ppTable">
+            <colgroup>
+              <col class="pp-col-item">
+              <col class="pp-col-project">
+              <col class="pp-col-status">
+              <col class="pp-col-user">
+              <col class="pp-col-status">
+              <col class="pp-col-status">
+              <col class="pp-col-user">
+              <col class="pp-col-due">
+              <col class="pp-col-notes">
+              <col class="pp-col-action">
+            </colgroup>
             <thead>
               <tr>
                 <th class="sortable" data-sort="item">Item <span class="sort-icon material-symbols-outlined">unfold_more</span></th>

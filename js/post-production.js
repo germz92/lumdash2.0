@@ -61,19 +61,41 @@
 
   function avatarHtml(user) {
     if (!user) {
-      return '<span class="pp-editor-initials">—</span><span>Unassigned</span>';
+      return '<span class="pp-editor-initials">—</span><span class="pp-editor-label">Unassigned</span>';
     }
+    const label = esc(user.name || user.email);
     if (user.profilePhoto) {
-      return `<img class="pp-editor-avatar" src="${esc(user.profilePhoto)}" alt=""><span>${esc(user.name || user.email)}</span>`;
+      return `<img class="pp-editor-avatar" src="${esc(user.profilePhoto)}" alt=""><span class="pp-editor-label" title="${label}">${label}</span>`;
     }
-    return `<span class="pp-editor-initials">${esc(initials(user.name || user.email))}</span><span>${esc(user.name || user.email)}</span>`;
+    return `<span class="pp-editor-initials">${esc(initials(user.name || user.email))}</span><span class="pp-editor-label" title="${label}">${label}</span>`;
+  }
+
+  function statusSelectClass(value) {
+    const map = {
+      '': 'pp-st-empty',
+      working: 'pp-st-working',
+      stuck: 'pp-st-stuck',
+      done: 'pp-st-done',
+      needs_revision: 'pp-st-needs-revision',
+      approved: 'pp-st-approved'
+    };
+    return map[value] || 'pp-st-empty';
   }
 
   function statusSelect(field, options, value, itemId) {
     const opts = options.map(o =>
       `<option value="${esc(o.value)}"${o.value === value ? ' selected' : ''}>${esc(o.label)}</option>`
     ).join('');
-    return `<select data-field="${field}" data-id="${itemId}" class="pp-status-select">${opts}</select>`;
+    const statusCls = statusSelectClass(value);
+    return `<select data-field="${field}" data-id="${itemId}" class="pp-status-select ${statusCls}">${opts}</select>`;
+  }
+
+  function syncStatusSelectStyles(root) {
+    const scope = root || document;
+    scope.querySelectorAll('.pp-status-select').forEach(sel => {
+      const statusCls = statusSelectClass(sel.value);
+      sel.className = `pp-status-select ${statusCls}`;
+    });
   }
 
   function dueRowClass(row) {
@@ -103,8 +125,9 @@
     });
   }
 
-  function td(label, content) {
-    return `<td data-label="${esc(label)}">${content}</td>`;
+  function td(label, content, cellClass) {
+    const cls = cellClass ? ` class="${cellClass}"` : '';
+    return `<td data-label="${esc(label)}"${cls}>${content}</td>`;
   }
 
   function resolveRowUser(row, idField, nameField, photoField) {
@@ -166,10 +189,10 @@
         <tr class="${p.dueClass}" data-id="${row._id}">
           ${td('Item', p.itemInput)}
           ${td('Project', p.projectInput)}
-          ${td('Edit', p.editSelect)}
+          ${td('Edit', p.editSelect, 'pp-td-status')}
           ${td('Editor', p.editorBtn)}
-          ${td('QC', p.qcSelect)}
-          ${td('Delivery', p.deliverySelect)}
+          ${td('QC', p.qcSelect, 'pp-td-status')}
+          ${td('Delivery', p.deliverySelect, 'pp-td-status')}
           ${td('Owner', p.ownerBtn)}
           ${td('Due Date', p.dueInput)}
           ${td('Notes', p.notesCell)}
@@ -272,7 +295,7 @@
 
     if (empty) empty.style.display = 'none';
 
-    if (isMobileView) {
+    if (viewMode === 'card') {
       if (wrap) wrap.style.display = 'none';
       if (cards) {
         cards.style.display = 'flex';
@@ -288,6 +311,23 @@
       }
       renderTableRows();
     }
+    updateViewToggleUI();
+    syncStatusSelectStyles();
+  }
+
+  function updateViewToggleUI() {
+    document.querySelectorAll('#ppViewToggle .pp-view-btn').forEach(btn => {
+      const active = btn.dataset.view === viewMode;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+  }
+
+  function setViewMode(mode) {
+    if (mode !== 'table' && mode !== 'card') return;
+    viewMode = mode;
+    localStorage.setItem(VIEW_STORAGE_KEY, mode);
+    renderLists();
   }
 
   async function loadData() {
@@ -361,6 +401,7 @@
       qcStatus: '',
       deliveryStatus: '',
       editorId: null,
+      ownerId: null,
       dueDate: null,
       notes: [],
       completed: false
@@ -411,10 +452,10 @@
     }
   }
 
-  function showEditorMenu(anchor, itemId) {
-    const menu = document.getElementById('ppEditorMenu');
+  function showUserPickerMenu(anchor, itemId, userField) {
+    const menu = document.getElementById('ppUserPickerMenu');
     if (!menu) return;
-    editorMenuTarget = itemId;
+    userPickerTarget = { itemId, userField };
 
     const rect = anchor.getBoundingClientRect();
     menu.style.display = 'block';
@@ -423,21 +464,21 @@
     menu.style.minWidth = `${Math.max(rect.width, 200)}px`;
 
     menu.innerHTML = `
-      <button type="button" class="pp-editor-option" data-editor-id="">
+      <button type="button" class="pp-editor-option" data-user-id="">
         <span class="pp-editor-initials">—</span><span>Unassigned</span>
       </button>
       ${users.map(u => `
-        <button type="button" class="pp-editor-option" data-editor-id="${u._id}">
+        <button type="button" class="pp-editor-option" data-user-id="${u._id}">
           ${avatarHtml(u)}
         </button>
       `).join('')}
     `;
   }
 
-  function hideEditorMenu() {
-    const menu = document.getElementById('ppEditorMenu');
+  function hideUserPickerMenu() {
+    const menu = document.getElementById('ppUserPickerMenu');
     if (menu) menu.style.display = 'none';
-    editorMenuTarget = null;
+    userPickerTarget = null;
   }
 
   async function showProjectSuggestions(input) {
@@ -528,20 +569,6 @@
     }
   }
 
-  function setupMobileViewListener() {
-    const onChange = () => {
-      const next = MOBILE_MQ.matches;
-      if (next === isMobileView) return;
-      isMobileView = next;
-      renderLists();
-    };
-    if (typeof MOBILE_MQ.addEventListener === 'function') {
-      MOBILE_MQ.addEventListener('change', onChange);
-    } else {
-      MOBILE_MQ.addListener(onChange);
-    }
-  }
-
   function setupListeners() {
     const listRoot = document.querySelector('.post-production-table-container');
     document.getElementById('ppSearch')?.addEventListener('input', (e) => {
@@ -550,6 +577,12 @@
         searchQuery = e.target.value.trim();
         loadData().catch(err => console.error(err));
       }, 300);
+    });
+
+    document.getElementById('ppViewToggle')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('.pp-view-btn');
+      if (!btn?.dataset.view) return;
+      setViewMode(btn.dataset.view);
     });
 
     document.getElementById('ppFilterTabs')?.addEventListener('click', (e) => {
@@ -579,6 +612,9 @@
       const id = el.dataset.id;
       const field = el.dataset.field;
       if (!id || !field || id === DRAFT_ID) return;
+      if (el.classList.contains('pp-status-select')) {
+        el.className = `pp-status-select ${statusSelectClass(el.value)}`;
+      }
       try {
         const body = {};
         if (field === 'dueDate') body.dueDate = el.value || null;
@@ -627,9 +663,9 @@
     });
 
     listRoot?.addEventListener('click', (e) => {
-      const picker = e.target.closest('[data-editor-picker]');
+      const picker = e.target.closest('[data-user-picker]');
       if (picker) {
-        showEditorMenu(picker, picker.dataset.editorPicker);
+        showUserPickerMenu(picker, picker.dataset.userPicker, picker.dataset.userField);
         return;
       }
       const notes = e.target.closest('[data-notes]');
@@ -649,12 +685,14 @@
       }
     });
 
-    document.getElementById('ppEditorMenu')?.addEventListener('click', async (e) => {
-      const opt = e.target.closest('[data-editor-id]');
-      if (!opt || !editorMenuTarget) return;
+    document.getElementById('ppUserPickerMenu')?.addEventListener('click', async (e) => {
+      const opt = e.target.closest('[data-user-id]');
+      if (!opt || !userPickerTarget) return;
       try {
-        await patchItem(editorMenuTarget, { editorId: opt.dataset.editorId || null });
-        hideEditorMenu();
+        const body = {};
+        body[userPickerTarget.userField] = opt.dataset.userId || null;
+        await patchItem(userPickerTarget.itemId, body);
+        hideUserPickerMenu();
         await loadData();
       } catch (err) {
         alert(err.message);
@@ -685,8 +723,8 @@
     });
 
     document.addEventListener('click', (e) => {
-      if (!e.target.closest('#ppEditorMenu') && !e.target.closest('[data-editor-picker]')) {
-        hideEditorMenu();
+      if (!e.target.closest('#ppUserPickerMenu') && !e.target.closest('[data-user-picker]')) {
+        hideUserPickerMenu();
       }
       if (!e.target.closest('#ppProjectSuggestions') && !e.target.closest('.pp-project-input')) {
         hideProjectSuggestions();
@@ -722,8 +760,8 @@
   window.initPage = async function() {
     try {
       await initDashboardSidebar();
-      setupMobileViewListener();
       setupListeners();
+      updateViewToggleUI();
       await loadData();
     } catch (err) {
       console.error(err);

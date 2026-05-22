@@ -1,6 +1,6 @@
 /**
- * Generate a local HTML preview of the reimbursement submitted email.
- * Run: node emails/generate-preview.js
+ * Generate local HTML previews for reimbursement emails.
+ * Run from backend/: node emails/generate-preview.js
  */
 const fs = require('fs');
 const path = require('path');
@@ -9,22 +9,39 @@ const {
   buildReimbursementSubmittedSubject,
   getSampleReimbursementEmailData
 } = require('./reimbursementSubmittedEmail');
-
-const sample = getSampleReimbursementEmailData();
-const html = buildReimbursementSubmittedEmail(sample);
-const subject = buildReimbursementSubmittedSubject(sample);
+const {
+  buildReimbursementApprovedEmail,
+  buildReimbursementApprovedSubject,
+  getSampleReimbursementApprovedEmailData
+} = require('./reimbursementApprovedEmail');
 
 const outDir = path.join(__dirname, 'preview');
-const outFile = path.join(outDir, 'reimbursement-submitted-preview.html');
-
 if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
-fs.writeFileSync(outFile, html, 'utf8');
+const submittedSample = getSampleReimbursementEmailData();
+const submittedHtml = buildReimbursementSubmittedEmail(submittedSample);
+const submittedSubject = buildReimbursementSubmittedSubject(submittedSample);
+const submittedFile = path.join(outDir, 'reimbursement-submitted-preview.html');
+fs.writeFileSync(submittedFile, submittedHtml, 'utf8');
 fs.writeFileSync(
   path.join(outDir, 'reimbursement-submitted-subject.txt'),
-  subject,
+  submittedSubject,
   'utf8'
 );
-console.log('Preview written to:', outFile);
-console.log('Subject:', subject);
-console.log('Open the file in a browser to review the template.');
+
+const approvedSample = getSampleReimbursementApprovedEmailData();
+const approvedHtml = buildReimbursementApprovedEmail(approvedSample);
+const approvedSubject = buildReimbursementApprovedSubject(approvedSample);
+const approvedFile = path.join(outDir, 'reimbursement-approved-preview.html');
+fs.writeFileSync(approvedFile, approvedHtml, 'utf8');
+fs.writeFileSync(
+  path.join(outDir, 'reimbursement-approved-subject.txt'),
+  approvedSubject,
+  'utf8'
+);
+
+console.log('Submitted preview:', submittedFile);
+console.log('Submitted subject:', submittedSubject);
+console.log('Approved preview:', approvedFile);
+console.log('Approved subject:', approvedSubject);
+console.log('Open the HTML files in a browser to review.');

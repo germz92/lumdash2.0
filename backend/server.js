@@ -993,6 +993,53 @@ async function sendReimbursementSubmittedEmails(request, reviewers, submitter) {
   });
 }
 
+/**
+ * Email submitter when their reimbursement is approved.
+ */
+async function sendReimbursementApprovedEmail(request) {
+  if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) {
+    console.warn('📧 Reimbursement approved email skipped: SendGrid not configured');
+    return;
+  }
+
+  const { userName, userEmail } = await resolveReimbursementSubmitter(request);
+  const to = (userEmail || '').trim().toLowerCase();
+  if (!to) {
+    console.warn(`📧 Reimbursement approved email skipped: no email for request ${request._id}`);
+    return;
+  }
+
+  const {
+    buildReimbursementApprovedSubject,
+    buildReimbursementApprovedEmail,
+    buildReimbursementApprovedText
+  } = require('./emails/reimbursementApprovedEmail');
+
+  const table = await resolveReimbursementEvent(request);
+  const data = {
+    submitterName: userName,
+    eventName: request.eventName || table?.title || 'your event',
+    totalAmount: request.totalAmount,
+    dateSubmitted: request.dateSubmitted || request.createdAt,
+    description: request.description
+      || (Array.isArray(request.items) && request.items[0]?.notes)
+      || ''
+  };
+
+  try {
+    await sgMail.send({
+      to,
+      from: process.env.SENDGRID_FROM_EMAIL,
+      subject: buildReimbursementApprovedSubject(data),
+      html: buildReimbursementApprovedEmail(data),
+      text: buildReimbursementApprovedText(data)
+    });
+    console.log(`📧 Reimbursement approved email sent to ${to}`);
+  } catch (err) {
+    console.error(`📧 Reimbursement approved email failed for ${to}:`, err.response?.body || err.message || err);
+  }
+}
+
 /** Event IDs this user may review reimbursements for (null = all events, admin) */
 async function getReimbursementEventScope(user) {
   if (!user) return [];
@@ -10783,6 +10830,12 @@ app.put('/api/reimbursements/:id/approve', authenticate, async (req, res) => {
     request.reviewedAt = new Date();
     request.reviewNotes = req.body.reviewNotes || '';
     await request.save();
+
+    try {
+      await sendReimbursementApprovedEmail(request);
+    } catch (emailErr) {
+      console.error('📧 Reimbursement approved email failed (request still approved):', emailErr);
+    }
 
     res.json({ message: 'Request approved', request });
   } catch (err) {

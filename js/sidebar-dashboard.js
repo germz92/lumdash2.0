@@ -21,6 +21,7 @@
     // Check for SPA pages via hash
     if (path.includes('dashboard.html')) {
       const hashPage = hash.replace('#', '').split('?')[0];
+      if (hashPage === 'post-production') return 'post-production';
       return hashPage || 'events';
     }
     

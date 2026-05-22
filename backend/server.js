@@ -1177,6 +1177,7 @@ const FlightRequest = require('./models/FlightRequest');
 const Passenger = require('./models/Passenger');
 const Notification = require('./models/Notification');
 const ReimbursementRequest = require('./models/ReimbursementRequest');
+const PostProductionItem = require('./models/PostProductionItem');
 
 
 
@@ -10726,6 +10727,314 @@ app.delete('/api/timesheets/entry', authenticate, async (req, res) => {
 });
 
 // ========= END TIMESHEETS API =========
+
+// ========= POST PRODUCTION API =========
+
+function isPostProductionAdmin(user) {
+  return /^admin$/i.test(user?.role || '');
+}
+
+function isPostProductionItemComplete(doc) {
+  return doc.editStatus === 'done' && doc.qcStatus === 'approved' && doc.deliveryStatus === 'done';
+}
+
+async function resolvePostProductionProject(projectText, eventId) {
+  const name = String(projectText || '').trim();
+  if (eventId) {
+    const table = await Table.findById(eventId).select('title owners').lean();
+    if (table) {
+      return {
+        eventId: table._id,
+        project: table.title || name,
+        owners: (table.owners || []).map(id => id.toString())
+      };
+    }
+  }
+  if (!name) {
+    return { eventId: null, project: '', owners: [] };
+  }
+  const exact = await Table.findOne({
+    title: { $regex: new RegExp(`^${escapeRegex(name)}$`, 'i') }
+  }).select('title owners').lean();
+  if (exact) {
+    return {
+      eventId: exact._id,
+      project: exact.title,
+      owners: (exact.owners || []).map(id => id.toString())
+    };
+  }
+  return { eventId: null, project: name, owners: [] };
+}
+
+async function userOwnsPostProductionEvent(userId, eventId) {
+  if (!eventId) return false;
+  const table = await Table.findById(eventId).select('owners').lean();
+  if (!table) return false;
+  const uid = userId.toString();
+  return (table.owners || []).some(id => id.toString() === uid);
+}
+
+async function canCreatePostProductionItem(user, payload) {
+  if (isPostProductionAdmin(user)) return true;
+  const resolved = await resolvePostProductionProject(payload.project, payload.eventId);
+  if (!resolved.eventId) return false;
+  return userOwnsPostProductionEvent(user.id, resolved.eventId);
+}
+
+async function postProductionUsersById(docs) {
+  const list = Array.isArray(docs) ? docs : [docs];
+  const ids = new Set();
+  list.forEach(doc => {
+    const o = doc.toObject ? doc.toObject() : doc;
+    if (o.editorId) ids.add(o.editorId.toString());
+    if (o.ownerId) ids.add(o.ownerId.toString());
+  });
+  if (!ids.size) return {};
+  const users = await User.find(
+    { _id: { $in: [...ids] } },
+    'fullName email profilePhoto'
+  ).lean();
+  const usersById = {};
+  users.forEach(u => { usersById[u._id.toString()] = u; });
+  return usersById;
+}
+
+function formatPostProductionItem(doc, usersById = {}) {
+  const o = doc.toObject ? doc.toObject() : doc;
+  const editor = o.editorId ? usersById[o.editorId.toString()] : null;
+  const owner = o.ownerId ? usersById[o.ownerId.toString()] : null;
+  const notes = [...(o.notes || [])].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  return {
+    _id: o._id,
+    item: o.item || '',
+    project: o.project || '',
+    eventId: o.eventId || null,
+    editStatus: o.editStatus || '',
+    qcStatus: o.qcStatus || '',
+    deliveryStatus: o.deliveryStatus || '',
+    editorId: o.editorId || null,
+    editorName: editor?.fullName || editor?.email || '',
+    editorPhoto: editor?.profilePhoto || null,
+    ownerId: o.ownerId || null,
+    ownerName: owner?.fullName || owner?.email || '',
+    ownerPhoto: owner?.profilePhoto || null,
+    dueDate: o.dueDate || null,
+    notes,
+    latestNote: notes[0] || null,
+    completed: isPostProductionItemComplete(o),
+    createdBy: o.createdBy,
+    updatedBy: o.updatedBy,
+    createdAt: o.createdAt,
+    updatedAt: o.updatedAt
+  };
+}
+
+app.get('/api/post-production', authenticate, async (req, res) => {
+  try {
+    const { search, filter, sort, order } = req.query;
+    let items = await PostProductionItem.find({}).lean();
+
+    const usersById = await postProductionUsersById(items);
+    let rows = items.map(i => formatPostProductionItem(i, usersById));
+
+    const q = String(search || '').trim().toLowerCase();
+    if (q) {
+      rows = rows.filter(r => {
+        const latest = r.latestNote?.text || '';
+        return (
+          (r.item || '').toLowerCase().includes(q) ||
+          (r.project || '').toLowerCase().includes(q) ||
+          (r.editorName || '').toLowerCase().includes(q) ||
+          (r.ownerName || '').toLowerCase().includes(q) ||
+          latest.toLowerCase().includes(q)
+        );
+      });
+    }
+
+    if (filter === 'pending') {
+      rows = rows.filter(r => !r.completed);
+    } else if (filter === 'completed') {
+      rows = rows.filter(r => r.completed);
+    }
+
+    const sortField = sort || 'dueDate';
+    const sortDir = order === 'desc' ? -1 : 1;
+    const sortKey = {
+      item: 'item',
+      project: 'project',
+      editStatus: 'editStatus',
+      editorName: 'editorName',
+      qcStatus: 'qcStatus',
+      deliveryStatus: 'deliveryStatus',
+      ownerName: 'ownerName',
+      dueDate: 'dueDate'
+    }[sortField] || 'dueDate';
+
+    rows.sort((a, b) => {
+      const av = a[sortKey];
+      const bv = b[sortKey];
+      if (sortKey === 'dueDate') {
+        const aEmpty = !av;
+        const bEmpty = !bv;
+        if (aEmpty && !bEmpty) return 1;
+        if (!aEmpty && bEmpty) return -1;
+        if (aEmpty && bEmpty) return 0;
+        return sortDir * (new Date(av) - new Date(bv));
+      }
+      const as = (av == null ? '' : String(av)).toLowerCase();
+      const bs = (bv == null ? '' : String(bv)).toLowerCase();
+      if (as < bs) return -1 * sortDir;
+      if (as > bs) return 1 * sortDir;
+      return 0;
+    });
+
+    let canCreate = isPostProductionAdmin(req.user);
+    if (!canCreate) {
+      const ownedEvent = await Table.findOne({ owners: req.user.id }).select('_id').lean();
+      canCreate = !!ownedEvent;
+    }
+
+    res.json({
+      items: rows,
+      permissions: {
+        isAdmin: isPostProductionAdmin(req.user),
+        canCreate
+      }
+    });
+  } catch (err) {
+    console.error('Error fetching post production items:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/post-production/project-suggestions', authenticate, async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    let query = {};
+    if (!isPostProductionAdmin(req.user)) {
+      query = { owners: req.user.id };
+    }
+    const tables = await Table.find(query).select('title').sort({ title: 1 }).lean();
+    let list = tables.map(t => ({ eventId: t._id, title: t.title }));
+    if (q) {
+      const lower = q.toLowerCase();
+      list = list.filter(t => (t.title || '').toLowerCase().includes(lower));
+    }
+    res.json(list.slice(0, 20));
+  } catch (err) {
+    console.error('Error fetching project suggestions:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/post-production', authenticate, async (req, res) => {
+  try {
+    if (!(await canCreatePostProductionItem(req.user, req.body))) {
+      return res.status(403).json({
+        error: 'You can only create items for events you own. Admins can create for any project.'
+      });
+    }
+
+    const resolved = await resolvePostProductionProject(req.body.project, req.body.eventId);
+
+    const doc = await PostProductionItem.create({
+      item: String(req.body.item || '').trim(),
+      project: resolved.project,
+      eventId: resolved.eventId,
+      editStatus: req.body.editStatus || '',
+      qcStatus: req.body.qcStatus || '',
+      deliveryStatus: req.body.deliveryStatus || '',
+      editorId: req.body.editorId || null,
+      ownerId: req.body.ownerId || null,
+      dueDate: req.body.dueDate ? new Date(req.body.dueDate) : null,
+      notes: [],
+      createdBy: req.user.id,
+      updatedBy: req.user.id
+    });
+
+    const usersById = await postProductionUsersById(doc);
+    res.status(201).json(formatPostProductionItem(doc, usersById));
+  } catch (err) {
+    console.error('Error creating post production item:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.put('/api/post-production/:id', authenticate, async (req, res) => {
+  try {
+    const doc = await PostProductionItem.findById(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Item not found' });
+
+    if (req.body.item != null) doc.item = String(req.body.item).trim();
+    if (req.body.editStatus != null) doc.editStatus = req.body.editStatus;
+    if (req.body.qcStatus != null) doc.qcStatus = req.body.qcStatus;
+    if (req.body.deliveryStatus != null) doc.deliveryStatus = req.body.deliveryStatus;
+    if (req.body.editorId !== undefined) doc.editorId = req.body.editorId || null;
+    if (req.body.ownerId !== undefined) doc.ownerId = req.body.ownerId || null;
+
+    if (req.body.project != null || req.body.eventId !== undefined) {
+      const resolved = await resolvePostProductionProject(
+        req.body.project != null ? req.body.project : doc.project,
+        req.body.eventId !== undefined ? req.body.eventId : doc.eventId
+      );
+      doc.project = resolved.project;
+      doc.eventId = resolved.eventId;
+    }
+
+    if (req.body.dueDate !== undefined) {
+      doc.dueDate = req.body.dueDate ? new Date(req.body.dueDate) : null;
+    }
+
+    doc.updatedBy = req.user.id;
+    await doc.save();
+
+    const usersById = await postProductionUsersById(doc);
+    res.json(formatPostProductionItem(doc, usersById));
+  } catch (err) {
+    console.error('Error updating post production item:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/post-production/:id/notes', authenticate, async (req, res) => {
+  try {
+    const text = String(req.body.text || '').trim();
+    if (!text) return res.status(400).json({ error: 'Note text is required' });
+
+    const doc = await PostProductionItem.findById(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Item not found' });
+
+    const user = await User.findById(req.user.id).select('fullName email').lean();
+    doc.notes.push({
+      text,
+      authorId: req.user.id,
+      authorName: user?.fullName || user?.email || 'Unknown',
+      createdAt: new Date()
+    });
+    doc.updatedBy = req.user.id;
+    await doc.save();
+
+    const usersById = await postProductionUsersById(doc);
+    res.json(formatPostProductionItem(doc, usersById));
+  } catch (err) {
+    console.error('Error adding post production note:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/api/post-production/:id', authenticate, async (req, res) => {
+  try {
+    if (!isPostProductionAdmin(req.user)) {
+      return res.status(403).json({ error: 'Only admins can delete post production items' });
+    }
+    const doc = await PostProductionItem.findByIdAndDelete(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Item not found' });
+    res.json({ message: 'Deleted' });
+  } catch (err) {
+    console.error('Error deleting post production item:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 
 // ========= REIMBURSEMENT REQUESTS API =========
 

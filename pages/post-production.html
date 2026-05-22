@@ -1,0 +1,104 @@
+<link rel="stylesheet" href="css/theme-dark.css">
+
+<div class="dark-theme post-production-page">
+  <div class="post-production-layout" id="postProductionPageLayout">
+
+    <main class="post-production-main">
+      <header class="post-production-header">
+        <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+        <h1 class="post-production-title">
+          <span class="material-symbols-outlined">movie_edit</span>
+          Post Production
+        </h1>
+        <div class="post-production-legend">
+          <span class="legend-item legend-overdue">Overdue</span>
+          <span class="legend-item legend-soon">Due within 3 days</span>
+          <span class="legend-item legend-done">Completed</span>
+        </div>
+      </header>
+
+      <div class="post-production-toolbar">
+        <div class="search-box">
+          <span class="material-symbols-outlined">search</span>
+          <input type="text" id="ppSearch" placeholder="Search items, projects, editors, owners, notes...">
+        </div>
+        <div class="pp-view-toggle" id="ppViewToggle" role="group" aria-label="View mode">
+          <button type="button" class="pp-view-btn active" data-view="table" title="Table view">
+            <span class="material-symbols-outlined">table_rows</span>
+          </button>
+          <button type="button" class="pp-view-btn" data-view="card" title="Card view">
+            <span class="material-symbols-outlined">view_agenda</span>
+          </button>
+        </div>
+        <div class="status-filter-tabs" id="ppFilterTabs">
+          <button type="button" class="status-tab active" data-filter="all">All</button>
+          <button type="button" class="status-tab" data-filter="pending">Pending</button>
+          <button type="button" class="status-tab" data-filter="completed">Completed</button>
+        </div>
+      </div>
+
+      <div class="post-production-table-container">
+        <div class="pp-cards-container" id="ppCardsContainer" aria-hidden="true"></div>
+
+        <div class="post-production-table-wrap">
+          <table class="post-production-table" id="ppTable">
+            <thead>
+              <tr>
+                <th class="sortable" data-sort="item">Item <span class="sort-icon material-symbols-outlined">unfold_more</span></th>
+                <th class="sortable" data-sort="project">Project <span class="sort-icon material-symbols-outlined">unfold_more</span></th>
+                <th class="sortable" data-sort="editStatus">Edit <span class="sort-icon material-symbols-outlined">unfold_more</span></th>
+                <th class="sortable" data-sort="editorName">Editor <span class="sort-icon material-symbols-outlined">unfold_more</span></th>
+                <th class="sortable" data-sort="qcStatus">QC <span class="sort-icon material-symbols-outlined">unfold_more</span></th>
+                <th class="sortable" data-sort="deliveryStatus">Delivery <span class="sort-icon material-symbols-outlined">unfold_more</span></th>
+                <th class="sortable" data-sort="ownerName">Owner <span class="sort-icon material-symbols-outlined">unfold_more</span></th>
+                <th class="sortable" data-sort="dueDate">Due Date <span class="sort-icon material-symbols-outlined">unfold_more</span></th>
+                <th>Notes</th>
+                <th class="action-col"></th>
+              </tr>
+            </thead>
+            <tbody id="ppTableBody"></tbody>
+          </table>
+        </div>
+
+        <div class="post-production-loading" id="ppLoading">
+          <span class="material-symbols-outlined spinning">sync</span>
+          Loading...
+        </div>
+        <div class="post-production-empty" id="ppEmpty" style="display: none;">
+          <span class="material-symbols-outlined">movie_edit</span>
+          <p>No deliverables yet</p>
+        </div>
+
+        <button type="button" class="btn-add-item" id="ppAddBtn" style="display: none;">
+          <span class="material-symbols-outlined">add</span>
+          Add item
+        </button>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Notes modal -->
+<div class="pp-modal-overlay" id="ppNotesModal" style="display: none;">
+  <div class="pp-modal">
+    <div class="pp-modal-header">
+      <h3>Notes</h3>
+      <button type="button" class="pp-modal-close" id="ppNotesClose"><span class="material-symbols-outlined">close</span></button>
+    </div>
+    <div class="pp-modal-body">
+      <div class="pp-notes-history" id="ppNotesHistory"></div>
+      <div class="pp-notes-add">
+        <textarea id="ppNoteInput" rows="3" placeholder="Add a note..."></textarea>
+        <button type="button" class="pp-btn-primary" id="ppNoteSave">Add note</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- User picker dropdown (editor / owner) -->
+<div class="pp-editor-menu" id="ppUserPickerMenu" style="display: none;"></div>
+
+<!-- Project suggestions -->
+<div class="pp-suggestions" id="ppProjectSuggestions" style="display: none;"></div>

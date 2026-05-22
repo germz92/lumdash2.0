@@ -101,8 +101,8 @@
   }
 
   function actionCellHtml(row) {
-    if (row && row.imported) return '<td class="action-col"></td>';
-    return `<td class="action-col">${deleteBtnHtml()}</td>`;
+    if (row && row.imported) return '<td class="action-col" data-label=""></td>';
+    return `<td class="action-col" data-label="">${deleteBtnHtml()}</td>`;
   }
 
   /** Read-only for imported rows except fields listed in editableWhenImported */
@@ -136,18 +136,24 @@
     return attrs.join(' ');
   }
 
+  /** Table cell with label for mobile card layout */
+  function expenseTd(label, content, extraClass = '') {
+    const cls = extraClass ? ` class="${extraClass}"` : '';
+    return `<td data-label="${escAttr(label)}"${cls}>${content}</td>`;
+  }
+
   function renderCrew() {
     const tbody = document.getElementById('crewTableBody');
     const crewEditable = ['rate', 'additionalCost', 'notes'];
     tbody.innerHTML = expensesData.crew.map((row, i) => `
       <tr data-section="crew" data-index="${i}" ${rowImportedAttrs(row)}>
-        <td>${expenseCell('name', row.name, row, crewEditable)}</td>
-        <td>${expenseCell('role', row.role, row, crewEditable)}</td>
-        <td>${expenseCell('hours', row.hours, row, crewEditable)}</td>
-        <td>${expenseCell('rate', row.rate, row, crewEditable)}</td>
-        <td>${expenseCell('additionalCost', row.additionalCost ?? 0, row, crewEditable)}</td>
-        <td class="computed-cell" data-field="total">${fmtCurrency(row.total)}</td>
-        <td>${expenseCell('notes', row.notes, row, crewEditable)}</td>
+        ${expenseTd('Name', expenseCell('name', row.name, row, crewEditable))}
+        ${expenseTd('Role', expenseCell('role', row.role, row, crewEditable))}
+        ${expenseTd('Hours', expenseCell('hours', row.hours, row, crewEditable))}
+        ${expenseTd('Rate', expenseCell('rate', row.rate, row, crewEditable))}
+        ${expenseTd('Additional', expenseCell('additionalCost', row.additionalCost ?? 0, row, crewEditable))}
+        ${expenseTd('Total', `<span class="computed-cell" data-field="total">${fmtCurrency(row.total)}</span>`, 'expenses-td-total')}
+        ${expenseTd('Notes', expenseCell('notes', row.notes, row, crewEditable))}
         ${actionCellHtml(row)}
       </tr>
     `).join('');
@@ -155,9 +161,9 @@
 
   function renderFlightCostCell(row) {
     if (row.imported) {
-      return `<td><span class="expenses-readonly expenses-amount" data-field="cost">${escAttr(fmtCurrency(row.cost))}</span></td>`;
+      return expenseTd('Cost', `<span class="expenses-readonly expenses-amount" data-field="cost">${escAttr(fmtCurrency(row.cost))}</span>`, 'expenses-td-amount');
     }
-    return `<td>${expenseCell('cost', row.cost, row, ['cost'])}</td>`;
+    return expenseTd('Cost', expenseCell('cost', row.cost, row, ['cost']), 'expenses-td-amount');
   }
 
   function renderFlights() {
@@ -165,12 +171,12 @@
     const flightEditable = ['notes'];
     tbody.innerHTML = expensesData.flights.map((row, i) => `
       <tr data-section="flights" data-index="${i}" ${rowImportedAttrs(row)}>
-        <td>${expenseCell('passengerName', row.passengerName, row, flightEditable)}</td>
-        <td>${expenseCell('date', row.date, row, flightEditable)}</td>
-        <td>${expenseCell('airline', row.airline, row, flightEditable)}</td>
-        <td>${expenseCell('refNumber', row.refNumber, row, flightEditable)}</td>
+        ${expenseTd('Passenger(s)', expenseCell('passengerName', row.passengerName, row, flightEditable))}
+        ${expenseTd('Date', expenseCell('date', row.date, row, flightEditable))}
+        ${expenseTd('Airline', expenseCell('airline', row.airline, row, flightEditable))}
+        ${expenseTd('REF Number', expenseCell('refNumber', row.refNumber, row, flightEditable))}
         ${renderFlightCostCell(row)}
-        <td>${expenseCell('notes', row.notes, row, flightEditable)}</td>
+        ${expenseTd('Notes', expenseCell('notes', row.notes, row, flightEditable))}
         ${actionCellHtml(row)}
       </tr>
     `).join('');
@@ -181,13 +187,13 @@
     const accEditable = ['cost', 'notes'];
     tbody.innerHTML = expensesData.accommodation.map((row, i) => `
       <tr data-section="accommodation" data-index="${i}" ${rowImportedAttrs(row)}>
-        <td>${expenseCell('name', row.name, row, accEditable)}</td>
-        <td>${expenseCell('checkIn', row.checkIn, row, accEditable)}</td>
-        <td>${expenseCell('checkOut', row.checkOut, row, accEditable)}</td>
-        <td>${expenseCell('hotel', row.hotel, row, accEditable)}</td>
-        <td>${expenseCell('refNumber', row.refNumber, row, accEditable)}</td>
-        <td>${expenseCell('cost', row.cost, row, accEditable)}</td>
-        <td>${expenseCell('notes', row.notes, row, accEditable)}</td>
+        ${expenseTd('Name', expenseCell('name', row.name, row, accEditable))}
+        ${expenseTd('Check In', expenseCell('checkIn', row.checkIn, row, accEditable))}
+        ${expenseTd('Check Out', expenseCell('checkOut', row.checkOut, row, accEditable))}
+        ${expenseTd('Hotel', expenseCell('hotel', row.hotel, row, accEditable))}
+        ${expenseTd('REF Number', expenseCell('refNumber', row.refNumber, row, accEditable))}
+        ${expenseTd('Cost', expenseCell('cost', row.cost, row, accEditable), 'expenses-td-amount')}
+        ${expenseTd('Notes', expenseCell('notes', row.notes, row, accEditable))}
         ${actionCellHtml(row)}
       </tr>
     `).join('');
@@ -205,10 +211,10 @@
     }
     tbody.innerHTML = rows.map((row, i) => `
       <tr data-section="reimbursements" data-index="${i}" ${rowImportedAttrs(row)}>
-        <td>${expenseCell('submittedBy', row.submittedBy, row, [])}</td>
-        <td>${expenseCell('dateSubmitted', fmtDateSubmitted(row.dateSubmitted), row, [])}</td>
-        <td class="expenses-desc-cell">${expenseCell('description', row.description, row, [])}</td>
-        <td><span class="expenses-readonly expenses-amount" data-field="amount">${escAttr(fmtCurrency(row.amount))}</span></td>
+        ${expenseTd('Submitted By', expenseCell('submittedBy', row.submittedBy, row, []))}
+        ${expenseTd('Date Submitted', expenseCell('dateSubmitted', fmtDateSubmitted(row.dateSubmitted), row, []))}
+        ${expenseTd('Description', expenseCell('description', row.description, row, []), 'expenses-desc-cell')}
+        ${expenseTd('Amount', `<span class="expenses-readonly expenses-amount" data-field="amount">${escAttr(fmtCurrency(row.amount))}</span>`, 'expenses-td-amount')}
         ${actionCellHtml(row)}
       </tr>
     `).join('');
@@ -217,12 +223,12 @@
   function renderMisc() {
     const tbody = document.getElementById('miscTableBody');
     tbody.innerHTML = expensesData.misc.map((row, i) => `
-      <tr data-section="misc" data-index="${i}">
-        <td><input type="text" data-field="item" value="${escAttr(row.item)}"></td>
-        <td><input type="text" data-field="description" value="${escAttr(row.description)}"></td>
-        <td><input type="text" inputmode="decimal" data-field="cost" class="num-input" value="${escAttr(row.cost)}"></td>
-        <td><input type="text" data-field="notes" value="${escAttr(row.notes)}"></td>
-        <td class="action-col">${deleteBtnHtml()}</td>
+      <tr data-section="misc" data-index="${i}" data-imported="false">
+        ${expenseTd('Item', `<input type="text" data-field="item" value="${escAttr(row.item)}">`)}
+        ${expenseTd('Description', `<input type="text" data-field="description" value="${escAttr(row.description)}">`)}
+        ${expenseTd('Cost', `<input type="text" inputmode="decimal" data-field="cost" class="num-input" value="${escAttr(row.cost)}">`, 'expenses-td-amount')}
+        ${expenseTd('Notes', `<input type="text" data-field="notes" value="${escAttr(row.notes)}">`)}
+        <td class="action-col" data-label="">${deleteBtnHtml()}</td>
       </tr>
     `).join('');
   }

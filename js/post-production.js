@@ -166,7 +166,7 @@
       deliverySelect: statusSelect('deliveryStatus', DELIVERY_STATUSES, row.deliveryStatus, row._id),
       editorBtn: `<button type="button" class="pp-editor-btn" data-user-picker="${row._id}" data-user-field="editorId">${avatarHtml(editorUser)}</button>`,
       ownerBtn: `<button type="button" class="pp-editor-btn" data-user-picker="${row._id}" data-user-field="ownerId">${avatarHtml(ownerUser)}</button>`,
-      dueInput: `<input type="date" data-field="dueDate" data-id="${row._id}" value="${formatDueDate(row.dueDate)}">`,
+      dueInput: `<div class="pp-date-input-wrap"><input type="date" data-field="dueDate" data-id="${row._id}" value="${formatDueDate(row.dueDate)}"></div>`,
       notesCell: `<div class="pp-notes-cell" data-notes="${row._id}">${notesPreview}</div>`
     };
   }
@@ -221,23 +221,21 @@
       return `
         <article class="pp-card ${p.dueClass}" data-id="${row._id}">
           <div class="pp-card-header">
-            <div class="pp-card-header-main">
+            <div class="pp-card-header-top">
               ${badge}
-              <div class="pp-card-field">
-                <span class="pp-card-label">Item</span>
-                ${p.itemInput}
-              </div>
-              <div class="pp-card-field">
-                <span class="pp-card-label">Project</span>
-                ${p.projectInput}
-              </div>
+              <div class="pp-card-header-actions">${p.deleteBtn}</div>
             </div>
-            <div class="pp-card-header-side">
-              ${p.deleteBtn}
-              <div class="pp-card-field pp-card-field-due">
-                <span class="pp-card-label">Due date</span>
-                ${p.dueInput}
-              </div>
+            <div class="pp-card-field">
+              <span class="pp-card-label">Item</span>
+              ${p.itemInput}
+            </div>
+            <div class="pp-card-field">
+              <span class="pp-card-label">Project</span>
+              ${p.projectInput}
+            </div>
+            <div class="pp-card-field pp-card-field-due">
+              <span class="pp-card-label">Due date</span>
+              ${p.dueInput}
             </div>
           </div>
           <div class="pp-card-status-grid">
@@ -316,11 +314,40 @@
   }
 
   function updateViewToggleUI() {
+    const page = document.querySelector('.post-production-page');
+    if (page) page.classList.toggle('card-view-mode', viewMode === 'card');
+
     document.querySelectorAll('#ppViewToggle .pp-view-btn').forEach(btn => {
       const active = btn.dataset.view === viewMode;
       btn.classList.toggle('active', active);
       btn.setAttribute('aria-pressed', active ? 'true' : 'false');
     });
+    updateDueSortUI();
+  }
+
+  function updateDueSortUI() {
+    const icon = document.getElementById('ppDueSortIcon');
+    const btn = document.getElementById('ppDueSortBtn');
+    if (!icon || !btn) return;
+    const isDueSort = sortField === 'dueDate';
+    btn.classList.toggle('active', isDueSort);
+    icon.textContent = isDueSort && sortOrder === 'desc' ? 'arrow_downward' : 'arrow_upward';
+    btn.setAttribute(
+      'aria-label',
+      isDueSort
+        ? `Sort by due date, ${sortOrder === 'asc' ? 'earliest first' : 'latest first'}`
+        : 'Sort by due date'
+    );
+  }
+
+  function toggleDueDateSort() {
+    if (sortField === 'dueDate') {
+      sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortField = 'dueDate';
+      sortOrder = 'asc';
+    }
+    loadData().catch(err => console.error(err));
   }
 
   function setViewMode(mode) {
@@ -585,6 +612,10 @@
       setViewMode(btn.dataset.view);
     });
 
+    document.getElementById('ppDueSortBtn')?.addEventListener('click', () => {
+      toggleDueDateSort();
+    });
+
     document.getElementById('ppFilterTabs')?.addEventListener('click', (e) => {
       const tab = e.target.closest('.status-tab');
       if (!tab) return;
@@ -592,6 +623,7 @@
       tab.classList.add('active');
       statusFilter = tab.dataset.filter || 'all';
       loadData().catch(err => console.error(err));
+      updateDueSortUI();
     });
 
     document.querySelector('#ppTable thead')?.addEventListener('click', (e) => {
@@ -605,6 +637,7 @@
         sortOrder = 'asc';
       }
       loadData().catch(err => console.error(err));
+      updateDueSortUI();
     });
 
     listRoot?.addEventListener('change', async (e) => {

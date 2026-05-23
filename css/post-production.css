@@ -284,6 +284,16 @@
   opacity: 0.75;
 }
 
+.post-production-table tr.pp-highlight td,
+.pp-card.pp-highlight {
+  animation: pp-highlight-pulse 2.5s ease-out;
+}
+
+@keyframes pp-highlight-pulse {
+  0%, 15% { background-color: rgba(204, 0, 7, 0.18); }
+  100% { background-color: transparent; }
+}
+
 .post-production-table input[type="text"],
 .post-production-table input[type="date"],
 .post-production-table select:not(.pp-status-select),

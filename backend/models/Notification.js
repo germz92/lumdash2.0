@@ -23,6 +23,8 @@ const notificationSchema = new mongoose.Schema({
       'owner_request_denied',    // Owner denied the request
       'event_shared',            // You were added to an event
       'reimbursement_submitted', // New reimbursement request submitted (for admins)
+      'post_production_assigned',    // Assigned as editor or owner on post production
+      'post_production_status_changed', // Status updated on an item you own
       'general'                  // Catch-all for future types
     ]
   },

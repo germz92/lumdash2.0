@@ -25,6 +25,8 @@
     owner_request_denied:   { icon: 'cancel',           color: '#ef4444' },
     event_shared:           { icon: 'group_add',        color: '#06b6d4' },
     reimbursement_submitted:{ icon: 'receipt_long',     color: '#10b981' },
+    post_production_assigned: { icon: 'movie_edit',      color: '#6366f1' },
+    post_production_status_changed: { icon: 'sync_alt',  color: '#f59e0b' },
     general:                { icon: 'notifications',    color: '#6b7280' }
   };
 
@@ -279,6 +281,9 @@
       } else if (typeof window.navigate === 'function') {
         if (notification.link.params?.reimbursementId) {
           sessionStorage.setItem('openReimbursementId', notification.link.params.reimbursementId);
+        }
+        if (notification.link.params?.itemId) {
+          sessionStorage.setItem('openPostProductionItemId', notification.link.params.itemId);
         }
         window.navigate(page, notification.link.eventId || null);
       }

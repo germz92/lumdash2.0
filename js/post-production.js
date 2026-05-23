@@ -790,12 +790,36 @@
     });
   }
 
+  function scrollToItem(itemId) {
+    if (!itemId) return;
+    const el = document.querySelector(`[data-id="${itemId}"]`)?.closest('tr, .pp-card');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.add('pp-highlight');
+      setTimeout(() => el.classList.remove('pp-highlight'), 2500);
+    }
+  }
+
+  function getOpenItemIdFromUrl() {
+    const hash = location.hash.replace('#', '') || '';
+    const qIndex = hash.indexOf('?');
+    if (qIndex === -1) return null;
+    return new URLSearchParams(hash.substring(qIndex + 1)).get('itemId');
+  }
+
   window.initPage = async function() {
     try {
       await initDashboardSidebar();
       setupListeners();
       updateViewToggleUI();
       await loadData();
+
+      const openId = sessionStorage.getItem('openPostProductionItemId')
+        || getOpenItemIdFromUrl();
+      if (openId) {
+        sessionStorage.removeItem('openPostProductionItemId');
+        scrollToItem(openId);
+      }
     } catch (err) {
       console.error(err);
       alert('Failed to load Post Production');

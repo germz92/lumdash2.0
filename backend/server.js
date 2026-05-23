@@ -10829,6 +10829,224 @@ function formatPostProductionItem(doc, usersById = {}) {
   };
 }
 
+const PP_STATUS_LABELS = {
+  editStatus: {
+    '': '—',
+    working: 'Working on it',
+    stuck: 'Stuck',
+    done: 'Done'
+  },
+  qcStatus: {
+    '': '—',
+    needs_revision: 'Needs Revision',
+    approved: 'Approved'
+  },
+  deliveryStatus: {
+    '': '—',
+    working: 'Working on it',
+    stuck: 'Stuck',
+    done: 'Done'
+  }
+};
+
+const PP_STATUS_FIELD_LABELS = {
+  editStatus: 'Edit',
+  qcStatus: 'QC',
+  deliveryStatus: 'Delivery'
+};
+
+function ppStatusLabel(field, value) {
+  const map = PP_STATUS_LABELS[field] || {};
+  return map[value ?? ''] ?? (value || '—');
+}
+
+function ppIdStr(id) {
+  return id ? id.toString() : null;
+}
+
+function postProductionPageUrl(itemId) {
+  const appUrl = (process.env.APP_URL || 'https://beta.lumdash.app').replace(/\/$/, '');
+  const id = ppIdStr(itemId);
+  return id
+    ? `${appUrl}/dashboard.html#post-production?itemId=${id}`
+    : `${appUrl}/dashboard.html#post-production`;
+}
+
+async function sendPostProductionAssignedEmail(recipient, data) {
+  if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) return;
+  const to = (recipient.email || '').trim().toLowerCase();
+  if (!to) return;
+
+  const {
+    buildPostProductionAssignedSubject,
+    buildPostProductionAssignedEmail,
+    buildPostProductionAssignedText
+  } = require('./emails/postProductionEmail');
+
+  const payload = {
+    recipientName: recipient.fullName || recipient.email,
+    actorName: data.actorName,
+    itemName: data.itemName,
+    project: data.project,
+    role: data.role,
+    pageUrl: data.pageUrl
+  };
+
+  try {
+    await sgMail.send({
+      to,
+      from: process.env.SENDGRID_FROM_EMAIL,
+      subject: buildPostProductionAssignedSubject(payload),
+      html: buildPostProductionAssignedEmail(payload),
+      text: buildPostProductionAssignedText(payload)
+    });
+    console.log(`📧 Post production assignment email sent to ${to}`);
+  } catch (err) {
+    console.error(`📧 Post production assignment email failed for ${to}:`, err.response?.body || err.message || err);
+  }
+}
+
+async function sendPostProductionStatusChangedEmail(recipient, data) {
+  if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) return;
+  const to = (recipient.email || '').trim().toLowerCase();
+  if (!to) return;
+
+  const {
+    buildPostProductionStatusChangedSubject,
+    buildPostProductionStatusChangedEmail,
+    buildPostProductionStatusChangedText
+  } = require('./emails/postProductionEmail');
+
+  const payload = {
+    recipientName: recipient.fullName || recipient.email,
+    actorName: data.actorName,
+    itemName: data.itemName,
+    project: data.project,
+    changes: data.changes,
+    pageUrl: data.pageUrl
+  };
+
+  try {
+    await sgMail.send({
+      to,
+      from: process.env.SENDGRID_FROM_EMAIL,
+      subject: buildPostProductionStatusChangedSubject(payload),
+      html: buildPostProductionStatusChangedEmail(payload),
+      text: buildPostProductionStatusChangedText(payload)
+    });
+    console.log(`📧 Post production status email sent to ${to}`);
+  } catch (err) {
+    console.error(`📧 Post production status email failed for ${to}:`, err.response?.body || err.message || err);
+  }
+}
+
+/**
+ * Notify assignees and owner about post production updates (non-blocking).
+ * @param {Object|null} before - Prior state (null on create)
+ * @param {Object} after - Saved item document
+ * @param {string} actorId - User who made the change
+ */
+async function notifyPostProductionUpdates(before, after, actorId) {
+  try {
+    const actor = await User.findById(actorId).select('fullName email').lean();
+    const actorName = actor?.fullName || actor?.email || 'Someone';
+    const itemId = after._id.toString();
+    const itemName = after.item || 'Deliverable';
+    const project = after.project || 'Unknown project';
+    const pageUrl = postProductionPageUrl(itemId);
+    const link = { page: 'post-production', params: { itemId } };
+    const actorStr = ppIdStr(actorId);
+
+    const prevEditor = before ? ppIdStr(before.editorId) : null;
+    const prevOwner = before ? ppIdStr(before.ownerId) : null;
+    const newEditor = ppIdStr(after.editorId);
+    const newOwner = ppIdStr(after.ownerId);
+
+    const assignmentTargets = [];
+    if (newEditor && newEditor !== prevEditor && newEditor !== actorStr) {
+      assignmentTargets.push({ userId: newEditor, role: 'editor' });
+    }
+    if (newOwner && newOwner !== prevOwner && newOwner !== actorStr) {
+      assignmentTargets.push({ userId: newOwner, role: 'owner' });
+    }
+
+    if (assignmentTargets.length) {
+      const assigneeIds = assignmentTargets.map(t => t.userId);
+      const assignees = await User.find({ _id: { $in: assigneeIds } }).select('fullName email').lean();
+      const assigneeById = {};
+      assignees.forEach(u => { assigneeById[u._id.toString()] = u; });
+
+      for (const target of assignmentTargets) {
+        const roleLabel = target.role === 'owner' ? 'Owner' : 'Editor';
+        await createNotification({
+          recipientId: target.userId,
+          type: 'post_production_assigned',
+          title: `Assigned as ${roleLabel}`,
+          message: `${actorName} assigned you as ${roleLabel} on "${itemName}" (${project})`,
+          link,
+          actorId,
+          eventId: after.eventId || null,
+          metadata: { itemId, role: target.role }
+        });
+
+        const recipient = assigneeById[target.userId];
+        if (recipient) {
+          await sendPostProductionAssignedEmail(recipient, {
+            actorName,
+            itemName,
+            project,
+            role: target.role,
+            pageUrl
+          });
+        }
+      }
+    }
+
+    if (newOwner && newOwner !== actorStr) {
+      const statusFields = ['editStatus', 'qcStatus', 'deliveryStatus'];
+      const changes = [];
+      for (const field of statusFields) {
+        const fromVal = before ? (before[field] ?? '') : '';
+        const toVal = after[field] ?? '';
+        if (fromVal !== toVal) {
+          changes.push({
+            label: PP_STATUS_FIELD_LABELS[field],
+            fromLabel: ppStatusLabel(field, fromVal),
+            toLabel: ppStatusLabel(field, toVal)
+          });
+        }
+      }
+
+      if (changes.length) {
+        const changeSummary = changes.map(c => `${c.label}: ${c.toLabel}`).join(', ');
+        await createNotification({
+          recipientId: newOwner,
+          type: 'post_production_status_changed',
+          title: 'Post production status updated',
+          message: `${actorName} updated ${itemName}: ${changeSummary}`,
+          link,
+          actorId,
+          eventId: after.eventId || null,
+          metadata: { itemId, changes }
+        });
+
+        const owner = await User.findById(newOwner).select('fullName email').lean();
+        if (owner) {
+          await sendPostProductionStatusChangedEmail(owner, {
+            actorName,
+            itemName,
+            project,
+            changes,
+            pageUrl
+          });
+        }
+      }
+    }
+  } catch (err) {
+    console.error('🔔 Post production notifications failed:', err);
+  }
+}
+
 app.get('/api/post-production', authenticate, async (req, res) => {
   try {
     const { search, filter, sort, order } = req.query;
@@ -10953,6 +11171,9 @@ app.post('/api/post-production', authenticate, async (req, res) => {
     });
 
     const usersById = await postProductionUsersById(doc);
+    notifyPostProductionUpdates(null, doc, req.user.id).catch(err =>
+      console.error('Post production create notifications:', err)
+    );
     res.status(201).json(formatPostProductionItem(doc, usersById));
   } catch (err) {
     console.error('Error creating post production item:', err);
@@ -10964,6 +11185,17 @@ app.put('/api/post-production/:id', authenticate, async (req, res) => {
   try {
     const doc = await PostProductionItem.findById(req.params.id);
     if (!doc) return res.status(404).json({ error: 'Item not found' });
+
+    const before = {
+      editorId: doc.editorId,
+      ownerId: doc.ownerId,
+      editStatus: doc.editStatus,
+      qcStatus: doc.qcStatus,
+      deliveryStatus: doc.deliveryStatus,
+      item: doc.item,
+      project: doc.project,
+      eventId: doc.eventId
+    };
 
     if (req.body.item != null) doc.item = String(req.body.item).trim();
     if (req.body.editStatus != null) doc.editStatus = req.body.editStatus;
@@ -10987,6 +11219,10 @@ app.put('/api/post-production/:id', authenticate, async (req, res) => {
 
     doc.updatedBy = req.user.id;
     await doc.save();
+
+    notifyPostProductionUpdates(before, doc, req.user.id).catch(err =>
+      console.error('Post production update notifications:', err)
+    );
 
     const usersById = await postProductionUsersById(doc);
     res.json(formatPostProductionItem(doc, usersById));

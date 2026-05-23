@@ -221,8 +221,8 @@
 }
 
 /* Fixed column widths — table scrolls horizontally when viewport is narrow */
-.post-production-table .pp-col-item { width: 160px; }
-.post-production-table .pp-col-project { width: 220px; }
+.post-production-table .pp-col-item { width: 200px; }
+.post-production-table .pp-col-project { width: 280px; }
 .post-production-table .pp-col-status { width: 188px; }
 .post-production-table .pp-col-user { width: 190px; }
 .post-production-table .pp-col-due { width: 140px; }
@@ -294,10 +294,8 @@
   100% { background-color: transparent; }
 }
 
-.post-production-table input[type="text"],
 .post-production-table input[type="date"],
 .post-production-table select:not(.pp-status-select),
-.pp-card input[type="text"],
 .pp-card select:not(.pp-status-select) {
   width: 100%;
   min-width: 0;
@@ -311,10 +309,34 @@
   font-family: inherit;
 }
 
+.post-production-table textarea.pp-text-field,
+.pp-card textarea.pp-text-field {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  max-height: 160px;
+  padding: 6px 8px;
+  box-sizing: border-box;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-family: inherit;
+  line-height: 1.35;
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .post-production-table input:focus,
 .post-production-table select:not(.pp-status-select):focus,
+.post-production-table textarea.pp-text-field:focus,
 .pp-card input:focus,
-.pp-card select:not(.pp-status-select):focus {
+.pp-card select:not(.pp-status-select):focus,
+.pp-card textarea.pp-text-field:focus {
   outline: none;
   border-color: var(--accent-red, #cc0007);
 }
@@ -786,7 +808,8 @@
 }
 
 .pp-card-field input,
-.pp-card-field select {
+.pp-card-field select,
+.pp-card-field textarea {
   width: 100%;
 }
 

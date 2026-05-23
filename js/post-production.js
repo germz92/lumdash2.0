@@ -130,6 +130,23 @@
     return `<td data-label="${esc(label)}"${cls}>${content}</td>`;
   }
 
+  function textField(field, value, itemId, className = '') {
+    const cls = ['pp-text-field', className].filter(Boolean).join(' ');
+    return `<textarea data-field="${field}" data-id="${itemId}" class="${cls}" rows="1">${esc(value)}</textarea>`;
+  }
+
+  function syncTextareaHeights(root) {
+    const scope = root || document;
+    scope.querySelectorAll('.pp-text-field').forEach(ta => {
+      ta.style.height = 'auto';
+      ta.style.height = `${Math.max(ta.scrollHeight, 32)}px`;
+    });
+  }
+
+  function getItemProjectField(id, field) {
+    return document.querySelector(`textarea[data-field="${field}"][data-id="${id}"]`);
+  }
+
   function resolveRowUser(row, idField, nameField, photoField) {
     const idStr = row[idField] ? String(row[idField]) : '';
     const found = users.find(u => String(u._id) === idStr);
@@ -159,8 +176,8 @@
       deleteBtn,
       isDraft,
       dueClass: dueRowClass(row),
-      itemInput: `<input type="text" data-field="item" data-id="${row._id}" value="${esc(row.item)}">`,
-      projectInput: `<div class="project-cell"><input type="text" data-field="project" data-id="${row._id}" data-event-id="${row.eventId || ''}" value="${esc(row.project)}" autocomplete="off" class="pp-project-input"></div>`,
+      itemInput: textField('item', row.item, row._id),
+      projectInput: `<div class="project-cell"><textarea data-field="project" data-id="${row._id}" data-event-id="${row.eventId || ''}" class="pp-text-field pp-project-input" rows="1" autocomplete="off">${esc(row.project)}</textarea></div>`,
       editSelect: statusSelect('editStatus', EDIT_STATUSES, row.editStatus, row._id),
       qcSelect: statusSelect('qcStatus', QC_STATUSES, row.qcStatus, row._id),
       deliverySelect: statusSelect('deliveryStatus', DELIVERY_STATUSES, row.deliveryStatus, row._id),
@@ -311,6 +328,9 @@
     }
     updateViewToggleUI();
     syncStatusSelectStyles();
+    requestAnimationFrame(() => {
+      syncTextareaHeights(document.querySelector('.post-production-table-container'));
+    });
   }
 
   function updateViewToggleUI() {
@@ -435,7 +455,7 @@
     });
     renderLists();
     requestAnimationFrame(() => {
-      document.querySelector(`input[data-field="item"][data-id="${DRAFT_ID}"]`)?.focus();
+      getItemProjectField(DRAFT_ID, 'item')?.focus();
     });
   }
 
@@ -446,8 +466,8 @@
   }
 
   async function commitDraftRow() {
-    const itemInput = document.querySelector(`input[data-field="item"][data-id="${DRAFT_ID}"]`);
-    const projectInput = document.querySelector(`input[data-field="project"][data-id="${DRAFT_ID}"]`);
+    const itemInput = getItemProjectField(DRAFT_ID, 'item');
+    const projectInput = getItemProjectField(DRAFT_ID, 'project');
     if (!itemInput || !projectInput) {
       removeDraftRow();
       return;
@@ -661,7 +681,7 @@
 
     listRoot?.addEventListener('blur', async (e) => {
       const el = e.target;
-      if (!el.matches('input[data-field="item"], input[data-field="project"]')) return;
+      if (!el.matches('textarea[data-field="item"], textarea[data-field="project"]')) return;
       const id = el.dataset.id;
       const field = el.dataset.field;
       if (!id) return;
@@ -689,6 +709,9 @@
     }, true);
 
     listRoot?.addEventListener('input', (e) => {
+      if (e.target.matches('.pp-text-field')) {
+        syncTextareaHeights(e.target.parentElement || listRoot);
+      }
       if (e.target.matches('.pp-project-input')) {
         clearTimeout(searchDebounce);
         searchDebounce = setTimeout(() => showProjectSuggestions(e.target), 200);

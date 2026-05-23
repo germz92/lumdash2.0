@@ -223,7 +223,6 @@
           <div class="pp-card-header">
             <div class="pp-card-header-top">
               ${badge}
-              <div class="pp-card-header-actions">${p.deleteBtn}</div>
             </div>
             <div class="pp-card-field">
               <span class="pp-card-label">Item</span>
@@ -266,6 +265,7 @@
             <span class="pp-card-label">Notes</span>
             ${p.notesCell}
           </div>
+          ${p.deleteBtn ? `<div class="pp-card-footer">${p.deleteBtn}</div>` : ''}
         </article>`;
     }).join('');
   }

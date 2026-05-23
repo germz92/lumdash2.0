@@ -700,6 +700,8 @@
 }
 
 .pp-card {
+  display: flex;
+  flex-direction: column;
   background: var(--bg-secondary);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-lg);
@@ -734,13 +736,17 @@
 .pp-card-header-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 8px;
   min-width: 0;
 }
 
-.pp-card-header-actions {
-  flex-shrink: 0;
+.pp-card-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: auto;
+  padding-top: 10px;
 }
 
 .pp-card-badge {
@@ -854,10 +860,6 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 10px;
-}
-
-.pp-card-notes-row:last-child {
   margin-bottom: 0;
 }
 

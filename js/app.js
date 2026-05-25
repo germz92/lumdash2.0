@@ -174,6 +174,12 @@ function navigate(page, id) {
   
   navigationInProgress = true;
   window.currentNavigatingPage = page; // Track for debugging
+
+  // Hide current page immediately so avatars/content don't flash unstyled during fetch
+  const pageContainer = document.getElementById('page-container');
+  if (window.currentPage && pageContainer) {
+    pageContainer.classList.add('page-navigating');
+  }
   
   // Only require an ID for pages that need it
   const needsId = !['events', 'dashboard', 'login', 'register', 'users', 'crew-planner', 'crew-calendar', 'inventory-management', 'my-tasks', 'call-times', 'reimbursements', 'post-production', 'settings'].includes(page);
@@ -188,6 +194,7 @@ function navigate(page, id) {
   if (needsId && (!finalId || finalId === "null")) {
     alert("No event selected. Please select an event first.");
     navigationInProgress = false;
+    pageContainer?.classList.remove('page-navigating');
     return;
   }
 
@@ -201,7 +208,6 @@ function navigate(page, id) {
   }
   
   // Clean up any existing page content and scripts
-  const pageContainer = document.getElementById('page-container');
   if (pageContainer) {
     // DON'T clear content yet - we'll do it in injectPageContent after new content is ready
     // This prevents the flash by keeping old content visible during fetch
@@ -272,8 +278,7 @@ function navigate(page, id) {
   } else {
     console.log(`[NAVIGATE] Hash already correct (page: ${currentParsed.page}, id: ${currentParsed.id}), skipping update`);
   }
-  loadPageCSS(page);
-  
+
   // Track the current page to know when we're navigating
   window.currentPage = page;
   
@@ -306,6 +311,11 @@ function loadPage(page, id) {
     })
     .catch(err => {
       console.error('Error loading page:', err);
+      const pageContainer = document.getElementById('page-container');
+      if (pageContainer) {
+        pageContainer.classList.remove('page-navigating');
+        pageContainer.style.opacity = '1';
+      }
     });
 }
 
@@ -317,7 +327,9 @@ function injectPageContent(html, page, id) {
     return;
   }
 
-  // Swap content immediately, then fade in
+  // Swap page CSS while hidden, then inject new HTML
+  loadPageCSS(page);
+  targetElement.classList.remove('page-navigating');
   targetElement.style.opacity = '0';
   targetElement.innerHTML = html;
   

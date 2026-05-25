@@ -40,7 +40,14 @@ const userSchema = new mongoose.Schema({
   archivedEvents: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Table'
-  }]
+  }],
+  // Extensible user preferences (notifications, appearance, etc.)
+  settings: {
+    notifications: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {}
+    }
+  }
 }, { timestamps: true });
 
 module.exports = mongoose.model('User', userSchema);

@@ -25,7 +25,10 @@
   let statusFilter = 'all';
   let sortField = 'dueDate';
   let sortOrder = 'asc';
-  let notesItemId = null;
+  let updatesItemId = null;
+  let replyToUpdateId = null;
+  let composeMentionIds = new Set();
+  let mentionMenuState = null;
   let userPickerTarget = null;
   let projectSuggestTarget = null;
   let searchDebounce = null;
@@ -35,6 +38,7 @@
   const MOBILE_MQ = window.matchMedia('(max-width: 768px)');
   let viewMode = localStorage.getItem(VIEW_STORAGE_KEY)
     || (MOBILE_MQ.matches ? 'card' : 'table');
+  const selectedIds = new Set();
 
   function getToken() {
     return localStorage.getItem('token');
@@ -118,11 +122,85 @@
     return d.toISOString().split('T')[0];
   }
 
-  function formatNoteDate(iso) {
+  function formatUpdateDate(iso) {
     if (!iso) return '';
     return new Date(iso).toLocaleString('en-US', {
       month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit'
     });
+  }
+
+  function userDisplayName(user) {
+    return user?.name || user?.email || '';
+  }
+
+  function renderMentionText(text) {
+    let safe = esc(text);
+    users.slice().sort((a, b) => userDisplayName(b).length - userDisplayName(a).length).forEach(u => {
+      const name = esc(userDisplayName(u));
+      if (!name) return;
+      const re = new RegExp(`@${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g');
+      safe = safe.replace(re, `<span class="pp-mention-tag">@${name}</span>`);
+    });
+    return safe;
+  }
+
+  function updatesButton(row) {
+    if (row._id === DRAFT_ID) return '';
+    const count = row.updateCount || 0;
+    const badge = count > 0
+      ? `<span class="pp-updates-badge">${count > 99 ? '99+' : count}</span>`
+      : '';
+    return `<div class="pp-updates-cell-inner"><button type="button" class="pp-updates-btn" data-updates="${esc(row._id)}" aria-label="Open updates (${count})">
+      <span class="material-symbols-outlined">chat</span>${badge}
+    </button></div>`;
+  }
+
+  function renderUpdateEntry(entry, { isReply = false, updateId = null } = {}) {
+    const replyBtn = !isReply && updateId
+      ? `<div class="pp-update-actions"><button type="button" class="pp-update-reply-btn" data-reply-to="${esc(updateId)}">Reply</button></div>`
+      : '';
+    const cls = isReply ? 'pp-update-reply' : 'pp-update-entry';
+    return `
+      <div class="${cls}">
+        <div class="pp-update-meta">${esc(entry.authorName || 'Unknown')} · ${formatUpdateDate(entry.createdAt)}</div>
+        <div class="pp-update-body">${renderMentionText(entry.text || '')}</div>
+        ${replyBtn}
+      </div>`;
+  }
+
+  function renderUpdatesFeed(updates) {
+    if (!updates.length) {
+      return '<p class="pp-updates-empty">No updates yet. Post the first update below.</p>';
+    }
+    const sorted = [...updates].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    return sorted.map(u => {
+      const replies = [...(u.replies || [])]
+        .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+        .map(r => renderUpdateEntry(r, { isReply: true }))
+        .join('');
+      return `
+        <article class="pp-update-thread" data-update-id="${esc(u._id)}">
+          ${renderUpdateEntry(u, { updateId: u._id })}
+          ${replies ? `<div class="pp-update-replies">${replies}</div>` : ''}
+        </article>`;
+    }).join('');
+  }
+
+  function countUpdates(updates) {
+    return (updates || []).reduce((n, u) => n + 1 + (u.replies?.length || 0), 0);
+  }
+
+  function setUpdatesFeed(row) {
+    const feed = document.getElementById('ppUpdatesFeed');
+    const countEl = document.getElementById('ppUpdatesFeedCount');
+    if (!feed) return;
+    const updates = row?.updates || [];
+    const total = row?.updateCount ?? countUpdates(updates);
+    if (countEl) {
+      countEl.textContent = total === 1 ? '1 update' : `${total} updates`;
+    }
+    feed.innerHTML = renderUpdatesFeed(updates);
+    feed.scrollTop = feed.scrollHeight;
   }
 
   function td(label, content, cellClass) {
@@ -147,6 +225,148 @@
     return document.querySelector(`textarea[data-field="${field}"][data-id="${id}"]`);
   }
 
+  function selectableItems() {
+    return items.filter(r => r._id !== DRAFT_ID);
+  }
+
+  function isSelected(id) {
+    return selectedIds.has(String(id));
+  }
+
+  function checkboxCell(id, disabled) {
+    if (id === DRAFT_ID) return '<td class="pp-td-select" data-label=""></td>';
+    const checked = isSelected(id) ? ' checked' : '';
+    const dis = disabled ? ' disabled' : '';
+    return `<td class="pp-td-select" data-label="">
+      <input type="checkbox" class="pp-row-checkbox" data-select-id="${esc(id)}"${checked}${dis} aria-label="Select row">
+    </td>`;
+  }
+
+  function cardCheckbox(id) {
+    if (id === DRAFT_ID) return '';
+    const checked = isSelected(id) ? ' checked' : '';
+    return `<label class="pp-card-select-row">
+      <input type="checkbox" class="pp-row-checkbox" data-select-id="${esc(id)}"${checked} aria-label="Select card">
+    </label>`;
+  }
+
+  function updateBulkActionsUI() {
+    const btn = document.getElementById('ppActionsBtn');
+    const label = document.getElementById('ppActionsBtnLabel');
+    const deleteItem = document.getElementById('ppActionDelete');
+    const archiveBtn = document.getElementById('ppActionArchive');
+    const archiveLabel = document.getElementById('ppActionArchiveLabel');
+    const count = selectedIds.size;
+
+    if (btn) btn.disabled = count === 0;
+    if (label) label.textContent = count > 0 ? `Actions (${count})` : 'Actions';
+    if (deleteItem) deleteItem.style.display = permissions.isAdmin ? '' : 'none';
+
+    const onArchivedTab = statusFilter === 'archived';
+    if (archiveBtn) {
+      archiveBtn.dataset.action = onArchivedTab ? 'restore' : 'archive';
+      const icon = archiveBtn.querySelector('.material-symbols-outlined');
+      if (icon) icon.textContent = onArchivedTab ? 'unarchive' : 'inventory_2';
+    }
+    if (archiveLabel) archiveLabel.textContent = onArchivedTab ? 'Restore' : 'Archive';
+
+    const dupBtn = document.querySelector('#ppActionsMenu [data-action="duplicate"]');
+    if (dupBtn) dupBtn.style.display = onArchivedTab ? 'none' : '';
+
+    const selectAll = document.getElementById('ppSelectAll');
+    const selectable = selectableItems();
+    if (selectAll) {
+      const allSelected = selectable.length > 0 && selectable.every(r => isSelected(r._id));
+      const someSelected = selectable.some(r => isSelected(r._id));
+      selectAll.checked = allSelected;
+      selectAll.indeterminate = someSelected && !allSelected;
+      selectAll.disabled = selectable.length === 0;
+    }
+  }
+
+  function syncSelectionCheckboxes() {
+    document.querySelectorAll('.pp-row-checkbox[data-select-id]').forEach(cb => {
+      const id = cb.dataset.selectId;
+      cb.checked = isSelected(id);
+    });
+    document.querySelectorAll('tr[data-id], .pp-card[data-id]').forEach(el => {
+      const id = el.dataset.id;
+      if (id && id !== DRAFT_ID) {
+        el.classList.toggle('pp-row-selected', isSelected(id));
+      }
+    });
+    updateBulkActionsUI();
+  }
+
+  function setSelected(id, on) {
+    const key = String(id);
+    if (on) selectedIds.add(key);
+    else selectedIds.delete(key);
+    syncSelectionCheckboxes();
+  }
+
+  function toggleSelectAll(on) {
+    selectableItems().forEach(r => {
+      if (on) selectedIds.add(String(r._id));
+      else selectedIds.delete(String(r._id));
+    });
+    syncSelectionCheckboxes();
+  }
+
+  function hideActionsMenu() {
+    const menu = document.getElementById('ppActionsMenu');
+    const btn = document.getElementById('ppActionsBtn');
+    if (menu) menu.classList.remove('show');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  }
+
+  function toggleActionsMenu() {
+    const menu = document.getElementById('ppActionsMenu');
+    const btn = document.getElementById('ppActionsBtn');
+    if (!menu || !btn || btn.disabled) return;
+    const open = menu.classList.toggle('show');
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  async function runBulkAction(action) {
+    const ids = [...selectedIds];
+    if (!ids.length) return;
+
+    const labels = {
+      delete: 'delete',
+      archive: 'archive',
+      restore: 'restore',
+      duplicate: 'duplicate'
+    };
+    const verb = labels[action] || action;
+    const msg = action === 'delete'
+      ? `Delete ${ids.length} item(s)? This cannot be undone.`
+      : action === 'duplicate'
+        ? `Duplicate ${ids.length} item(s)?`
+        : action === 'restore'
+          ? `Restore ${ids.length} item(s)?`
+          : `Archive ${ids.length} item(s)?`;
+    if (!confirm(msg)) return;
+
+    hideActionsMenu();
+    try {
+      const res = await fetch(`${API_BASE}/api/post-production/bulk`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ action, ids })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Bulk ${verb} failed`);
+      if (action === 'duplicate' && data.skipped > 0) {
+        alert(`Duplicated ${data.affected} item(s). ${data.skipped} skipped (no permission for that project).`);
+      }
+      selectedIds.clear();
+      await loadData();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
   function resolveRowUser(row, idField, nameField, photoField) {
     const idStr = row[idField] ? String(row[idField]) : '';
     const found = users.find(u => String(u._id) === idStr);
@@ -158,22 +378,11 @@
   function getRowParts(row) {
     const editorUser = resolveRowUser(row, 'editorId', 'editorName', 'editorPhoto');
     const ownerUser = resolveRowUser(row, 'ownerId', 'ownerName', 'ownerPhoto');
-
-    const latest = row.latestNote;
-    const notesPreview = latest
-      ? `<span class="pp-notes-preview" title="${esc(latest.text)}">${esc(latest.text)}</span>`
-      : '<span class="pp-notes-empty">Add note...</span>';
-
     const isDraft = row._id === DRAFT_ID;
-    const deleteBtn = permissions.isAdmin && !isDraft
-      ? `<button type="button" class="pp-delete-btn" data-delete="${row._id}" title="Delete"><span class="material-symbols-outlined">delete</span></button>`
-      : '';
 
     return {
       editorUser,
       ownerUser,
-      notesPreview,
-      deleteBtn,
       isDraft,
       dueClass: dueRowClass(row),
       itemInput: textField('item', row.item, row._id),
@@ -184,7 +393,7 @@
       editorBtn: `<button type="button" class="pp-editor-btn" data-user-picker="${row._id}" data-user-field="editorId">${avatarHtml(editorUser)}</button>`,
       ownerBtn: `<button type="button" class="pp-editor-btn" data-user-picker="${row._id}" data-user-field="ownerId">${avatarHtml(ownerUser)}</button>`,
       dueInput: `<div class="pp-date-input-wrap"><input type="date" data-field="dueDate" data-id="${row._id}" value="${formatDueDate(row.dueDate)}"></div>`,
-      notesCell: `<div class="pp-notes-cell" data-notes="${row._id}">${notesPreview}</div>`
+      updatesBtn: updatesButton(row)
     };
   }
 
@@ -202,18 +411,19 @@
 
     tbody.innerHTML = items.map(row => {
       const p = getRowParts(row);
+      const selectedCls = isSelected(row._id) ? ' pp-row-selected' : '';
       return `
-        <tr class="${p.dueClass}" data-id="${row._id}">
-          ${td('Item', p.itemInput)}
-          ${td('Project', p.projectInput)}
+        <tr class="${p.dueClass}${selectedCls}" data-id="${row._id}">
+          ${checkboxCell(row._id)}
+          ${td('Item', p.itemInput, 'pp-td-item')}
+          ${td('Updates', p.updatesBtn, 'pp-td-updates')}
+          ${td('Project', p.projectInput, 'pp-td-project')}
+          ${td('Due Date', p.dueInput)}
           ${td('Edit', p.editSelect, 'pp-td-status')}
           ${td('Editor', p.editorBtn)}
           ${td('QC', p.qcSelect, 'pp-td-status')}
           ${td('Delivery', p.deliverySelect, 'pp-td-status')}
           ${td('Owner', p.ownerBtn)}
-          ${td('Due Date', p.dueInput)}
-          ${td('Notes', p.notesCell)}
-          <td class="action-col" data-label="">${p.deleteBtn}</td>
         </tr>`;
     }).join('');
 
@@ -235,8 +445,10 @@
     container.innerHTML = items.map(row => {
       const p = getRowParts(row);
       const badge = dueBadgeHtml(row);
+      const selectedCls = isSelected(row._id) ? ' pp-row-selected' : '';
       return `
-        <article class="pp-card ${p.dueClass}" data-id="${row._id}">
+        <article class="pp-card ${p.dueClass}${selectedCls}" data-id="${row._id}">
+          ${cardCheckbox(row._id)}
           <div class="pp-card-header">
             <div class="pp-card-header-top">
               ${badge}
@@ -278,11 +490,10 @@
               ${p.ownerBtn}
             </div>
           </div>
-          <div class="pp-card-notes-row">
-            <span class="pp-card-label">Notes</span>
-            ${p.notesCell}
+          <div class="pp-card-updates-row">
+            <span class="pp-card-label">Updates</span>
+            ${p.updatesBtn}
           </div>
-          ${p.deleteBtn ? `<div class="pp-card-footer">${p.deleteBtn}</div>` : ''}
         </article>`;
     }).join('');
   }
@@ -301,7 +512,6 @@
       if (wrap) wrap.style.display = 'none';
       if (cards) {
         cards.innerHTML = '';
-        cards.style.display = 'none';
         cards.setAttribute('aria-hidden', 'true');
       }
       if (empty) empty.style.display = 'block';
@@ -313,7 +523,7 @@
     if (viewMode === 'card') {
       if (wrap) wrap.style.display = 'none';
       if (cards) {
-        cards.style.display = 'flex';
+        cards.removeAttribute('style');
         cards.setAttribute('aria-hidden', 'false');
         renderCardRows();
       }
@@ -321,13 +531,13 @@
       if (wrap) wrap.style.display = '';
       if (cards) {
         cards.innerHTML = '';
-        cards.style.display = 'none';
         cards.setAttribute('aria-hidden', 'true');
       }
       renderTableRows();
     }
     updateViewToggleUI();
     syncStatusSelectStyles();
+    syncSelectionCheckboxes();
     requestAnimationFrame(() => {
       syncTextareaHeights(document.querySelector('.post-production-table-container'));
     });
@@ -407,7 +617,26 @@
     const addBtn = document.getElementById('ppAddBtn');
     if (addBtn) addBtn.style.display = permissions.canCreate ? 'inline-flex' : 'none';
 
+    updateBulkActionsUI();
     renderLists();
+
+    if (updatesItemId) {
+      const openRow = items.find(i => i._id === updatesItemId);
+      if (openRow) {
+        setUpdatesFeed(openRow);
+      } else {
+        fetchItemWithUpdates(updatesItemId).then(setUpdatesFeed).catch(() => {});
+      }
+    }
+  }
+
+  async function fetchItemWithUpdates(itemId) {
+    const res = await fetch(`${API_BASE}/api/post-production/${itemId}`, { headers: authHeaders() });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || 'Failed to load updates');
+    }
+    return res.json();
   }
 
   async function patchItem(id, body) {
@@ -450,7 +679,7 @@
       editorId: null,
       ownerId: null,
       dueDate: null,
-      notes: [],
+      updates: [],
       completed: false
     });
     renderLists();
@@ -567,31 +796,185 @@
     projectSuggestTarget = null;
   }
 
-  function openNotesModal(itemId) {
-    notesItemId = itemId;
-    const row = items.find(i => i._id === itemId);
-    const modal = document.getElementById('ppNotesModal');
-    const history = document.getElementById('ppNotesHistory');
-    if (!modal || !history) return;
-
-    const notes = row?.notes || [];
-    history.innerHTML = notes.length
-      ? notes.map(n => `
-          <div class="pp-note-entry">
-            <div class="pp-note-meta">${esc(n.authorName || 'Unknown')} · ${formatNoteDate(n.createdAt)}</div>
-            <div class="pp-note-text">${esc(n.text)}</div>
-          </div>
-        `).join('')
-      : '<p class="pp-notes-empty" style="padding:12px 0;">No notes yet.</p>';
-
-    document.getElementById('ppNoteInput').value = '';
-    modal.style.display = 'flex';
+  function resetComposeState() {
+    replyToUpdateId = null;
+    composeMentionIds = new Set();
+    const input = document.getElementById('ppUpdateInput');
+    const label = document.getElementById('ppReplyingLabel');
+    const saveBtn = document.getElementById('ppUpdateSave');
+    if (input) input.value = '';
+    if (label) {
+      label.style.display = 'none';
+      label.innerHTML = '';
+    }
+    if (saveBtn) saveBtn.textContent = 'Post update';
+    hideMentionMenu();
   }
 
-  function closeNotesModal() {
-    notesItemId = null;
-    const modal = document.getElementById('ppNotesModal');
+  function setReplyTarget(updateId, authorName) {
+    replyToUpdateId = updateId;
+    const label = document.getElementById('ppReplyingLabel');
+    const saveBtn = document.getElementById('ppUpdateSave');
+    if (label) {
+      label.style.display = '';
+      label.innerHTML = `Replying to ${esc(authorName || 'update')} <button type="button" id="ppCancelReply">Cancel</button>`;
+      document.getElementById('ppCancelReply')?.addEventListener('click', () => {
+        replyToUpdateId = null;
+        if (label) label.style.display = 'none';
+        if (saveBtn) saveBtn.textContent = 'Post update';
+      });
+    }
+    if (saveBtn) saveBtn.textContent = 'Post reply';
+    document.getElementById('ppUpdateInput')?.focus();
+  }
+
+  function ensureUpdatesPanelInBody() {
+    const modal = document.getElementById('ppUpdatesModal');
+    if (modal && modal.parentElement !== document.body) {
+      document.body.appendChild(modal);
+    }
+  }
+
+  function onUpdatesModalKeydown(e) {
+    if (e.key === 'Escape') closeUpdatesModal();
+  }
+
+  async function openUpdatesModal(itemId) {
+    ensureUpdatesPanelInBody();
+    updatesItemId = itemId;
+    const modal = document.getElementById('ppUpdatesModal');
+    const feed = document.getElementById('ppUpdatesFeed');
+    const title = document.getElementById('ppUpdatesModalTitle');
+    const sub = document.getElementById('ppUpdatesModalSub');
+    const countEl = document.getElementById('ppUpdatesFeedCount');
+    if (!modal || !feed) return;
+
+    resetComposeState();
+    if (title) title.textContent = 'Updates';
+    if (sub) sub.textContent = '';
+    if (countEl) countEl.textContent = 'Loading…';
+    feed.innerHTML = '<p class="pp-updates-loading">Loading thread history…</p>';
+    modal.style.display = 'flex';
+    document.addEventListener('keydown', onUpdatesModalKeydown);
+
+    try {
+      const row = await fetchItemWithUpdates(itemId);
+      const idx = items.findIndex(i => i._id === itemId);
+      if (idx >= 0) items[idx] = row;
+      else items.push(row);
+
+      if (title) title.textContent = row.item ? `Updates — ${row.item}` : 'Updates';
+      if (sub) sub.textContent = row.project ? `Project: ${row.project}` : '';
+      setUpdatesFeed(row);
+      document.getElementById('ppUpdateInput')?.focus();
+    } catch (err) {
+      feed.innerHTML = `<p class="pp-updates-empty">${esc(err.message || 'Failed to load updates')}</p>`;
+    }
+  }
+
+  function closeUpdatesModal() {
+    updatesItemId = null;
+    resetComposeState();
+    document.removeEventListener('keydown', onUpdatesModalKeydown);
+    const modal = document.getElementById('ppUpdatesModal');
     if (modal) modal.style.display = 'none';
+  }
+
+  function hideMentionMenu() {
+    const menu = document.getElementById('ppMentionMenu');
+    if (menu) menu.style.display = 'none';
+    mentionMenuState = null;
+  }
+
+  function showMentionMenu(textarea, query) {
+    const menu = document.getElementById('ppMentionMenu');
+    if (!menu) return;
+    const q = String(query || '').trim().toLowerCase();
+    const matches = users.filter(u => {
+      const name = userDisplayName(u).toLowerCase();
+      const email = (u.email || '').toLowerCase();
+      return !q || name.includes(q) || email.includes(q);
+    }).slice(0, 8);
+
+    if (!matches.length) {
+      hideMentionMenu();
+      return;
+    }
+
+    const rect = textarea.getBoundingClientRect();
+    menu.style.display = 'block';
+    menu.style.left = `${rect.left}px`;
+    menu.style.top = `${rect.bottom + 4}px`;
+    menu.style.minWidth = `${Math.max(rect.width, 220)}px`;
+
+    menu.innerHTML = matches.map(u => `
+      <button type="button" class="pp-mention-option" data-user-id="${esc(u._id)}" data-user-name="${esc(userDisplayName(u))}">
+        ${avatarHtml(u)}
+      </button>
+    `).join('');
+
+    mentionMenuState = { textarea, atIndex: textarea.selectionStart - query.length - 1 };
+  }
+
+  function insertMention(userId, userName) {
+    if (!mentionMenuState?.textarea) return;
+    const ta = mentionMenuState.textarea;
+    const atIndex = mentionMenuState.atIndex;
+    const before = ta.value.slice(0, atIndex);
+    const after = ta.value.slice(ta.selectionStart);
+    const mention = `@${userName} `;
+    ta.value = `${before}${mention}${after}`;
+    composeMentionIds.add(String(userId));
+    const cursor = before.length + mention.length;
+    ta.setSelectionRange(cursor, cursor);
+    ta.focus();
+    hideMentionMenu();
+  }
+
+  function handleMentionInput(textarea) {
+    const pos = textarea.selectionStart;
+    const before = textarea.value.slice(0, pos);
+    const at = before.lastIndexOf('@');
+    if (at === -1 || (at > 0 && !/\s/.test(before[at - 1]))) {
+      hideMentionMenu();
+      return;
+    }
+    const query = before.slice(at + 1);
+    if (/\s/.test(query)) {
+      hideMentionMenu();
+      return;
+    }
+    showMentionMenu(textarea, query);
+  }
+
+  async function submitUpdate() {
+    const input = document.getElementById('ppUpdateInput');
+    const text = input?.value?.trim();
+    if (!text || !updatesItemId) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/post-production/${updatesItemId}/updates`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          text,
+          parentUpdateId: replyToUpdateId,
+          mentionIds: [...composeMentionIds]
+        })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to post update');
+      }
+      const updated = await res.json();
+      const idx = items.findIndex(i => i._id === updatesItemId);
+      if (idx >= 0) items[idx] = updated;
+      setUpdatesFeed(updated);
+      resetComposeState();
+      renderLists();
+      updateBulkActionsUI();
+    } catch (err) {
+      alert(err.message);
+    }
   }
 
   async function initDashboardSidebar() {
@@ -617,6 +1000,7 @@
   }
 
   function setupListeners() {
+    ensureUpdatesPanelInBody();
     const listRoot = document.querySelector('.post-production-table-container');
     document.getElementById('ppSearch')?.addEventListener('input', (e) => {
       clearTimeout(searchDebounce);
@@ -642,11 +1026,29 @@
       document.querySelectorAll('#ppFilterTabs .status-tab').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
       statusFilter = tab.dataset.filter || 'all';
+      selectedIds.clear();
+      hideActionsMenu();
       loadData().catch(err => console.error(err));
       updateDueSortUI();
     });
 
+    document.getElementById('ppSelectAll')?.addEventListener('change', (e) => {
+      toggleSelectAll(e.target.checked);
+    });
+
+    document.getElementById('ppActionsBtn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleActionsMenu();
+    });
+
+    document.getElementById('ppActionsMenu')?.addEventListener('click', (e) => {
+      const item = e.target.closest('[data-action]');
+      if (!item) return;
+      runBulkAction(item.dataset.action);
+    });
+
     document.querySelector('#ppTable thead')?.addEventListener('click', (e) => {
+      if (e.target.closest('.pp-col-select-th, .pp-row-checkbox')) return;
       const th = e.target.closest('th.sortable');
       if (!th) return;
       const field = th.dataset.sort;
@@ -719,25 +1121,31 @@
     });
 
     listRoot?.addEventListener('click', (e) => {
+      const rowCb = e.target.closest('.pp-row-checkbox[data-select-id]');
+      if (rowCb) {
+        e.stopPropagation();
+        if (rowCb.id === 'ppSelectAll') return;
+        setSelected(rowCb.dataset.selectId, rowCb.checked);
+        return;
+      }
+
       const picker = e.target.closest('[data-user-picker]');
       if (picker) {
         showUserPickerMenu(picker, picker.dataset.userPicker, picker.dataset.userField);
         return;
       }
-      const notes = e.target.closest('[data-notes]');
-      if (notes) {
-        openNotesModal(notes.dataset.notes);
+      const updatesBtn = e.target.closest('[data-updates]');
+      if (updatesBtn) {
+        openUpdatesModal(updatesBtn.dataset.updates);
         return;
       }
-      const del = e.target.closest('[data-delete]');
-      if (del && confirm('Delete this item?')) {
-        fetch(`${API_BASE}/api/post-production/${del.dataset.delete}`, {
-          method: 'DELETE',
-          headers: authHeaders()
-        }).then(r => {
-          if (!r.ok) throw new Error('Delete failed');
-          loadData();
-        }).catch(err => alert(err.message));
+      const replyBtn = e.target.closest('[data-reply-to]');
+      if (replyBtn && updatesItemId) {
+        const updateId = replyBtn.dataset.replyTo;
+        const row = items.find(i => i._id === updatesItemId);
+        const update = (row?.updates || []).find(u => String(u._id) === String(updateId));
+        setReplyTarget(updateId, update?.authorName);
+        return;
       }
     });
 
@@ -785,31 +1193,46 @@
       if (!e.target.closest('#ppProjectSuggestions') && !e.target.closest('.pp-project-input')) {
         hideProjectSuggestions();
       }
+      if (!e.target.closest('#ppMentionMenu') && !e.target.closest('#ppUpdateInput')) {
+        hideMentionMenu();
+      }
+      if (!e.target.closest('#ppBulkActions')) {
+        hideActionsMenu();
+      }
     });
 
     document.getElementById('ppAddBtn')?.addEventListener('click', () => {
       insertDraftRow();
     });
 
-    document.getElementById('ppNotesClose')?.addEventListener('click', closeNotesModal);
-    document.getElementById('ppNotesModal')?.addEventListener('click', (e) => {
-      if (e.target.id === 'ppNotesModal') closeNotesModal();
+    document.getElementById('ppUpdatesClose')?.addEventListener('click', closeUpdatesModal);
+    document.getElementById('ppUpdatesModal')?.addEventListener('click', (e) => {
+      if (e.target.id === 'ppUpdatesModal') closeUpdatesModal();
     });
-    document.getElementById('ppNoteSave')?.addEventListener('click', async () => {
-      const text = document.getElementById('ppNoteInput')?.value?.trim();
-      if (!text || !notesItemId) return;
-      try {
-        const res = await fetch(`${API_BASE}/api/post-production/${notesItemId}/notes`, {
-          method: 'POST',
-          headers: authHeaders(),
-          body: JSON.stringify({ text })
-        });
-        if (!res.ok) throw new Error('Failed to save note');
-        closeNotesModal();
-        await loadData();
-      } catch (err) {
-        alert(err.message);
+    document.getElementById('ppUpdateSave')?.addEventListener('click', () => {
+      submitUpdate().catch(err => alert(err.message));
+    });
+    document.getElementById('ppUpdateInput')?.addEventListener('input', (e) => {
+      handleMentionInput(e.target);
+    });
+    document.getElementById('ppUpdateInput')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        submitUpdate().catch(err => alert(err.message));
       }
+    });
+    document.getElementById('ppMentionMenu')?.addEventListener('click', (e) => {
+      const opt = e.target.closest('[data-user-id]');
+      if (!opt) return;
+      insertMention(opt.dataset.userId, opt.dataset.userName);
+    });
+    document.getElementById('ppUpdatesFeed')?.addEventListener('click', (e) => {
+      const replyBtn = e.target.closest('[data-reply-to]');
+      if (!replyBtn || !updatesItemId) return;
+      const updateId = replyBtn.dataset.replyTo;
+      const row = items.find(i => i._id === updatesItemId);
+      const update = (row?.updates || []).find(u => String(u._id) === String(updateId));
+      setReplyTarget(updateId, update?.authorName);
     });
   }
 
@@ -830,6 +1253,13 @@
     return new URLSearchParams(hash.substring(qIndex + 1)).get('itemId');
   }
 
+  function shouldOpenUpdatesFromUrl() {
+    const hash = location.hash.replace('#', '') || '';
+    const qIndex = hash.indexOf('?');
+    if (qIndex === -1) return false;
+    return new URLSearchParams(hash.substring(qIndex + 1)).get('openUpdates') === '1';
+  }
+
   window.initPage = async function() {
     try {
       await initDashboardSidebar();
@@ -837,11 +1267,16 @@
       updateViewToggleUI();
       await loadData();
 
+      const openUpdates = sessionStorage.getItem('openPostProductionUpdates') === '1'
+        || shouldOpenUpdatesFromUrl();
+      sessionStorage.removeItem('openPostProductionUpdates');
+
       const openId = sessionStorage.getItem('openPostProductionItemId')
         || getOpenItemIdFromUrl();
       if (openId) {
         sessionStorage.removeItem('openPostProductionItemId');
         scrollToItem(openId);
+        if (openUpdates) openUpdatesModal(openId);
       }
     } catch (err) {
       console.error(err);

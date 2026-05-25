@@ -25,6 +25,7 @@ const notificationSchema = new mongoose.Schema({
       'reimbursement_submitted', // New reimbursement request submitted (for admins)
       'post_production_assigned',    // Assigned as editor or owner on post production
       'post_production_status_changed', // Status updated on an item you own
+      'post_production_update',      // New update or reply on a post production item
       'general'                  // Catch-all for future types
     ]
   },

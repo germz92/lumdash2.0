@@ -754,6 +754,14 @@ async function createNotification({ recipientId, type, title, message = '', link
       return null;
     }
 
+    const {
+      isNotificationChannelEnabled
+    } = require('./lib/userSettings');
+    const recipientUser = await User.findById(recipientStr).select('settings role').lean();
+    const showToast = recipientUser
+      ? isNotificationChannelEnabled(recipientUser, type, 'toast')
+      : true;
+
     const NotificationModel = require('./models/Notification');
     const notification = await NotificationModel.create({
       recipient: recipientStr,
@@ -780,7 +788,8 @@ async function createNotification({ recipientId, type, title, message = '', link
       eventId: notification.eventId,
       metadata: notification.metadata,
       read: false,
-      createdAt: notification.createdAt
+      createdAt: notification.createdAt,
+      showToast
     });
 
     console.log(`🔔 Notification created: [${type}] "${title}" → user ${recipientStr}`);
@@ -965,12 +974,21 @@ async function sendReimbursementSubmittedEmails(request, reviewers, submitter) {
     reviewUrl
   };
 
+  const { isNotificationChannelEnabled } = require('./lib/userSettings');
+
   const results = await Promise.allSettled(
     reviewers.map(async (reviewer) => {
-      const to = reviewer.email.trim().toLowerCase();
+      const reviewerDoc = await User.findById(reviewer._id).select('settings role email fullName').lean();
+      if (!reviewerDoc) return;
+      if (!isNotificationChannelEnabled(reviewerDoc, 'reimbursement_submitted', 'email')) {
+        console.log(`📧 Reimbursement email skipped (user pref): ${reviewer.email}`);
+        return;
+      }
+
+      const to = reviewerDoc.email.trim().toLowerCase();
       const data = {
         ...baseData,
-        recipientName: reviewer.fullName || reviewer.email
+        recipientName: reviewerDoc.fullName || reviewerDoc.email
       };
 
       await sgMail.send({
@@ -1007,6 +1025,15 @@ async function sendReimbursementApprovedEmail(request) {
   if (!to) {
     console.warn(`📧 Reimbursement approved email skipped: no email for request ${request._id}`);
     return;
+  }
+
+  if (request.userId) {
+    const submitter = await User.findById(request.userId).select('settings role').lean();
+    const { isNotificationChannelEnabled } = require('./lib/userSettings');
+    if (submitter && !isNotificationChannelEnabled(submitter, 'reimbursement_approved', 'email')) {
+      console.log(`📧 Reimbursement approved email skipped (user pref): ${to}`);
+      return;
+    }
   }
 
   const {
@@ -1165,6 +1192,7 @@ function setupReimbursementChangeStream() {
 }
 
 const User = require('./models/User');
+const Invite = require('./models/Invite');
 const Table = require('./models/Table');
 const GearInventory = require('./models/GearInventory');
 const GearPackage = require('./models/GearPackage');
@@ -1253,15 +1281,237 @@ function hasEventReadAccess(table, user) {
 }
 
 // AUTH
+function buildInviteRegisterUrl(token) {
+  const base = (process.env.APP_URL || 'https://beta.lumdash.app').replace(/\/$/, '');
+  return `${base}/register.html?invite=${encodeURIComponent(token)}`;
+}
+
+async function sendInviteEmail(invite, inviteUrl, inviterName) {
+  if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) return;
+  const to = invite.email.trim().toLowerCase();
+  if (!to) return;
+  try {
+    await sgMail.send({
+      to,
+      from: process.env.SENDGRID_FROM_EMAIL,
+      subject: 'You\'re invited to LumDash',
+      html: `
+        <p>Hello,</p>
+        <p>${inviterName || 'An administrator'} invited you to join LumDash as a <strong>${invite.role}</strong>.</p>
+        <p><a href="${inviteUrl}" style="display:inline-block;padding:12px 24px;background:#CC0007;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;">Create your account</a></p>
+        <p>Or copy this link: ${inviteUrl}</p>
+        <p>This invite expires on ${invite.expiresAt.toLocaleDateString()}.</p>
+      `,
+      text: `You were invited to LumDash as ${invite.role}. Create your account: ${inviteUrl}`
+    });
+    console.log(`📧 Invite email sent to ${to}`);
+  } catch (err) {
+    console.error(`📧 Invite email failed for ${to}:`, err.response?.body || err.message || err);
+  }
+}
+
+app.get('/api/invites/validate/:token', async (req, res) => {
+  try {
+    const invite = await Invite.findOne({ token: String(req.params.token || '').trim() });
+    if (!invite || !invite.isActive()) {
+      return res.status(404).json({ valid: false, error: 'Invalid or expired invite' });
+    }
+    const existing = await User.findOne({ email: invite.email });
+    if (existing) {
+      return res.status(400).json({ valid: false, error: 'An account with this email already exists' });
+    }
+    res.json({
+      valid: true,
+      email: invite.email,
+      role: invite.role,
+      expiresAt: invite.expiresAt
+    });
+  } catch (err) {
+    console.error('Invite validate error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 app.post('/api/auth/register', async (req, res) => {
-  const { email, password, fullName, role } = req.body; // 🔥 updated
+  try {
+    const normalizedEmail = String(req.body.email || '').trim().toLowerCase();
+    const fullName = String(req.body.fullName || '').trim();
+    const password = String(req.body.password || '');
+    const inviteToken = String(req.body.inviteToken || '').trim();
 
-  const hashed = await bcrypt.hash(password, 10);
-  const user = new User({ email, password: hashed, fullName, role: role || 'user' }); // 🔥 updated
+    if (!normalizedEmail || !fullName || !password) {
+      return res.status(400).json({ error: 'Email, full name, and password are required' });
+    }
+    if (password.length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+    if (await User.findOne({ email: normalizedEmail })) {
+      return res.status(400).json({ error: 'Email already registered' });
+    }
 
-  await user.save();
-  io.emit('usersChanged'); // Notify all clients
-  res.json({ message: 'User created' });
+    const userCount = await User.countDocuments();
+    let invite = null;
+
+    if (userCount > 0) {
+      if (!inviteToken) {
+        return res.status(403).json({ error: 'Registration is invite-only. Use the link from your administrator.' });
+      }
+      invite = await Invite.findOne({ token: inviteToken });
+      if (!invite || !invite.isActive()) {
+        return res.status(400).json({ error: 'Invalid or expired invite' });
+      }
+      if (invite.email !== normalizedEmail) {
+        return res.status(400).json({ error: 'Email must match the invited address' });
+      }
+    }
+
+    const hashed = await bcrypt.hash(password, 10);
+    const role = invite ? invite.role : 'admin';
+
+    const user = new User({
+      email: normalizedEmail,
+      password: hashed,
+      fullName,
+      role
+    });
+    await user.save();
+
+    if (invite) {
+      invite.usedAt = new Date();
+      invite.usedBy = user._id;
+      await invite.save();
+    }
+
+    io.emit('usersChanged');
+    res.json({ message: 'User created' });
+  } catch (err) {
+    console.error('Register error:', err);
+    if (err.code === 11000) {
+      return res.status(400).json({ error: 'Email already registered' });
+    }
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/invites', authenticate, async (req, res) => {
+  try {
+    if (!/^admin$/i.test(req.user.role || '')) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    const invites = await Invite.find()
+      .sort({ createdAt: -1 })
+      .limit(200)
+      .populate('createdBy', 'fullName email')
+      .populate('usedBy', 'fullName email')
+      .lean();
+
+    res.json({
+      invites: invites.map(inv => ({
+        _id: inv._id,
+        email: inv.email,
+        token: inv.token,
+        role: inv.role,
+        expiresAt: inv.expiresAt,
+        usedAt: inv.usedAt,
+        revokedAt: inv.revokedAt,
+        createdAt: inv.createdAt,
+        createdByName: inv.createdBy?.fullName || inv.createdBy?.email || '',
+        usedByName: inv.usedBy?.fullName || inv.usedBy?.email || '',
+        status: inv.revokedAt ? 'revoked' : inv.usedAt ? 'used' : (new Date(inv.expiresAt) <= new Date() ? 'expired' : 'pending'),
+        inviteUrl: buildInviteRegisterUrl(inv.token)
+      }))
+    });
+  } catch (err) {
+    console.error('List invites error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/invites', authenticate, async (req, res) => {
+  try {
+    if (!/^admin$/i.test(req.user.role || '')) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const role = ['user', 'planner', 'admin'].includes(req.body.role) ? req.body.role : 'user';
+    const sendEmail = req.body.sendEmail !== false;
+    const expiresInDays = Math.min(Math.max(parseInt(req.body.expiresInDays, 10) || 7, 1), 30);
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    if (await User.findOne({ email })) {
+      return res.status(400).json({ error: 'A user with this email already exists' });
+    }
+
+    const pending = await Invite.findOne({
+      email,
+      usedAt: null,
+      revokedAt: null,
+      expiresAt: { $gt: new Date() }
+    });
+    if (pending) {
+      return res.status(400).json({ error: 'A pending invite already exists for this email' });
+    }
+
+    const inviter = await User.findById(req.user.id).select('fullName email').lean();
+    const invite = await Invite.create({
+      email,
+      role,
+      createdBy: req.user.id,
+      expiresAt: new Date(Date.now() + expiresInDays * 24 * 60 * 60 * 1000)
+    });
+
+    const inviteUrl = buildInviteRegisterUrl(invite.token);
+    if (sendEmail) {
+      await sendInviteEmail(invite, inviteUrl, inviter?.fullName || inviter?.email);
+    }
+
+    res.status(201).json({
+      invite: {
+        _id: invite._id,
+        email: invite.email,
+        token: invite.token,
+        role: invite.role,
+        expiresAt: invite.expiresAt,
+        inviteUrl,
+        status: 'pending'
+      }
+    });
+  } catch (err) {
+    console.error('Create invite error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.delete('/api/invites/:id', authenticate, async (req, res) => {
+  try {
+    if (!/^admin$/i.test(req.user.role || '')) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    const invite = await Invite.findById(req.params.id);
+    if (!invite) return res.status(404).json({ error: 'Invite not found' });
+    if (invite.usedAt) {
+      return res.status(400).json({ error: 'Cannot revoke an invite that was already used' });
+    }
+    invite.revokedAt = new Date();
+    await invite.save();
+    res.json({ message: 'Invite revoked' });
+  } catch (err) {
+    console.error('Revoke invite error:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/auth/bootstrap-status', async (req, res) => {
+  try {
+    const count = await User.countDocuments();
+    res.json({ allowOpenRegistration: count === 0, userCount: count });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
 });
 
 app.post('/api/auth/login', async (req, res) => {
@@ -5155,6 +5405,62 @@ app.get('/api/users/:id', authenticate, async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching user:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ── User settings ────────────────────────────────────────
+app.get('/api/users/me/settings', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('role settings').lean();
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const { buildSettingsResponse } = require('./lib/userSettings');
+    res.json(buildSettingsResponse(user));
+  } catch (err) {
+    console.error('Error fetching user settings:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/users/me/settings/notifications', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select('role settings').lean();
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const { getMergedSettings } = require('./lib/userSettings');
+    res.json({ notifications: getMergedSettings(user).notifications });
+  } catch (err) {
+    console.error('Error fetching notification preferences:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.patch('/api/users/me/settings', authenticate, async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const {
+      sanitizeNotificationPatch,
+      buildSettingsResponse
+    } = require('./lib/userSettings');
+
+    if (req.body?.notifications && typeof req.body.notifications === 'object') {
+      const patch = sanitizeNotificationPatch(user.role, req.body.notifications);
+      if (!user.settings) user.settings = {};
+      if (!user.settings.notifications) user.settings.notifications = {};
+      Object.entries(patch).forEach(([key, value]) => {
+        user.settings.notifications[key] = {
+          ...(user.settings.notifications[key] || {}),
+          ...value
+        };
+      });
+      user.markModified('settings.notifications');
+    }
+
+    await user.save();
+    res.json(buildSettingsResponse(user.toObject()));
+  } catch (err) {
+    console.error('Error updating user settings:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -10774,6 +11080,49 @@ async function userOwnsPostProductionEvent(userId, eventId) {
   return (table.owners || []).some(id => id.toString() === uid);
 }
 
+/** Assigned as editor or post-production owner (not the event's owners list). */
+function isAssignedToPostProductionItem(user, doc) {
+  const uid = user.id.toString();
+  const editorId = doc.editorId ? doc.editorId.toString() : null;
+  const ownerId = doc.ownerId ? doc.ownerId.toString() : null;
+  return editorId === uid || ownerId === uid;
+}
+
+/**
+ * Read/update access: admins see all; event owners (Table.owners) see items for their events;
+ * everyone else only sees items where they are editor or assignee owner.
+ */
+async function canAccessPostProductionItem(user, doc) {
+  if (isPostProductionAdmin(user)) return true;
+  if (doc.eventId && await userOwnsPostProductionEvent(user.id, doc.eventId)) return true;
+  return isAssignedToPostProductionItem(user, doc);
+}
+
+/** MongoDB filter for non-admin list/detail queries; null = no restriction (admin). */
+async function buildPostProductionAccessFilter(user) {
+  if (isPostProductionAdmin(user)) return null;
+
+  const uid = user.id;
+  const ownedEvents = await Table.find({ owners: uid }).select('_id').lean();
+  const ownedEventIds = ownedEvents.map(t => t._id);
+
+  const or = [
+    { editorId: uid },
+    { ownerId: uid }
+  ];
+  if (ownedEventIds.length) {
+    or.push({ eventId: { $in: ownedEventIds } });
+  }
+
+  return { $or: or };
+}
+
+async function canEditPostProductionProject(user, resolved) {
+  if (isPostProductionAdmin(user)) return true;
+  if (!resolved.eventId) return false;
+  return userOwnsPostProductionEvent(user.id, resolved.eventId);
+}
+
 async function canCreatePostProductionItem(user, payload) {
   if (isPostProductionAdmin(user)) return true;
   const resolved = await resolvePostProductionProject(payload.project, payload.eventId);
@@ -10799,11 +11148,41 @@ async function postProductionUsersById(docs) {
   return usersById;
 }
 
+function formatPostProductionUpdates(rawDoc) {
+  const o = rawDoc.toObject ? rawDoc.toObject() : rawDoc;
+  let updates = [...(o.updates || [])];
+  if (!updates.length && (o.notes || []).length) {
+    updates = (o.notes || []).map(n => ({
+      _id: n._id,
+      text: n.text,
+      authorId: n.authorId,
+      authorName: n.authorName,
+      mentionIds: [],
+      replies: [],
+      createdAt: n.createdAt
+    }));
+  }
+  updates.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  updates = updates.map(u => ({
+    ...u,
+    mentionIds: (u.mentionIds || []).map(id => id?.toString?.() || id),
+    replies: [...(u.replies || [])]
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+      .map(r => ({
+        ...r,
+        mentionIds: (r.mentionIds || []).map(id => id?.toString?.() || id)
+      }))
+  }));
+  const updateCount = updates.reduce((n, u) => n + 1 + (u.replies?.length || 0), 0);
+  const latestUpdate = updates[0] || null;
+  return { updates, updateCount, latestUpdate };
+}
+
 function formatPostProductionItem(doc, usersById = {}) {
   const o = doc.toObject ? doc.toObject() : doc;
   const editor = o.editorId ? usersById[o.editorId.toString()] : null;
   const owner = o.ownerId ? usersById[o.ownerId.toString()] : null;
-  const notes = [...(o.notes || [])].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const { updates, updateCount, latestUpdate } = formatPostProductionUpdates(o);
   return {
     _id: o._id,
     item: o.item || '',
@@ -10819,9 +11198,12 @@ function formatPostProductionItem(doc, usersById = {}) {
     ownerName: owner?.fullName || owner?.email || '',
     ownerPhoto: owner?.profilePhoto || null,
     dueDate: o.dueDate || null,
-    notes,
-    latestNote: notes[0] || null,
+    updates,
+    updateCount,
+    latestUpdate,
     completed: isPostProductionItemComplete(o),
+    archived: !!o.archived,
+    archivedAt: o.archivedAt || null,
     createdBy: o.createdBy,
     updatedBy: o.updatedBy,
     createdAt: o.createdAt,
@@ -10864,16 +11246,113 @@ function ppIdStr(id) {
   return id ? id.toString() : null;
 }
 
-function postProductionPageUrl(itemId) {
+function postProductionPageUrl(itemId, extraParams = {}) {
   const appUrl = (process.env.APP_URL || 'https://beta.lumdash.app').replace(/\/$/, '');
   const id = ppIdStr(itemId);
-  return id
-    ? `${appUrl}/dashboard.html#post-production?itemId=${id}`
-    : `${appUrl}/dashboard.html#post-production`;
+  if (!id) return `${appUrl}/dashboard.html#post-production`;
+  const params = new URLSearchParams({ itemId: id, ...extraParams });
+  return `${appUrl}/dashboard.html#post-production?${params.toString()}`;
+}
+
+function normalizePostProductionMentionIds(body) {
+  if (!Array.isArray(body.mentionIds)) return [];
+  return [...new Set(body.mentionIds.map(String).filter(id => mongoose.Types.ObjectId.isValid(id)))];
+}
+
+async function sendPostProductionUpdateEmail(recipient, data) {
+  if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) return;
+  const { isNotificationChannelEnabled } = require('./lib/userSettings');
+  if (!isNotificationChannelEnabled(recipient, 'post_production_update', 'email')) return;
+  const to = (recipient.email || '').trim().toLowerCase();
+  if (!to) return;
+
+  const {
+    buildPostProductionUpdateSubject,
+    buildPostProductionUpdateEmail,
+    buildPostProductionUpdateText
+  } = require('./emails/postProductionEmail');
+
+  const payload = {
+    recipientName: recipient.fullName || recipient.email,
+    actorName: data.actorName,
+    itemName: data.itemName,
+    project: data.project,
+    previewText: data.previewText,
+    isReply: data.isReply,
+    pageUrl: data.pageUrl
+  };
+
+  try {
+    await sgMail.send({
+      to,
+      from: process.env.SENDGRID_FROM_EMAIL,
+      subject: buildPostProductionUpdateSubject(payload),
+      html: buildPostProductionUpdateEmail(payload),
+      text: buildPostProductionUpdateText(payload)
+    });
+    console.log(`📧 Post production update email sent to ${to}`);
+  } catch (err) {
+    console.error(`📧 Post production update email failed for ${to}:`, err.response?.body || err.message || err);
+  }
+}
+
+/**
+ * Notify editor, assignee owner, and @mentioned users about a new update or reply.
+ */
+async function notifyPostProductionUpdate(doc, actorId, { isReply, previewText, mentionIds = [] }) {
+  try {
+    const actor = await User.findById(actorId).select('fullName email').lean();
+    const actorName = actor?.fullName || actor?.email || 'Someone';
+    const itemId = doc._id.toString();
+    const itemName = doc.item || 'Deliverable';
+    const project = doc.project || 'Unknown project';
+    const pageUrl = postProductionPageUrl(itemId, { openUpdates: '1' });
+    const link = { page: 'post-production', params: { itemId, openUpdates: true } };
+    const actorStr = ppIdStr(actorId);
+    const snippet = String(previewText || '').trim().slice(0, 280);
+
+    const recipientIds = new Set();
+    if (doc.editorId) recipientIds.add(doc.editorId.toString());
+    if (doc.ownerId) recipientIds.add(doc.ownerId.toString());
+    mentionIds.forEach(id => recipientIds.add(String(id)));
+    recipientIds.delete(actorStr);
+
+    if (!recipientIds.size) return;
+
+    const recipients = await User.find({ _id: { $in: [...recipientIds] } }).select('fullName email settings role').lean();
+    const title = isReply ? 'New reply on post production item' : 'New update on post production item';
+    const message = `${actorName} ${isReply ? 'replied on' : 'posted an update on'} "${itemName}": ${snippet}`;
+
+    for (const recipient of recipients) {
+      const rid = recipient._id.toString();
+      await createNotification({
+        recipientId: rid,
+        type: 'post_production_update',
+        title,
+        message,
+        link,
+        actorId,
+        eventId: doc.eventId ? doc.eventId.toString() : null,
+        metadata: { itemId, isReply: !!isReply }
+      });
+      await sendPostProductionUpdateEmail(recipient, {
+        actorName,
+        itemName,
+        project,
+        previewText: snippet,
+        isReply: !!isReply,
+        pageUrl
+      });
+    }
+  } catch (err) {
+    console.error('Post production update notifications:', err);
+  }
 }
 
 async function sendPostProductionAssignedEmail(recipient, data) {
   if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) return;
+  const { isNotificationChannelEnabled } = require('./lib/userSettings');
+  if (!isNotificationChannelEnabled(recipient, 'post_production_assigned', 'email')) return;
   const to = (recipient.email || '').trim().toLowerCase();
   if (!to) return;
 
@@ -10908,6 +11387,8 @@ async function sendPostProductionAssignedEmail(recipient, data) {
 
 async function sendPostProductionStatusChangedEmail(recipient, data) {
   if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) return;
+  const { isNotificationChannelEnabled } = require('./lib/userSettings');
+  if (!isNotificationChannelEnabled(recipient, 'post_production_status_changed', 'email')) return;
   const to = (recipient.email || '').trim().toLowerCase();
   if (!to) return;
 
@@ -10972,7 +11453,7 @@ async function notifyPostProductionUpdates(before, after, actorId) {
 
     if (assignmentTargets.length) {
       const assigneeIds = assignmentTargets.map(t => t.userId);
-      const assignees = await User.find({ _id: { $in: assigneeIds } }).select('fullName email').lean();
+      const assignees = await User.find({ _id: { $in: assigneeIds } }).select('fullName email settings role').lean();
       const assigneeById = {};
       assignees.forEach(u => { assigneeById[u._id.toString()] = u; });
 
@@ -11030,7 +11511,7 @@ async function notifyPostProductionUpdates(before, after, actorId) {
           metadata: { itemId, changes }
         });
 
-        const owner = await User.findById(newOwner).select('fullName email').lean();
+        const owner = await User.findById(newOwner).select('fullName email settings role').lean();
         if (owner) {
           await sendPostProductionStatusChangedEmail(owner, {
             actorName,
@@ -11050,7 +11531,13 @@ async function notifyPostProductionUpdates(before, after, actorId) {
 app.get('/api/post-production', authenticate, async (req, res) => {
   try {
     const { search, filter, sort, order } = req.query;
-    let items = await PostProductionItem.find({}).lean();
+    const showArchived = filter === 'archived';
+    const query = showArchived ? { archived: true } : { archived: { $ne: true } };
+    const accessFilter = await buildPostProductionAccessFilter(req.user);
+    if (accessFilter) {
+      Object.assign(query, accessFilter);
+    }
+    let items = await PostProductionItem.find(query).lean();
 
     const usersById = await postProductionUsersById(items);
     let rows = items.map(i => formatPostProductionItem(i, usersById));
@@ -11058,21 +11545,26 @@ app.get('/api/post-production', authenticate, async (req, res) => {
     const q = String(search || '').trim().toLowerCase();
     if (q) {
       rows = rows.filter(r => {
-        const latest = r.latestNote?.text || '';
+        const updateText = (r.updates || []).flatMap(u => [
+          u.text || '',
+          ...(u.replies || []).map(rep => rep.text || '')
+        ]).join(' ');
         return (
           (r.item || '').toLowerCase().includes(q) ||
           (r.project || '').toLowerCase().includes(q) ||
           (r.editorName || '').toLowerCase().includes(q) ||
           (r.ownerName || '').toLowerCase().includes(q) ||
-          latest.toLowerCase().includes(q)
+          updateText.toLowerCase().includes(q)
         );
       });
     }
 
-    if (filter === 'pending') {
-      rows = rows.filter(r => !r.completed);
-    } else if (filter === 'completed') {
-      rows = rows.filter(r => r.completed);
+    if (!showArchived) {
+      if (filter === 'pending') {
+        rows = rows.filter(r => !r.completed);
+      } else if (filter === 'completed') {
+        rows = rows.filter(r => r.completed);
+      }
     }
 
     const sortField = sort || 'dueDate';
@@ -11165,6 +11657,7 @@ app.post('/api/post-production', authenticate, async (req, res) => {
       editorId: req.body.editorId || null,
       ownerId: req.body.ownerId || null,
       dueDate: req.body.dueDate ? new Date(req.body.dueDate) : null,
+      updates: [],
       notes: [],
       createdBy: req.user.id,
       updatedBy: req.user.id
@@ -11181,10 +11674,147 @@ app.post('/api/post-production', authenticate, async (req, res) => {
   }
 });
 
+async function duplicatePostProductionItem(source, userId) {
+  const updates = (source.updates || []).map(u => ({
+    text: u.text,
+    authorId: u.authorId,
+    authorName: u.authorName,
+    mentionIds: u.mentionIds || [],
+    createdAt: u.createdAt || new Date(),
+    replies: (u.replies || []).map(r => ({
+      text: r.text,
+      authorId: r.authorId,
+      authorName: r.authorName,
+      mentionIds: r.mentionIds || [],
+      createdAt: r.createdAt || new Date()
+    }))
+  }));
+  const itemName = String(source.item || '').trim();
+  return PostProductionItem.create({
+    item: itemName ? `${itemName} (copy)` : 'Copy',
+    project: source.project || '',
+    eventId: source.eventId || null,
+    editStatus: source.editStatus || '',
+    qcStatus: source.qcStatus || '',
+    deliveryStatus: source.deliveryStatus || '',
+    editorId: source.editorId || null,
+    ownerId: source.ownerId || null,
+    dueDate: source.dueDate || null,
+    updates,
+    notes: [],
+    archived: false,
+    archivedAt: null,
+    createdBy: userId,
+    updatedBy: userId
+  });
+}
+
+app.post('/api/post-production/bulk', authenticate, async (req, res) => {
+  try {
+    const action = String(req.body.action || '').trim();
+    const ids = Array.isArray(req.body.ids) ? req.body.ids.map(String).filter(Boolean) : [];
+    if (!ids.length) return res.status(400).json({ error: 'No items selected' });
+
+    const objectIds = ids.filter(id => mongoose.Types.ObjectId.isValid(id));
+    if (!objectIds.length) return res.status(400).json({ error: 'Invalid item ids' });
+
+    const docs = await PostProductionItem.find({ _id: { $in: objectIds } });
+    if (!docs.length) return res.status(404).json({ error: 'No items found' });
+
+    if (action === 'delete') {
+      if (!isPostProductionAdmin(req.user)) {
+        return res.status(403).json({ error: 'Only admins can delete post production items' });
+      }
+      await PostProductionItem.deleteMany({ _id: { $in: objectIds } });
+      return res.json({ action, affected: docs.length });
+    }
+
+    const accessibleDocs = [];
+    for (const doc of docs) {
+      if (await canAccessPostProductionItem(req.user, doc)) accessibleDocs.push(doc);
+    }
+    if (!accessibleDocs.length) {
+      return res.status(403).json({ error: 'You do not have access to the selected items' });
+    }
+    const accessibleIds = accessibleDocs.map(d => d._id);
+
+    if (action === 'archive') {
+      const result = await PostProductionItem.updateMany(
+        { _id: { $in: accessibleIds } },
+        { $set: { archived: true, archivedAt: new Date(), updatedBy: req.user.id } }
+      );
+      return res.json({
+        action,
+        affected: result.modifiedCount,
+        skipped: docs.length - accessibleDocs.length
+      });
+    }
+
+    if (action === 'restore') {
+      const result = await PostProductionItem.updateMany(
+        { _id: { $in: accessibleIds } },
+        { $set: { archived: false, archivedAt: null, updatedBy: req.user.id } }
+      );
+      return res.json({
+        action,
+        affected: result.modifiedCount,
+        skipped: docs.length - accessibleDocs.length
+      });
+    }
+
+    if (action === 'duplicate') {
+      const created = [];
+      for (const doc of accessibleDocs) {
+        if (doc.archived) continue;
+        const canCreate = await canCreatePostProductionItem(req.user, {
+          project: doc.project,
+          eventId: doc.eventId
+        });
+        if (!canCreate) continue;
+        const copy = await duplicatePostProductionItem(doc, req.user.id);
+        created.push(copy);
+        notifyPostProductionUpdates(null, copy, req.user.id).catch(err =>
+          console.error('Post production duplicate notifications:', err)
+        );
+      }
+      const usersById = await postProductionUsersById(created);
+      return res.json({
+        action,
+        affected: created.length,
+        skipped: docs.length - created.length,
+        items: created.map(c => formatPostProductionItem(c, usersById))
+      });
+    }
+
+    return res.status(400).json({ error: 'Invalid action' });
+  } catch (err) {
+    console.error('Post production bulk action:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/post-production/:id', authenticate, async (req, res) => {
+  try {
+    const doc = await PostProductionItem.findById(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Item not found' });
+    if (!(await canAccessPostProductionItem(req.user, doc))) {
+      return res.status(403).json({ error: 'You do not have access to this item' });
+    }
+    const usersById = await postProductionUsersById([doc]);
+    res.json(formatPostProductionItem(doc, usersById));
+  } catch (err) {
+    console.error('Error fetching post production item:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 app.put('/api/post-production/:id', authenticate, async (req, res) => {
   try {
     const doc = await PostProductionItem.findById(req.params.id);
     if (!doc) return res.status(404).json({ error: 'Item not found' });
+    if (!(await canAccessPostProductionItem(req.user, doc))) {
+      return res.status(403).json({ error: 'You do not have access to this item' });
+    }
 
     const before = {
       editorId: doc.editorId,
@@ -11201,14 +11831,29 @@ app.put('/api/post-production/:id', authenticate, async (req, res) => {
     if (req.body.editStatus != null) doc.editStatus = req.body.editStatus;
     if (req.body.qcStatus != null) doc.qcStatus = req.body.qcStatus;
     if (req.body.deliveryStatus != null) doc.deliveryStatus = req.body.deliveryStatus;
-    if (req.body.editorId !== undefined) doc.editorId = req.body.editorId || null;
-    if (req.body.ownerId !== undefined) doc.ownerId = req.body.ownerId || null;
+
+    if (req.body.editorId !== undefined || req.body.ownerId !== undefined) {
+      const canReassign = isPostProductionAdmin(req.user)
+        || (doc.eventId && await userOwnsPostProductionEvent(req.user.id, doc.eventId));
+      if (!canReassign) {
+        return res.status(403).json({
+          error: 'Only admins and event owners can change editor or owner assignments'
+        });
+      }
+      if (req.body.editorId !== undefined) doc.editorId = req.body.editorId || null;
+      if (req.body.ownerId !== undefined) doc.ownerId = req.body.ownerId || null;
+    }
 
     if (req.body.project != null || req.body.eventId !== undefined) {
       const resolved = await resolvePostProductionProject(
         req.body.project != null ? req.body.project : doc.project,
         req.body.eventId !== undefined ? req.body.eventId : doc.eventId
       );
+      if (!(await canEditPostProductionProject(req.user, resolved))) {
+        return res.status(403).json({
+          error: 'You can only set the project to an event you own. Admins can use any project.'
+        });
+      }
       doc.project = resolved.project;
       doc.eventId = resolved.eventId;
     }
@@ -11232,28 +11877,56 @@ app.put('/api/post-production/:id', authenticate, async (req, res) => {
   }
 });
 
-app.post('/api/post-production/:id/notes', authenticate, async (req, res) => {
+app.post('/api/post-production/:id/updates', authenticate, async (req, res) => {
   try {
     const text = String(req.body.text || '').trim();
-    if (!text) return res.status(400).json({ error: 'Note text is required' });
+    if (!text) return res.status(400).json({ error: 'Update text is required' });
 
     const doc = await PostProductionItem.findById(req.params.id);
     if (!doc) return res.status(404).json({ error: 'Item not found' });
+    if (!(await canAccessPostProductionItem(req.user, doc))) {
+      return res.status(403).json({ error: 'You do not have access to this item' });
+    }
 
     const user = await User.findById(req.user.id).select('fullName email').lean();
-    doc.notes.push({
-      text,
-      authorId: req.user.id,
-      authorName: user?.fullName || user?.email || 'Unknown',
-      createdAt: new Date()
-    });
+    const authorName = user?.fullName || user?.email || 'Unknown';
+    const mentionIds = normalizePostProductionMentionIds(req.body);
+    const parentUpdateId = req.body.parentUpdateId ? String(req.body.parentUpdateId) : null;
+
+    if (parentUpdateId) {
+      const parent = doc.updates.id(parentUpdateId);
+      if (!parent) return res.status(404).json({ error: 'Update not found' });
+      parent.replies.push({
+        text,
+        authorId: req.user.id,
+        authorName,
+        mentionIds,
+        createdAt: new Date()
+      });
+    } else {
+      doc.updates.push({
+        text,
+        authorId: req.user.id,
+        authorName,
+        mentionIds,
+        replies: [],
+        createdAt: new Date()
+      });
+    }
+
     doc.updatedBy = req.user.id;
     await doc.save();
+
+    notifyPostProductionUpdate(doc, req.user.id, {
+      isReply: !!parentUpdateId,
+      previewText: text,
+      mentionIds
+    }).catch(err => console.error('Post production update notifications:', err));
 
     const usersById = await postProductionUsersById(doc);
     res.json(formatPostProductionItem(doc, usersById));
   } catch (err) {
-    console.error('Error adding post production note:', err);
+    console.error('Error adding post production update:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -11597,31 +12270,36 @@ app.post('/api/tables/:id/share', authenticate, async (req, res) => {
 
   // Send notification email to the user
   try {
-    let subject = 'You have been added to an event in LumDash';
-    let html = `<p>Hello ${user.fullName || user.email},</p>`;
-    if (makeOwner) {
-      html += `<p>You have been made an <b>owner</b> of the event: <b>${table.title}</b>.</p>`;
-    } else if (makeLead) {
-      html += `<p>You have been given <b>lead access</b> to the event: <b>${table.title}</b>.<br>
+    const { isNotificationChannelEnabled } = require('./lib/userSettings');
+    const userPrefs = await User.findById(user._id).select('settings role email fullName').lean();
+    if (userPrefs && !isNotificationChannelEnabled(userPrefs, 'event_shared', 'email')) {
+      console.log(`📧 Event shared email skipped (user pref): ${user.email}`);
+    } else if (process.env.SENDGRID_FROM_EMAIL) {
+      let subject = 'You have been added to an event in LumDash';
+      let html = `<p>Hello ${user.fullName || user.email},</p>`;
+      if (makeOwner) {
+        html += `<p>You have been made an <b>owner</b> of the event: <b>${table.title}</b>.</p>`;
+      } else if (makeLead) {
+        html += `<p>You have been given <b>lead access</b> to the event: <b>${table.title}</b>.<br>
         This gives you full schedule access for this event only.</p>`;
-    } else {
-      html += `<p>You have been added as a collaborator to the event: <b>${table.title}</b>.</p>`;
-    }
-    // Add a consistent View Event button for all roles
-    const eventUrl = `${process.env.APP_URL}/dashboard.html?id=${table._id}`;
-    html += `
+      } else {
+        html += `<p>You have been added as a collaborator to the event: <b>${table.title}</b>.</p>`;
+      }
+      const eventUrl = `${process.env.APP_URL}/dashboard.html?id=${table._id}`;
+      html += `
       <div style="margin: 24px 0;">
         <a href="${eventUrl}" style="display:inline-block;padding:12px 28px;background:#CC0007;color:#fff;text-decoration:none;font-size:17px;font-weight:600;border-radius:8px;">View Event</a>
       </div>
     `;
-    html += `<p>Log in to LumDash to view the event.</p>`;
+      html += `<p>Log in to LumDash to view the event.</p>`;
 
-    await sgMail.send({
-      to: user.email,
-      from: process.env.SENDGRID_FROM_EMAIL,
-      subject,
-      html
-    });
+      await sgMail.send({
+        to: user.email,
+        from: process.env.SENDGRID_FROM_EMAIL,
+        subject,
+        html
+      });
+    }
   } catch (err) {
     console.error('Failed to send share notification email:', err);
     // Don't fail the request if email fails

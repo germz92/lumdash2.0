@@ -176,11 +176,87 @@ function buildPostProductionStatusChangedText(data) {
   return lines.join('\n');
 }
 
+function buildPostProductionUpdateSubject(data) {
+  const item = data.itemName || 'Deliverable';
+  const kind = data.isReply ? 'New reply' : 'New update';
+  return `Post Production: ${kind} — ${item}`;
+}
+
+function buildPostProductionUpdateEmail(data) {
+  const recipientName = escapeHtml(data.recipientName || 'there');
+  const actorName = escapeHtml(data.actorName || 'Someone');
+  const itemName = escapeHtml(data.itemName || 'Deliverable');
+  const project = escapeHtml(data.project || 'Unknown project');
+  const pageUrl = escapeHtml(data.pageUrl || '#');
+  const preview = escapeHtml(data.previewText || '');
+  const heading = data.isReply ? 'New Reply' : 'New Update';
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Post Production ${heading}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f0f1f3;font-family:Arial,Helvetica,sans-serif;line-height:1.6;color:#333;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f0f1f3;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
+          <tr>
+            <td style="padding:28px 32px 20px;text-align:center;border-bottom:2px solid #CC0007;">
+              <div style="color:#CC0007;font-size:22px;font-weight:bold;">Lumetry Media</div>
+              <h1 style="margin:12px 0 0;font-size:20px;font-weight:600;color:#1a1a1a;">${heading}</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 32px;">
+              <p style="margin:0 0 16px;font-size:15px;">Hi ${recipientName},</p>
+              <p style="margin:0 0 16px;font-size:15px;color:#444;">
+                <strong>${actorName}</strong> ${data.isReply ? 'replied on' : 'posted an update on'} <strong>${itemName}</strong> (${project}):
+              </p>
+              <div style="margin:0 0 24px;padding:14px 16px;background:#f8f9fa;border:1px solid #e9ecef;border-radius:6px;font-size:14px;color:#333;white-space:pre-wrap;">${preview}</div>
+              <p style="margin:0 0 24px;text-align:center;">
+                <a href="${pageUrl}" style="display:inline-block;background:#CC0007;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:6px;font-weight:600;font-size:15px;">View Updates</a>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:20px 32px;background:#f8f9fa;text-align:center;font-size:12px;color:#888;">
+              LumDash · Lumetry Media
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+function buildPostProductionUpdateText(data) {
+  const kind = data.isReply ? 'replied on' : 'posted an update on';
+  return [
+    `Hi ${data.recipientName || 'there'},`,
+    '',
+    `${data.actorName || 'Someone'} ${kind} "${data.itemName || 'Deliverable'}" (${data.project || 'Unknown project'}):`,
+    '',
+    data.previewText || '',
+    '',
+    `Open: ${data.pageUrl || ''}`,
+    '',
+    '— Lumetry Media / LumDash'
+  ].join('\n');
+}
+
 module.exports = {
   buildPostProductionAssignedSubject,
   buildPostProductionAssignedEmail,
   buildPostProductionAssignedText,
   buildPostProductionStatusChangedSubject,
   buildPostProductionStatusChangedEmail,
-  buildPostProductionStatusChangedText
+  buildPostProductionStatusChangedText,
+  buildPostProductionUpdateSubject,
+  buildPostProductionUpdateEmail,
+  buildPostProductionUpdateText
 };

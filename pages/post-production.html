@@ -19,6 +19,28 @@
           <span class="material-symbols-outlined">search</span>
           <input type="text" id="ppSearch" placeholder="Search..." aria-label="Search deliverables">
         </div>
+        <div class="pp-bulk-actions" id="ppBulkActions">
+          <button type="button" class="pp-actions-trigger" id="ppActionsBtn" disabled aria-haspopup="true" aria-expanded="false">
+            <span class="material-symbols-outlined">more_horiz</span>
+            <span id="ppActionsBtnLabel">Actions</span>
+            <span class="material-symbols-outlined pp-actions-chevron">expand_more</span>
+          </button>
+          <div class="action-dropdown pp-actions-menu" id="ppActionsMenu" role="menu">
+            <button type="button" class="action-item" data-action="duplicate" role="menuitem">
+              <span class="material-symbols-outlined">content_copy</span>
+              Duplicate
+            </button>
+            <button type="button" class="action-item" data-action="archive" id="ppActionArchive" role="menuitem">
+              <span class="material-symbols-outlined">inventory_2</span>
+              <span id="ppActionArchiveLabel">Archive</span>
+            </button>
+            <div class="dropdown-divider"></div>
+            <button type="button" class="action-item danger" data-action="delete" id="ppActionDelete" role="menuitem">
+              <span class="material-symbols-outlined">delete</span>
+              Delete
+            </button>
+          </div>
+        </div>
         <div class="pp-view-toggle" id="ppViewToggle" role="group" aria-label="View mode">
           <button type="button" class="pp-view-btn active" data-view="table" title="Table view">
             <span class="material-symbols-outlined">table_rows</span>
@@ -36,6 +58,7 @@
           <button type="button" class="status-tab active" data-filter="all">All</button>
           <button type="button" class="status-tab" data-filter="pending">Pending</button>
           <button type="button" class="status-tab" data-filter="completed">Completed</button>
+          <button type="button" class="status-tab" data-filter="archived">Archived</button>
         </div>
       </div>
 
@@ -45,29 +68,31 @@
         <div class="post-production-table-wrap">
           <table class="post-production-table" id="ppTable">
             <colgroup>
+              <col class="pp-col-select">
               <col class="pp-col-item">
+              <col class="pp-col-updates">
               <col class="pp-col-project">
-              <col class="pp-col-status">
-              <col class="pp-col-user">
-              <col class="pp-col-status">
-              <col class="pp-col-status">
-              <col class="pp-col-user">
               <col class="pp-col-due">
-              <col class="pp-col-notes">
-              <col class="pp-col-action">
+              <col class="pp-col-status">
+              <col class="pp-col-user">
+              <col class="pp-col-status">
+              <col class="pp-col-status">
+              <col class="pp-col-user">
             </colgroup>
             <thead>
               <tr>
-                <th class="sortable" data-sort="item">Item <span class="sort-icon material-symbols-outlined">unfold_more</span></th>
-                <th class="sortable" data-sort="project">Project <span class="sort-icon material-symbols-outlined">unfold_more</span></th>
+                <th class="pp-col-select-th">
+                  <input type="checkbox" id="ppSelectAll" class="pp-row-checkbox" aria-label="Select all" title="Select all">
+                </th>
+                <th class="pp-th-item sortable" data-sort="item">Item <span class="sort-icon material-symbols-outlined">unfold_more</span></th>
+                <th class="pp-th-updates" aria-label="Updates"><span class="material-symbols-outlined pp-th-updates-icon">forum</span></th>
+                <th class="pp-th-project sortable" data-sort="project">Project <span class="sort-icon material-symbols-outlined">unfold_more</span></th>
+                <th class="sortable" data-sort="dueDate">Due Date <span class="sort-icon material-symbols-outlined">unfold_more</span></th>
                 <th class="sortable" data-sort="editStatus">Edit <span class="sort-icon material-symbols-outlined">unfold_more</span></th>
                 <th class="sortable" data-sort="editorName">Editor <span class="sort-icon material-symbols-outlined">unfold_more</span></th>
                 <th class="sortable" data-sort="qcStatus">QC <span class="sort-icon material-symbols-outlined">unfold_more</span></th>
                 <th class="sortable" data-sort="deliveryStatus">Delivery <span class="sort-icon material-symbols-outlined">unfold_more</span></th>
                 <th class="sortable" data-sort="ownerName">Owner <span class="sort-icon material-symbols-outlined">unfold_more</span></th>
-                <th class="sortable" data-sort="dueDate">Due Date <span class="sort-icon material-symbols-outlined">unfold_more</span></th>
-                <th>Notes</th>
-                <th class="action-col"></th>
               </tr>
             </thead>
             <tbody id="ppTableBody"></tbody>
@@ -92,22 +117,36 @@
   </div>
 </div>
 
-<!-- Notes modal -->
-<div class="pp-modal-overlay" id="ppNotesModal" style="display: none;">
-  <div class="pp-modal">
+<!-- Updates side panel -->
+<div class="pp-updates-panel" id="ppUpdatesModal" style="display: none;">
+  <div class="pp-modal pp-updates-modal dark-theme">
     <div class="pp-modal-header">
-      <h3>Notes</h3>
-      <button type="button" class="pp-modal-close" id="ppNotesClose"><span class="material-symbols-outlined">close</span></button>
+      <div>
+        <h3 id="ppUpdatesModalTitle">Updates</h3>
+        <p class="pp-updates-modal-sub" id="ppUpdatesModalSub"></p>
+      </div>
+      <button type="button" class="pp-modal-close" id="ppUpdatesClose" aria-label="Close"><span class="material-symbols-outlined">close</span></button>
     </div>
-    <div class="pp-modal-body">
-      <div class="pp-notes-history" id="ppNotesHistory"></div>
-      <div class="pp-notes-add">
-        <textarea id="ppNoteInput" rows="3" placeholder="Add a note..."></textarea>
-        <button type="button" class="pp-btn-primary" id="ppNoteSave">Add note</button>
+    <div class="pp-modal-body pp-updates-modal-body">
+      <div class="pp-updates-feed-wrap">
+        <div class="pp-updates-feed-header">
+          <span id="ppUpdatesFeedCount">Updates</span>
+        </div>
+        <div class="pp-updates-feed" id="ppUpdatesFeed"></div>
+      </div>
+      <div class="pp-updates-compose" id="ppUpdatesCompose">
+        <textarea id="ppUpdateInput" rows="3" placeholder="Write an update… Use @ to mention someone"></textarea>
+        <div class="pp-updates-compose-bar">
+          <span class="pp-replying-label" id="ppReplyingLabel" style="display: none;"></span>
+          <button type="button" class="pp-btn-primary" id="ppUpdateSave">Post update</button>
+        </div>
       </div>
     </div>
   </div>
 </div>
+
+<!-- @ mention suggestions -->
+<div class="pp-mention-menu" id="ppMentionMenu" style="display: none;"></div>
 
 <!-- User picker dropdown (editor / owner) -->
 <div class="pp-editor-menu" id="ppUserPickerMenu" style="display: none;"></div>

@@ -358,9 +358,14 @@
     if (settingsMenuItem) {
       settingsMenuItem.onclick = function(e) {
         e.stopPropagation();
-        console.log('Settings clicked');
-        // TODO: Navigate to settings page when implemented
         document.getElementById('userMenuDropdown')?.classList.remove('show');
+        if (typeof window.navigateToSettings === 'function') {
+          window.navigateToSettings();
+        } else if (typeof window.navigate === 'function') {
+          window.navigate('settings');
+        } else {
+          window.location.href = '/dashboard.html#settings';
+        }
       };
     }
   }

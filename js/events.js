@@ -2921,15 +2921,20 @@ window.initPage = function(id) {
             adminRow.appendChild(adminButtonsContainer);
         }
 
-        // Add admin console button
+        // Add user management button (Settings → User management)
         let adminBtn = document.getElementById('adminConsoleBtn');
           if (!adminBtn && adminButtonsContainer) {
           adminBtn = document.createElement('button');
           adminBtn.id = 'adminConsoleBtn';
           adminBtn.className = 'btn-admin btn-outlined';
-          adminBtn.textContent = 'Admin Console';
+          adminBtn.textContent = 'User Management';
           adminBtn.onclick = () => {
-            window.location.href = '/pages/users.html';
+            sessionStorage.setItem('settingsSection', 'users');
+            if (typeof window.navigate === 'function') {
+              window.navigate('settings');
+            } else {
+              window.location.href = '/dashboard.html#settings';
+            }
           };
           adminButtonsContainer.appendChild(adminBtn);
         }

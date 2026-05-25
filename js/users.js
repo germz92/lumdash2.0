@@ -18,10 +18,13 @@ let userIdInput, userNameInput, userEmailInput, userRoleInput, passwordGroup, us
 let users = [];
 let editingUserId = null;
   let userToDelete = null;
+  let usersEmbedded = false;
 
   // Initialize page function - called by SPA navigation
-  function initUsersPage() {
-    console.log('initUsersPage called');
+  function initUsersPage(options = {}) {
+    const embedded = options.embedded || !!document.getElementById('settingsSectionUsers');
+    usersEmbedded = embedded;
+    console.log('initUsersPage called', embedded ? '(embedded in settings)' : '');
   
     // Always re-initialize DOM elements on each navigation
   messageArea = document.getElementById('messageArea');
@@ -79,14 +82,14 @@ let editingUserId = null;
       if (event.target === deleteUserModal) closeDeleteModal();
     };
     
-    // Inject and initialize shared dashboard sidebar
+    // Inject and initialize shared dashboard sidebar (standalone users page only)
     const layoutContainer = document.getElementById('usersPageLayout');
-    if (layoutContainer && typeof window.injectDashboardSidebar === 'function') {
+    if (!embedded && layoutContainer && typeof window.injectDashboardSidebar === 'function') {
       window.injectDashboardSidebar(layoutContainer, { 
         position: 'prepend',
         activePage: 'users'
       });
-    } else if (typeof window.initDashboardSidebar === 'function') {
+    } else if (!embedded && typeof window.initDashboardSidebar === 'function') {
       // Fallback: sidebar HTML already exists, just initialize
       window.initDashboardSidebar();
     } else {
@@ -101,34 +104,13 @@ let editingUserId = null;
     // Setup external navigation links (inline onclick doesn't work reliably in SPA)
     setupExternalNavigation();
     
-    // Setup Add User button
+    // Add User removed — accounts are invite-only
     const addUserBtn = document.getElementById('addUserBtn');
-    if (addUserBtn) {
-      addUserBtn.onclick = function() {
-        // Reset form for new user
-        if (userIdInput) userIdInput.value = '';
-        if (userNameInput) userNameInput.value = '';
-        if (userEmailInput) userEmailInput.value = '';
-        if (userRoleInput) userRoleInput.value = 'user';
-        if (passwordGroup) passwordGroup.style.display = '';
-        if (userPasswordInput) {
-          userPasswordInput.value = '';
-          userPasswordInput.required = true;
-        }
-        if (resetPasswordBtn) resetPasswordBtn.style.display = 'none';
-        
-        // Change password label to "Password" for new users
-        const passwordLabel = passwordGroup?.querySelector('label');
-        if (passwordLabel) passwordLabel.textContent = 'Password';
-        
-        editingUserId = null;
-        openModal('Add New User');
-      };
-    }
+    if (addUserBtn) addUserBtn.style.display = 'none';
     
-    console.log('Users page initialized, checking admin role...');
+    console.log('Users admin initialized, checking admin role...');
   
-  if (checkAdminRole()) {
+  if (checkAdminRole(embedded)) {
     loadUsers();
     
       // Setup Socket.IO (only once)
@@ -269,7 +251,7 @@ function setupSocketIO() {
 }
 
   // Check admin role
-function checkAdminRole() {
+function checkAdminRole(embedded = false) {
   try {
       const token = getUsersToken();
       if (!token) {
@@ -279,21 +261,23 @@ function checkAdminRole() {
     const payload = JSON.parse(atob(token.split('.')[1]));
     console.log('User role:', payload.role);
       
-      if (payload.role !== 'admin' && payload.role !== 'owner') {
+      if (payload.role !== 'admin') {
       if (messageArea) {
         messageArea.innerHTML = `
           <div class="msg msg-error">
-            You don't have admin privileges. Redirecting to events page in 3 seconds.
+            You don't have admin privileges.
           </div>
         `;
       }
-      setTimeout(() => {
+      if (!embedded) {
+        setTimeout(() => {
           if (typeof window.navigate === 'function') {
-            window.navigate('events');
+            window.navigate('settings');
           } else {
-        window.location.href = '../dashboard.html#events';
+            window.location.href = '../dashboard.html#settings';
           }
-      }, 3000);
+        }, 2000);
+      }
       return false;
     }
     return true;
@@ -346,7 +330,7 @@ function renderUsers() {
     return;
   }
     
-    const isDarkTheme = document.querySelector('.users-page.dark-theme');
+    const isDarkTheme = document.querySelector('.users-page.dark-theme') || usersEmbedded;
     
     if (isDarkTheme) {
       userTableBody.innerHTML = users.map(user => {
@@ -555,26 +539,9 @@ async function handleFormSubmit(e) {
   try {
     let res;
       
-      if (isNewUser) {
-        // Create new user using the same endpoint as register.js
-        res = await fetch(`${window.API_BASE}/api/auth/register`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: getUsersToken() },
-          body: JSON.stringify({ 
-            email, 
-            fullName: name, 
-            password,
-            role // Include role if the backend supports it
-          })
-        });
-        
-        const data = await res.json();
-        
-        if (!res.ok) {
-          throw new Error(data.message || 'Failed to create user');
-        }
-        
-        showMessage('User created successfully!', 'success');
+    if (isNewUser) {
+        showMessage('New users must be invited from Settings → User invites.', 'error');
+        return;
       } else if (isReset) {
       // Reset password
       res = await fetch(`${window.API_BASE}/api/users/${id}/reset-password`, {
@@ -696,7 +663,10 @@ function escapeHtml(unsafe) {
   }
 
   // Expose functions globally for onclick handlers and SPA navigation
-  window.initPage = initUsersPage;
+  window.initUsersAdminPanel = initUsersPage;
+  if (document.getElementById('usersPageLayout')) {
+    window.initPage = initUsersPage;
+  }
   window._usersEditUser = editUser;
   window._usersResetPassword = resetPassword;
   window._usersConfirmDelete = confirmDeleteUser;
@@ -708,11 +678,13 @@ function escapeHtml(unsafe) {
   window.confirmDeleteUser = confirmDeleteUser;
   window.deleteUser = deleteUser;
   
-  // Auto-initialize if DOM is ready
-  if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    setTimeout(initUsersPage, 0);
-  } else {
-    document.addEventListener('DOMContentLoaded', initUsersPage);
+  // Auto-initialize standalone users page only
+  if (document.getElementById('usersPageLayout')) {
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      setTimeout(initUsersPage, 0);
+    } else {
+      document.addEventListener('DOMContentLoaded', initUsersPage);
+    }
   }
   
 })();

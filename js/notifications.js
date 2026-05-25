@@ -13,6 +13,7 @@
   let dropdownOpen = false;
   let initialized = false;
   let fetchInProgress = false;
+  let notificationPrefs = null;
 
   // Icon mapping per notification type
   const TYPE_CONFIG = {
@@ -27,12 +28,36 @@
     reimbursement_submitted:{ icon: 'receipt_long',     color: '#10b981' },
     post_production_assigned: { icon: 'movie_edit',      color: '#6366f1' },
     post_production_status_changed: { icon: 'sync_alt',  color: '#f59e0b' },
+    post_production_update: { icon: 'forum',            color: '#6366f1' },
     general:                { icon: 'notifications',    color: '#6b7280' }
   };
 
   // ── Get auth token ──────────────────────────────────
   function getToken() {
     return localStorage.getItem('token');
+  }
+
+  // ── Fetch notification preferences ─────────────────
+  async function loadNotificationPreferences() {
+    try {
+      const token = getToken();
+      if (!token) return;
+      const res = await fetch(`${API_BASE}/api/users/me/settings/notifications`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      notificationPrefs = data.notifications || {};
+    } catch (err) {
+      console.warn('🔔 Failed to load notification preferences:', err);
+    }
+  }
+
+  function shouldShowToast(type) {
+    if (notificationPrefs && notificationPrefs[type]) {
+      return notificationPrefs[type].toast !== false;
+    }
+    return true;
   }
 
   // ── Fetch notifications from API (reliable baseline) ──
@@ -103,8 +128,12 @@
       updateBadge();
       if (dropdownOpen) renderDropdown();
 
-      // Show toast for instant feedback
-      if (typeof window.showToast === 'function') {
+      // Show toast for instant feedback (respect user preferences)
+      if (
+        typeof window.showToast === 'function'
+        && notification.showToast !== false
+        && shouldShowToast(notification.type)
+      ) {
         window.showToast(notification.title, 'info', 5000);
       }
     });
@@ -285,6 +314,9 @@
         if (notification.link.params?.itemId) {
           sessionStorage.setItem('openPostProductionItemId', notification.link.params.itemId);
         }
+        if (notification.link.params?.openUpdates) {
+          sessionStorage.setItem('openPostProductionUpdates', '1');
+        }
         window.navigate(page, notification.link.eventId || null);
       }
     }
@@ -456,6 +488,7 @@
       // Re-attach to new DOM elements after SPA navigation
       attachButton();
       fetchNotifications();
+      loadNotificationPreferences();
       return;
     }
 
@@ -464,6 +497,7 @@
 
     attachButton();
     setupSocketListener();
+    loadNotificationPreferences();
     fetchNotifications();
     logNotificationDebug();
   }
@@ -506,7 +540,8 @@
     markAllRead,
     clearAll,
     approveOwner,
-    denyOwner
+    denyOwner,
+    refreshPreferences: loadNotificationPreferences
   };
 
   // Auto-init: try now and also on navigation

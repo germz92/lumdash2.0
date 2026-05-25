@@ -1,0 +1,195 @@
+<link rel="stylesheet" href="css/theme-dark.css">
+
+<div class="dark-theme settings-page">
+  <div class="settings-layout" id="settingsPageLayout">
+    <main class="settings-main">
+      <header class="settings-header">
+        <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+        <h1 class="settings-title">
+          <span class="material-symbols-outlined">settings</span>
+          Settings
+        </h1>
+      </header>
+
+      <div class="settings-body">
+        <nav class="settings-nav" id="settingsNav" aria-label="Settings sections">
+          <button type="button" class="settings-nav-item active" data-section="notifications">
+            <span class="material-symbols-outlined">notifications</span>
+            Notifications
+          </button>
+          <button type="button" class="settings-nav-item settings-admin-only" data-section="users" style="display:none;">
+            <span class="material-symbols-outlined">group</span>
+            User management
+          </button>
+          <button type="button" class="settings-nav-item disabled" data-section="appearance" disabled title="Coming soon">
+            <span class="material-symbols-outlined">palette</span>
+            Appearance
+            <span class="settings-nav-badge">Soon</span>
+          </button>
+          <button type="button" class="settings-nav-item disabled" data-section="privacy" disabled title="Coming soon">
+            <span class="material-symbols-outlined">shield</span>
+            Privacy &amp; security
+            <span class="settings-nav-badge">Soon</span>
+          </button>
+        </nav>
+
+        <div class="settings-content">
+          <section class="settings-section active" id="settingsSectionNotifications" data-section="notifications">
+            <div class="settings-section-header">
+              <div>
+                <h2>Notifications</h2>
+                <p class="settings-section-desc">Control toast popups and email for each alert type. In-app notifications in the bell menu are always saved.</p>
+              </div>
+              <span class="settings-save-status" id="settingsSaveStatus" aria-live="polite"></span>
+            </div>
+            <div id="settingsNotificationsContent">
+              <div class="settings-loading">
+                <span class="material-symbols-outlined spinning">sync</span>
+                Loading preferences…
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-section" id="settingsSectionUsers" data-section="users">
+            <div class="settings-section-header">
+              <div>
+                <h2>User management</h2>
+                <p class="settings-section-desc">Invite new people and manage existing users, roles, and passwords. Registration is invite-only.</p>
+              </div>
+              <span class="settings-save-status" id="settingsInvitesStatus" aria-live="polite"></span>
+            </div>
+
+            <div class="settings-users-subsection">
+              <h3 class="settings-subsection-title">Invite new user</h3>
+              <form class="settings-invite-form" id="settingsInviteForm">
+                <div class="settings-invite-fields">
+                  <label>
+                    <span>Email</span>
+                    <input type="email" id="inviteEmail" required placeholder="person@company.com">
+                  </label>
+                  <label>
+                    <span>Role</span>
+                    <select id="inviteRole">
+                      <option value="user">User</option>
+                      <option value="planner">Planner</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>Expires in (days)</span>
+                    <input type="number" id="inviteExpiresDays" min="1" max="30" value="7">
+                  </label>
+                </div>
+                <div class="settings-invite-actions">
+                  <label class="settings-checkbox-label">
+                    <input type="checkbox" id="inviteSendEmail" checked>
+                    Send invite email
+                  </label>
+                  <button type="submit" class="settings-btn-primary">Create invite</button>
+                </div>
+              </form>
+              <div id="settingsInvitesContent" class="settings-invites-list-wrap">
+                <div class="settings-loading">
+                  <span class="material-symbols-outlined spinning">sync</span>
+                  Loading invites…
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-users-subsection">
+              <h3 class="settings-subsection-title">Existing users</h3>
+              <div id="messageArea"></div>
+              <div class="settings-users-toolbar">
+                <div class="settings-users-search">
+                  <span class="material-symbols-outlined">search</span>
+                  <input type="text" placeholder="Search users…" id="searchUsersInput">
+                </div>
+              </div>
+              <div class="settings-users-table-wrap">
+                <table class="settings-pref-table settings-users-table">
+                  <thead>
+                    <tr>
+                      <th>User</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="userTableBody">
+                    <tr><td colspan="4" class="settings-loading-cell">Loading users…</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <p class="settings-users-count" id="usersCount">Showing 0 users</p>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- User modals (shared with users.js) -->
+<div id="userModal" class="dark-modal">
+  <div class="dark-modal-content">
+    <div class="modal-header-dark">
+      <h3 id="modalTitle">Edit User</h3>
+      <button type="button" class="modal-close-btn" id="closeModalBtn">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark">
+      <form id="userForm">
+        <input type="hidden" id="userId">
+        <div class="form-group-dark">
+          <label for="userName">Name</label>
+          <input type="text" id="userName" required placeholder="Enter user name">
+        </div>
+        <div class="form-group-dark">
+          <label for="userEmail">Email</label>
+          <input type="email" id="userEmail" required placeholder="Enter email address">
+        </div>
+        <div class="form-group-dark">
+          <label for="userRole">Role</label>
+          <select id="userRole">
+            <option value="user">User</option>
+            <option value="planner">Planner</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div class="form-group-dark" id="passwordGroup" style="display:none;">
+          <label for="userPassword">New Password</label>
+          <input type="password" id="userPassword" minlength="6" placeholder="Enter new password">
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer-dark">
+      <button type="button" id="resetPasswordBtn" class="btn-secondary" style="margin-right:auto;display:none;">
+        <span class="material-symbols-outlined">lock_reset</span>
+        Reset Password
+      </button>
+      <button type="button" id="cancelModalBtn" class="btn-secondary">Cancel</button>
+      <button type="submit" id="saveUserBtn" class="btn-primary" form="userForm">Save Changes</button>
+    </div>
+  </div>
+</div>
+
+<div id="deleteUserModal" class="dark-modal">
+  <div class="dark-modal-content small">
+    <div class="modal-header-dark">
+      <h3>Delete User</h3>
+      <button type="button" class="modal-close-btn" id="closeDeleteModalBtn">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark">
+      <p id="deleteModalMessage">Are you sure you want to delete this user? This action cannot be undone.</p>
+    </div>
+    <div class="modal-footer-dark">
+      <button type="button" class="btn-secondary" id="cancelDeleteBtn">Cancel</button>
+      <button type="button" class="btn-danger" id="confirmDeleteBtn">Delete User</button>
+    </div>
+  </div>
+</div>

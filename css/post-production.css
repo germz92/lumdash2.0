@@ -1930,6 +1930,8 @@
   .post-production-page.card-view-mode .post-production-table-container {
     padding-left: 14px;
     padding-right: 14px;
+    padding-bottom: 120px;
+    scroll-padding-bottom: 120px;
   }
 
   .pp-card {

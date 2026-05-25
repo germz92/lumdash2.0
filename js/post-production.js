@@ -185,7 +185,7 @@
 
   function renderUpdatesFeed(updates) {
     if (!updates.length) {
-      return '<p class="pp-updates-empty">No updates yet. Post the first update below.</p>';
+      return '<p class="pp-updates-empty">No updates yet. Post the first update above.</p>';
     }
     const sorted = [...updates].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
     return sorted.map(u => {
@@ -831,36 +831,50 @@
     projectSuggestTarget = null;
   }
 
-  function resetComposeState() {
+  function clearReplyTarget() {
     replyToUpdateId = null;
+    const context = document.getElementById('ppReplyContext');
+    const input = document.getElementById('ppUpdateInput');
+    const saveBtn = document.getElementById('ppUpdateSave');
+    if (context) {
+      context.hidden = true;
+      context.innerHTML = '';
+    }
+    if (input) input.placeholder = 'Write an update… Use @ to mention someone';
+    if (saveBtn) saveBtn.textContent = 'Post update';
+  }
+
+  function resetComposeState() {
     composeMentionIds = new Set();
     const input = document.getElementById('ppUpdateInput');
-    const label = document.getElementById('ppReplyingLabel');
-    const saveBtn = document.getElementById('ppUpdateSave');
     if (input) input.value = '';
-    if (label) {
-      label.style.display = 'none';
-      label.innerHTML = '';
-    }
-    if (saveBtn) saveBtn.textContent = 'Post update';
+    clearReplyTarget();
     hideMentionMenu();
   }
 
-  function setReplyTarget(updateId, authorName) {
-    replyToUpdateId = updateId;
-    const label = document.getElementById('ppReplyingLabel');
+  function setReplyTarget(update) {
+    if (!update?._id) return;
+    replyToUpdateId = update._id;
+    const context = document.getElementById('ppReplyContext');
+    const input = document.getElementById('ppUpdateInput');
     const saveBtn = document.getElementById('ppUpdateSave');
-    if (label) {
-      label.style.display = '';
-      label.innerHTML = `Replying to ${esc(authorName || 'update')} <button type="button" id="ppCancelReply">Cancel</button>`;
-      document.getElementById('ppCancelReply')?.addEventListener('click', () => {
-        replyToUpdateId = null;
-        if (label) label.style.display = 'none';
-        if (saveBtn) saveBtn.textContent = 'Post update';
-      });
+    const preview = renderMentionText(String(update.text || '').trim());
+    if (context) {
+      context.hidden = false;
+      context.innerHTML = `
+        <div class="pp-reply-context-inner">
+          <div class="pp-reply-context-header">
+            <span class="pp-reply-context-label">Replying to ${esc(update.authorName || 'Unknown')}</span>
+            <span class="pp-reply-context-meta">${formatUpdateDate(update.createdAt)}</span>
+            <button type="button" class="pp-reply-context-cancel" id="ppCancelReply">Cancel</button>
+          </div>
+          <div class="pp-reply-context-preview">${preview || '<span class="pp-reply-context-empty">No message text</span>'}</div>
+        </div>`;
+      document.getElementById('ppCancelReply')?.addEventListener('click', clearReplyTarget);
     }
+    if (input) input.placeholder = 'Write a reply… Use @ to mention someone';
     if (saveBtn) saveBtn.textContent = 'Post reply';
-    document.getElementById('ppUpdateInput')?.focus();
+    input?.focus();
   }
 
   function ensureUpdatesPanelInBody() {
@@ -1179,7 +1193,7 @@
         const updateId = replyBtn.dataset.replyTo;
         const row = items.find(i => i._id === updatesItemId);
         const update = (row?.updates || []).find(u => String(u._id) === String(updateId));
-        setReplyTarget(updateId, update?.authorName);
+        setReplyTarget(update);
         return;
       }
     });
@@ -1267,7 +1281,7 @@
       const updateId = replyBtn.dataset.replyTo;
       const row = items.find(i => i._id === updatesItemId);
       const update = (row?.updates || []).find(u => String(u._id) === String(updateId));
-      setReplyTarget(updateId, update?.authorName);
+      setReplyTarget(update);
     });
   }
 

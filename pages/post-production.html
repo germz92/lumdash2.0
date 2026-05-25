@@ -128,18 +128,18 @@
       <button type="button" class="pp-modal-close" id="ppUpdatesClose" aria-label="Close"><span class="material-symbols-outlined">close</span></button>
     </div>
     <div class="pp-modal-body pp-updates-modal-body">
+      <div class="pp-updates-compose" id="ppUpdatesCompose">
+        <div class="pp-reply-context" id="ppReplyContext" hidden></div>
+        <textarea id="ppUpdateInput" rows="3" placeholder="Write an update… Use @ to mention someone"></textarea>
+        <div class="pp-updates-compose-bar">
+          <button type="button" class="pp-btn-primary" id="ppUpdateSave">Post update</button>
+        </div>
+      </div>
       <div class="pp-updates-feed-wrap">
         <div class="pp-updates-feed-header">
           <span id="ppUpdatesFeedCount">Updates</span>
         </div>
         <div class="pp-updates-feed" id="ppUpdatesFeed"></div>
-      </div>
-      <div class="pp-updates-compose" id="ppUpdatesCompose">
-        <textarea id="ppUpdateInput" rows="3" placeholder="Write an update… Use @ to mention someone"></textarea>
-        <div class="pp-updates-compose-bar">
-          <span class="pp-replying-label" id="ppReplyingLabel" style="display: none;"></span>
-          <button type="button" class="pp-btn-primary" id="ppUpdateSave">Post update</button>
-        </div>
       </div>
     </div>
   </div>

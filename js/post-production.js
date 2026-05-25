@@ -63,15 +63,30 @@
       : (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   }
 
-  function avatarHtml(user) {
+  function avatarHtml(user, avatarOnly = false) {
     if (!user) {
+      if (avatarOnly) {
+        return '<span class="pp-editor-initials pp-avatar-only" aria-hidden="true">—</span>';
+      }
       return '<span class="pp-editor-initials">—</span><span class="pp-editor-label">Unassigned</span>';
     }
     const label = esc(user.name || user.email);
     if (user.profilePhoto) {
+      if (avatarOnly) {
+        return `<img class="pp-editor-avatar pp-avatar-only" src="${esc(user.profilePhoto)}" alt="">`;
+      }
       return `<img class="pp-editor-avatar" src="${esc(user.profilePhoto)}" alt=""><span class="pp-editor-label" title="${label}">${label}</span>`;
     }
-    return `<span class="pp-editor-initials">${esc(initials(user.name || user.email))}</span><span class="pp-editor-label" title="${label}">${label}</span>`;
+    const initialsHtml = `<span class="pp-editor-initials${avatarOnly ? ' pp-avatar-only' : ''}">${esc(initials(user.name || user.email))}</span>`;
+    if (avatarOnly) return initialsHtml;
+    return `${initialsHtml}<span class="pp-editor-label" title="${label}">${label}</span>`;
+  }
+
+  function userPickerBtn(row, field, user, avatarOnly = false) {
+    const name = user ? userDisplayName(user) : 'Unassigned';
+    const title = esc(name);
+    const compactCls = avatarOnly ? ' pp-editor-btn--avatar-only' : '';
+    return `<button type="button" class="pp-editor-btn${compactCls}" data-user-picker="${row._id}" data-user-field="${field}" title="${title}" aria-label="${title}">${avatarHtml(user, avatarOnly)}</button>`;
   }
 
   function statusSelectClass(value) {
@@ -215,10 +230,29 @@
 
   function syncTextareaHeights(root) {
     const scope = root || document;
-    scope.querySelectorAll('.pp-text-field').forEach(ta => {
+    const table = scope.closest?.('.post-production-table') || scope.querySelector?.('.post-production-table');
+    const textareas = table
+      ? table.querySelectorAll('textarea.pp-text-field')
+      : scope.querySelectorAll('.pp-text-field');
+
+  textareas.forEach(ta => {
       ta.style.height = 'auto';
-      ta.style.height = `${Math.max(ta.scrollHeight, 32)}px`;
+      ta.style.minHeight = '38px';
+      ta.style.height = `${Math.max(ta.scrollHeight, 38)}px`;
     });
+
+    if (table) {
+      table.querySelectorAll('tbody tr').forEach(row => {
+        let maxHeight = 38;
+        row.querySelectorAll('textarea.pp-text-field').forEach(ta => {
+          maxHeight = Math.max(maxHeight, ta.scrollHeight, ta.offsetHeight);
+        });
+        row.querySelectorAll('textarea.pp-text-field').forEach(ta => {
+          ta.style.height = `${maxHeight}px`;
+          ta.style.minHeight = `${maxHeight}px`;
+        });
+      });
+    }
   }
 
   function getItemProjectField(id, field) {
@@ -390,8 +424,10 @@
       editSelect: statusSelect('editStatus', EDIT_STATUSES, row.editStatus, row._id),
       qcSelect: statusSelect('qcStatus', QC_STATUSES, row.qcStatus, row._id),
       deliverySelect: statusSelect('deliveryStatus', DELIVERY_STATUSES, row.deliveryStatus, row._id),
-      editorBtn: `<button type="button" class="pp-editor-btn" data-user-picker="${row._id}" data-user-field="editorId">${avatarHtml(editorUser)}</button>`,
-      ownerBtn: `<button type="button" class="pp-editor-btn" data-user-picker="${row._id}" data-user-field="ownerId">${avatarHtml(ownerUser)}</button>`,
+      editorBtn: userPickerBtn(row, 'editorId', editorUser),
+      ownerBtn: userPickerBtn(row, 'ownerId', ownerUser),
+      tableEditorBtn: userPickerBtn(row, 'editorId', editorUser, true),
+      tableOwnerBtn: userPickerBtn(row, 'ownerId', ownerUser, true),
       dueInput: `<div class="pp-date-input-wrap"><input type="date" data-field="dueDate" data-id="${row._id}" value="${formatDueDate(row.dueDate)}"></div>`,
       updatesBtn: updatesButton(row)
     };
@@ -418,12 +454,12 @@
           ${td('Item', p.itemInput, 'pp-td-item')}
           ${td('Updates', p.updatesBtn, 'pp-td-updates')}
           ${td('Project', p.projectInput, 'pp-td-project')}
-          ${td('Due Date', p.dueInput)}
+          ${td('Due Date', p.dueInput, 'pp-td-due')}
+          ${td('Owner', p.tableOwnerBtn, 'pp-td-avatar')}
           ${td('Edit', p.editSelect, 'pp-td-status')}
-          ${td('Editor', p.editorBtn)}
+          ${td('Editor', p.tableEditorBtn, 'pp-td-avatar')}
           ${td('QC', p.qcSelect, 'pp-td-status')}
           ${td('Delivery', p.deliverySelect, 'pp-td-status')}
-          ${td('Owner', p.ownerBtn)}
         </tr>`;
     }).join('');
 
@@ -448,11 +484,11 @@
       const selectedCls = isSelected(row._id) ? ' pp-row-selected' : '';
       return `
         <article class="pp-card ${p.dueClass}${selectedCls}" data-id="${row._id}">
-          ${cardCheckbox(row._id)}
+          <div class="pp-card-top-bar">
+            ${cardCheckbox(row._id)}
+            <div class="pp-card-badges">${badge}</div>
+          </div>
           <div class="pp-card-header">
-            <div class="pp-card-header-top">
-              ${badge}
-            </div>
             <div class="pp-card-field">
               <span class="pp-card-label">Item</span>
               ${p.itemInput}
@@ -490,8 +526,7 @@
               ${p.ownerBtn}
             </div>
           </div>
-          <div class="pp-card-updates-row">
-            <span class="pp-card-label">Updates</span>
+          <div class="pp-card-footer">
             ${p.updatesBtn}
           </div>
         </article>`;

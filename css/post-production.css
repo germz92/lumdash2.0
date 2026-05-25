@@ -243,6 +243,53 @@
   display: inline-flex;
 }
 
+.post-production-page.card-view-mode .post-production-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "search view"
+    "sort actions"
+    "filters filters";
+  align-items: center;
+}
+
+.post-production-page.card-view-mode .post-production-toolbar .search-box {
+  grid-area: search;
+  max-width: none;
+  flex: none;
+  width: 100%;
+}
+
+.post-production-page.card-view-mode .post-production-toolbar .pp-view-toggle {
+  grid-area: view;
+  justify-self: end;
+}
+
+.post-production-page.card-view-mode .post-production-toolbar .pp-due-sort-btn {
+  grid-area: sort;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
+}
+
+.post-production-page.card-view-mode .post-production-toolbar .pp-bulk-actions {
+  grid-area: actions;
+  justify-self: end;
+}
+
+.post-production-page.card-view-mode .post-production-toolbar .status-filter-tabs {
+  grid-area: filters;
+  width: 100%;
+  min-width: 0;
+}
+
+.post-production-page.card-view-mode .status-filter-tabs .status-tab {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
 .pp-due-sort-btn .material-symbols-outlined {
   font-size: 18px;
 }
@@ -298,8 +345,9 @@
 .post-production-table .pp-col-item { width: var(--pp-sticky-item-width); }
 .post-production-table .pp-col-updates { width: var(--pp-sticky-updates-width); }
 .post-production-table .pp-col-project { width: 280px; }
-.post-production-table .pp-col-status { width: 188px; }
+.post-production-table .pp-col-status { width: 144px; }
 .post-production-table .pp-col-user { width: 190px; }
+.post-production-table .pp-col-avatar { width: 84px; }
 .post-production-table .pp-col-due { width: 140px; }
 
 .post-production-table th.pp-th-updates,
@@ -357,7 +405,7 @@
   width: 44px;
   min-width: 44px;
   max-width: 44px;
-  padding: 10px 8px;
+  padding: 0 8px;
   text-align: center;
   vertical-align: middle;
 }
@@ -422,20 +470,25 @@
 }
 
 .post-production-table th {
-  padding: 10px 12px;
+  padding: 10px 8px;
   text-align: left;
   font-size: 0.68rem;
   font-weight: 600;
   text-transform: uppercase;
   color: var(--text-muted);
   background: var(--bg-tertiary);
-  border-bottom: 1px solid var(--border-default);
+  border-bottom: none;
   white-space: nowrap;
+  overflow: hidden;
+  max-width: 0;
+  box-sizing: border-box;
 }
 
 .post-production-table th.sortable {
   cursor: pointer;
   user-select: none;
+  position: relative;
+  padding-right: 22px;
 }
 
 .post-production-table th.sortable:hover {
@@ -443,9 +496,14 @@
 }
 
 .post-production-table th .sort-icon {
-  font-size: 16px;
-  vertical-align: middle;
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 15px;
   opacity: 0.5;
+  margin: 0;
+  line-height: 1;
 }
 
 .post-production-table th.sort-active .sort-icon {
@@ -453,24 +511,184 @@
   color: var(--accent-red, #cc0007);
 }
 
+/* Narrow avatar columns — single-line label + sort icon */
+.post-production-table th.pp-th-avatar {
+  text-align: center;
+  padding: 10px 20px 10px 6px;
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
+}
+
+.post-production-table th.pp-th-status {
+  padding-right: 20px;
+}
+
 .post-production-table td {
-  padding: 10px 12px;
+  padding: 0;
   border-bottom: 1px solid var(--border-default);
-  vertical-align: top;
+  vertical-align: stretch;
   overflow-wrap: anywhere;
 }
 
-/* Sticky select + item columns while scrolling horizontally */
-.post-production-table th.pp-col-select-th,
 .post-production-table td.pp-td-select {
+  padding: 0 8px;
+}
+
+.post-production-table td.pp-td-updates {
+  padding: 0;
+  vertical-align: middle;
+  text-align: center;
+}
+
+/* Monday.com-style: borderless inputs that fill the cell */
+.post-production-table .project-cell {
+  position: relative;
+  height: 100%;
+  min-height: 38px;
+}
+
+.post-production-table .pp-date-input-wrap {
+  position: relative;
+  height: 100%;
+  min-height: 38px;
+}
+
+.post-production-table input[type="date"],
+.post-production-table select:not(.pp-status-select),
+.pp-card select:not(.pp-status-select) {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 8px;
+  box-sizing: border-box;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-family: inherit;
+}
+
+.post-production-table input[type="date"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 38px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-primary);
+}
+
+.post-production-table input[type="date"]:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.post-production-table input[type="date"]:focus {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 2px rgba(204, 0, 7, 0.35);
+  outline: none;
+}
+
+.post-production-table textarea.pp-text-field,
+.pp-card textarea.pp-text-field {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  max-height: 160px;
+  padding: 6px 8px;
+  box-sizing: border-box;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  font-family: inherit;
+  line-height: 1.35;
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.post-production-table textarea.pp-text-field {
+  min-height: 38px;
+  height: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.post-production-table textarea.pp-text-field:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.post-production-table textarea.pp-text-field:focus {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 2px rgba(204, 0, 7, 0.35);
+  outline: none;
+}
+
+.post-production-table input:focus,
+.post-production-table select:not(.pp-status-select):focus,
+.pp-card input:focus,
+.pp-card select:not(.pp-status-select):focus,
+.pp-card textarea.pp-text-field:focus {
+  outline: none;
+  border-color: var(--accent-red, #cc0007);
+}
+
+/* Status cells — Monday.com-style filled labels (!important beats .dark-theme select) */
+.post-production-table td.pp-td-status {
+  padding: 0;
+  position: relative;
+  vertical-align: stretch;
+  height: 1px;
+}
+
+.dark-theme.post-production-page .post-production-table select.pp-status-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 38px;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+/* Sticky select + item + updates columns while scrolling horizontally */
+.post-production-table th.pp-col-select-th,
+.post-production-table th.pp-th-item,
+.post-production-table th.pp-th-updates {
+  border-bottom: none;
+}
+
+.post-production-table thead tr {
+  box-shadow: inset 0 -1px 0 var(--border-default);
+}
+
+.post-production-table th.pp-col-select-th {
+  position: sticky;
+  left: 0;
+  z-index: 5;
+  background-color: var(--bg-tertiary) !important;
+  border-right: none;
+  overflow: visible;
+  box-shadow: 1px 0 0 var(--border-default);
+}
+
+.post-production-table tbody td.pp-td-select {
   position: sticky;
   left: 0;
   z-index: 3;
-  background-color: var(--bg-secondary);
+  background-color: var(--pp-row-bg) !important;
   border-right: none;
   overflow: visible;
-  /* Box-shadow divider avoids a 1px layout gap vs border-right */
   box-shadow: 1px 0 0 var(--border-default);
+  vertical-align: stretch;
 }
 
 /* Opaque bleed past the select column edge (covers subpixel scroll seams) */
@@ -493,13 +711,22 @@
   background-color: var(--pp-row-bg);
 }
 
-.post-production-table th.pp-th-item,
-.post-production-table td.pp-td-item {
+.post-production-table th.pp-th-item {
+  position: sticky;
+  left: var(--pp-sticky-item-left);
+  z-index: 6;
+  background-color: var(--bg-tertiary) !important;
+  overflow: visible;
+  border-right: none;
+  box-shadow: 1px 0 0 var(--border-default);
+}
+
+.post-production-table tbody td.pp-td-item {
   position: sticky;
   left: var(--pp-sticky-item-left);
   z-index: 4;
-  background-color: var(--bg-secondary);
-  overflow: hidden;
+  background-color: var(--pp-row-bg) !important;
+  overflow: visible;
   border-right: none;
   box-shadow: 1px 0 0 var(--border-default);
 }
@@ -515,16 +742,6 @@
   pointer-events: none;
 }
 
-.post-production-table thead th.pp-col-select-th {
-  z-index: 5;
-  background-color: var(--bg-tertiary);
-}
-
-.post-production-table thead th.pp-th-item {
-  z-index: 6;
-  background-color: var(--bg-tertiary);
-}
-
 .post-production-table thead th.pp-th-item::before {
   background-color: var(--bg-tertiary);
 }
@@ -533,25 +750,30 @@
   background-color: var(--pp-row-bg);
 }
 
-.post-production-table th.pp-th-updates,
-.post-production-table td.pp-td-updates {
+.post-production-table th.pp-th-updates {
   position: sticky;
   left: var(--pp-sticky-updates-left);
-  z-index: 5;
-  background-color: var(--bg-secondary);
+  z-index: 7;
+  background-color: var(--bg-tertiary) !important;
   border-right: none;
   box-shadow:
     1px 0 0 var(--border-default),
     8px 0 18px -10px rgba(0, 0, 0, 0.65);
 }
 
-.post-production-table thead th.pp-th-updates {
-  z-index: 7;
-  background-color: var(--bg-tertiary);
+.post-production-table tbody td.pp-td-updates {
+  position: sticky;
+  left: var(--pp-sticky-updates-left);
+  z-index: 5;
+  background-color: var(--pp-row-bg) !important;
+  border-right: none;
+  box-shadow:
+    1px 0 0 var(--border-default),
+    8px 0 18px -10px rgba(0, 0, 0, 0.65);
 }
 
-.post-production-table th.pp-th-updates::before,
-.post-production-table td.pp-td-updates::before {
+.post-production-table thead th.pp-th-updates::before,
+.post-production-table tbody td.pp-td-updates::before {
   content: "";
   position: absolute;
   top: 0;
@@ -586,11 +808,14 @@
   --pp-row-bg: color-mix(in srgb, var(--bg-secondary) 75%, black 25%);
 }
 
-.post-production-table tbody td,
+.post-production-table tbody td {
+  background-color: var(--pp-row-bg) !important;
+}
+
 .post-production-table tbody td.pp-td-select,
 .post-production-table tbody td.pp-td-item,
 .post-production-table tbody td.pp-td-updates {
-  background-color: var(--pp-row-bg) !important;
+  vertical-align: stretch;
 }
 
 .post-production-table tbody tr.row-overdue:hover {
@@ -680,71 +905,14 @@
   100% { background-color: color-mix(in srgb, var(--bg-secondary) 94%, #f59e0b 6%); }
 }
 
-.post-production-table input[type="date"],
-.post-production-table select:not(.pp-status-select),
-.pp-card select:not(.pp-status-select) {
-  width: 100%;
-  min-width: 0;
-  padding: 6px 8px;
-  box-sizing: border-box;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-size: 0.82rem;
-  font-family: inherit;
-}
-
-.post-production-table textarea.pp-text-field,
-.pp-card textarea.pp-text-field {
-  display: block;
-  width: 100%;
-  min-width: 0;
-  min-height: 32px;
-  max-height: 160px;
-  padding: 6px 8px;
-  box-sizing: border-box;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  color: var(--text-primary);
-  font-size: 0.82rem;
-  font-family: inherit;
-  line-height: 1.35;
-  resize: none;
-  overflow: hidden;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.post-production-table input:focus,
-.post-production-table select:not(.pp-status-select):focus,
-.post-production-table textarea.pp-text-field:focus,
-.pp-card input:focus,
-.pp-card select:not(.pp-status-select):focus,
-.pp-card textarea.pp-text-field:focus {
-  outline: none;
-  border-color: var(--accent-red, #cc0007);
-}
-
-.post-production-table .project-cell {
-  position: relative;
-}
-
-/* Status cells — Monday.com-style filled labels (!important beats .dark-theme select) */
-.post-production-table td.pp-td-status {
-  padding: 6px 8px;
-  vertical-align: middle;
-}
-
 .dark-theme.post-production-page select.pp-status-select {
   display: block;
   width: 100%;
   max-width: 100%;
   min-width: 0;
   min-height: 34px;
-  padding: 8px 30px 8px 10px !important;
-  font-size: 0.8rem !important;
+  padding: 8px 26px 8px 8px !important;
+  font-size: 0.78rem !important;
   font-weight: 600 !important;
   line-height: 1.3 !important;
   text-align: left;
@@ -818,6 +986,9 @@
 .dark-theme.post-production-page .pp-card select.pp-status-select {
   font-size: 0.8rem !important;
   min-height: 36px;
+  border-radius: 6px !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25) !important;
+  position: static;
 }
 
 .dark-theme.post-production-page .pp-card-status-grid .pp-card-field {
@@ -839,6 +1010,72 @@
   cursor: pointer;
   text-align: left;
   font-family: inherit;
+}
+
+.post-production-table .pp-editor-btn.pp-editor-btn--avatar-only {
+  width: 100%;
+  min-height: 38px;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  justify-content: center;
+  align-items: center;
+}
+
+.post-production-table .pp-editor-btn.pp-editor-btn--avatar-only:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.post-production-table td.pp-td-due,
+.post-production-table td.pp-td-status {
+  position: relative;
+  vertical-align: stretch;
+  height: 1px;
+}
+
+.post-production-table td.pp-td-item,
+.post-production-table td.pp-td-project {
+  position: relative;
+  vertical-align: top;
+  padding: 0;
+}
+
+.post-production-table td.pp-td-due .pp-date-input-wrap {
+  position: absolute;
+  inset: 0;
+  min-height: 38px;
+}
+
+.dark-theme.post-production-page .post-production-table select.pp-status-select:focus {
+  outline: none !important;
+  border: none !important;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35) !important;
+}
+
+.post-production-table td.pp-td-avatar {
+  padding: 0;
+  text-align: center;
+  vertical-align: middle;
+  min-height: 38px;
+}
+
+.pp-editor-btn.pp-editor-btn--avatar-only {
+  width: auto;
+  min-width: 0;
+  padding: 4px;
+  justify-content: center;
+  align-items: center;
+  margin: 0 auto;
+}
+
+.pp-editor-btn--avatar-only .pp-editor-avatar,
+.pp-editor-btn--avatar-only .pp-editor-initials.pp-avatar-only {
+  width: 28px;
+  height: 28px;
+  font-size: 0.68rem;
 }
 
 .pp-editor-btn .pp-editor-label {
@@ -1260,7 +1497,7 @@
 .pp-card-select-row {
   display: flex;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 0;
 }
 
 .pp-card.pp-row-selected {
@@ -1334,6 +1571,22 @@
   pointer-events: auto;
   flex: 1;
   min-height: 0;
+}
+
+@media (max-width: 768px) {
+  #ppUpdatesModal.pp-updates-panel {
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-width: 100%;
+    z-index: 1100;
+  }
+
+  #ppUpdatesModal.pp-updates-panel > .pp-updates-modal {
+    border-radius: 0;
+    border-left: none;
+    box-shadow: none;
+  }
 }
 
 .pp-btn-primary {
@@ -1447,15 +1700,24 @@
   border-bottom: 1px solid var(--border-default);
 }
 
-.pp-card-header-top {
+.pp-card-top-bar {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 8px;
+  margin-bottom: 10px;
   min-width: 0;
 }
 
-.pp-card-header-top .pp-row-checkbox {
+.pp-card-badges {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.pp-card-top-bar .pp-row-checkbox {
   flex-shrink: 0;
 }
 
@@ -1463,13 +1725,25 @@
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  align-self: stretch;
+  width: 100%;
   margin-top: auto;
   padding-top: 10px;
+  border-top: 1px solid var(--border-default);
+}
+
+.pp-card-footer .pp-updates-cell-inner {
+  display: flex;
+  justify-content: flex-end;
+  width: auto;
+  max-width: none;
+  margin: 0;
+  margin-left: auto;
+  flex: 0 0 auto;
 }
 
 .pp-card-badge {
   display: inline-flex;
-  align-self: flex-start;
   padding: 3px 8px;
   border-radius: 999px;
   font-size: 0.65rem;
@@ -1574,16 +1848,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  margin-bottom: 12px;
-}
-
-.pp-card-updates-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   margin-bottom: 0;
-  padding-top: 8px;
-  border-top: 1px solid var(--border-default);
 }
 
 .pp-card .pp-editor-btn {
@@ -1607,15 +1872,16 @@
 
   .post-production-toolbar {
     display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-rows: auto auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "search actions view"
+      "filters filters filters";
     gap: 8px;
     padding: 8px 12px;
   }
 
   .post-production-toolbar .search-box {
-    grid-column: 1;
-    grid-row: 1;
+    grid-area: search;
     max-width: none;
     width: 100%;
     flex: none;
@@ -1623,36 +1889,27 @@
   }
 
   .post-production-toolbar .pp-bulk-actions {
-    grid-column: 2;
-    grid-row: 1;
+    grid-area: actions;
     align-self: center;
   }
 
   .post-production-toolbar .pp-view-toggle {
-    grid-column: 3;
-    grid-row: 1;
+    grid-area: view;
     align-self: center;
   }
 
   .post-production-toolbar .status-filter-tabs {
-    grid-column: 1 / -1;
-    grid-row: 2;
+    grid-area: filters;
     width: 100%;
+    min-width: 0;
   }
 
   .post-production-page.card-view-mode .post-production-toolbar {
-    grid-template-rows: auto auto auto;
-  }
-
-  .post-production-page.card-view-mode .pp-due-sort-btn {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    width: 100%;
-    justify-content: center;
-  }
-
-  .post-production-page.card-view-mode .status-filter-tabs {
-    grid-row: 3;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "search view"
+      "sort actions"
+      "filters filters";
   }
 
   .post-production-page.card-view-mode .post-production-table-container {
@@ -1688,4 +1945,86 @@
   .pp-card-people-row {
     grid-template-columns: 1fr;
   }
+}
+
+/* ── Monday.com table cells: beat theme-dark.css global input !important rules ── */
+.dark-theme.post-production-page .post-production-table textarea.pp-text-field,
+.dark-theme.post-production-page .post-production-table input[type="date"] {
+  background: transparent !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+}
+
+.dark-theme.post-production-page .post-production-table textarea.pp-text-field {
+  display: block;
+  width: 100%;
+  min-height: 38px;
+  padding: 10px 12px !important;
+  box-sizing: border-box;
+  line-height: 1.35;
+}
+
+.dark-theme.post-production-page .post-production-table textarea.pp-text-field:hover,
+.dark-theme.post-production-page .post-production-table input[type="date"]:hover {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.dark-theme.post-production-page .post-production-table textarea.pp-text-field:focus,
+.dark-theme.post-production-page .post-production-table input[type="date"]:focus {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: none !important;
+  box-shadow: inset 0 0 0 2px rgba(204, 0, 7, 0.35) !important;
+  outline: none !important;
+}
+
+.dark-theme.post-production-page .post-production-table input[type="date"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 38px;
+  padding: 10px 12px !important;
+}
+
+.dark-theme.post-production-page .post-production-table select.pp-status-select {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 38px !important;
+  margin: 0 !important;
+  border: none !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+.dark-theme.post-production-page .post-production-table select.pp-status-select:focus {
+  border: none !important;
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35) !important;
+  outline: none !important;
+}
+
+.post-production-table .pp-updates-btn {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  width: 32px;
+  height: 32px;
+}
+
+.post-production-table .pp-updates-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+}
+
+.post-production-table .project-cell {
+  display: block;
+  min-height: 38px;
+}
+
+.post-production-table th.pp-th-project,
+.post-production-table td.pp-td-project {
+  padding-left: 0;
 }

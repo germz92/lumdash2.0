@@ -922,16 +922,20 @@ async function getReimbursementReviewerUsers(request) {
   if (!recipientIds.size) return [];
 
   const users = await User.find({ _id: { $in: [...recipientIds] } })
-    .select('_id email fullName')
+    .select('_id email fullName role settings')
     .lean();
 
-  const withEmail = users.filter(u => u.email);
-  console.log(
-    `📋 Reimbursement reviewers (${withEmail.length}):`,
-    withEmail.map(u => `${u.fullName} <${u.email}> [${u._id}]`).join('; ') || '(none)'
-  );
+  if (!users.length) {
+    console.warn('📋 Reimbursement reviewers: matched IDs but no User documents found');
+  } else {
+    const withEmail = users.filter(u => u.email);
+    console.log(
+      `📋 Reimbursement reviewers (${users.length} user(s), ${withEmail.length} with email):`,
+      users.map(u => `${u.fullName || '(no name)'} <${u.email || 'no email'}> [${u._id}]`).join('; ')
+    );
+  }
 
-  return withEmail;
+  return users;
 }
 
 /** @returns {string[]} User ids for in-app notifications */
@@ -985,7 +989,11 @@ async function sendReimbursementSubmittedEmails(request, reviewers, submitter) {
         return;
       }
 
-      const to = reviewerDoc.email.trim().toLowerCase();
+      const to = (reviewerDoc.email || '').trim().toLowerCase();
+      if (!to) {
+        console.log(`📧 Reimbursement email skipped (no email): ${reviewerDoc.fullName || reviewer._id}`);
+        return;
+      }
       const data = {
         ...baseData,
         recipientName: reviewerDoc.fullName || reviewerDoc.email
@@ -1108,7 +1116,10 @@ async function notifyReimbursementSubmitted(request, options = {}) {
     }
 
     const reviewers = await getReimbursementReviewerUsers(request);
-    if (!reviewers.length) return;
+    if (!reviewers.length) {
+      console.warn(`📋 Reimbursement ${requestId}: no reviewers (no admins and/or event owners)`);
+      return;
+    }
 
     const { userName, userEmail } = await resolveReimbursementSubmitter(request);
 
@@ -1151,6 +1162,57 @@ async function notifyReimbursementSubmitted(request, options = {}) {
 }
 
 let reimbursementChangeStreamStarted = false;
+let reimbursementReconcileInProgress = false;
+let reimbursementReconcileLastRun = 0;
+const REIMBURSE_RECONCILE_COOLDOWN_MS = 5 * 60 * 1000;
+
+/**
+ * Backfill notifications for submitted reimbursements that were never alerted.
+ * Used on startup and when an admin opens reimbursements (debounced) — not on a timer.
+ */
+async function reconcileUnnotifiedReimbursementSubmissions(options = {}) {
+  const { force = false } = options;
+  if (reimbursementReconcileInProgress) return;
+
+  const now = Date.now();
+  if (!force && now - reimbursementReconcileLastRun < REIMBURSE_RECONCILE_COOLDOWN_MS) {
+    return;
+  }
+
+  reimbursementReconcileInProgress = true;
+  reimbursementReconcileLastRun = now;
+
+  try {
+    const NotificationModel = require('./models/Notification');
+    const notifiedIds = await NotificationModel.distinct('metadata.reimbursementId', {
+      type: 'reimbursement_submitted'
+    });
+    const notifiedSet = new Set((notifiedIds || []).map(String));
+
+    const pending = await ReimbursementRequest.find({ status: 'submitted' }).select('_id').lean();
+    const missingIds = pending
+      .map(r => r._id.toString())
+      .filter(id => !notifiedSet.has(id));
+
+    if (!missingIds.length) return;
+
+    console.log(`📋 Reimbursement reconcile: ${missingIds.length} submitted request(s) without notifications`);
+    const missing = await ReimbursementRequest.find({ _id: { $in: missingIds } }).lean();
+    for (const request of missing) {
+      await notifyReimbursementSubmitted(request);
+    }
+  } catch (err) {
+    console.error('📋 Reimbursement reconcile failed:', err);
+  } finally {
+    reimbursementReconcileInProgress = false;
+  }
+}
+
+/** One-time backfill after deploy (change stream / webhook may have missed prior submissions). */
+function scheduleReimbursementReconcileOnStartup() {
+  setTimeout(() => reconcileUnnotifiedReimbursementSubmissions({ force: true }), 5000);
+  console.log('📋 Reimbursement reconcile scheduled once on startup');
+}
 
 /**
  * Watch reimbursementrequests collection for external-app submissions.
@@ -1174,9 +1236,12 @@ function setupReimbursementChangeStream() {
     const changeStream = collection.watch(pipeline, { fullDocument: 'updateLookup' });
 
     changeStream.on('change', async (change) => {
-      const doc = change.fullDocument;
+      let doc = change.fullDocument;
+      if (!doc && change.documentKey?._id) {
+        doc = await ReimbursementRequest.findById(change.documentKey._id).lean();
+      }
       if (!doc || doc.status !== 'submitted') return;
-      console.log('📋 Reimbursement submitted:', doc._id);
+      console.log('📋 Reimbursement submitted (change stream):', doc._id);
       await notifyReimbursementSubmitted(doc);
     });
 
@@ -1188,7 +1253,9 @@ function setupReimbursementChangeStream() {
     console.log('📋 Reimbursement change stream watcher started');
   } catch (err) {
     console.warn('📋 Could not start reimbursement change stream (requires replica set):', err.message);
+    console.warn('📋 Use /api/reimbursements/submitted-hook from the submit app, or reconcile on startup / reimbursements page load');
   }
+  scheduleReimbursementReconcileOnStartup();
 }
 
 const User = require('./models/User');
@@ -11978,6 +12045,11 @@ app.get('/api/reimbursements', authenticate, async (req, res) => {
     else if (sort === 'amount_asc') sortObj = { totalAmount: 1 };
 
     let requests = await ReimbursementRequest.find(query).sort(sortObj).lean();
+
+    // Catch missed submission alerts (debounced — max once per 5 min)
+    reconcileUnnotifiedReimbursementSubmissions().catch(err =>
+      console.error('📋 Reimbursement reconcile on list failed:', err)
+    );
 
     // Backfill userName/userEmail from the users collection for any docs missing them
     const needsUser = requests.filter(r => !r.userName && r.userId);

@@ -711,26 +711,8 @@
     
     // Sort flights by depart date
     filteredRequests.sort((a, b) => {
-      // Handle different date formats
-      let dateA, dateB;
-      
-      if (a.departDate instanceof Date) {
-        dateA = a.departDate;
-      } else if (typeof a.departDate === 'string') {
-        dateA = new Date(a.departDate);
-      } else {
-        dateA = new Date();
-      }
-      
-      if (b.departDate instanceof Date) {
-        dateB = b.departDate;
-      } else if (typeof b.departDate === 'string') {
-        dateB = new Date(b.departDate);
-      } else {
-        dateB = new Date();
-      }
-      
-      // 'soonest' = earliest dates first (ascending), 'latest' = furthest dates first (descending)
+      const dateA = parseFlightDate(a.departDate) || new Date(0);
+      const dateB = parseFlightDate(b.departDate) || new Date(0);
       return sortValue === 'latest' ? dateB - dateA : dateA - dateB;
     });
     
@@ -824,26 +806,8 @@
     
     // Sort flights by depart date
     filteredFlights.sort((a, b) => {
-      // Handle different date formats
-      let dateA, dateB;
-      
-      if (a.departDate instanceof Date) {
-        dateA = a.departDate;
-      } else if (typeof a.departDate === 'string') {
-        dateA = new Date(a.departDate);
-      } else {
-        dateA = new Date();
-      }
-      
-      if (b.departDate instanceof Date) {
-        dateB = b.departDate;
-      } else if (typeof b.departDate === 'string') {
-        dateB = new Date(b.departDate);
-      } else {
-        dateB = new Date();
-      }
-      
-      // 'soonest' = earliest dates first (ascending), 'latest' = furthest dates first (descending)
+      const dateA = parseFlightDate(a.departDate) || new Date(0);
+      const dateB = parseFlightDate(b.departDate) || new Date(0);
       return sortValue === 'latest' ? dateB - dateA : dateA - dateB;
     });
     
@@ -940,8 +904,8 @@
         <tbody>
           ${requests.map(request => {
             const isChangeRequest = request.status === 'change_requested';
-            const departDate = new Date(request.departDate);
-            const returnDate = request.returnDate ? new Date(request.returnDate) : null;
+            const departDateStr = formatFlightDateTable(request.departDate);
+            const returnDateStr = request.returnDate ? formatFlightDateTable(request.returnDate) : '—';
             const departTimePref = formatTimePreference(request.departTimePreference);
             const returnTimePref = formatTimePreference(request.returnTimePreference);
             
@@ -959,9 +923,9 @@
                     ).join('')}
                   </div>
                 </td>
-                <td class="table-date">${departDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
+                <td class="table-date">${departDateStr}</td>
                 <td class="table-time">${departTimePref}</td>
-                <td class="table-date">${returnDate ? returnDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
+                <td class="table-date">${returnDateStr}</td>
                 <td class="table-time">${request.returnDate ? returnTimePref : '—'}</td>
                 <td>
                   <div class="table-airport">
@@ -996,7 +960,7 @@
     
     flights.forEach(flight => {
       // Outbound row
-      const departDate = new Date(flight.departDate);
+      const departDateStr = formatFlightDateTable(flight.departDate);
       const departTime = formatTimeDisplay(flight.bookedDetails?.departTime) || '—';
       const arriveTime = formatTimeDisplay(flight.bookedDetails?.arriveTime) || '—';
       const confirmationCode = flight.bookedDetails?.confirmationCode || 'N/A';
@@ -1011,7 +975,7 @@
             </div>
           </td>
           <td class="table-date">
-            ${departDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+            ${departDateStr}
             ${flight.tripType === 'roundtrip' ? '<span class="table-direction-badge outbound">Outbound</span>' : ''}
           </td>
           <td class="table-time">${departTime}</td>
@@ -1040,7 +1004,7 @@
       
       // Return row for round trips
       if (flight.tripType === 'roundtrip' && flight.returnDate) {
-        const returnDate = new Date(flight.returnDate);
+        const returnDateStr = formatFlightDateTable(flight.returnDate);
         const returnDepartTime = formatTimeDisplay(flight.returnBookedDetails?.departTime) || '—';
         const returnArriveTime = formatTimeDisplay(flight.returnBookedDetails?.arriveTime) || '—';
         
@@ -1054,7 +1018,7 @@
               </div>
             </td>
             <td class="table-date">
-              ${returnDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+              ${returnDateStr}
               <span class="table-direction-badge return">Return</span>
             </td>
             <td class="table-time">${returnDepartTime}</td>
@@ -1118,20 +1082,22 @@
   };
 
   /**
-   * Format date for display
-   */
-  /**
    * Format date for display - timezone-safe
-   * Parses date string without timezone conversion
    */
   function formatDateDisplay(dateStr) {
     if (!dateStr) return '';
-    // Extract just the date part (YYYY-MM-DD) to avoid timezone issues
-    const datePart = dateStr.split('T')[0];
-    const [year, month, day] = datePart.split('-').map(Number);
-    // Create date using local timezone (noon to avoid any edge cases)
-    const date = new Date(year, month - 1, day, 12, 0, 0);
+    const date = parseFlightDate(dateStr);
+    if (!date) return '';
     return date.toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' });
+  }
+
+  /**
+   * Format flight date for table cells (same calendar date as card view)
+   */
+  function formatFlightDateTable(value) {
+    const date = parseFlightDate(value);
+    if (!date) return '—';
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   }
 
   /**

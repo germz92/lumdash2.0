@@ -39,6 +39,7 @@ let deletedRows = new Set(); // Track deleted rows
 let autosaveTimeout = null; // Debounce autosave
 let isSaving = false; // Track if currently saving
 let isEditing = false; // Track if any field is currently being edited
+let pendingRerender = false; // A render was requested while editing; flush after edit ends
 let suppressSocketUntil = 0; // Timestamp to suppress socket events until (self-notification suppression)
 
 // Suppress socket events for a short time after own saves
@@ -46,51 +47,56 @@ function suppressNextSocketEvent() {
   suppressSocketUntil = Date.now() + 3000; // 3 second suppression window
 }
 
-// Socket.IO real-time updates - disabled when there are unsaved changes or self-saving
+// Decide whether a remote-change socket event should trigger a reload right now.
+// Re-checked both on arrival AND at fire time so an edit started during the
+// debounce window can cancel a pending reload (prevents getting kicked out).
+function shouldReloadFromRemote(data) {
+  // Crew DOM not present (we navigated away) -> never act on a stale handler
+  if (!document.getElementById('dateSections')) return false;
+  const currentTableId = getCurrentTableId();
+  if (data && data.tableId && data.tableId !== currentTableId) return false;
+  // Skip if this is our own save bouncing back
+  if (Date.now() < suppressSocketUntil) return false;
+  // Don't reload if user has unsaved changes or is mid-edit
+  if (hasUnsavedChanges || isEditing) return false;
+  return true;
+}
+
+function handleRemoteChange(data, label) {
+  if (!shouldReloadFromRemote(data)) {
+    console.log(`Ignoring ${label} (suppressed / editing / unsaved / off-page)`);
+    return;
+  }
+  console.log(`${label}: scheduling reload...`);
+  tableId = getCurrentTableId();
+
+  if (reloadTimeout) clearTimeout(reloadTimeout);
+  reloadTimeout = setTimeout(() => {
+    // Re-check at fire time: an edit may have started during the 800ms window
+    if (shouldReloadFromRemote(data)) {
+      loadTable();
+    } else {
+      console.log(`Skipping deferred reload for ${label} (state changed)`);
+    }
+  }, 800);
+}
+
+// Socket.IO real-time updates - bound exactly once per page session.
+// Re-running this IIFE on SPA navigation would otherwise stack duplicate
+// listeners (each with its own stale closure), so detach our prior handlers first.
 if (window.socket) {
-  window.socket.on('crewChanged', (data) => {
-    const currentTableId = getCurrentTableId();
-    if (data && data.tableId && data.tableId !== currentTableId) {
-      return;
-    }
-    // Skip if this is our own save bouncing back
-    if (Date.now() < suppressSocketUntil) {
-      console.log('Ignoring crewChanged (self-notification suppressed)');
-      return;
-    }
-    // Don't reload if user has unsaved changes or is editing
-    if (hasUnsavedChanges || isEditing) {
-      console.log('Crew data changed remotely, but you have unsaved changes. Save or discard first.');
-      return;
-    }
-    console.log('Crew data changed remotely, reloading...');
-    tableId = currentTableId;
-    
-    if (reloadTimeout) clearTimeout(reloadTimeout);
-    reloadTimeout = setTimeout(() => loadTable(), 800);
-  });
-  
-  window.socket.on('tableUpdated', (data) => {
-    const currentTableId = getCurrentTableId();
-    if (data && data.tableId && data.tableId !== currentTableId) {
-      return;
-    }
-    // Skip if this is our own save bouncing back
-    if (Date.now() < suppressSocketUntil) {
-      console.log('Ignoring tableUpdated (self-notification suppressed)');
-      return;
-    }
-    // Don't reload if user has unsaved changes or is editing
-    if (hasUnsavedChanges || isEditing) {
-      console.log('Table updated remotely, but you have unsaved changes. Save or discard first.');
-      return;
-    }
-    console.log('Table updated remotely, reloading...');
-    tableId = currentTableId;
-    
-    if (reloadTimeout) clearTimeout(reloadTimeout);
-    reloadTimeout = setTimeout(() => loadTable(), 800);
-  });
+  if (window.__crewSocketHandlers) {
+    window.socket.off('crewChanged', window.__crewSocketHandlers.crewChanged);
+    window.socket.off('tableUpdated', window.__crewSocketHandlers.tableUpdated);
+  }
+
+  const onCrewChanged = (data) => handleRemoteChange(data, 'crewChanged');
+  const onTableUpdated = (data) => handleRemoteChange(data, 'tableUpdated');
+
+  window.socket.on('crewChanged', onCrewChanged);
+  window.socket.on('tableUpdated', onTableUpdated);
+
+  window.__crewSocketHandlers = { crewChanged: onCrewChanged, tableUpdated: onTableUpdated };
 }
 
 // Update save status UI
@@ -313,6 +319,15 @@ let selectedRowId = null;
 
 function renderTableSection() {
   const container = document.getElementById('dateSections');
+  if (!container) return;
+
+  // Never blow away a live input/dropdown the user is editing. Defer the
+  // re-render until they finish (exitEdit will flush pendingRerender).
+  if (isEditing) {
+    pendingRerender = true;
+    return;
+  }
+
   container.innerHTML = '';
 
   const filterDropdown = document.getElementById('filterDate');
@@ -1140,6 +1155,12 @@ function makeEditable(cell, row) {
     displaySpan.style.display = '';
     cell.classList.remove('editing');
     isEditing = false;
+
+    // If a render was requested while we were editing, run it now that it's safe.
+    if (pendingRerender) {
+      pendingRerender = false;
+      renderTableSection();
+    }
   };
   
   // For custom dropdowns, handle click outside to exit

@@ -1273,6 +1273,9 @@ const Passenger = require('./models/Passenger');
 const Notification = require('./models/Notification');
 const ReimbursementRequest = require('./models/ReimbursementRequest');
 const PostProductionItem = require('./models/PostProductionItem');
+const PostProductionUpdateRead = require('./models/PostProductionUpdateRead');
+const PostProductionAssignmentSeen = require('./models/PostProductionAssignmentSeen');
+const DashboardNavVisit = require('./models/DashboardNavVisit');
 
 
 
@@ -11147,12 +11150,58 @@ async function userOwnsPostProductionEvent(userId, eventId) {
   return (table.owners || []).some(id => id.toString() === uid);
 }
 
-/** Assigned as editor or post-production owner (not the event's owners list). */
+function normalizePostProductionUserIds(raw) {
+  if (!Array.isArray(raw)) return [];
+  return [...new Set(raw.map(String).filter(id => mongoose.Types.ObjectId.isValid(id)))];
+}
+
+function getPostProductionEditorIds(doc) {
+  const o = doc.toObject ? doc.toObject() : doc;
+  const ids = new Set();
+  (o.editorIds || []).forEach(id => {
+    if (id) ids.add(id.toString());
+  });
+  if (o.editorId) ids.add(o.editorId.toString());
+  return [...ids];
+}
+
+function getPostProductionCollaboratorIds(doc) {
+  const o = doc.toObject ? doc.toObject() : doc;
+  return (o.collaboratorIds || [])
+    .map(id => id?.toString?.() || String(id))
+    .filter(id => mongoose.Types.ObjectId.isValid(id));
+}
+
+function syncPostProductionAssigneeFields(doc) {
+  const editorIds = getPostProductionEditorIds(doc);
+  const collaboratorIds = getPostProductionCollaboratorIds(doc);
+  doc.editorIds = editorIds;
+  doc.collaboratorIds = collaboratorIds;
+  doc.editorId = editorIds[0] || null;
+}
+
+function formatPostProductionUserList(ids, usersById) {
+  return ids.map(id => {
+    const u = usersById[id];
+    return {
+      _id: id,
+      name: u?.fullName || u?.email || '',
+      profilePhoto: u?.profilePhoto || null
+    };
+  });
+}
+
+function postProductionUsersSortName(users) {
+  return users.map(u => u.name).filter(Boolean).join(', ').toLowerCase();
+}
+
+/** Assigned as editor, collaborator, or post-production owner (not the event's owners list). */
 function isAssignedToPostProductionItem(user, doc) {
   const uid = user.id.toString();
-  const editorId = doc.editorId ? doc.editorId.toString() : null;
   const ownerId = doc.ownerId ? doc.ownerId.toString() : null;
-  return editorId === uid || ownerId === uid;
+  if (ownerId === uid) return true;
+  return getPostProductionEditorIds(doc).includes(uid)
+    || getPostProductionCollaboratorIds(doc).includes(uid);
 }
 
 /**
@@ -11175,6 +11224,8 @@ async function buildPostProductionAccessFilter(user) {
 
   const or = [
     { editorId: uid },
+    { editorIds: uid },
+    { collaboratorIds: uid },
     { ownerId: uid }
   ];
   if (ownedEventIds.length) {
@@ -11202,7 +11253,8 @@ async function postProductionUsersById(docs) {
   const ids = new Set();
   list.forEach(doc => {
     const o = doc.toObject ? doc.toObject() : doc;
-    if (o.editorId) ids.add(o.editorId.toString());
+    getPostProductionEditorIds(o).forEach(id => ids.add(id));
+    getPostProductionCollaboratorIds(o).forEach(id => ids.add(id));
     if (o.ownerId) ids.add(o.ownerId.toString());
   });
   if (!ids.size) return {};
@@ -11230,26 +11282,199 @@ function formatPostProductionUpdates(rawDoc) {
     }));
   }
   updates.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const mapEntry = (entry) => ({
+    ...entry,
+    mentionIds: (entry.mentionIds || []).map(id => id?.toString?.() || id),
+    links: (entry.links || []).map(l => ({
+      _id: l._id,
+      url: l.url || '',
+      label: l.label || ''
+    })),
+    attachments: (entry.attachments || []).map(a => ({
+      _id: a._id,
+      url: a.url || '',
+      originalName: a.originalName || '',
+      fileType: a.fileType || '',
+      size: a.size || 0,
+      cloudinaryPublicId: a.cloudinaryPublicId || ''
+    }))
+  });
   updates = updates.map(u => ({
-    ...u,
-    mentionIds: (u.mentionIds || []).map(id => id?.toString?.() || id),
+    ...mapEntry(u),
     replies: [...(u.replies || [])]
       .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
-      .map(r => ({
-        ...r,
-        mentionIds: (r.mentionIds || []).map(id => id?.toString?.() || id)
-      }))
+      .map(r => mapEntry(r))
   }));
   const updateCount = updates.reduce((n, u) => n + 1 + (u.replies?.length || 0), 0);
   const latestUpdate = updates[0] || null;
   return { updates, updateCount, latestUpdate };
 }
 
-function formatPostProductionItem(doc, usersById = {}) {
+function isUnreadPostProductionEntry(entry, lastReadAt, userId) {
+  const authorId = entry?.authorId?.toString?.() || String(entry?.authorId || '');
+  if (authorId && authorId === userId) return false;
+  const createdAt = entry?.createdAt ? new Date(entry.createdAt) : null;
+  if (!createdAt || Number.isNaN(createdAt.getTime())) return false;
+  if (!lastReadAt) return false;
+  return createdAt > new Date(lastReadAt);
+}
+
+function countUnreadPostProductionUpdates(updates, lastReadAt, userId) {
+  const uid = userId?.toString?.() || String(userId || '');
+  if (!uid) return 0;
+  return (updates || []).reduce((n, u) => {
+    let count = isUnreadPostProductionEntry(u, lastReadAt, uid) ? 1 : 0;
+    for (const reply of u.replies || []) {
+      if (isUnreadPostProductionEntry(reply, lastReadAt, uid)) count += 1;
+    }
+    return n + count;
+  }, 0);
+}
+
+async function postProductionLastReadMap(userId, itemIds) {
+  const ids = [...new Set((itemIds || []).map(id => id?.toString?.() || String(id)).filter(Boolean))];
+  if (!ids.length) return new Map();
+  const reads = await PostProductionUpdateRead.find({
+    userId,
+    itemId: { $in: ids }
+  }).select('itemId lastReadAt').lean();
+  return new Map(reads.map(r => [r.itemId.toString(), r.lastReadAt]));
+}
+
+async function markPostProductionUpdatesRead(userId, itemId) {
+  const now = new Date();
+  await PostProductionUpdateRead.findOneAndUpdate(
+    { userId, itemId },
+    { $set: { lastReadAt: now } },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+  return now;
+}
+
+/** First-time recipients get a baseline just before the new message so only that update counts as unread. */
+async function ensurePostProductionUnreadBaseline(userId, itemId, updateTime) {
+  const t = updateTime instanceof Date ? updateTime : new Date(updateTime);
+  const markBefore = new Date(t.getTime() - 1);
+  await PostProductionUpdateRead.findOneAndUpdate(
+    { userId, itemId },
+    { $setOnInsert: { lastReadAt: markBefore } },
+    { upsert: true }
+  );
+}
+
+/** Everyone who can view the item except the author should get unread tracking for a new update. */
+async function getPostProductionUpdateRecipientIds(doc, actorId, mentionIds = []) {
+  const ids = new Set();
+  const add = (id) => {
+    if (!id) return;
+    const s = id?.toString?.() || String(id);
+    if (mongoose.Types.ObjectId.isValid(s)) ids.add(s);
+  };
+  getPostProductionEditorIds(doc).forEach(add);
+  getPostProductionCollaboratorIds(doc).forEach(add);
+  add(doc.ownerId);
+  (mentionIds || []).forEach(add);
+  if (doc.eventId) {
+    const table = await Table.findById(doc.eventId).select('owners').lean();
+    (table?.owners || []).forEach(o => add(o));
+  }
+  const admins = await User.find({ role: { $regex: /^admin$/i } }).select('_id').lean();
+  admins.forEach(u => add(u._id));
+  const actorStr = ppIdStr(actorId);
+  if (actorStr) ids.delete(actorStr);
+  return [...ids];
+}
+
+async function bumpPostProductionUnreadForRecipients(doc, actorId, mentionIds, updateTime) {
+  const recipientIds = await getPostProductionUpdateRecipientIds(doc, actorId, mentionIds);
+  await Promise.all(
+    recipientIds.map(rid => ensurePostProductionUnreadBaseline(rid, doc._id, updateTime))
+  );
+}
+
+async function markPostProductionAssignmentNew(userId, itemId) {
+  await PostProductionAssignmentSeen.deleteOne({ userId, itemId });
+}
+
+async function markPostProductionAssignmentsVisited(user, userId) {
+  const accessFilter = await buildPostProductionAccessFilter(user);
+  const query = { archived: { $ne: true } };
+  if (accessFilter) Object.assign(query, accessFilter);
+  const items = await PostProductionItem.find(query).select('editorId editorIds collaboratorIds ownerId').lean();
+  const uid = userId?.toString?.() || String(userId);
+  const ops = [];
+  for (const item of items) {
+    const isAssigned = item.ownerId?.toString() === uid
+      || getPostProductionEditorIds(item).includes(uid)
+      || getPostProductionCollaboratorIds(item).includes(uid);
+    if (!isAssigned) continue;
+    ops.push({
+      updateOne: {
+        filter: { userId, itemId: item._id },
+        update: { $set: { seenAt: new Date() } },
+        upsert: true
+      }
+    });
+  }
+  if (ops.length) await PostProductionAssignmentSeen.bulkWrite(ops);
+}
+
+async function getPostProductionSidebarIndicator(user) {
+  const userId = user.id;
+  const uid = userId?.toString?.() || String(userId);
+  const accessFilter = await buildPostProductionAccessFilter(user);
+  const query = { archived: { $ne: true } };
+  if (accessFilter) Object.assign(query, accessFilter);
+
+  const items = await PostProductionItem.find(query)
+    .select('updates editorId editorIds collaboratorIds ownerId notes')
+    .lean();
+  if (!items.length) return { hasNew: false };
+
+  const itemIds = items.map(i => i._id);
+  const readMap = await postProductionLastReadMap(userId, itemIds);
+
+  let hasUnread = false;
+  for (const item of items) {
+    const { updates } = formatPostProductionUpdates(item);
+    const lastReadAt = readMap.get(item._id.toString()) || null;
+    if (countUnreadPostProductionUpdates(updates, lastReadAt, uid) > 0) {
+      hasUnread = true;
+      break;
+    }
+  }
+
+  const assignedIds = items
+    .filter(i => i.ownerId?.toString() === uid
+      || getPostProductionEditorIds(i).includes(uid)
+      || getPostProductionCollaboratorIds(i).includes(uid))
+    .map(i => i._id);
+  let hasNewAssignment = false;
+  if (assignedIds.length) {
+    const seen = await PostProductionAssignmentSeen.find({
+      userId,
+      itemId: { $in: assignedIds }
+    }).select('itemId').lean();
+    const seenSet = new Set(seen.map(s => s.itemId.toString()));
+    hasNewAssignment = assignedIds.some(id => !seenSet.has(id.toString()));
+  }
+
+  return { hasNew: hasUnread || hasNewAssignment };
+}
+
+function formatPostProductionItem(doc, usersById = {}, readOptions = {}) {
   const o = doc.toObject ? doc.toObject() : doc;
-  const editor = o.editorId ? usersById[o.editorId.toString()] : null;
+  const editorIds = getPostProductionEditorIds(o);
+  const collaboratorIds = getPostProductionCollaboratorIds(o);
+  const editors = formatPostProductionUserList(editorIds, usersById);
+  const collaborators = formatPostProductionUserList(collaboratorIds, usersById);
+  const firstEditor = editors[0] || null;
   const owner = o.ownerId ? usersById[o.ownerId.toString()] : null;
   const { updates, updateCount, latestUpdate } = formatPostProductionUpdates(o);
+  const userId = readOptions.userId?.toString?.() || (readOptions.userId ? String(readOptions.userId) : null);
+  const unreadUpdateCount = userId
+    ? countUnreadPostProductionUpdates(updates, readOptions.lastReadAt ?? null, userId)
+    : 0;
   return {
     _id: o._id,
     item: o.item || '',
@@ -11258,15 +11483,22 @@ function formatPostProductionItem(doc, usersById = {}) {
     editStatus: o.editStatus || '',
     qcStatus: o.qcStatus || '',
     deliveryStatus: o.deliveryStatus || '',
-    editorId: o.editorId || null,
-    editorName: editor?.fullName || editor?.email || '',
-    editorPhoto: editor?.profilePhoto || null,
+    editorIds,
+    editors,
+    editorsSortName: postProductionUsersSortName(editors),
+    editorId: editorIds[0] || null,
+    editorName: firstEditor?.name || '',
+    editorPhoto: firstEditor?.profilePhoto || null,
+    collaboratorIds,
+    collaborators,
+    collaboratorsSortName: postProductionUsersSortName(collaborators),
     ownerId: o.ownerId || null,
     ownerName: owner?.fullName || owner?.email || '',
     ownerPhoto: owner?.profilePhoto || null,
     dueDate: o.dueDate || null,
     updates,
     updateCount,
+    unreadUpdateCount,
     latestUpdate,
     completed: isPostProductionItemComplete(o),
     archived: !!o.archived,
@@ -11326,6 +11558,103 @@ function normalizePostProductionMentionIds(body) {
   return [...new Set(body.mentionIds.map(String).filter(id => mongoose.Types.ObjectId.isValid(id)))];
 }
 
+function normalizePostProductionLinks(body) {
+  const raw = body?.links;
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const item of raw.slice(0, 10)) {
+    const url = String(item?.url || item || '').trim();
+    if (!url) continue;
+    try {
+      const parsed = new URL(url);
+      if (!['http:', 'https:'].includes(parsed.protocol)) continue;
+      out.push({
+        url: parsed.href,
+        label: String(item?.label || '').trim().slice(0, 200)
+      });
+    } catch (_) { /* skip invalid */ }
+  }
+  return out;
+}
+
+function normalizePostProductionAttachments(body) {
+  const raw = body?.attachments;
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, 10).map(a => ({
+    url: String(a?.url || '').trim(),
+    originalName: String(a?.originalName || '').trim().slice(0, 255),
+    fileType: String(a?.fileType || '').trim(),
+    size: Math.max(0, Number(a?.size) || 0),
+    cloudinaryPublicId: String(a?.cloudinaryPublicId || '').trim()
+  })).filter(a => a.url);
+}
+
+function postProductionUpdatePreviewText(text, links, attachments) {
+  const trimmed = String(text || '').trim();
+  if (trimmed) return trimmed;
+  if (links.length && attachments.length) return 'Shared links and attachments';
+  if (links.length > 1) return `Shared ${links.length} links`;
+  if (links.length === 1) return links[0].label || links[0].url;
+  if (attachments.length > 1) return `Shared ${attachments.length} attachments`;
+  if (attachments.length === 1) return attachments[0].originalName || 'Shared an attachment';
+  return '';
+}
+
+const ppUpdateUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = [
+      'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+      'application/pdf'
+    ];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Allowed: JPG, PNG, GIF, WebP, and PDF.'), false);
+    }
+  }
+});
+
+async function uploadPostProductionAttachment(file, itemId) {
+  const isImage = (file.mimetype || '').startsWith('image/');
+  const resourceType = isImage ? 'image' : 'raw';
+  const cleanFilename = file.originalname.replace(/\.[^/.]+$/, '');
+  const sanitizedFilename = cleanFilename.replace(/[^a-zA-Z0-9.-]/g, '_');
+
+  const uploadResult = await new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        resource_type: resourceType,
+        folder: `lumdash/post-production/${itemId}`,
+        public_id: `${Date.now()}_${sanitizedFilename}`,
+        use_filename: false,
+        unique_filename: true,
+        type: 'upload',
+        access_mode: 'public'
+      },
+      (error, result) => {
+        if (error) reject(error);
+        else resolve(result);
+      }
+    );
+    uploadStream.end(file.buffer);
+  });
+
+  let url = uploadResult.secure_url;
+  if (!isImage && file.mimetype === 'application/pdf' && url.includes('/raw/upload/')) {
+    url = url.replace('/raw/upload/', '/image/upload/fl_attachment:false/');
+  }
+
+  return {
+    url,
+    originalName: file.originalname,
+    fileType: file.mimetype,
+    size: file.size,
+    cloudinaryPublicId: uploadResult.public_id
+  };
+}
+
 async function sendPostProductionUpdateEmail(recipient, data) {
   if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) return;
   const { isNotificationChannelEnabled } = require('./lib/userSettings');
@@ -11366,7 +11695,7 @@ async function sendPostProductionUpdateEmail(recipient, data) {
 /**
  * Notify editor, assignee owner, and @mentioned users about a new update or reply.
  */
-async function notifyPostProductionUpdate(doc, actorId, { isReply, previewText, mentionIds = [] }) {
+async function notifyPostProductionUpdate(doc, actorId, { isReply, previewText, mentionIds = [], updateTime = null }) {
   try {
     const actor = await User.findById(actorId).select('fullName email').lean();
     const actorName = actor?.fullName || actor?.email || 'Someone';
@@ -11378,15 +11707,10 @@ async function notifyPostProductionUpdate(doc, actorId, { isReply, previewText, 
     const actorStr = ppIdStr(actorId);
     const snippet = String(previewText || '').trim().slice(0, 280);
 
-    const recipientIds = new Set();
-    if (doc.editorId) recipientIds.add(doc.editorId.toString());
-    if (doc.ownerId) recipientIds.add(doc.ownerId.toString());
-    mentionIds.forEach(id => recipientIds.add(String(id)));
-    recipientIds.delete(actorStr);
+    const recipientIds = await getPostProductionUpdateRecipientIds(doc, actorId, mentionIds);
+    if (!recipientIds.length) return;
 
-    if (!recipientIds.size) return;
-
-    const recipients = await User.find({ _id: { $in: [...recipientIds] } }).select('fullName email settings role').lean();
+    const recipients = await User.find({ _id: { $in: recipientIds } }).select('fullName email settings role').lean();
     const title = isReply ? 'New reply on post production item' : 'New update on post production item';
     const message = `${actorName} ${isReply ? 'replied on' : 'posted an update on'} "${itemName}": ${snippet}`;
 
@@ -11505,14 +11829,23 @@ async function notifyPostProductionUpdates(before, after, actorId) {
     const link = { page: 'post-production', params: { itemId } };
     const actorStr = ppIdStr(actorId);
 
-    const prevEditor = before ? ppIdStr(before.editorId) : null;
+    const prevEditors = new Set(before ? (before.editorIds || []) : []);
+    const prevCollaborators = new Set(before ? (before.collaboratorIds || []) : []);
     const prevOwner = before ? ppIdStr(before.ownerId) : null;
-    const newEditor = ppIdStr(after.editorId);
+    const newEditorIds = getPostProductionEditorIds(after);
+    const newCollaboratorIds = getPostProductionCollaboratorIds(after);
     const newOwner = ppIdStr(after.ownerId);
 
     const assignmentTargets = [];
-    if (newEditor && newEditor !== prevEditor && newEditor !== actorStr) {
-      assignmentTargets.push({ userId: newEditor, role: 'editor' });
+    for (const userId of newEditorIds) {
+      if (!prevEditors.has(userId) && userId !== actorStr) {
+        assignmentTargets.push({ userId, role: 'editor' });
+      }
+    }
+    for (const userId of newCollaboratorIds) {
+      if (!prevCollaborators.has(userId) && userId !== actorStr) {
+        assignmentTargets.push({ userId, role: 'collaborator' });
+      }
     }
     if (newOwner && newOwner !== prevOwner && newOwner !== actorStr) {
       assignmentTargets.push({ userId: newOwner, role: 'owner' });
@@ -11525,7 +11858,10 @@ async function notifyPostProductionUpdates(before, after, actorId) {
       assignees.forEach(u => { assigneeById[u._id.toString()] = u; });
 
       for (const target of assignmentTargets) {
-        const roleLabel = target.role === 'owner' ? 'Owner' : 'Editor';
+        await markPostProductionAssignmentNew(target.userId, after._id);
+        const roleLabel = target.role === 'owner'
+          ? 'Owner'
+          : (target.role === 'collaborator' ? 'Collaborator' : 'Editor');
         await createNotification({
           recipientId: target.userId,
           type: 'post_production_assigned',
@@ -11595,6 +11931,118 @@ async function notifyPostProductionUpdates(before, after, actorId) {
   }
 }
 
+async function getDashboardNavVisitedAt(userId, page) {
+  const doc = await DashboardNavVisit.findOne({ userId, page }).select('visitedAt').lean();
+  return doc?.visitedAt || null;
+}
+
+async function markDashboardNavVisited(userId, page) {
+  const now = new Date();
+  await DashboardNavVisit.findOneAndUpdate(
+    { userId, page },
+    { $set: { visitedAt: now } },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+  return now;
+}
+
+async function userCanReviewAnyReimbursement(user) {
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  const scope = await getReimbursementEventScope(user);
+  return Array.isArray(scope) && scope.length > 0;
+}
+
+async function getFlightsSidebarIndicator(user) {
+  if (!hasPlannerAccess(user)) return { hasNew: false };
+  const visitedAt = await getDashboardNavVisitedAt(user.id, 'flights');
+  const query = { status: { $in: ['pending', 'change_requested'] } };
+  if (visitedAt) query.updatedAt = { $gt: visitedAt };
+  const count = await FlightRequest.countDocuments(query);
+  return { hasNew: count > 0 };
+}
+
+async function getReimbursementsSidebarIndicator(user) {
+  if (!(await userCanReviewAnyReimbursement(user))) return { hasNew: false };
+  const visitedAt = await getDashboardNavVisitedAt(user.id, 'reimbursements');
+  const query = { status: 'submitted' };
+  const eventScope = await getReimbursementEventScope(user);
+  if (eventScope) query.eventId = { $in: eventScope };
+  if (visitedAt) query.dateSubmitted = { $gt: visitedAt };
+  const count = await ReimbursementRequest.countDocuments(query);
+  return { hasNew: count > 0 };
+}
+
+app.get('/api/dashboard/sidebar-indicators', authenticate, async (req, res) => {
+  try {
+    const [postProduction, flights, reimbursements] = await Promise.all([
+      getPostProductionSidebarIndicator(req.user),
+      getFlightsSidebarIndicator(req.user),
+      getReimbursementsSidebarIndicator(req.user)
+    ]);
+    res.json({
+      postProduction: !!postProduction.hasNew,
+      flights: !!flights.hasNew,
+      reimbursements: !!reimbursements.hasNew
+    });
+  } catch (err) {
+    console.error('Error fetching dashboard sidebar indicators:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/dashboard/sidebar-visited', authenticate, async (req, res) => {
+  try {
+    const page = String(req.body.page || '').trim();
+    if (page === 'post-production') {
+      await markPostProductionAssignmentsVisited(req.user, req.user.id);
+      const indicator = await getPostProductionSidebarIndicator(req.user);
+      return res.json({ page, hasNew: !!indicator.hasNew });
+    }
+    if (page === 'flights') {
+      if (!hasPlannerAccess(req.user)) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      await markDashboardNavVisited(req.user.id, 'flights');
+      const indicator = await getFlightsSidebarIndicator(req.user);
+      return res.json({ page, hasNew: !!indicator.hasNew });
+    }
+    if (page === 'reimbursements') {
+      if (!(await userCanReviewAnyReimbursement(req.user))) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      await markDashboardNavVisited(req.user.id, 'reimbursements');
+      const indicator = await getReimbursementsSidebarIndicator(req.user);
+      return res.json({ page, hasNew: !!indicator.hasNew });
+    }
+    return res.status(400).json({ error: 'Invalid page' });
+  } catch (err) {
+    console.error('Error marking dashboard sidebar visited:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.get('/api/post-production/sidebar-indicator', authenticate, async (req, res) => {
+  try {
+    const indicator = await getPostProductionSidebarIndicator(req.user);
+    res.json(indicator);
+  } catch (err) {
+    console.error('Error fetching post production sidebar indicator:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/post-production/mark-visited', authenticate, async (req, res) => {
+  try {
+    await markPostProductionAssignmentsVisited(req.user, req.user.id);
+    const indicator = await getPostProductionSidebarIndicator(req.user);
+    res.json(indicator);
+  } catch (err) {
+    console.error('Error marking post production visited:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 app.get('/api/post-production', authenticate, async (req, res) => {
   try {
     const { search, filter, sort, order } = req.query;
@@ -11607,7 +12055,11 @@ app.get('/api/post-production', authenticate, async (req, res) => {
     let items = await PostProductionItem.find(query).lean();
 
     const usersById = await postProductionUsersById(items);
-    let rows = items.map(i => formatPostProductionItem(i, usersById));
+    const readMap = await postProductionLastReadMap(req.user.id, items.map(i => i._id));
+    let rows = items.map(i => formatPostProductionItem(i, usersById, {
+      userId: req.user.id,
+      lastReadAt: readMap.get(i._id.toString()) || null
+    }));
 
     const q = String(search || '').trim().toLowerCase();
     if (q) {
@@ -11620,6 +12072,8 @@ app.get('/api/post-production', authenticate, async (req, res) => {
           (r.item || '').toLowerCase().includes(q) ||
           (r.project || '').toLowerCase().includes(q) ||
           (r.editorName || '').toLowerCase().includes(q) ||
+          (r.editorsSortName || '').includes(q) ||
+          (r.collaboratorsSortName || '').includes(q) ||
           (r.ownerName || '').toLowerCase().includes(q) ||
           updateText.toLowerCase().includes(q)
         );
@@ -11640,7 +12094,8 @@ app.get('/api/post-production', authenticate, async (req, res) => {
       item: 'item',
       project: 'project',
       editStatus: 'editStatus',
-      editorName: 'editorName',
+      editorName: 'editorsSortName',
+      collaboratorsSortName: 'collaboratorsSortName',
       qcStatus: 'qcStatus',
       deliveryStatus: 'deliveryStatus',
       ownerName: 'ownerName',
@@ -11714,6 +12169,10 @@ app.post('/api/post-production', authenticate, async (req, res) => {
 
     const resolved = await resolvePostProductionProject(req.body.project, req.body.eventId);
 
+    const editorIds = normalizePostProductionUserIds(req.body.editorIds
+      || (req.body.editorId ? [req.body.editorId] : []));
+    const collaboratorIds = normalizePostProductionUserIds(req.body.collaboratorIds || []);
+
     const doc = await PostProductionItem.create({
       item: String(req.body.item || '').trim(),
       project: resolved.project,
@@ -11721,7 +12180,9 @@ app.post('/api/post-production', authenticate, async (req, res) => {
       editStatus: req.body.editStatus || '',
       qcStatus: req.body.qcStatus || '',
       deliveryStatus: req.body.deliveryStatus || '',
-      editorId: req.body.editorId || null,
+      editorIds,
+      collaboratorIds,
+      editorId: editorIds[0] || null,
       ownerId: req.body.ownerId || null,
       dueDate: req.body.dueDate ? new Date(req.body.dueDate) : null,
       updates: [],
@@ -11734,7 +12195,11 @@ app.post('/api/post-production', authenticate, async (req, res) => {
     notifyPostProductionUpdates(null, doc, req.user.id).catch(err =>
       console.error('Post production create notifications:', err)
     );
-    res.status(201).json(formatPostProductionItem(doc, usersById));
+    const read = await PostProductionUpdateRead.findOne({ userId: req.user.id, itemId: doc._id }).select('lastReadAt').lean();
+    res.status(201).json(formatPostProductionItem(doc, usersById, {
+      userId: req.user.id,
+      lastReadAt: read?.lastReadAt || null
+    }));
   } catch (err) {
     console.error('Error creating post production item:', err);
     res.status(500).json({ error: 'Server error' });
@@ -11743,20 +12208,26 @@ app.post('/api/post-production', authenticate, async (req, res) => {
 
 async function duplicatePostProductionItem(source, userId) {
   const updates = (source.updates || []).map(u => ({
-    text: u.text,
+    text: u.text || '',
     authorId: u.authorId,
     authorName: u.authorName,
     mentionIds: u.mentionIds || [],
+    links: u.links || [],
+    attachments: u.attachments || [],
     createdAt: u.createdAt || new Date(),
     replies: (u.replies || []).map(r => ({
       text: r.text,
       authorId: r.authorId,
       authorName: r.authorName,
       mentionIds: r.mentionIds || [],
+      links: r.links || [],
+      attachments: r.attachments || [],
       createdAt: r.createdAt || new Date()
     }))
   }));
   const itemName = String(source.item || '').trim();
+  const editorIds = getPostProductionEditorIds(source);
+  const collaboratorIds = getPostProductionCollaboratorIds(source);
   return PostProductionItem.create({
     item: itemName ? `${itemName} (copy)` : 'Copy',
     project: source.project || '',
@@ -11764,7 +12235,9 @@ async function duplicatePostProductionItem(source, userId) {
     editStatus: source.editStatus || '',
     qcStatus: source.qcStatus || '',
     deliveryStatus: source.deliveryStatus || '',
-    editorId: source.editorId || null,
+    editorIds,
+    collaboratorIds,
+    editorId: editorIds[0] || null,
     ownerId: source.ownerId || null,
     dueDate: source.dueDate || null,
     updates,
@@ -11845,11 +12318,15 @@ app.post('/api/post-production/bulk', authenticate, async (req, res) => {
         );
       }
       const usersById = await postProductionUsersById(created);
+      const readMap = await postProductionLastReadMap(req.user.id, created.map(c => c._id));
       return res.json({
         action,
         affected: created.length,
         skipped: docs.length - created.length,
-        items: created.map(c => formatPostProductionItem(c, usersById))
+        items: created.map(c => formatPostProductionItem(c, usersById, {
+          userId: req.user.id,
+          lastReadAt: readMap.get(c._id.toString()) || null
+        }))
       });
     }
 
@@ -11868,7 +12345,11 @@ app.get('/api/post-production/:id', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'You do not have access to this item' });
     }
     const usersById = await postProductionUsersById([doc]);
-    res.json(formatPostProductionItem(doc, usersById));
+    const read = await PostProductionUpdateRead.findOne({ userId: req.user.id, itemId: doc._id }).select('lastReadAt').lean();
+    res.json(formatPostProductionItem(doc, usersById, {
+      userId: req.user.id,
+      lastReadAt: read?.lastReadAt || null
+    }));
   } catch (err) {
     console.error('Error fetching post production item:', err);
     res.status(500).json({ error: 'Server error' });
@@ -11884,7 +12365,8 @@ app.put('/api/post-production/:id', authenticate, async (req, res) => {
     }
 
     const before = {
-      editorId: doc.editorId,
+      editorIds: getPostProductionEditorIds(doc),
+      collaboratorIds: getPostProductionCollaboratorIds(doc),
       ownerId: doc.ownerId,
       editStatus: doc.editStatus,
       qcStatus: doc.qcStatus,
@@ -11899,16 +12381,26 @@ app.put('/api/post-production/:id', authenticate, async (req, res) => {
     if (req.body.qcStatus != null) doc.qcStatus = req.body.qcStatus;
     if (req.body.deliveryStatus != null) doc.deliveryStatus = req.body.deliveryStatus;
 
-    if (req.body.editorId !== undefined || req.body.ownerId !== undefined) {
+    const reassignFields = ['editorIds', 'collaboratorIds', 'editorId', 'ownerId'];
+    const hasReassign = reassignFields.some(f => req.body[f] !== undefined);
+    if (hasReassign) {
       const canReassign = isPostProductionAdmin(req.user)
         || (doc.eventId && await userOwnsPostProductionEvent(req.user.id, doc.eventId));
       if (!canReassign) {
         return res.status(403).json({
-          error: 'Only admins and event owners can change editor or owner assignments'
+          error: 'Only admins and event owners can change editor, collaborator, or owner assignments'
         });
       }
-      if (req.body.editorId !== undefined) doc.editorId = req.body.editorId || null;
+      if (req.body.editorIds !== undefined) {
+        doc.editorIds = normalizePostProductionUserIds(req.body.editorIds);
+      } else if (req.body.editorId !== undefined) {
+        doc.editorIds = req.body.editorId ? [req.body.editorId] : [];
+      }
+      if (req.body.collaboratorIds !== undefined) {
+        doc.collaboratorIds = normalizePostProductionUserIds(req.body.collaboratorIds);
+      }
       if (req.body.ownerId !== undefined) doc.ownerId = req.body.ownerId || null;
+      syncPostProductionAssigneeFields(doc);
     }
 
     if (req.body.project != null || req.body.eventId !== undefined) {
@@ -11937,9 +12429,46 @@ app.put('/api/post-production/:id', authenticate, async (req, res) => {
     );
 
     const usersById = await postProductionUsersById(doc);
-    res.json(formatPostProductionItem(doc, usersById));
+    const read = await PostProductionUpdateRead.findOne({ userId: req.user.id, itemId: doc._id }).select('lastReadAt').lean();
+    res.json(formatPostProductionItem(doc, usersById, {
+      userId: req.user.id,
+      lastReadAt: read?.lastReadAt || null
+    }));
   } catch (err) {
     console.error('Error updating post production item:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/post-production/:id/updates/attachments', authenticate, ppUpdateUpload.single('file'), async (req, res) => {
+  try {
+    const doc = await PostProductionItem.findById(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Item not found' });
+    if (!(await canAccessPostProductionItem(req.user, doc))) {
+      return res.status(403).json({ error: 'You do not have access to this item' });
+    }
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    const attachment = await uploadPostProductionAttachment(req.file, doc._id.toString());
+    res.json({ attachment });
+  } catch (err) {
+    console.error('Error uploading post production attachment:', err);
+    res.status(500).json({ error: err.message || 'Failed to upload attachment' });
+  }
+});
+
+app.post('/api/post-production/:id/updates/mark-read', authenticate, async (req, res) => {
+  try {
+    const doc = await PostProductionItem.findById(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Item not found' });
+    if (!(await canAccessPostProductionItem(req.user, doc))) {
+      return res.status(403).json({ error: 'You do not have access to this item' });
+    }
+
+    const lastReadAt = await markPostProductionUpdatesRead(req.user.id, doc._id);
+    res.json({ unreadUpdateCount: 0, lastReadAt });
+  } catch (err) {
+    console.error('Error marking post production updates read:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -11947,7 +12476,11 @@ app.put('/api/post-production/:id', authenticate, async (req, res) => {
 app.post('/api/post-production/:id/updates', authenticate, async (req, res) => {
   try {
     const text = String(req.body.text || '').trim();
-    if (!text) return res.status(400).json({ error: 'Update text is required' });
+    const links = normalizePostProductionLinks(req.body);
+    const attachments = normalizePostProductionAttachments(req.body);
+    if (!text && !links.length && !attachments.length) {
+      return res.status(400).json({ error: 'Add a message, link, or attachment' });
+    }
 
     const doc = await PostProductionItem.findById(req.params.id);
     if (!doc) return res.status(404).json({ error: 'Item not found' });
@@ -11959,39 +12492,45 @@ app.post('/api/post-production/:id/updates', authenticate, async (req, res) => {
     const authorName = user?.fullName || user?.email || 'Unknown';
     const mentionIds = normalizePostProductionMentionIds(req.body);
     const parentUpdateId = req.body.parentUpdateId ? String(req.body.parentUpdateId) : null;
+    const updateTime = new Date();
+    const previewText = postProductionUpdatePreviewText(text, links, attachments);
+
+    const entryPayload = {
+      text,
+      authorId: req.user.id,
+      authorName,
+      mentionIds,
+      links,
+      attachments,
+      createdAt: updateTime
+    };
 
     if (parentUpdateId) {
       const parent = doc.updates.id(parentUpdateId);
       if (!parent) return res.status(404).json({ error: 'Update not found' });
-      parent.replies.push({
-        text,
-        authorId: req.user.id,
-        authorName,
-        mentionIds,
-        createdAt: new Date()
-      });
+      parent.replies.push(entryPayload);
     } else {
-      doc.updates.push({
-        text,
-        authorId: req.user.id,
-        authorName,
-        mentionIds,
-        replies: [],
-        createdAt: new Date()
-      });
+      doc.updates.push({ ...entryPayload, replies: [] });
     }
 
     doc.updatedBy = req.user.id;
     await doc.save();
 
+    await bumpPostProductionUnreadForRecipients(doc, req.user.id, mentionIds, updateTime);
+
     notifyPostProductionUpdate(doc, req.user.id, {
       isReply: !!parentUpdateId,
-      previewText: text,
-      mentionIds
+      previewText,
+      mentionIds,
+      updateTime
     }).catch(err => console.error('Post production update notifications:', err));
 
     const usersById = await postProductionUsersById(doc);
-    res.json(formatPostProductionItem(doc, usersById));
+    const read = await PostProductionUpdateRead.findOne({ userId: req.user.id, itemId: doc._id }).select('lastReadAt').lean();
+    res.json(formatPostProductionItem(doc, usersById, {
+      userId: req.user.id,
+      lastReadAt: read?.lastReadAt || null
+    }));
   } catch (err) {
     console.error('Error adding post production update:', err);
     res.status(500).json({ error: 'Server error' });

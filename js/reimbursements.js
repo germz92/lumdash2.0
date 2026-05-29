@@ -585,6 +585,10 @@
       window.initDashboardSidebar();
     }
 
+    if (typeof window.markSidebarPageVisited === 'function') {
+      await window.markSidebarPageVisited('reimbursements');
+    }
+
     setupMobileMenu();
     setupListeners();
     checkResponsiveView();

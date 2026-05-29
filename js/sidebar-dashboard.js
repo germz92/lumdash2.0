@@ -187,6 +187,8 @@
     fixPageContainer();
     setupAvatarUpload();
     loadProfilePhoto();
+    refreshAllSidebarDots();
+    setupSidebarDotsPolling();
   }
   
   /**
@@ -210,7 +212,11 @@
         // For SPA pages (marked with data-spa="true"), use window.navigate
         if (isSpa && window.navigate) {
           e.preventDefault();
-          window.navigate(page);
+          if (page === 'post-production' || page === 'reimbursements') {
+            markSidebarPageVisited(page).finally(() => window.navigate(page));
+          } else {
+            window.navigate(page);
+          }
           return;
         }
         
@@ -711,11 +717,109 @@
     };
   }
 
+  function authHeaders() {
+    const token = localStorage.getItem('token');
+    if (!token) return {};
+    return { Authorization: token.startsWith('Bearer ') ? token : `Bearer ${token}` };
+  }
+
+  function setSidebarDotVisible(dotId, show) {
+    const dot = document.getElementById(dotId);
+    if (!dot) return;
+    if (show) {
+      dot.classList.add('show');
+      dot.removeAttribute('hidden');
+      dot.setAttribute('aria-hidden', 'false');
+    } else {
+      dot.classList.remove('show');
+      dot.setAttribute('hidden', '');
+      dot.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  async function refreshAllSidebarDots() {
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setSidebarDotVisible('ppSidebarDot', false);
+      setSidebarDotVisible('flightsSidebarDot', false);
+      setSidebarDotVisible('reimbursementsSidebarDot', false);
+      return;
+    }
+    try {
+      const res = await fetch(`${getApiBase()}/api/dashboard/sidebar-indicators`, {
+        headers: authHeaders()
+      });
+      if (!res.ok) {
+        setSidebarDotVisible('ppSidebarDot', false);
+        setSidebarDotVisible('flightsSidebarDot', false);
+        setSidebarDotVisible('reimbursementsSidebarDot', false);
+        return;
+      }
+      const data = await res.json();
+      setSidebarDotVisible('ppSidebarDot', !!data.postProduction);
+      setSidebarDotVisible('flightsSidebarDot', !!data.flights);
+      setSidebarDotVisible('reimbursementsSidebarDot', !!data.reimbursements);
+    } catch (err) {
+      console.error('Dashboard sidebar indicators:', err);
+    }
+  }
+
+  async function markSidebarPageVisited(page) {
+    const token = localStorage.getItem('token');
+    if (!token || !page) return;
+    const dotMap = {
+      'post-production': 'ppSidebarDot',
+      flights: 'flightsSidebarDot',
+      reimbursements: 'reimbursementsSidebarDot'
+    };
+    try {
+      const res = await fetch(`${getApiBase()}/api/dashboard/sidebar-visited`, {
+        method: 'POST',
+        headers: {
+          ...authHeaders(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ page })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const dotId = dotMap[page];
+        if (dotId) setSidebarDotVisible(dotId, !!data.hasNew);
+        return;
+      }
+    } catch (err) {
+      console.error('Dashboard sidebar mark visited:', err);
+    }
+    await refreshAllSidebarDots();
+  }
+
+  function setupSidebarDotsPolling() {
+    if (document._sidebarDotsPollingAttached) return;
+    document._sidebarDotsPollingAttached = true;
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        refreshAllSidebarDots();
+      }
+    });
+  }
+
+  async function refreshPostProductionSidebarDot() {
+    return refreshAllSidebarDots();
+  }
+
+  async function markPostProductionVisited() {
+    return markSidebarPageVisited('post-production');
+  }
+
   // Expose functions globally
   window.injectDashboardSidebar = injectDashboardSidebar;
   window.initDashboardSidebar = initDashboardSidebar;
   window.updateDashboardUserInfo = updateUserInfo;
   window.setDashboardActivePage = setActivePage;
   window.loadDashboardProfilePhoto = loadProfilePhoto;
+  window.refreshAllSidebarDots = refreshAllSidebarDots;
+  window.refreshPostProductionSidebarDot = refreshPostProductionSidebarDot;
+  window.markSidebarPageVisited = markSidebarPageVisited;
+  window.markPostProductionVisited = markPostProductionVisited;
   
 })();

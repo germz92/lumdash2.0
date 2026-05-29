@@ -46,6 +46,47 @@
     };
   }
 
+  /**
+   * Wrap an async submit/click handler so it can't run concurrently with itself.
+   * Prevents duplicate records from double-taps / "ghost clicks" on mobile and
+   * impatient re-taps while a slow request is still in flight. Also disables the
+   * relevant submit/button control for the duration of the request.
+   */
+  function guardSubmit(handler) {
+    let busy = false;
+    return async function guardedHandler(e) {
+      if (busy) {
+        // Block the duplicate invocation (and any native form submission).
+        if (e && typeof e.preventDefault === 'function') e.preventDefault();
+        return;
+      }
+
+      // Resolve the control to disable: the clicked button for click handlers,
+      // or the form's submit button for submit handlers.
+      const target = e && e.currentTarget;
+      let control = null;
+      if (target && target.tagName === 'BUTTON') {
+        control = target;
+      } else {
+        const form = (target && target.tagName === 'FORM')
+          ? target
+          : (e && e.target && e.target.closest ? e.target.closest('form') : null);
+        control = form ? form.querySelector('button[type="submit"], [type="submit"]') : null;
+      }
+
+      busy = true;
+      const prevDisabled = control ? control.disabled : null;
+      if (control) control.disabled = true;
+
+      try {
+        return await handler.call(this, e);
+      } finally {
+        busy = false;
+        if (control) control.disabled = prevDisabled === null ? false : prevDisabled;
+      }
+    };
+  }
+
   // DOM Elements
   const elements = {
     // Grids and Tables
@@ -413,7 +454,7 @@
     elements.createRequestModal?.addEventListener('click', (e) => {
       if (e.target === elements.createRequestModal) closeCreateModal();
     });
-    elements.createRequestForm?.addEventListener('submit', handleCreateRequest);
+    elements.createRequestForm?.addEventListener('submit', guardSubmit(handleCreateRequest));
 
     // Trip type toggle
     document.querySelectorAll('input[name="tripType"]').forEach(radio => {
@@ -444,7 +485,7 @@
     elements.viewRequestModal?.addEventListener('click', (e) => {
       if (e.target === elements.viewRequestModal) closeViewModal();
     });
-    elements.viewRequestForm?.addEventListener('submit', handleSaveChanges);
+    elements.viewRequestForm?.addEventListener('submit', guardSubmit(handleSaveChanges));
 
     // Trip type buttons in view modal
     document.querySelectorAll('.trip-type-btn').forEach(btn => {
@@ -455,7 +496,7 @@
     document.getElementById('bookFlightBtn')?.addEventListener('click', showBookingSection);
     document.getElementById('closeBookingSection')?.addEventListener('click', hideBookingSection);
     document.getElementById('cancelBookingBtn')?.addEventListener('click', hideBookingSection);
-    document.getElementById('confirmBookingBtn')?.addEventListener('click', handleConfirmBooking);
+    document.getElementById('confirmBookingBtn')?.addEventListener('click', guardSubmit(handleConfirmBooking));
 
     // Booking Confirmed Modal
     document.getElementById('closeBookingConfirmedModal')?.addEventListener('click', closeBookingConfirmedModal);
@@ -473,7 +514,7 @@
     elements.addPassengerModal?.addEventListener('click', (e) => {
       if (e.target === elements.addPassengerModal) closeAddPassengerModal();
     });
-    elements.addPassengerForm?.addEventListener('submit', handleAddNewPassenger);
+    elements.addPassengerForm?.addEventListener('submit', guardSubmit(handleAddNewPassenger));
 
     // Edit Booked Flight Modal
     elements.closeEditBookedModal?.addEventListener('click', closeEditBookedModal);
@@ -481,7 +522,7 @@
     elements.editBookedModal?.addEventListener('click', (e) => {
       if (e.target === elements.editBookedModal) closeEditBookedModal();
     });
-    elements.editBookedForm?.addEventListener('submit', handleSaveBookedFlight);
+    elements.editBookedForm?.addEventListener('submit', guardSubmit(handleSaveBookedFlight));
     document.getElementById('deleteBookedFlightBtn')?.addEventListener('click', handleDeleteCurrentBookedFlight);
 
     // Edit booked event name search
@@ -514,7 +555,7 @@
     elements.editPassengerModal?.addEventListener('click', (e) => {
       if (e.target === elements.editPassengerModal) closeEditPassengerModal();
     });
-    elements.editPassengerForm?.addEventListener('submit', handleSavePassenger);
+    elements.editPassengerForm?.addEventListener('submit', guardSubmit(handleSavePassenger));
     document.getElementById('deletePassengerBtn')?.addEventListener('click', handleDeletePassenger);
 
     // Rewards management
@@ -528,7 +569,7 @@
     elements.createBookingModal?.addEventListener('click', (e) => {
       if (e.target === elements.createBookingModal) closeCreateBookingModal();
     });
-    elements.createBookingForm?.addEventListener('submit', handleCreateBooking);
+    elements.createBookingForm?.addEventListener('submit', guardSubmit(handleCreateBooking));
 
     // Booking trip type toggle
     document.querySelectorAll('input[name="bookingTripType"]').forEach(radio => {
@@ -552,7 +593,7 @@
     elements.requestChangeModal?.addEventListener('click', (e) => {
       if (e.target === elements.requestChangeModal) closeRequestChangeModal();
     });
-    elements.requestChangeForm?.addEventListener('submit', handleSubmitChangeRequest);
+    elements.requestChangeForm?.addEventListener('submit', guardSubmit(handleSubmitChangeRequest));
 
     // Change field checkboxes - toggle visibility of corresponding input fields
     document.querySelectorAll('input[name="changeField"]').forEach(cb => {
@@ -565,7 +606,7 @@
     elements.approveChangeModal?.addEventListener('click', (e) => {
       if (e.target === elements.approveChangeModal) closeApproveChangeModal();
     });
-    elements.approveChangeForm?.addEventListener('submit', handleConfirmApproveChange);
+    elements.approveChangeForm?.addEventListener('submit', guardSubmit(handleConfirmApproveChange));
 
     // Close suggestions on click outside
     document.addEventListener('click', (e) => {

@@ -1327,6 +1327,10 @@
         } else if (window.initDashboardSidebar) {
           window.initDashboardSidebar();
         }
+
+        if (typeof window.markSidebarPageVisited === 'function') {
+          window.markSidebarPageVisited('flights');
+        }
       });
     </script>
 </body>

@@ -76,6 +76,7 @@
               <col class="pp-col-avatar">
               <col class="pp-col-status">
               <col class="pp-col-avatar">
+              <col class="pp-col-avatar">
               <col class="pp-col-status">
               <col class="pp-col-status">
             </colgroup>
@@ -90,7 +91,8 @@
                 <th class="sortable pp-th-due" data-sort="dueDate">Due Date<span class="sort-icon material-symbols-outlined">unfold_more</span></th>
                 <th class="sortable pp-th-avatar" data-sort="ownerName" title="Owner">Owner<span class="sort-icon material-symbols-outlined">unfold_more</span></th>
                 <th class="sortable pp-th-status" data-sort="editStatus">Edit<span class="sort-icon material-symbols-outlined">unfold_more</span></th>
-                <th class="sortable pp-th-avatar" data-sort="editorName" title="Editor">Editor<span class="sort-icon material-symbols-outlined">unfold_more</span></th>
+                <th class="sortable pp-th-avatar" data-sort="editorName" title="Editors">Editors<span class="sort-icon material-symbols-outlined">unfold_more</span></th>
+                <th class="sortable pp-th-avatar" data-sort="collaboratorsSortName" title="Collaborators">Collaborators<span class="sort-icon material-symbols-outlined">unfold_more</span></th>
                 <th class="sortable pp-th-status" data-sort="qcStatus">QC<span class="sort-icon material-symbols-outlined">unfold_more</span></th>
                 <th class="sortable pp-th-status" data-sort="deliveryStatus">Delivery<span class="sort-icon material-symbols-outlined">unfold_more</span></th>
               </tr>
@@ -131,7 +133,23 @@
       <div class="pp-updates-compose" id="ppUpdatesCompose">
         <div class="pp-reply-context" id="ppReplyContext" hidden></div>
         <textarea id="ppUpdateInput" rows="3" placeholder="Write an update… Use @ to mention someone"></textarea>
+        <div class="pp-link-form" id="ppLinkForm" hidden>
+          <input type="url" id="ppLinkUrl" class="pp-link-url-input" placeholder="https://example.com" autocomplete="off">
+          <input type="text" id="ppLinkLabel" class="pp-link-label-input" placeholder="Link label (optional)" autocomplete="off">
+          <button type="button" class="pp-compose-tool-btn" id="ppLinkAdd">Add</button>
+          <button type="button" class="pp-compose-tool-btn pp-compose-tool-btn-muted" id="ppLinkCancel">Cancel</button>
+        </div>
+        <div class="pp-compose-pending" id="ppComposePending" hidden></div>
         <div class="pp-updates-compose-bar">
+          <div class="pp-updates-compose-tools">
+            <button type="button" class="pp-compose-tool-btn" id="ppAttachBtn" title="Attach file" aria-label="Attach file">
+              <span class="material-symbols-outlined">attach_file</span>
+            </button>
+            <button type="button" class="pp-compose-tool-btn" id="ppAddLinkBtn" title="Add link" aria-label="Add link">
+              <span class="material-symbols-outlined">link</span>
+            </button>
+            <input type="file" id="ppAttachInput" hidden accept="image/jpeg,image/png,image/gif,image/webp,application/pdf">
+          </div>
           <button type="button" class="pp-btn-primary" id="ppUpdateSave">Post update</button>
         </div>
       </div>
@@ -148,7 +166,7 @@
 <!-- @ mention suggestions -->
 <div class="pp-mention-menu" id="ppMentionMenu" style="display: none;"></div>
 
-<!-- User picker dropdown (editor / owner) -->
+<!-- User picker dropdown (editors / collaborators / owner) -->
 <div class="pp-editor-menu" id="ppUserPickerMenu" style="display: none;"></div>
 
 <!-- Project suggestions -->

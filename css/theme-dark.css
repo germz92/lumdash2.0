@@ -359,6 +359,25 @@ body:has(.events-page) {
   font-variation-settings: 'FILL' 1;
 }
 
+.nav-item-dot {
+  display: none;
+  width: 8px;
+  height: 8px;
+  margin-left: auto;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--brand-red, #cc0007);
+  box-shadow: 0 0 0 2px var(--bg-primary, #0a0a0a);
+}
+
+.nav-item-dot.show {
+  display: block;
+}
+
+.nav-item.active .nav-item-dot.show {
+  box-shadow: 0 0 0 2px var(--brand-red-muted, rgba(204, 0, 7, 0.15));
+}
+
 /* Sidebar User Profile */
 .sidebar-user {
   padding: 16px;

@@ -28,6 +28,9 @@
   let updatesItemId = null;
   let replyToUpdateId = null;
   let composeMentionIds = new Set();
+  let composePendingLinks = [];
+  let composePendingAttachments = [];
+  let composeUploading = false;
   let mentionMenuState = null;
   let userPickerTarget = null;
   let projectSuggestTarget = null;
@@ -44,8 +47,10 @@
     return localStorage.getItem('token');
   }
 
-  function authHeaders() {
-    return { Authorization: getToken(), 'Content-Type': 'application/json' };
+  function authHeaders(json = true) {
+    const h = { Authorization: getToken() };
+    if (json) h['Content-Type'] = 'application/json';
+    return h;
   }
 
   function esc(s) {
@@ -87,6 +92,74 @@
     const title = esc(name);
     const compactCls = avatarOnly ? ' pp-editor-btn--avatar-only' : '';
     return `<button type="button" class="pp-editor-btn${compactCls}" data-user-picker="${row._id}" data-user-field="${field}" title="${title}" aria-label="${title}">${avatarHtml(user, avatarOnly)}</button>`;
+  }
+
+  function resolveRowUsers(row, idsField) {
+    const ids = (row[idsField] || []).map(id => String(id));
+    if (!ids.length && idsField === 'editorIds' && row.editorId) {
+      ids.push(String(row.editorId));
+    }
+    return ids.map(idStr => {
+      const found = users.find(u => String(u._id) === idStr);
+      if (found) return found;
+      const fromApi = (row.editors || row.collaborators || []).find(u => String(u._id) === idStr);
+      if (fromApi) {
+        return { _id: idStr, name: fromApi.name, profilePhoto: fromApi.profilePhoto };
+      }
+      return { _id: idStr, name: 'Unknown', profilePhoto: null };
+    });
+  }
+
+  function singleAvatarChip(user) {
+    if (!user) return '<span class="pp-editor-initials pp-stack-avatar">—</span>';
+    if (user.profilePhoto) {
+      return `<img class="pp-editor-avatar pp-stack-avatar" src="${esc(user.profilePhoto)}" alt="">`;
+    }
+    return `<span class="pp-editor-initials pp-stack-avatar">${esc(initials(userDisplayName(user)))}</span>`;
+  }
+
+  function assigneesNamesTitle(userList) {
+    return userList.map(u => userDisplayName(u)).filter(Boolean).join(', ');
+  }
+
+  function assigneesLabelHtml(userList, maxShow) {
+    const names = assigneesNamesTitle(userList);
+    if (userList.length === 1) {
+      return `<span class="pp-editor-label" title="${esc(names)}">${esc(userDisplayName(userList[0]))}</span>`;
+    }
+    if (userList.length <= maxShow) {
+      return `<span class="pp-editor-label" title="${esc(names)}">${esc(names)}</span>`;
+    }
+    const hidden = userList.length - 1;
+    return `<span class="pp-editor-label" title="${esc(names)}">${esc(userDisplayName(userList[0]))}<span class="pp-assignees-more-label"> +${hidden}</span></span>`;
+  }
+
+  function avatarsStackHtml(userList, avatarOnly = false) {
+    if (!userList.length) {
+      return avatarHtml(null, avatarOnly);
+    }
+    const maxShow = avatarOnly ? 2 : 3;
+    const shown = userList.slice(0, maxShow);
+    const extra = userList.length - shown.length;
+    const hiddenNames = assigneesNamesTitle(userList.slice(maxShow));
+    const chips = shown.map(u => singleAvatarChip(u)).join('');
+    const extraBadge = extra > 0
+      ? `<span class="pp-avatar-more" title="${esc(hiddenNames)}">+${extra}</span>`
+      : '';
+    const stackTitle = esc(assigneesNamesTitle(userList));
+    if (avatarOnly) {
+      return `<span class="pp-avatars-stack pp-avatars-stack--compact" title="${stackTitle}">${chips}${extraBadge}</span>`;
+    }
+    return `<span class="pp-avatars-stack" title="${stackTitle}">${chips}${extraBadge}</span>${assigneesLabelHtml(userList, maxShow)}`;
+  }
+
+  function usersPickerBtn(row, field, userList, avatarOnly = false) {
+    const label = field === 'editorIds' ? 'Editors' : 'Collaborators';
+    const title = userList.length
+      ? userList.map(userDisplayName).join(', ')
+      : `Assign ${label.toLowerCase()}`;
+    const compactCls = avatarOnly ? ' pp-editor-btn--avatar-only' : '';
+    return `<button type="button" class="pp-editor-btn${compactCls}" data-user-picker="${row._id}" data-user-field="${field}" data-user-multi="1" title="${esc(title)}" aria-label="${esc(title)}">${avatarsStackHtml(userList, avatarOnly)}</button>`;
   }
 
   function statusSelectClass(value) {
@@ -159,13 +232,86 @@
     return safe;
   }
 
+  function linkifyEscapedHtml(safe) {
+    return safe.replace(
+      /(https?:\/\/[^\s<]+[^\s<.,:;"')\]}>])/gi,
+      '<a href="$1" target="_blank" rel="noopener noreferrer" class="pp-update-link">$1</a>'
+    );
+  }
+
+  function renderMessageText(text) {
+    let safe = esc(text);
+    safe = linkifyEscapedHtml(safe);
+    users.slice().sort((a, b) => userDisplayName(b).length - userDisplayName(a).length).forEach(u => {
+      const name = esc(userDisplayName(u));
+      if (!name) return;
+      const re = new RegExp(`@${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g');
+      safe = safe.replace(re, `<span class="pp-mention-tag">@${name}</span>`);
+    });
+    return safe;
+  }
+
+  function isImageFileType(fileType) {
+    return /^image\//i.test(fileType || '');
+  }
+
+  function renderAttachmentHtml(a) {
+    const name = esc(a.originalName || 'Attachment');
+    const url = esc(a.url || '#');
+    if (isImageFileType(a.fileType)) {
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="pp-update-attachment pp-update-attachment-image">
+        <img src="${url}" alt="${name}" loading="lazy">
+      </a>`;
+    }
+    return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="pp-update-attachment pp-update-attachment-file">
+      <span class="material-symbols-outlined">description</span>
+      <span class="pp-update-attachment-name">${name}</span>
+    </a>`;
+  }
+
+  function renderUpdateExtras(entry) {
+    const links = entry.links || [];
+    const attachments = entry.attachments || [];
+    let html = '';
+    if (links.length) {
+      html += `<div class="pp-update-links">${links.map(l => {
+        const url = esc(l.url || '');
+        const label = esc(l.label || l.url || 'Link');
+        return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="pp-update-link-chip">
+          <span class="material-symbols-outlined">link</span>
+          <span>${label}</span>
+        </a>`;
+      }).join('')}</div>`;
+    }
+    if (attachments.length) {
+      html += `<div class="pp-update-attachments">${attachments.map(renderAttachmentHtml).join('')}</div>`;
+    }
+    return html;
+  }
+
+  function renderUpdateBody(entry) {
+    const text = String(entry.text || '').trim();
+    let html = '';
+    if (text) {
+      html += `<div class="pp-update-body">${renderMessageText(text)}</div>`;
+    }
+    html += renderUpdateExtras(entry);
+    if (!html) {
+      html = '<div class="pp-update-body pp-update-body-muted">Shared an update</div>';
+    }
+    return html;
+  }
+
   function updatesButton(row) {
     if (row._id === DRAFT_ID) return '';
-    const count = row.updateCount || 0;
+    const count = row.unreadUpdateCount || 0;
     const badge = count > 0
       ? `<span class="pp-updates-badge">${count > 99 ? '99+' : count}</span>`
       : '';
-    return `<div class="pp-updates-cell-inner"><button type="button" class="pp-updates-btn" data-updates="${esc(row._id)}" aria-label="Open updates (${count})">
+    const ariaLabel = count > 0
+      ? `Open updates (${count} unread)`
+      : 'Open updates';
+    return `<div class="pp-updates-cell-inner"><button type="button" class="pp-updates-btn" data-updates="${esc(row._id)}" aria-label="${ariaLabel}">
       <span class="material-symbols-outlined">chat</span>${badge}
     </button></div>`;
   }
@@ -178,7 +324,7 @@
     return `
       <div class="${cls}">
         <div class="pp-update-meta">${esc(entry.authorName || 'Unknown')} · ${formatUpdateDate(entry.createdAt)}</div>
-        <div class="pp-update-body">${renderMentionText(entry.text || '')}</div>
+        ${renderUpdateBody(entry)}
         ${replyBtn}
       </div>`;
   }
@@ -410,12 +556,14 @@
   }
 
   function getRowParts(row) {
-    const editorUser = resolveRowUser(row, 'editorId', 'editorName', 'editorPhoto');
+    const editorUsers = resolveRowUsers(row, 'editorIds');
+    const collaboratorUsers = resolveRowUsers(row, 'collaboratorIds');
     const ownerUser = resolveRowUser(row, 'ownerId', 'ownerName', 'ownerPhoto');
     const isDraft = row._id === DRAFT_ID;
 
     return {
-      editorUser,
+      editorUsers,
+      collaboratorUsers,
       ownerUser,
       isDraft,
       dueClass: dueRowClass(row),
@@ -424,9 +572,11 @@
       editSelect: statusSelect('editStatus', EDIT_STATUSES, row.editStatus, row._id),
       qcSelect: statusSelect('qcStatus', QC_STATUSES, row.qcStatus, row._id),
       deliverySelect: statusSelect('deliveryStatus', DELIVERY_STATUSES, row.deliveryStatus, row._id),
-      editorBtn: userPickerBtn(row, 'editorId', editorUser),
+      editorsBtn: usersPickerBtn(row, 'editorIds', editorUsers),
+      collaboratorsBtn: usersPickerBtn(row, 'collaboratorIds', collaboratorUsers),
       ownerBtn: userPickerBtn(row, 'ownerId', ownerUser),
-      tableEditorBtn: userPickerBtn(row, 'editorId', editorUser, true),
+      tableEditorsBtn: usersPickerBtn(row, 'editorIds', editorUsers, true),
+      tableCollaboratorsBtn: usersPickerBtn(row, 'collaboratorIds', collaboratorUsers, true),
       tableOwnerBtn: userPickerBtn(row, 'ownerId', ownerUser, true),
       dueInput: `<div class="pp-date-input-wrap"><input type="date" data-field="dueDate" data-id="${row._id}" value="${formatDueDate(row.dueDate)}"></div>`,
       updatesBtn: updatesButton(row)
@@ -457,7 +607,8 @@
           ${td('Due Date', p.dueInput, 'pp-td-due')}
           ${td('Owner', p.tableOwnerBtn, 'pp-td-avatar')}
           ${td('Edit', p.editSelect, 'pp-td-status')}
-          ${td('Editor', p.tableEditorBtn, 'pp-td-avatar')}
+          ${td('Editors', p.tableEditorsBtn, 'pp-td-avatar')}
+          ${td('Collaborators', p.tableCollaboratorsBtn, 'pp-td-avatar')}
           ${td('QC', p.qcSelect, 'pp-td-status')}
           ${td('Delivery', p.deliverySelect, 'pp-td-status')}
         </tr>`;
@@ -518,15 +669,19 @@
           </div>
           <div class="pp-card-people-row">
             <div class="pp-card-field">
-              <span class="pp-card-label">Editor</span>
-              ${p.editorBtn}
+              <span class="pp-card-label">Editors</span>
+              ${p.editorsBtn}
             </div>
             <div class="pp-card-field">
-              <span class="pp-card-label">Owner</span>
-              ${p.ownerBtn}
+              <span class="pp-card-label">Collaborators</span>
+              ${p.collaboratorsBtn}
             </div>
           </div>
           <div class="pp-card-footer">
+            <div class="pp-card-field pp-card-footer-owner">
+              <span class="pp-card-label">Owner</span>
+              ${p.ownerBtn}
+            </div>
             ${p.updatesBtn}
           </div>
         </article>`;
@@ -674,6 +829,20 @@
     return res.json();
   }
 
+  async function markUpdatesRead(itemId) {
+    const res = await fetch(`${API_BASE}/api/post-production/${itemId}/updates/mark-read`, {
+      method: 'POST',
+      headers: authHeaders()
+    });
+    if (!res.ok) return;
+    const idx = items.findIndex(i => i._id === itemId);
+    if (idx >= 0) items[idx].unreadUpdateCount = 0;
+    renderLists();
+    if (typeof window.refreshPostProductionSidebarDot === 'function') {
+      window.refreshPostProductionSidebarDot();
+    }
+  }
+
   async function patchItem(id, body) {
     const res = await fetch(`${API_BASE}/api/post-production/${id}`, {
       method: 'PUT',
@@ -711,7 +880,8 @@
       editStatus: '',
       qcStatus: '',
       deliveryStatus: '',
-      editorId: null,
+      editorIds: [],
+      collaboratorIds: [],
       ownerId: null,
       dueDate: null,
       updates: [],
@@ -763,16 +933,40 @@
     }
   }
 
-  function showUserPickerMenu(anchor, itemId, userField) {
+  function getRowAssigneeIds(row, userField) {
+    const ids = new Set((row?.[userField] || []).map(String));
+    if (userField === 'editorIds' && row?.editorId) ids.add(String(row.editorId));
+    return ids;
+  }
+
+  function showUserPickerMenu(anchor, itemId, userField, isMulti = false) {
     const menu = document.getElementById('ppUserPickerMenu');
     if (!menu) return;
-    userPickerTarget = { itemId, userField };
+    userPickerTarget = { itemId, userField, isMulti };
 
     const rect = anchor.getBoundingClientRect();
     menu.style.display = 'block';
     menu.style.left = `${rect.left}px`;
     menu.style.top = `${rect.bottom + 4}px`;
-    menu.style.minWidth = `${Math.max(rect.width, 200)}px`;
+    menu.style.minWidth = `${Math.max(rect.width, 220)}px`;
+
+    if (isMulti) {
+      const row = items.find(i => i._id === itemId);
+      const selected = getRowAssigneeIds(row, userField);
+      const fieldLabel = userField === 'editorIds' ? 'editors' : 'collaborators';
+      menu.innerHTML = `
+        <div class="pp-editor-menu-hint">Click to add or remove ${fieldLabel}</div>
+        ${users.map(u => {
+          const checked = selected.has(String(u._id));
+          return `
+            <button type="button" class="pp-editor-option pp-editor-option--multi${checked ? ' is-selected' : ''}" data-user-id="${u._id}">
+              ${avatarHtml(u)}
+              ${checked ? '<span class="material-symbols-outlined pp-option-check">check</span>' : ''}
+            </button>`;
+        }).join('')}
+      `;
+      return;
+    }
 
     menu.innerHTML = `
       <button type="button" class="pp-editor-option" data-user-id="">
@@ -844,12 +1038,141 @@
     if (saveBtn) saveBtn.textContent = 'Post update';
   }
 
+  function hideLinkForm() {
+    const form = document.getElementById('ppLinkForm');
+    if (form) {
+      form.hidden = true;
+      form.classList.remove('is-open');
+    }
+    const urlInput = document.getElementById('ppLinkUrl');
+    const labelInput = document.getElementById('ppLinkLabel');
+    if (urlInput) urlInput.value = '';
+    if (labelInput) labelInput.value = '';
+  }
+
+  function showLinkForm() {
+    const form = document.getElementById('ppLinkForm');
+    if (form) {
+      form.hidden = false;
+      form.classList.add('is-open');
+      document.getElementById('ppLinkUrl')?.focus();
+    }
+  }
+
+  function renderComposePending() {
+    const box = document.getElementById('ppComposePending');
+    if (!box) return;
+    const hasItems = composePendingLinks.length || composePendingAttachments.length;
+    if (!hasItems) {
+      box.hidden = true;
+      box.classList.remove('is-open');
+      box.innerHTML = '';
+      return;
+    }
+    box.hidden = false;
+    box.classList.add('is-open');
+    const linkItems = composePendingLinks.map((l, i) => `
+      <div class="pp-compose-pending-item">
+        <span class="material-symbols-outlined">link</span>
+        <span class="pp-compose-pending-label">${esc(l.label || l.url)}</span>
+        <button type="button" class="pp-compose-pending-remove" data-remove-link="${i}" aria-label="Remove link">&times;</button>
+      </div>`).join('');
+    const fileItems = composePendingAttachments.map((a, i) => `
+      <div class="pp-compose-pending-item">
+        <span class="material-symbols-outlined">${isImageFileType(a.fileType) ? 'image' : 'description'}</span>
+        <span class="pp-compose-pending-label">${esc(a.originalName || 'File')}</span>
+        <button type="button" class="pp-compose-pending-remove" data-remove-attachment="${i}" aria-label="Remove attachment">&times;</button>
+      </div>`).join('');
+    box.innerHTML = linkItems + fileItems;
+  }
+
   function resetComposeState() {
     composeMentionIds = new Set();
+    composePendingLinks = [];
+    composePendingAttachments = [];
+    composeUploading = false;
     const input = document.getElementById('ppUpdateInput');
     if (input) input.value = '';
     clearReplyTarget();
     hideMentionMenu();
+    hideLinkForm();
+    renderComposePending();
+    updateComposeSubmitState();
+  }
+
+  function updateComposeSubmitState() {
+    const input = document.getElementById('ppUpdateInput');
+    const saveBtn = document.getElementById('ppUpdateSave');
+    const text = input?.value?.trim() || '';
+    const canPost = !composeUploading && (
+      text || composePendingLinks.length || composePendingAttachments.length
+    );
+    if (saveBtn) saveBtn.disabled = !canPost;
+  }
+
+  function addComposeLink() {
+    const urlInput = document.getElementById('ppLinkUrl');
+    const labelInput = document.getElementById('ppLinkLabel');
+    const raw = urlInput?.value?.trim();
+    if (!raw) return;
+    try {
+      const parsed = new URL(raw);
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        alert('Please enter a valid http or https link.');
+        return;
+      }
+      if (composePendingLinks.length >= 10) {
+        alert('Maximum 10 links per update.');
+        return;
+      }
+      composePendingLinks.push({
+        url: parsed.href,
+        label: labelInput?.value?.trim() || ''
+      });
+      hideLinkForm();
+      renderComposePending();
+      updateComposeSubmitState();
+    } catch (_) {
+      alert('Please enter a valid URL.');
+    }
+  }
+
+  async function uploadComposeAttachment(file) {
+    if (!updatesItemId || !file) return;
+    if (composePendingAttachments.length >= 10) {
+      alert('Maximum 10 attachments per update.');
+      return;
+    }
+    composeUploading = true;
+    updateComposeSubmitState();
+    const attachBtn = document.getElementById('ppAttachBtn');
+    if (attachBtn) attachBtn.disabled = true;
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_BASE}/api/post-production/${updatesItemId}/updates/attachments`, {
+        method: 'POST',
+        headers: { Authorization: getToken() },
+        body: formData
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to upload file');
+      }
+      const data = await res.json();
+      if (data.attachment) {
+        composePendingAttachments.push(data.attachment);
+        renderComposePending();
+      }
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      composeUploading = false;
+      if (attachBtn) attachBtn.disabled = false;
+      const fileInput = document.getElementById('ppAttachInput');
+      if (fileInput) fileInput.value = '';
+      updateComposeSubmitState();
+    }
   }
 
   function setReplyTarget(update) {
@@ -915,6 +1238,7 @@
       if (title) title.textContent = row.item ? `Updates — ${row.item}` : 'Updates';
       if (sub) sub.textContent = row.project ? `Project: ${row.project}` : '';
       setUpdatesFeed(row);
+      updateComposeSubmitState();
       document.getElementById('ppUpdateInput')?.focus();
     } catch (err) {
       feed.innerHTML = `<p class="pp-updates-empty">${esc(err.message || 'Failed to load updates')}</p>`;
@@ -922,11 +1246,13 @@
   }
 
   function closeUpdatesModal() {
+    const itemId = updatesItemId;
     updatesItemId = null;
     resetComposeState();
     document.removeEventListener('keydown', onUpdatesModalKeydown);
     const modal = document.getElementById('ppUpdatesModal');
     if (modal) modal.style.display = 'none';
+    if (itemId) markUpdatesRead(itemId);
   }
 
   function hideMentionMenu() {
@@ -998,14 +1324,17 @@
 
   async function submitUpdate() {
     const input = document.getElementById('ppUpdateInput');
-    const text = input?.value?.trim();
-    if (!text || !updatesItemId) return;
+    const text = input?.value?.trim() || '';
+    if (!updatesItemId || composeUploading) return;
+    if (!text && !composePendingLinks.length && !composePendingAttachments.length) return;
     try {
       const res = await fetch(`${API_BASE}/api/post-production/${updatesItemId}/updates`, {
         method: 'POST',
         headers: authHeaders(),
         body: JSON.stringify({
           text,
+          links: composePendingLinks,
+          attachments: composePendingAttachments,
           parentUpdateId: replyToUpdateId,
           mentionIds: [...composeMentionIds]
         })
@@ -1021,6 +1350,10 @@
       resetComposeState();
       renderLists();
       updateBulkActionsUI();
+      loadData().catch(err => console.error(err));
+      if (typeof window.refreshPostProductionSidebarDot === 'function') {
+        window.refreshPostProductionSidebarDot();
+      }
     } catch (err) {
       alert(err.message);
     }
@@ -1050,6 +1383,14 @@
 
   function setupListeners() {
     ensureUpdatesPanelInBody();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        loadData().catch(err => console.error(err));
+        if (typeof window.refreshPostProductionSidebarDot === 'function') {
+          window.refreshPostProductionSidebarDot();
+        }
+      }
+    });
     const listRoot = document.querySelector('.post-production-table-container');
     document.getElementById('ppSearch')?.addEventListener('input', (e) => {
       clearTimeout(searchDebounce);
@@ -1180,7 +1521,12 @@
 
       const picker = e.target.closest('[data-user-picker]');
       if (picker) {
-        showUserPickerMenu(picker, picker.dataset.userPicker, picker.dataset.userField);
+        showUserPickerMenu(
+          picker,
+          picker.dataset.userPicker,
+          picker.dataset.userField,
+          picker.dataset.userMulti === '1'
+        );
         return;
       }
       const updatesBtn = e.target.closest('[data-updates]');
@@ -1202,11 +1548,30 @@
       const opt = e.target.closest('[data-user-id]');
       if (!opt || !userPickerTarget) return;
       try {
-        const body = {};
-        body[userPickerTarget.userField] = opt.dataset.userId || null;
-        await patchItem(userPickerTarget.itemId, body);
-        hideUserPickerMenu();
-        await loadData();
+        if (userPickerTarget.isMulti) {
+          const row = items.find(i => i._id === userPickerTarget.itemId);
+          const uid = String(opt.dataset.userId);
+          let ids = [...getRowAssigneeIds(row, userPickerTarget.userField)];
+          if (ids.includes(uid)) {
+            ids = ids.filter(id => id !== uid);
+          } else {
+            ids.push(uid);
+          }
+          await patchItem(userPickerTarget.itemId, { [userPickerTarget.userField]: ids });
+          await loadData();
+          const anchor = document.querySelector(
+            `[data-user-picker="${userPickerTarget.itemId}"][data-user-field="${userPickerTarget.userField}"]`
+          );
+          if (anchor) {
+            showUserPickerMenu(anchor, userPickerTarget.itemId, userPickerTarget.userField, true);
+          }
+        } else {
+          const body = {};
+          body[userPickerTarget.userField] = opt.dataset.userId || null;
+          await patchItem(userPickerTarget.itemId, body);
+          hideUserPickerMenu();
+          await loadData();
+        }
       } catch (err) {
         alert(err.message);
       }
@@ -1263,6 +1628,42 @@
     });
     document.getElementById('ppUpdateInput')?.addEventListener('input', (e) => {
       handleMentionInput(e.target);
+      updateComposeSubmitState();
+    });
+    document.getElementById('ppAttachBtn')?.addEventListener('click', () => {
+      document.getElementById('ppAttachInput')?.click();
+    });
+    document.getElementById('ppAttachInput')?.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (file) uploadComposeAttachment(file);
+    });
+    document.getElementById('ppAddLinkBtn')?.addEventListener('click', () => {
+      const form = document.getElementById('ppLinkForm');
+      if (!form?.classList.contains('is-open')) showLinkForm();
+      else hideLinkForm();
+    });
+    document.getElementById('ppLinkAdd')?.addEventListener('click', addComposeLink);
+    document.getElementById('ppLinkCancel')?.addEventListener('click', hideLinkForm);
+    document.getElementById('ppLinkUrl')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addComposeLink();
+      }
+    });
+    document.getElementById('ppComposePending')?.addEventListener('click', (e) => {
+      const linkIdx = e.target.closest('[data-remove-link]')?.dataset.removeLink;
+      if (linkIdx != null) {
+        composePendingLinks.splice(Number(linkIdx), 1);
+        renderComposePending();
+        updateComposeSubmitState();
+        return;
+      }
+      const attIdx = e.target.closest('[data-remove-attachment]')?.dataset.removeAttachment;
+      if (attIdx != null) {
+        composePendingAttachments.splice(Number(attIdx), 1);
+        renderComposePending();
+        updateComposeSubmitState();
+      }
     });
     document.getElementById('ppUpdateInput')?.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
@@ -1312,6 +1713,9 @@
   window.initPage = async function() {
     try {
       await initDashboardSidebar();
+      if (typeof window.markPostProductionVisited === 'function') {
+        await window.markPostProductionVisited();
+      }
       setupListeners();
       updateViewToggleUI();
       await loadData();

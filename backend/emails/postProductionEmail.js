@@ -12,7 +12,9 @@ function escapeHtml(str) {
 }
 
 function roleLabel(role) {
-  return role === 'owner' ? 'Owner' : 'Editor';
+  if (role === 'owner') return 'Owner';
+  if (role === 'collaborator') return 'Collaborator';
+  return 'Editor';
 }
 
 function buildPostProductionAssignedSubject(data) {

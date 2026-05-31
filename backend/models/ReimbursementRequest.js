@@ -23,6 +23,8 @@ const reimbursementRequestSchema = new mongoose.Schema({
     default: 'draft'
   },
   dateSubmitted: Date,
+  /** Set atomically when reviewer alerts (in-app + email) are sent — prevents duplicate webhook/change-stream delivery */
+  submissionNotifiedAt: Date,
   totalAmount: { type: Number, default: 0 },
   items: [reimbursementItemSchema],
   reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },

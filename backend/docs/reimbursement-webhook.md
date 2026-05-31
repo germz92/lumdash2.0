@@ -128,7 +128,9 @@ x-reimbursement-hook-secret: <SECRET>
 }
 ```
 
-Duplicate calls for the same `requestId` are safe; reviewers are not notified twice.
+Duplicate calls for the same `requestId` are safe; LumDash uses an atomic claim on the reimbursement document (`submissionNotifiedAt`) so reviewers are not notified twice, even if the webhook and MongoDB change stream fire in parallel.
+
+**Important:** Call the hook **once** per submission. Do not retry on `200`. Only retry on `500` or network timeout (see Retry policy).
 
 ### 400 Bad Request
 
@@ -198,7 +200,7 @@ Example event name that must match LumDash: `Conference Direct - APM 2026`.
 ## What LumDash does after a successful hook
 
 1. Loads the reimbursement by `requestId`
-2. Skips if notifications were already sent for this request (unless admin force-resend)
+2. Skips if `submissionNotifiedAt` is already set (unless admin force-resend)
 3. Creates in-app notifications for admins + event owners
 4. Pushes real-time toasts via Socket.IO if reviewers are online
 5. Sends email via SendGrid (if configured and user has email enabled in Settings → Reimbursement submitted)

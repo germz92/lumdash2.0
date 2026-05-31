@@ -1095,29 +1095,70 @@ async function canReviewReimbursements(user, request = null) {
 
 /**
  * Notify reviewers when a reimbursement request is submitted.
- * Submissions come from an external app writing to MongoDB (see change stream watcher).
+ * External app should call POST /api/reimbursements/submitted-hook after save.
+ * Change stream / reconcile are fallbacks; atomic claim prevents double delivery.
  * @param {Object} options.force — skip duplicate check (admin resend only)
  */
 async function notifyReimbursementSubmitted(request, options = {}) {
   const { force = false } = options;
+  let notifyClaimed = false;
   try {
     const requestId = request._id.toString();
 
     if (!force) {
+      const ReimbursementRequestModel = require('./models/ReimbursementRequest');
       const NotificationModel = require('./models/Notification');
+
+      const alreadyMarked = await ReimbursementRequestModel.exists({
+        _id: request._id,
+        submissionNotifiedAt: { $exists: true, $ne: null }
+      });
+      if (alreadyMarked) {
+        console.log(`📋 Reimbursement ${requestId} already notified — skipping (submissionNotifiedAt set)`);
+        return;
+      }
+
+      // Legacy rows: notifications sent before submissionNotifiedAt existed
       const alreadyNotified = await NotificationModel.exists({
         type: 'reimbursement_submitted',
         'metadata.reimbursementId': requestId
       });
       if (alreadyNotified) {
-        console.log(`📋 Reimbursement ${requestId} already notified — skipping duplicate (hook + change stream)`);
+        await ReimbursementRequestModel.updateOne(
+          { _id: request._id, submissionNotifiedAt: { $exists: false } },
+          { $set: { submissionNotifiedAt: new Date() } }
+        );
+        console.log(`📋 Reimbursement ${requestId} already notified — backfilled submissionNotifiedAt`);
         return;
       }
+
+      // Atomic claim: only one of webhook / change stream / reconcile may proceed
+      const claimed = await ReimbursementRequestModel.findOneAndUpdate(
+        {
+          _id: request._id,
+          status: 'submitted',
+          submissionNotifiedAt: { $exists: false }
+        },
+        { $set: { submissionNotifiedAt: new Date() } }
+      );
+      if (!claimed) {
+        console.log(`📋 Reimbursement ${requestId} notify claim lost — skipping duplicate (parallel webhook/change stream)`);
+        return;
+      }
+      notifyClaimed = true;
     }
 
     const reviewers = await getReimbursementReviewerUsers(request);
     if (!reviewers.length) {
       console.warn(`📋 Reimbursement ${requestId}: no reviewers (no admins and/or event owners)`);
+      if (notifyClaimed) {
+        const ReimbursementRequestModel = require('./models/ReimbursementRequest');
+        await ReimbursementRequestModel.updateOne(
+          { _id: request._id },
+          { $unset: { submissionNotifiedAt: 1 } }
+        );
+        notifyClaimed = false;
+      }
       return;
     }
 
@@ -1157,6 +1198,17 @@ async function notifyReimbursementSubmitted(request, options = {}) {
 
     console.log(`📋 Reimbursement alerts sent to ${recipientIds.length} reviewer(s) (in-app + email)`);
   } catch (err) {
+    if (notifyClaimed) {
+      try {
+        const ReimbursementRequestModel = require('./models/ReimbursementRequest');
+        await ReimbursementRequestModel.updateOne(
+          { _id: request._id },
+          { $unset: { submissionNotifiedAt: 1 } }
+        );
+      } catch (rollbackErr) {
+        console.error('📋 Failed to release reimbursement notify claim:', rollbackErr);
+      }
+    }
     console.error('🔔 Failed to notify reviewers about reimbursement submission:', err);
   }
 }
@@ -1183,21 +1235,14 @@ async function reconcileUnnotifiedReimbursementSubmissions(options = {}) {
   reimbursementReconcileLastRun = now;
 
   try {
-    const NotificationModel = require('./models/Notification');
-    const notifiedIds = await NotificationModel.distinct('metadata.reimbursementId', {
-      type: 'reimbursement_submitted'
-    });
-    const notifiedSet = new Set((notifiedIds || []).map(String));
+    const missing = await ReimbursementRequest.find({
+      status: 'submitted',
+      submissionNotifiedAt: { $exists: false }
+    }).lean();
 
-    const pending = await ReimbursementRequest.find({ status: 'submitted' }).select('_id').lean();
-    const missingIds = pending
-      .map(r => r._id.toString())
-      .filter(id => !notifiedSet.has(id));
+    if (!missing.length) return;
 
-    if (!missingIds.length) return;
-
-    console.log(`📋 Reimbursement reconcile: ${missingIds.length} submitted request(s) without notifications`);
-    const missing = await ReimbursementRequest.find({ _id: { $in: missingIds } }).lean();
+    console.log(`📋 Reimbursement reconcile: ${missing.length} submitted request(s) without submissionNotifiedAt`);
     for (const request of missing) {
       await notifyReimbursementSubmitted(request);
     }

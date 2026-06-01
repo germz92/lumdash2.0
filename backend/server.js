@@ -697,6 +697,109 @@ async function calculateCartItemAvailability(cartItem, cart, allCartItems) {
   return Math.max(0, totalAvailable - existingCartQuantity);
 }
 
+// BULK version of calculateCartItemAvailability.
+// Computes availableQuantity for EVERY cart item using a bounded number of
+// queries (~4 total) instead of the per-item N+1 explosion. It mutates each
+// item object in `cartItemsObjects`, setting `item.availableQuantity`, and
+// produces values identical to calling calculateCartItemAvailability per item.
+//
+// This is a read-side display optimization only. It never creates reservations,
+// so it cannot affect integrity — the atomic reserve flow remains the sole
+// authority and re-validates availability inside a transaction.
+async function assignCartItemAvailabilityBulk(cart, cartItemsObjects) {
+  if (!cartItemsObjects || cartItemsObjects.length === 0) return;
+
+  // Resolve the base inventory id for each cart item (handles populated or raw)
+  const getInvId = (ci) => {
+    if (!ci.inventoryId) return null;
+    return (ci.inventoryId._id ? ci.inventoryId._id : ci.inventoryId).toString();
+  };
+
+  const baseIds = [...new Set(cartItemsObjects.map(getInvId).filter(Boolean))];
+  if (baseIds.length === 0) {
+    cartItemsObjects.forEach(ci => { ci.availableQuantity = 0; });
+    return;
+  }
+
+  // 1. Fetch base inventory items (ONE query)
+  const baseItems = await GearInventory.find({ _id: { $in: baseIds } }).lean();
+  const baseById = new Map(baseItems.map(it => [it._id.toString(), it]));
+
+  // 2. Build brand/model group keys (replicating label.split(' ', 2) prefix logic)
+  const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const keyForLabel = (label) => {
+    const parts = (label || '').split(' ');
+    return `${parts[0] || ''} ${parts[1] || ''}`.trim();
+  };
+
+  const groupKeys = new Set();
+  for (const item of baseItems) {
+    groupKeys.add(keyForLabel(item.label));
+  }
+
+  // 3. Find ALL similar items for every group in ONE $or query
+  const orConditions = [...groupKeys].map(key => ({
+    label: { $regex: `^${escapeRegex(key)}`, $options: 'i' }
+  }));
+  const allSimilarItems = orConditions.length > 0
+    ? await GearInventory.find({ $or: orConditions }).lean()
+    : [];
+
+  // Group similar items by their group key
+  const similarByKey = new Map();
+  for (const item of allSimilarItems) {
+    const key = keyForLabel(item.label);
+    if (!similarByKey.has(key)) similarByKey.set(key, []);
+    similarByKey.get(key).push(item);
+  }
+
+  // 4. Bulk availability for ALL similar items (TWO queries)
+  const availabilityMap = await AtomicReservationService.getAvailableQuantitiesBulk(
+    allSimilarItems, cart.checkOutDate, cart.checkInDate
+  );
+
+  // 5. Total available + total cart quantity per group
+  const totalAvailableByKey = new Map();
+  for (const [key, items] of similarByKey) {
+    const total = items.reduce(
+      (sum, it) => sum + (availabilityMap.get(it._id.toString()) ?? 0), 0
+    );
+    totalAvailableByKey.set(key, total);
+  }
+
+  // Map each similar inventory id -> its group key (to attribute cart items)
+  const keyByInventoryId = new Map();
+  for (const [key, items] of similarByKey) {
+    for (const it of items) keyByInventoryId.set(it._id.toString(), key);
+  }
+
+  const cartQtyByKey = new Map();
+  for (const ci of cartItemsObjects) {
+    if (ci.specificSerial) continue; // mirror original (grouped-only aggregation)
+    const invId = getInvId(ci);
+    const key = keyByInventoryId.get(invId);
+    if (!key) continue;
+    cartQtyByKey.set(key, (cartQtyByKey.get(key) || 0) + ci.quantity);
+  }
+
+  // 6. Assign availableQuantity to each cart item
+  for (const ci of cartItemsObjects) {
+    const invId = getInvId(ci);
+    const baseItem = baseById.get(invId);
+    if (!baseItem) { ci.availableQuantity = 0; continue; }
+
+    if (ci.specificSerial) {
+      ci.availableQuantity = availabilityMap.get(invId) ?? 0;
+      continue;
+    }
+
+    const key = keyForLabel(baseItem.label);
+    const totalAvailable = totalAvailableByKey.get(key) || 0;
+    const groupCartQty = cartQtyByKey.get(key) || 0;
+    ci.availableQuantity = Math.max(0, totalAvailable - groupCartQty);
+  }
+}
+
 // Helper function to notify clients about data changes
 function notifyDataChange(eventType, additionalData = null, tableId = null) {
   console.log(`📢 Emitting ${eventType} event for tableId: ${tableId || 'all'}`);
@@ -6081,33 +6184,25 @@ app.get('/api/gear-inventory/availability', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Start date and end date are required' });
     }
     
-    const gear = await GearInventory.find();
-    
-    // Calculate availability using BULLETPROOF atomic service
-    const gearWithAvailability = await Promise.all(gear.map(async (item) => {
-      try {
-        const availableQty = await AtomicReservationService.getAvailableQuantity(
-          item._id, startDate, endDate
-        );
-        const reservedQty = item.quantity - availableQty;
-        
-        return {
-          ...item.toObject(),
-          availableQuantity: availableQty,
-          reservedQuantity: reservedQty,
-          isAvailable: availableQty > 0
-        };
-      } catch (error) {
-        console.error(`Error calculating availability for item ${item._id}:`, error);
-        return {
-          ...item.toObject(),
-          availableQuantity: 0,
-          reservedQuantity: item.quantity,
-          isAvailable: false
-        };
-      }
-    }));
-    
+    const gear = await GearInventory.find().lean();
+
+    // Calculate availability for ALL items in just TWO queries (bulk),
+    // instead of 3 queries per item. Same overlap logic, same results.
+    const availabilityMap = await AtomicReservationService.getAvailableQuantitiesBulk(
+      gear, startDate, endDate
+    );
+
+    const gearWithAvailability = gear.map((item) => {
+      const availableQty = availabilityMap.get(item._id.toString()) ?? 0;
+      const reservedQty = item.quantity - availableQty;
+      return {
+        ...item,
+        availableQuantity: availableQty,
+        reservedQuantity: reservedQty,
+        isAvailable: availableQty > 0
+      };
+    });
+
     res.json(gearWithAvailability);
   } catch (err) {
     console.error('Error fetching gear inventory with availability:', err);
@@ -6131,19 +6226,20 @@ app.get('/api/gear-inventory/available/:eventId', authenticate, async (req, res)
       cart = { checkOutDate: event.gear.checkOutDate, checkInDate: event.gear.checkInDate };
     }
     
-    const gear = await GearInventory.find();
-    
-    // Calculate availability using BULLETPROOF atomic service
-    const gearWithAvailability = await Promise.all(gear.map(async (item) => {
-      const availableQty = await AtomicReservationService.getAvailableQuantity(
-        item._id, cart.checkOutDate, cart.checkInDate  // Don't exclude current event
-      );
-      return {
-        ...item.toObject(),
-        availableQuantity: availableQty
-      };
+    const gear = await GearInventory.find().lean();
+
+    // Calculate availability for ALL items in just TWO queries (bulk),
+    // instead of 3 queries per item. Same overlap logic, same results.
+    // Don't exclude current event - we want to see ALL existing reservations.
+    const availabilityMap = await AtomicReservationService.getAvailableQuantitiesBulk(
+      gear, cart.checkOutDate, cart.checkInDate
+    );
+
+    const gearWithAvailability = gear.map((item) => ({
+      ...item,
+      availableQuantity: availabilityMap.get(item._id.toString()) ?? 0
     }));
-    
+
     res.json(gearWithAvailability);
   } catch (err) {
     console.error('Error fetching gear inventory with availability:', err);
@@ -8647,10 +8743,7 @@ app.get('/api/carts/:eventId', authenticate, async (req, res) => {
 
     // Add availability information to each item
     const cartWithAvailability = cart.toObject();
-    for (let i = 0; i < cartWithAvailability.items.length; i++) {
-      const item = cartWithAvailability.items[i];
-      item.availableQuantity = await calculateCartItemAvailability(item, cart, cartWithAvailability.items);
-    }
+    await assignCartItemAvailabilityBulk(cart, cartWithAvailability.items);
 
     res.json(cartWithAvailability);
   } catch (err) {
@@ -8700,6 +8793,33 @@ app.post('/api/carts/:eventId/items', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Inventory item not found' });
     }
 
+    // A real serial number identifies ONE physical unit and can never be
+    // reserved more than once. Multiple units must use different serials.
+    // ('N/A' means no serial, so it behaves like a normal grouped/bulk add.)
+    if (specificSerial && specificSerial !== 'N/A') {
+      const serialAvailable = await AtomicReservationService.getAvailableQuantity(
+        inventoryItem._id, cart.checkOutDate, cart.checkInDate
+      );
+      const alreadyInCart = cart.items
+        .filter(ci => ci.inventoryId.toString() === inventoryId &&
+                      ci.specificSerialRequested && ci.serial === specificSerial)
+        .reduce((sum, ci) => sum + ci.quantity, 0);
+
+      if (quantity > 1 || alreadyInCart + quantity > Math.min(serialAvailable, 1)) {
+        return res.status(400).json({
+          error: `Serial ${specificSerial} is a single unit — it can't be reserved more than once. Choose a different serial for additional units.`,
+          availableQuantity: Math.max(0, Math.min(serialAvailable, 1) - alreadyInCart)
+        });
+      }
+
+      cart.addItem(inventoryItem, 1, specificSerial);
+      await cart.save();
+      await cart.populate('items.inventoryId', 'label category serial quantity status');
+      const cartObj = cart.toObject();
+      await assignCartItemAvailabilityBulk(cart, cartObj.items);
+      return res.json(cartObj);
+    }
+
     // Check availability across all similar items (same brand/model)
     const [brand, model] = inventoryItem.label.split(' ', 2);
     
@@ -8708,12 +8828,13 @@ app.post('/api/carts/:eventId/items', authenticate, async (req, res) => {
       label: { $regex: `^${brand} ${model}`, $options: 'i' }
     });
     
-    // Calculate total available quantity using BULLETPROOF atomic service
+    // Calculate total available quantity in bulk (2 queries instead of 3 per item)
+    const addAvailabilityMap = await AtomicReservationService.getAvailableQuantitiesBulk(
+      similarItems, cart.checkOutDate, cart.checkInDate
+    );
     let totalAvailableQty = 0;
     for (const item of similarItems) {
-      totalAvailableQty += await AtomicReservationService.getAvailableQuantity(
-        item._id, cart.checkOutDate, cart.checkInDate
-      );
+      totalAvailableQty += addAvailabilityMap.get(item._id.toString()) ?? 0;
     }
     
     // Check how many of this brand/model are already in the cart
@@ -8745,10 +8866,7 @@ app.post('/api/carts/:eventId/items', authenticate, async (req, res) => {
     
     // Add availability information to each item
     const cartWithAvailability = cart.toObject();
-    for (let i = 0; i < cartWithAvailability.items.length; i++) {
-      const item = cartWithAvailability.items[i];
-      item.availableQuantity = await calculateCartItemAvailability(item, cart, cartWithAvailability.items);
-    }
+    await assignCartItemAvailabilityBulk(cart, cartWithAvailability.items);
 
     res.json(cartWithAvailability);
   } catch (err) {
@@ -8881,6 +8999,8 @@ app.post('/api/carts/:eventId/items/batch', authenticate, async (req, res) => {
     const results = [];
     // Track quantities being added in this batch to prevent over-allocation
     const batchAddedByBrandModel = new Map();
+    // Track quantities being added per specific serial in this batch (key: inventoryId|||serial)
+    const batchAddedBySerial = new Map();
 
     for (const reqItem of items) {
       const { inventoryId, quantity = 1, specificSerial = null } = reqItem;
@@ -8895,14 +9015,31 @@ app.post('/api/carts/:eventId/items/batch', authenticate, async (req, res) => {
       const bmKey = `${parts[0] || ''}|||${parts.slice(1).join(' ') || ''}`;
 
       if (specificSerial) {
-        // For specific serial: check individual item availability
+        // For specific serial: check individual item availability.
+        // A real serial number identifies ONE physical unit, so it can never be
+        // reserved more than once. (Multiple units must use different serials.)
+        // 'N/A' means the item simply has no serial, so it behaves like a bulk unit.
+        const isRealSerial = specificSerial !== 'N/A';
         const itemAvailable = getAvailableQty(inventoryItem);
+        const maxForSerial = isRealSerial ? Math.min(itemAvailable, 1) : itemAvailable;
+
+        // Use the ACTUAL cart item fields (serial + specificSerialRequested)
         const existingSerialInCart = cart.items
-          .filter(ci => ci.inventoryId.toString() === inventoryId && ci.specificSerial === specificSerial)
+          .filter(ci => ci.inventoryId.toString() === inventoryId &&
+                        ci.specificSerialRequested && ci.serial === specificSerial)
           .reduce((sum, ci) => sum + ci.quantity, 0);
-        
-        if (existingSerialInCart + quantity > itemAvailable) {
-          results.push({ inventoryId, success: false, error: 'Serial not available' });
+
+        const serialKey = `${inventoryId}|||${specificSerial}`;
+        const batchSerialAdded = batchAddedBySerial.get(serialKey) || 0;
+
+        if (existingSerialInCart + batchSerialAdded + quantity > maxForSerial) {
+          results.push({
+            inventoryId,
+            success: false,
+            error: isRealSerial
+              ? `Serial ${specificSerial} is already reserved/in your cart`
+              : 'Serial not available'
+          });
           continue;
         }
       } else {
@@ -8937,6 +9074,9 @@ app.post('/api/carts/:eventId/items/batch', authenticate, async (req, res) => {
       if (!specificSerial) {
         const batchAdded = batchAddedByBrandModel.get(bmKey) || 0;
         batchAddedByBrandModel.set(bmKey, batchAdded + quantity);
+      } else {
+        const serialKey = `${inventoryId}|||${specificSerial}`;
+        batchAddedBySerial.set(serialKey, (batchAddedBySerial.get(serialKey) || 0) + quantity);
       }
       results.push({ inventoryId, success: true, quantity });
     }
@@ -9035,10 +9175,7 @@ app.put('/api/carts/:eventId/items/:itemId', authenticate, async (req, res) => {
     
     // Add availability information to each item
     const cartWithAvailability = cart.toObject();
-    for (let i = 0; i < cartWithAvailability.items.length; i++) {
-      const item = cartWithAvailability.items[i];
-      item.availableQuantity = await calculateCartItemAvailability(item, cart, cartWithAvailability.items);
-    }
+    await assignCartItemAvailabilityBulk(cart, cartWithAvailability.items);
 
     res.json(cartWithAvailability);
   } catch (err) {
@@ -9067,10 +9204,7 @@ app.delete('/api/carts/:eventId/items/:itemId', authenticate, async (req, res) =
     
     // Add availability information to each item
     const cartWithAvailability = cart.toObject();
-    for (let i = 0; i < cartWithAvailability.items.length; i++) {
-      const item = cartWithAvailability.items[i];
-      item.availableQuantity = await calculateCartItemAvailability(item, cart, cartWithAvailability.items);
-    }
+    await assignCartItemAvailabilityBulk(cart, cartWithAvailability.items);
 
     res.json(cartWithAvailability);
   } catch (err) {
@@ -9398,10 +9532,7 @@ app.put('/api/carts/:eventId/grouped-quantity', authenticate, async (req, res) =
       
       // Add availability information to each item
       const cartWithAvailability = cart.toObject();
-      for (let i = 0; i < cartWithAvailability.items.length; i++) {
-        const item = cartWithAvailability.items[i];
-        item.availableQuantity = await calculateCartItemAvailability(item, cart, cartWithAvailability.items);
-      }
+      await assignCartItemAvailabilityBulk(cart, cartWithAvailability.items);
       
       const message = `Added ${quantityToAdd} units: ${addedItems.join(', ')}`;
       console.log(`[GROUPED QUANTITY] Success: ${message}`);
@@ -9450,10 +9581,7 @@ app.put('/api/carts/:eventId/grouped-quantity', authenticate, async (req, res) =
       
       // Add availability information to each item
       const cartWithAvailability = cart.toObject();
-      for (let i = 0; i < cartWithAvailability.items.length; i++) {
-        const item = cartWithAvailability.items[i];
-        item.availableQuantity = await calculateCartItemAvailability(item, cart, cartWithAvailability.items);
-      }
+      await assignCartItemAvailabilityBulk(cart, cartWithAvailability.items);
       
       const message = `Removed ${quantityToRemove} units: ${removedItems.join(', ')}`;
       console.log(`[GROUPED QUANTITY] Success: ${message}`);

@@ -853,6 +853,9 @@
         let selectedInventoryId = null;
         let selectedQuantity = 1;
         let currentItemForModal = null;
+        // For real serial numbers, multiple units must each be a DIFFERENT serial.
+        // Tracks the distinct serial units the user has toggled on: [{ inventoryId, serial }]
+        let selectedSerialUnits = [];
         let currentCategory = 'all';
         let currentBrand = 'all';
         let currentSort = 'asc';
@@ -1446,7 +1449,9 @@
         function showSerialModal(item, similarItems) {
             currentItemForModal = item;
             selectedSerial = null;
+            selectedInventoryId = null;
             selectedQuantity = 1;
+            selectedSerialUnits = [];
 
             const labelParts = item.label.split(' ');
             const brand = labelParts[0] || 'Unknown';
@@ -1459,7 +1464,7 @@
             
             // Update description based on whether there are real serials
             const description = hasRealSerials 
-                ? 'Choose a specific serial number or select "No Preference" to reserve any available unit.'
+                ? 'Select one or more specific serial numbers (each is a single unit), or choose "No Preference" to reserve any available units.'
                 : 'This item has no serial numbers. You can reserve any available unit.';
             
             const modalBody = document.getElementById('modalBody');
@@ -1469,10 +1474,10 @@
                 </p>
                 
                 ${hasRealSerials ? `
-                    <div class="serial-option" onclick="selectSerial(null)">
+                    <div class="serial-option no-preference-option" data-no-pref="1">
                         <div class="serial-info">
                             <div><strong>No Preference</strong></div>
-                            <div style="font-size: 13px; color: #666;">Reserve any available unit</div>
+                            <div style="font-size: 13px; color: #666;">Reserve any available unit(s)</div>
                         </div>
                         <div style="color: #28a745; font-weight: 600;">
                             ${getAvailableQuantity(item)} available
@@ -1484,10 +1489,11 @@
                     const availableQty = getAvailableQuantity(similarItem);
                     if (availableQty === 0) return '';
                     
-                    const displayText = similarItem.serial === 'N/A' ? 'No Serial Number' : `Serial: ${similarItem.serial}`;
+                    const isRealSerial = similarItem.serial && similarItem.serial !== 'N/A';
+                    const displayText = isRealSerial ? `Serial: ${similarItem.serial}` : 'No Serial Number';
                     
                     return `
-                        <div class="serial-option serial-select-btn" data-serial="${(similarItem.serial || '').replace(/"/g, '&quot;')}" data-inventory-id="${similarItem._id}">
+                        <div class="serial-option serial-select-btn" data-serial="${(similarItem.serial || '').replace(/"/g, '&quot;')}" data-inventory-id="${similarItem._id}" data-real-serial="${isRealSerial ? '1' : '0'}">
                             <div class="serial-info">
                                 <div><strong>${displayText}</strong></div>
                                 <div style="font-size: 13px; color: #666;">${similarItem.label}</div>
@@ -1499,22 +1505,15 @@
                     `;
                 }).join('')}
 
-                <div class="quantity-input">
+                <div class="quantity-input" id="quantityInputWrapper">
                     <label for="quantityInput"><strong>Quantity:</strong></label>
                     <input type="number" id="quantityInput" value="1" min="1" onchange="updateQuantity(this.value)">
                 </div>
+                <div id="serialSelectionSummary" style="display:none; margin-top:12px; font-weight:600; color:#0d6efd;"></div>
             `;
 
             document.getElementById('serialModal').style.display = 'block';
-            
-            // Add event listeners for serial selection buttons
-            document.querySelectorAll('.serial-select-btn').forEach(button => {
-                button.addEventListener('click', function() {
-                    const serial = this.getAttribute('data-serial').replace(/&quot;/g, '"');
-                    const inventoryId = this.getAttribute('data-inventory-id');
-                    selectSerial(serial, inventoryId);
-                });
-            });
+            wireSerialModalEvents();
         }
 
         // Show serial selection modal for grouped items
@@ -1537,6 +1536,7 @@
             selectedSerial = null;
             selectedInventoryId = null;
             selectedQuantity = 1;
+            selectedSerialUnits = [];
 
             document.getElementById('modalTitle').textContent = `Select Serial - ${brand} ${model}`;
             
@@ -1545,7 +1545,7 @@
             
             // Update description based on whether there are real serials
             const description = hasRealSerials 
-                ? 'Choose a specific serial number or select "No Preference" to reserve any available unit.'
+                ? 'Select one or more specific serial numbers (each is a single unit), or choose "No Preference" to reserve any available units.'
                 : 'This item has no serial numbers. You can reserve any available unit.';
             
             const modalBody = document.getElementById('modalBody');
@@ -1555,10 +1555,10 @@
                 </p>
                 
                 ${hasRealSerials ? `
-                    <div class="serial-option" onclick="selectSerial(null)">
+                    <div class="serial-option no-preference-option" data-no-pref="1">
                         <div class="serial-info">
                             <div><strong>No Preference</strong></div>
-                            <div style="font-size: 13px; color: #666;">Reserve any available unit</div>
+                            <div style="font-size: 13px; color: #666;">Reserve any available unit(s)</div>
                         </div>
                         <div style="color: #28a745; font-weight: 600;">
                             ${totalAvailable} available
@@ -1568,10 +1568,11 @@
 
                 ${availableItems.map(item => {
                     const availableQty = getAvailableQuantity(item);
-                    const displayText = item.serial === 'N/A' ? 'No Serial Number' : `Serial: ${item.serial}`;
+                    const isRealSerial = item.serial && item.serial !== 'N/A';
+                    const displayText = isRealSerial ? `Serial: ${item.serial}` : 'No Serial Number';
                     
                     return `
-                        <div class="serial-option serial-select-btn" data-serial="${(item.serial || '').replace(/"/g, '&quot;')}" data-inventory-id="${item._id}">
+                        <div class="serial-option serial-select-btn" data-serial="${(item.serial || '').replace(/"/g, '&quot;')}" data-inventory-id="${item._id}" data-real-serial="${isRealSerial ? '1' : '0'}">
                             <div class="serial-info">
                                 <div><strong>${displayText}</strong></div>
                                 <div style="font-size: 13px; color: #666;">${item.label}</div>
@@ -1583,28 +1584,120 @@
                     `;
                 }).join('')}
 
-                <div class="quantity-input">
+                <div class="quantity-input" id="quantityInputWrapper">
                     <label for="quantityInput"><strong>Quantity:</strong></label>
                     <input type="number" id="quantityInput" value="1" min="1" max="${totalAvailable}" onchange="updateQuantity(this.value)">
                 </div>
+                <div id="serialSelectionSummary" style="display:none; margin-top:12px; font-weight:600; color:#0d6efd;"></div>
             `;
 
             document.getElementById('serialModal').style.display = 'block';
+            wireSerialModalEvents();
             
-            // Add event listeners for serial selection buttons
+            // Auto-select if there's only one selectable serial option (and no "No Preference")
+            const serialBtns = document.querySelectorAll('.serial-select-btn');
+            if (!hasRealSerials && serialBtns.length === 1) {
+                serialBtns[0].click();
+            }
+        }
+
+        // Wire up click handlers for the serial modal (shared by both modal builders)
+        function wireSerialModalEvents() {
+            // Specific serial / N/A options
             document.querySelectorAll('.serial-select-btn').forEach(button => {
                 button.addEventListener('click', function() {
                     const serial = this.getAttribute('data-serial').replace(/&quot;/g, '"');
                     const inventoryId = this.getAttribute('data-inventory-id');
-                    selectSerial(serial, inventoryId);
+                    const isRealSerial = this.getAttribute('data-real-serial') === '1';
+                    if (isRealSerial) {
+                        // Multi-select: each real serial is a distinct single unit
+                        toggleSerialUnit(inventoryId, serial, this);
+                    } else {
+                        // N/A bulk item: single-select with quantity (legacy behavior)
+                        selectSingleSerial(serial, inventoryId, this);
+                    }
                 });
             });
-            
-            // Auto-select if there's only one option
-            const serialOptions = document.querySelectorAll('.serial-option');
-            if (serialOptions.length === 1) {
-                // Automatically select the single option
-                serialOptions[0].click();
+
+            // "No Preference" option (single-select, grouped)
+            document.querySelectorAll('.no-preference-option').forEach(button => {
+                button.addEventListener('click', function() {
+                    selectNoPreference(currentItemForModal._id, this);
+                });
+            });
+        }
+
+        // Toggle a real-serial unit on/off (multi-select, enforces DISTINCT serials)
+        function toggleSerialUnit(inventoryId, serial, el) {
+            // Choosing specific serials clears any "No Preference"/N/A single selection
+            selectedSerial = null;
+            selectedInventoryId = null;
+
+            const idx = selectedSerialUnits.findIndex(u => u.inventoryId === inventoryId);
+            if (idx > -1) {
+                selectedSerialUnits.splice(idx, 1);
+                if (el) el.classList.remove('selected');
+            } else {
+                selectedSerialUnits.push({ inventoryId, serial });
+                if (el) el.classList.add('selected');
+            }
+
+            document.querySelectorAll('.no-preference-option').forEach(o => o.classList.remove('selected'));
+            updateSerialSelectionSummary();
+        }
+
+        // Single-select for N/A (no real serial) bulk items — keeps quantity input
+        function selectSingleSerial(serial, inventoryId, el) {
+            selectedSerialUnits = [];
+            selectedSerial = serial;
+            selectedInventoryId = inventoryId;
+            document.querySelectorAll('.serial-option').forEach(o => o.classList.remove('selected'));
+            if (el) el.classList.add('selected');
+            updateSerialSelectionSummary();
+        }
+
+        // "No Preference" — reserve any available units of the brand/model (grouped)
+        function selectNoPreference(representativeId, el) {
+            selectedSerialUnits = [];
+            selectedSerial = null;
+            selectedInventoryId = representativeId;
+            document.querySelectorAll('.serial-option').forEach(o => o.classList.remove('selected'));
+            if (el) el.classList.add('selected');
+            updateSerialSelectionSummary();
+        }
+
+        // When specific serials are selected, the quantity is driven by the number
+        // of DISTINCT serials chosen, so the quantity input is disabled (each serial
+        // is a single unit and can't be reserved more than once).
+        function updateSerialSelectionSummary() {
+            const summary = document.getElementById('serialSelectionSummary');
+            const qtyWrapper = document.getElementById('quantityInputWrapper');
+            const qtyInput = document.getElementById('quantityInput');
+
+            if (selectedSerialUnits.length > 0) {
+                // Keep the quantity visible but disabled, reflecting the serial count
+                if (qtyInput) {
+                    qtyInput.value = selectedSerialUnits.length;
+                    qtyInput.disabled = true;
+                    qtyInput.style.opacity = '0.5';
+                    qtyInput.style.cursor = 'not-allowed';
+                }
+                if (qtyWrapper) qtyWrapper.style.opacity = '0.6';
+                if (summary) {
+                    summary.style.display = 'block';
+                    summary.textContent = `${selectedSerialUnits.length} unit(s) selected (different serials): ${selectedSerialUnits.map(u => u.serial).join(', ')}`;
+                }
+            } else {
+                // No specific serials selected — restore normal quantity input
+                if (qtyInput) {
+                    qtyInput.value = 1;
+                    qtyInput.disabled = false;
+                    qtyInput.style.opacity = '';
+                    qtyInput.style.cursor = '';
+                }
+                if (qtyWrapper) qtyWrapper.style.opacity = '';
+                if (summary) summary.style.display = 'none';
+                selectedQuantity = 1;
             }
         }
 
@@ -1632,22 +1725,79 @@
 
         // Add selected to cart
         async function addSelectedToCart() {
+            const addToCartBtn = document.getElementById('addToCartBtn');
+
+            // Case 1: one or more specific (real) serials selected — add each as a
+            // single distinct unit. This guarantees no serial is reserved twice.
+            if (selectedSerialUnits.length > 0) {
+                showButtonLoading(addToCartBtn);
+                try {
+                    await addSerialUnitsToCart(selectedSerialUnits);
+                    closeModal();
+                } catch (error) {
+                    console.error('Error adding selected serials to cart:', error);
+                } finally {
+                    hideButtonLoading(addToCartBtn);
+                }
+                return;
+            }
+
+            // Case 2: "No Preference" or N/A bulk item — single add with quantity
             if (!selectedInventoryId) {
                 alert('Please select an option before adding to cart');
                 return;
             }
 
-            const addToCartBtn = document.getElementById('addToCartBtn');
             showButtonLoading(addToCartBtn);
-            
             try {
-            await addItemToCart(selectedInventoryId, selectedQuantity, selectedSerial);
-            closeModal();
+                await addItemToCart(selectedInventoryId, selectedQuantity, selectedSerial);
+                closeModal();
             } catch (error) {
                 console.error('Error adding selected item to cart:', error);
                 // Error will be shown by addItemToCart
             } finally {
                 hideButtonLoading(addToCartBtn);
+            }
+        }
+
+        // Add multiple distinct serial units to the cart in one request.
+        // Each unit is quantity 1 with its own serial, so the same serial can
+        // never be reserved more than once.
+        async function addSerialUnitsToCart(units) {
+            const items = units.map(u => ({
+                inventoryId: u.inventoryId,
+                quantity: 1,
+                specificSerial: u.serial
+            }));
+
+            const response = await fetch(`${API_BASE}/api/carts/${eventId}/items/batch`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({ items })
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                alert(result.error || 'Failed to add serials to cart');
+                return;
+            }
+
+            // Batch endpoint returns a summary (not the full cart) — refresh cart state.
+            await loadCart();
+            filterAndRenderInventory();
+
+            if (result.failCount > 0) {
+                const firstError = (result.results || []).find(r => !r.success);
+                showToast(
+                    `Added ${result.successCount} unit(s). ${result.failCount} unavailable${firstError ? `: ${firstError.error}` : ''}`,
+                    'warning'
+                );
+            } else {
+                showToast(`Added ${result.successCount} unit(s) to cart!`, 'success');
             }
         }
 
@@ -1677,10 +1827,15 @@
                 if (response.ok) {
                     currentCart = result;
                     updateCartButton();
-                    
-                    // Reload inventory to get updated availability calculations
-                    await loadInventory();
-                    
+
+                    // Re-render from local state instead of re-fetching the whole
+                    // inventory. Adding to a cart does NOT create a hard reservation,
+                    // so per-item availability from the backend is unchanged; the grid
+                    // already subtracts cart quantities locally. This avoids a second
+                    // full round-trip on every add. (The atomic reserve step still
+                    // re-validates availability, so integrity is preserved.)
+                    filterAndRenderInventory();
+
                     // Show success message
                     const item = currentInventory.find(i => i._id === inventoryId);
                     showToast(`Added ${item?.label || 'item'} to cart!`, 'success');
@@ -1757,6 +1912,7 @@
             selectedInventoryId = null;
             selectedQuantity = 1;
             currentItemForModal = null;
+            selectedSerialUnits = [];
         }
 
         // Navigation
@@ -1795,7 +1951,7 @@
                 position: fixed;
                 top: 20px;
                 right: 20px;
-                background: ${type === 'success' ? '#28a745' : '#dc3545'};
+                background: ${type === 'success' ? '#28a745' : (type === 'warning' ? '#e0a800' : '#dc3545')};
                 color: white;
                 padding: 12px 20px;
                 border-radius: 8px;

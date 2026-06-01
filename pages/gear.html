@@ -1647,7 +1647,7 @@
                 console.log('[gear.html] Checking user role...');
                 checkUserRole();
                 console.log('[gear.html] Loading event...');
-                loadEvent();
+                await loadEvent(); // Await so date inputs are populated before user interaction
                 console.log('[gear.html] Loading gear lists...');
                 await loadGearLists(); // Wait for gear lists to load before loading gear
                 console.log('[gear.html] Loading gear...');
@@ -2512,10 +2512,18 @@
             }
         }
 
+        let isSwitchingList = false;
         async function switchToList(listName) {
             if (!listName || listName === currentListName) {
                 return;
             }
+
+            // Guard against overlapping switches (rapid clicks / change events)
+            if (isSwitchingList) return;
+            isSwitchingList = true;
+
+            const select = document.getElementById('gearListSelect');
+            if (select) select.disabled = true;
 
             try {
                 // Set as current list in the backend
@@ -2527,8 +2535,14 @@
                 });
 
                 if (response.ok) {
-                    // Reload the entire page to ensure clean state
-                    window.location.reload();
+                    // Refresh in place instead of a full page reload. A full reload was
+                    // slow and — when gear.html runs inside the dashboard SPA — could drop
+                    // out of the gear view entirely, which is what made switching feel
+                    // "stuck" and require a refresh or a second click.
+                    currentListName = listName;
+                    await loadGearLists(); // refreshes the list dropdown + currentListName
+                    await loadGear();      // loads gear for the newly selected list
+                    updateCartBadge();
                 } else {
                     alert('Failed to switch lists');
                     updateListSelect(); // Reset selection
@@ -2537,6 +2551,9 @@
                 console.error('Error switching lists:', error);
                 alert('Failed to switch lists');
                 updateListSelect(); // Reset selection
+            } finally {
+                isSwitchingList = false;
+                if (select) select.disabled = false;
             }
         }
 
@@ -2560,15 +2577,18 @@
 
                 if (response.ok) {
                     const result = await response.json();
-                    // Set the new list as current and reload page
+                    // Set the new list as current
                     await fetch(`${API_BASE}/api/tables/${eventId}/gear-lists/${encodeURIComponent(listName.trim())}/set-current`, {
                         method: 'PUT',
                         headers: {
                             'Authorization': `Bearer ${localStorage.getItem('token')}`
                         }
                     });
-                    // Reload the entire page to show new list
-                    window.location.reload();
+                    // Refresh in place to show the new (empty) list — no full reload
+                    currentListName = listName.trim();
+                    await loadGearLists();
+                    await loadGear();
+                    updateCartBadge();
                 } else {
                     const error = await response.json();
                     alert(error.error || 'Failed to create list');
@@ -2636,8 +2656,12 @@
 
                 if (response.ok) {
                     const result = await response.json();
-                    // Reload the entire page to show updated state
-                    window.location.reload();
+                    // Refresh in place — loadGearLists() reads the backend's new current list
+                    currentListName = 'Main List';
+                    await loadGearLists();
+                    await loadGear();
+                    updateCartBadge();
+                    showToast('List deleted', 'success');
                 } else {
                     const error = await response.json();
                     alert(error.error || 'Failed to delete list');
@@ -3014,7 +3038,11 @@
                         
                         // Determine status
                         let statusClass, statusText, actionHTML;
-                        if (availableQty >= templateQty) {
+                        if (item.notInInventory) {
+                            statusText = 'Not in inventory';
+                            statusClass = 'status-unavailable';
+                            actionHTML = '';
+                        } else if (availableQty >= templateQty) {
                             statusText = 'Available';
                             statusClass = 'status-available';
                             actionHTML = `<button class="package-btn primary" onclick="openAddItemsModal('${item._id}', ${templateQty})" style="padding: 6px 14px; font-size: 13px;">
@@ -3081,21 +3109,35 @@
 
                 const allInventory = await response.json();
                 
-                // Filter to only items that match template items (brand + model)
+                // Templates are generic by MODEL (brand + model), never by serial.
+                // A template item like "Sony A7IV" must match ANY available unit of that
+                // model regardless of its serial number. Match on a normalized brand+model
+                // (case-insensitive, whitespace-collapsed) so minor label formatting
+                // differences don't cause a model to silently match nothing.
+                const norm = (s) => (s ?? '').toString().trim().replace(/\s+/g, ' ').toLowerCase();
                 const templateInventoryItems = [];
                 
                 templateItems.forEach(templateItem => {
-                    // Find inventory items that match this template item's brand and model
+                    const tBrand = norm(templateItem.brand);
+                    const tModel = norm(templateItem.model);
+                    const tCategory = norm(templateItem.category);
+
+                    // Find ALL inventory units of this model (any serial)
                     const matchingItems = allInventory.filter(invItem => {
-                        const invLabelParts = invItem.label.split(' ');
-                        const invBrand = invLabelParts[0] || '';
-                        const invModel = invLabelParts.slice(1).join(' ') || '';
-                        
-                        return invBrand === templateItem.brand && invModel === templateItem.model;
+                        const invLabelParts = (invItem.label || '').split(' ');
+                        const invBrand = norm(invLabelParts[0] || '');
+                        const invModel = norm(invLabelParts.slice(1).join(' '));
+                        const invCategory = norm(invItem.category);
+
+                        const brandModelMatch = invBrand === tBrand && invModel === tModel;
+                        // Require category match only when both sides have one (matches the
+                        // server-side reserve logic); tolerate missing/blank categories.
+                        const categoryOk = !tCategory || !invCategory || invCategory === tCategory;
+                        return brandModelMatch && categoryOk;
                     });
                     
                     if (matchingItems.length > 0) {
-                        // Group same brand+model items and sum their availability and total quantities
+                        // Group all units of this model and sum availability + total quantities
                         const totalAvailable = matchingItems.reduce((sum, item) => {
                             return sum + (item.availableQuantity ?? 0);
                         }, 0);
@@ -3113,10 +3155,24 @@
                             templateQuantity: templateItem.quantity,
                             availableQuantity: totalAvailable,
                             quantity: totalQuantity, // Show correct total units
-                            matchingItems: matchingItems // Store all matching items for serial selection
+                            matchingItems: matchingItems // All units of this model (any serial)
                         };
                         
                         templateInventoryItems.push(representativeItem);
+                    } else {
+                        // Surface template models that aren't in inventory instead of
+                        // silently dropping them, so the user knows what's missing.
+                        templateInventoryItems.push({
+                            _id: `unmatched_${tBrand}_${tModel}_${Math.random().toString(36).slice(2, 8)}`,
+                            brand: templateItem.brand,
+                            model: templateItem.model,
+                            category: templateItem.category,
+                            templateQuantity: templateItem.quantity,
+                            availableQuantity: 0,
+                            quantity: 0,
+                            matchingItems: [],
+                            notInInventory: true
+                        });
                     }
                 });
                 
@@ -3741,18 +3797,31 @@
         }
 
         // Navigation
-        function addItems() {
-            const checkOutDate = document.getElementById('checkoutDate').value;
-            const checkInDate = document.getElementById('checkinDate').value;
+        async function addItems() {
+            // The event (and its dates) load asynchronously. If the user clicks
+            // before loadEvent() has resolved, the date inputs are still empty —
+            // which previously caused the "no dates set" path to fire and required
+            // a second click. Make sure the event is loaded first.
+            if (!currentEvent) {
+                await loadEvent();
+            }
+
+            let checkOutDate = document.getElementById('checkoutDate').value;
+            let checkInDate = document.getElementById('checkinDate').value;
+
+            // Fall back to the loaded event's gear dates if the inputs aren't
+            // populated yet (e.g. updateDateInputs hasn't run for this render).
+            if ((!checkOutDate || !checkInDate) && currentEvent && currentEvent.gear) {
+                checkOutDate = checkOutDate || currentEvent.gear.checkOutDate || '';
+                checkInDate = checkInDate || currentEvent.gear.checkInDate || '';
+            }
 
             if (!checkOutDate || !checkInDate) {
                 if (confirm('No dates set. Would you like to set check-out and check-in dates first?')) {
                     document.getElementById('checkoutDate').focus();
-                    return;
-                } else {
-                    // User clicked Cancel, stay on current page
-                    return;
                 }
+                // Either way, stay on the current page until dates are set
+                return;
             }
 
             window.location.href = `/inventory.html?eventId=${eventId}`;

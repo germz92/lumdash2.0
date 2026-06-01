@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const GearInventory = require('../models/GearInventory');
 const ReservedGearItem = require('../models/ReservedGearItem');
+const ManualReservation = require('../models/ManualReservation');
 
 class AtomicReservationService {
   
@@ -308,6 +309,91 @@ class AtomicReservationService {
    */
   static async getAvailableQuantity(inventoryId, checkOutDate, checkInDate, excludeEventId = null) {
     return await ReservedGearItem.getAvailableQuantity(inventoryId, checkOutDate, checkInDate, excludeEventId);
+  }
+
+  /**
+   * GET AVAILABILITY (BULK): Compute available quantity for MANY inventory items
+   * at once using only TWO database queries instead of 3 queries per item.
+   *
+   * This is purely a read-side performance optimization. It uses the exact same
+   * date-overlap logic as ReservedGearItem.getAvailableQuantity so the numbers are
+   * identical to the per-item path. It does NOT create reservations and therefore
+   * cannot affect integrity — the atomic createReservation/createBulkReservations
+   * transactions remain the only place that commits a reservation, and they
+   * re-validate availability inside the transaction.
+   *
+   * @param {Array} inventoryItems - Already-fetched GearInventory documents (need _id + quantity)
+   * @param {Date|string} checkOutDate
+   * @param {Date|string} checkInDate
+   * @param {string|ObjectId|null} excludeEventId - Optional event to exclude (for updates)
+   * @returns {Map<string, number>} Map of inventoryId (string) -> available quantity
+   */
+  static async getAvailableQuantitiesBulk(inventoryItems, checkOutDate, checkInDate, excludeEventId = null) {
+    const result = new Map();
+    if (!inventoryItems || inventoryItems.length === 0) {
+      return result;
+    }
+
+    const normalizeDate = (dateStr) => {
+      const date = new Date(dateStr);
+      date.setUTCHours(0, 0, 0, 0);
+      return date;
+    };
+
+    const reqStart = normalizeDate(checkOutDate);
+    const reqEnd = normalizeDate(checkInDate);
+    const now = new Date();
+    now.setUTCHours(0, 0, 0, 0);
+
+    const inventoryIds = inventoryItems.map(item => item._id);
+
+    // Base overlap conditions, identical to getAvailableQuantity():
+    //   reservation overlaps [reqStart, reqEnd] AND has not already expired
+    const reservedQuery = {
+      inventoryId: { $in: inventoryIds },
+      $and: [
+        { checkOutDate: { $lte: reqEnd } },
+        { checkInDate: { $gte: reqStart } },
+        { checkInDate: { $gte: now } }
+      ]
+    };
+    if (excludeEventId) {
+      reservedQuery.eventId = { $ne: excludeEventId };
+    }
+
+    const manualQuery = {
+      inventoryId: { $in: inventoryIds },
+      $and: [
+        { startDate: { $lte: reqEnd } },
+        { endDate: { $gte: reqStart } },
+        { endDate: { $gte: now } }
+      ]
+    };
+
+    // TWO queries total (instead of 3 per item)
+    const [overlappingReservations, manualReservations] = await Promise.all([
+      ReservedGearItem.find(reservedQuery).select('inventoryId quantity').lean(),
+      ManualReservation.find(manualQuery).select('inventoryId quantity').lean()
+    ]);
+
+    // Aggregate reserved quantity per inventory item
+    const reservedById = new Map();
+    for (const res of overlappingReservations) {
+      const id = res.inventoryId.toString();
+      reservedById.set(id, (reservedById.get(id) || 0) + res.quantity);
+    }
+    for (const res of manualReservations) {
+      const id = res.inventoryId.toString();
+      reservedById.set(id, (reservedById.get(id) || 0) + res.quantity);
+    }
+
+    for (const item of inventoryItems) {
+      const id = item._id.toString();
+      const reserved = reservedById.get(id) || 0;
+      result.set(id, Math.max(0, item.quantity - reserved));
+    }
+
+    return result;
   }
 }
 

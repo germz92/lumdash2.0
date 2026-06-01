@@ -1,6 +1,21 @@
-<!-- Dark Theme Inventory Management Page - SPA Partial -->
-<link rel="stylesheet" href="css/theme-dark.css">
-<style>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Management - LumDash</title>
+    <link rel="icon" href="../assets/favicon.png" type="image/png">
+    <!-- Preconnect for faster font loading -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
+    <link rel="stylesheet" href="../css/general.css">
+    <link rel="stylesheet" href="../css/theme-dark.css">
+    <link rel="stylesheet" href="../css/chat.css">
+    <script src="../js/config.js"></script>
+    <script src="../js/sidebar-dashboard.js"></script>
+    <script src="../js/chat.js"></script>
+    <style>
       /* Inventory Management Dark Theme Styles */
       .inventory-dark {
         font-family: var(--font-family);
@@ -22,7 +37,20 @@
       }
 
       .inventory-dark .page-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
         margin-bottom: 32px;
+      }
+
+      .inventory-dark .page-header .mobile-menu-btn {
+        display: none;
+        flex-shrink: 0;
+      }
+
+      .inventory-dark .page-header-text {
+        flex: 1;
+        min-width: 0;
       }
 
       .inventory-dark .page-header h1 {
@@ -462,6 +490,199 @@
         font-size: 13px;
       }
 
+      /* Inventory notes */
+      .inventory-dark .notes-cell {
+        max-width: 220px;
+        cursor: pointer;
+      }
+
+      .inventory-dark .notes-preview {
+        font-size: 13px;
+        color: var(--text-primary);
+        line-height: 1.4;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+      }
+
+      .inventory-dark .notes-preview:hover {
+        color: var(--brand-red);
+      }
+
+      .inventory-dark .notes-preview-empty {
+        font-size: 12px;
+        color: var(--text-muted);
+        font-style: italic;
+      }
+
+      .inventory-dark .notes-timestamp {
+        font-size: 11px;
+        color: var(--text-tertiary);
+        margin-top: 4px;
+      }
+
+      .inventory-dark .notes-entry {
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        padding: 12px 16px;
+        margin-bottom: 12px;
+        background: var(--bg-tertiary);
+      }
+
+      .inventory-dark .notes-entry-text {
+        color: var(--text-primary);
+        font-size: 14px;
+        line-height: 1.5;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+
+      .inventory-dark .notes-entry-meta {
+        font-size: 12px;
+        color: var(--text-tertiary);
+        margin-top: 8px;
+      }
+
+      .inventory-dark .edit-notes-section {
+        margin-top: 20px;
+        padding-top: 20px;
+        border-top: 1px solid var(--border-default);
+      }
+
+      .inventory-dark .edit-notes-section textarea {
+        width: 100%;
+        min-height: 80px;
+        padding: 12px;
+        background: var(--surface-input);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        color: var(--text-primary);
+        font-size: 14px;
+        font-family: inherit;
+        resize: vertical;
+        box-sizing: border-box;
+      }
+
+      .inventory-dark .edit-notes-section textarea:focus {
+        outline: none;
+        border-color: var(--brand-red);
+        box-shadow: 0 0 0 3px var(--brand-red-muted);
+      }
+
+      .inventory-dark .edit-notes-history {
+        margin-top: 16px;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+
+      .inventory-dark .group-header-row td {
+        background: var(--bg-tertiary);
+        font-weight: 600;
+        border-top: 2px solid var(--border-default);
+      }
+
+      .inventory-dark .group-serial-row td:first-child {
+        border-left: 3px solid var(--brand-red);
+      }
+
+      .inventory-dark .serial-notes-label {
+        font-size: 11px;
+        color: var(--text-tertiary);
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        margin-bottom: 2px;
+      }
+
+      .inventory-dark .item-modal-footer {
+        padding: 14px 24px;
+        border-top: 1px solid var(--border-default);
+        display: flex;
+        justify-content: flex-end;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+
+      .inventory-dark .item-modal-overlay {
+        display: none;
+        position: fixed;
+        z-index: 2100;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.7);
+        backdrop-filter: blur(4px);
+        justify-content: center;
+        align-items: flex-start;
+        padding: 40px 16px;
+        overflow-y: auto;
+      }
+
+      .inventory-dark .item-modal-overlay.show {
+        display: flex;
+      }
+
+      .inventory-dark .item-modal {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        width: 100%;
+        max-width: 640px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        overflow: hidden;
+      }
+
+      .inventory-dark .item-modal.notes-modal-panel {
+        max-width: 560px;
+      }
+
+      .inventory-dark .item-modal-header {
+        background: linear-gradient(135deg, var(--accent-red), #b91c1c);
+        color: #fff;
+        padding: 18px 24px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .inventory-dark .item-modal-header h2 {
+        font-size: 18px;
+        font-weight: 700;
+        margin: 0;
+      }
+
+      .inventory-dark .item-modal-close {
+        background: none;
+        border: none;
+        color: #fff;
+        cursor: pointer;
+        opacity: 0.85;
+        padding: 4px;
+        display: flex;
+        align-items: center;
+      }
+
+      .inventory-dark .item-modal-close:hover {
+        opacity: 1;
+      }
+
+      .inventory-dark .item-modal-body {
+        padding: 24px;
+        max-height: 70vh;
+        overflow-y: auto;
+      }
+
+      .inventory-dark .item-modal-body h3 {
+        margin: 0 0 8px;
+        font-size: var(--font-size-lg);
+        color: var(--text-primary);
+      }
+
+      .inventory-dark .serial-code {
+        font-family: monospace;
+        font-size: 13px;
+        color: var(--text-secondary);
+      }
+
       /* Search Box */
       .inventory-dark .search-box {
         display: flex;
@@ -660,15 +881,36 @@
         background: rgba(239, 68, 68, 0.1);
         }
 
-      /* Mobile Responsive */
-        @media (max-width: 768px) {
-        .inventory-dark .dashboard-sidebar {
-          display: none;
-        }
-
+      @media (max-width: 1024px) {
         .inventory-dark .main-content {
           margin-left: 0;
           padding: 20px;
+        }
+
+        .inventory-dark .page-header .mobile-menu-btn {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 40px;
+          height: 40px;
+          background: transparent;
+          border: none;
+          color: var(--text-secondary);
+          cursor: pointer;
+          border-radius: var(--radius-md);
+          transition: all var(--transition-fast);
+        }
+
+        .inventory-dark .page-header .mobile-menu-btn:hover {
+          background: var(--bg-hover);
+          color: var(--text-primary);
+        }
+      }
+
+      /* Mobile Responsive */
+        @media (max-width: 768px) {
+        .inventory-dark .main-content {
+          padding: 16px;
             }
 
         .inventory-dark .form-grid {
@@ -972,76 +1214,21 @@
         padding-bottom: 0;
         }
     </style>
-
-<!-- Sidebar -->
-    <aside class="dashboard-sidebar" id="dashboardSidebar">
-      <div class="sidebar-header">
-        <div class="sidebar-logo">
-          <img src="assets/Logo - Dark BG.png" alt="Lumetry Media" class="sidebar-logo-img">
-        </div>
-      </div>
-      
-      <nav class="sidebar-nav">
-        <a href="#" class="nav-item" data-page="events" onclick="event.preventDefault(); window.navigate && window.navigate('events');">
-          <span class="material-symbols-outlined">dashboard</span>
-          <span>Dashboard</span>
-        </a>
-        <a href="#" class="nav-item" data-page="event-calendar" onclick="event.preventDefault(); window.navigate && window.navigate('event-calendar');">
-          <span class="material-symbols-outlined">calendar_month</span>
-          <span>Event Calendar</span>
-        </a>
-        <a href="#" class="nav-item admin-only-nav" data-page="users" id="adminNavItem" style="display: none;" onclick="event.preventDefault(); window.navigate && window.navigate('users');">
-          <span class="material-symbols-outlined">admin_panel_settings</span>
-          <span>Admin Console</span>
-        </a>
-        <a href="#" class="nav-item active" data-page="inventory-management" onclick="event.preventDefault();">
-          <span class="material-symbols-outlined">inventory_2</span>
-          <span>Inventory</span>
-        </a>
-        <a href="#" class="nav-item" data-page="crew-planner" onclick="event.preventDefault(); window.navigate && window.navigate('crew-planner');">
-          <span class="material-symbols-outlined">groups</span>
-          <span>Crew Planner</span>
-        </a>
-        <a href="#" class="nav-item" data-page="crew-calendar" onclick="event.preventDefault(); window.navigate && window.navigate('crew-calendar');">
-          <span class="material-symbols-outlined">calendar_month</span>
-          <span>Crew Calendar</span>
-        </a>
-      </nav>
-      
-      <div class="sidebar-user" id="sidebarUserContainer">
-        <div class="sidebar-user-avatar" id="sidebarUserAvatar">
-          <img src="" alt="User" id="sidebarAvatarImg" style="display: none;">
-          <span class="material-symbols-outlined" id="sidebarAvatarIcon">person</span>
-        </div>
-        <div class="sidebar-user-info">
-          <div class="sidebar-user-name" id="sidebarUserName">Loading...</div>
-          <div class="sidebar-user-role" id="sidebarUserRole">User</div>
-        </div>
-        <span class="material-symbols-outlined" style="color: var(--text-tertiary); font-size: 18px;">expand_more</span>
-      </div>
-    </aside>
-
-    <!-- User Dropdown Menu -->
-    <div class="user-menu-dropdown" id="userMenuDropdown">
-      <button class="user-menu-item" id="profileMenuItem">
-        <span class="material-symbols-outlined">person</span>
-        <span>Profile</span>
-        </button>
-      <button class="user-menu-item" id="settingsMenuItem">
-        <span class="material-symbols-outlined">settings</span>
-        <span>Settings</span>
-      </button>
-      <button class="user-menu-item danger" id="logoutMenuItem">
-        <span class="material-symbols-outlined">logout</span>
-        <span>Logout</span>
-      </button>
-    </div>
+</head>
+<body class="inventory-dark">
+    <!-- Sidebar Container - will be populated by sidebar-dashboard.js -->
+    <div id="sidebarContainer"></div>
 
     <!-- Main Content -->
     <main class="main-content">
       <div class="page-header">
-            <h1>Inventory Management</h1>
-            <p>Add and manage gear inventory items. All fields are required.</p>
+            <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu">
+              <span class="material-symbols-outlined">menu</span>
+            </button>
+            <div class="page-header-text">
+              <h1>Inventory Management</h1>
+              <p>Add and manage gear inventory items. All fields are required.</p>
+            </div>
         </div>
 
         <div id="messageContainer"></div>
@@ -1172,7 +1359,7 @@
             </div>
           </div>
         </div>
-      </div>
+        </div>
 
         <!-- Inventory List -->
         <div class="section-card">
@@ -1206,23 +1393,118 @@
       </div>
     </div>
 
+    <!-- Edit Item Modal -->
+    <div class="item-modal-overlay" id="editItemModal">
+      <div class="item-modal">
+        <div class="item-modal-header">
+          <h2 id="editModalTitle">Edit Item</h2>
+          <button class="item-modal-close" type="button" onclick="closeEditModal()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="item-modal-body">
+          <form id="editItemForm">
+            <div class="form-grid">
+              <div class="form-group">
+                <label for="editBrand">Brand *</label>
+                <input type="text" id="editBrand" name="brand" required placeholder="e.g., Sony">
+              </div>
+              <div class="form-group">
+                <label for="editModel">Model *</label>
+                <input type="text" id="editModel" name="model" required placeholder="e.g., A7IV">
+              </div>
+              <div class="form-group">
+                <label for="editCategory">Category *</label>
+                <select id="editCategory" name="category" required>
+                  <option value="">Select Category</option>
+                  <option value="Camera">Camera</option>
+                  <option value="Lenses">Lenses</option>
+                  <option value="Lighting">Lighting</option>
+                  <option value="Support">Support</option>
+                  <option value="Accessories">Accessories</option>
+                  <option value="Computers">Computers</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="editSerial">Serial Number</label>
+                <input type="text" id="editSerial" name="serial" placeholder="Optional">
+              </div>
+              <div class="form-group">
+                <label for="editQuantity">Quantity *</label>
+                <input type="number" id="editQuantity" name="quantity" required min="1" value="1">
+              </div>
+            </div>
+            <div id="editNotesSection" class="edit-notes-section">
+              <h3 class="section-title" style="margin-bottom: 12px;">
+                <span class="material-symbols-outlined">sticky_note_2</span>
+                Item Notes
+              </h3>
+              <div class="form-group" id="noteSerialGroup" style="margin-bottom: 12px;">
+                <label for="noteSerialSelect">Serial number for this note</label>
+                <select id="noteSerialSelect"></select>
+              </div>
+              <label for="itemNoteInput" style="font-weight: var(--font-weight-medium); color: var(--text-secondary); font-size: var(--font-size-sm);">Add a note</label>
+              <textarea id="itemNoteInput" placeholder="Enter a note for the selected serial (saved with timestamp when you click Add Note)..."></textarea>
+              <div style="margin-top: 12px;">
+                <button type="button" class="btn btn-secondary btn-sm" id="addNoteBtn" onclick="addInventoryNote()">
+                  <span class="material-symbols-outlined">note_add</span>
+                  Add Note
+                </button>
+              </div>
+              <div id="editNotesHistory" class="edit-notes-history"></div>
+            </div>
+          </form>
+        </div>
+        <div class="item-modal-footer">
+          <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Cancel</button>
+          <button type="submit" form="editItemForm" class="btn btn-primary" id="editItemSubmitBtn">
+            <span class="material-symbols-outlined">save</span>
+            Update Item
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notes History Modal -->
+    <div class="item-modal-overlay" id="notesModal">
+      <div class="item-modal notes-modal-panel">
+        <div class="item-modal-header">
+          <h2>Notes History</h2>
+          <button class="item-modal-close" type="button" onclick="closeNotesModal()">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="item-modal-body">
+          <h3 id="notesModalItemName">Item</h3>
+          <div id="notesModalContent"></div>
+        </div>
+      </div>
+    </div>
+
     <script>
         let currentInventory = [];
+        let filteredInventory = [];
+        let editingItemId = null;
+        let editingNoteSerial = null;
+        let manualReservationMode = false;
+        let manualCart = [];
 
-        // Initialize page function for SPA
-        function initPage() {
-            // Initialize sidebar
-            if (window.initDashboardSidebar) {
-              window.initDashboardSidebar();
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', async function() {
+            // Initialize Luma AI chat
+            if (typeof window.initGlobalChat === 'function') {
+              setTimeout(() => window.initGlobalChat(), 500);
             }
-
-            // Setup logout handler
-            const logoutBtn = document.getElementById('logoutMenuItem');
-            if (logoutBtn) {
-              logoutBtn.onclick = function() {
-                localStorage.clear();
-                window.location.href = '/index.html';
-              };
+            
+            // Inject the shared sidebar
+            const sidebarContainer = document.getElementById('sidebarContainer');
+            if (sidebarContainer && window.injectDashboardSidebar) {
+              await window.injectDashboardSidebar(sidebarContainer, { 
+                position: 'replace',
+                activePage: 'inventory-management'
+              });
+            } else if (window.initDashboardSidebar) {
+              window.initDashboardSidebar();
             }
 
             // Check admin access for nav item
@@ -1240,17 +1522,10 @@
             checkAdminAccess();
             loadInventory();
             setupForm();
+            setupEditForm();
             loadManualReservations();
             restoreCollapsedStates();
-        }
-        
-        // Expose initPage for SPA framework
-        window.initPage = initPage;
-
-        // Initialize on load (for standalone mode only)
-        if (!window.navigate) {
-            document.addEventListener('DOMContentLoaded', initPage);
-        }
+        });
 
         // Check if user is admin
         async function checkAdminAccess() {
@@ -1274,6 +1549,13 @@
             } catch (error) {
                 console.error('Error checking admin access:', error);
                 window.location.href = '/index.html';
+            }
+        }
+
+        function setupEditForm() {
+            const editForm = document.getElementById('editItemForm');
+            if (editForm) {
+                editForm.addEventListener('submit', handleEditItem);
             }
         }
 
@@ -1337,7 +1619,8 @@
                 }
 
                 currentInventory = await response.json();
-                renderInventory(currentInventory);
+                filteredInventory = [...currentInventory];
+                renderInventory();
             } catch (error) {
                 console.error('Error loading inventory:', error);
                 document.getElementById('inventoryContainer').innerHTML = `
@@ -1348,10 +1631,11 @@
             }
         }
 
-        // Render inventory table
-        function renderInventory(inventory) {
+        // Render inventory table (grouped by model, notes per serial)
+        function renderInventory() {
             const container = document.getElementById('inventoryContainer');
-            
+            const inventory = filteredInventory;
+
             if (inventory.length === 0) {
                 container.innerHTML = `
                     <div class="message message-info">
@@ -1371,82 +1655,236 @@
                                 <th>Category</th>
                                 <th>Serial</th>
                                 <th>Quantity</th>
-                                <th>Status</th>
+                                ${manualReservationMode ? '<th>Status</th>' : '<th>Notes</th>'}
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
-                            ${inventory.map(item => {
-                                const label = item.label || 'Unknown Item';
-                                const labelParts = label.split(' ');
-                                const brand = labelParts[0] || 'Unknown';
-                                const model = labelParts.slice(1).join(' ') || 'Unknown';
-                                const status = item.status || 'available';
-                                const category = item.category || 'Uncategorized';
-                                const serial = item.serial || 'N/A';
-                                const quantity = item.quantity || 1;
-                                
-                                return `
-                                    <tr>
-                                        <td><strong>${brand}</strong></td>
-                                        <td>${model}</td>
-                                        <td>${category}</td>
-                                        <td>
-                                            <code>${serial}</code>
-                                        </td>
-                                        <td>
-                                            <span class="quantity-badge ${quantity === 1 ? 'quantity-single' : 'quantity-multiple'}">
-                                                ${quantity}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <span class="status-${status.replace('_', '-')}">
-                                                ${status === 'available' ? 'Available' : 'Checked Out'}
-                                            </span>
-                                        </td>
-                                        <td>
-                                            <div class="action-buttons">
-                                                ${manualReservationMode ? `
-                                                    <button class="btn btn-success btn-sm" onclick="addToManualCart('${item._id}')">
-                                                        <span class="material-symbols-outlined">add_shopping_cart</span>
-                                                        Add
-                                                    </button>
-                                                ` : `
-                                                <button class="btn btn-warning btn-sm" onclick="openReservationsModal('${item._id}')">
-                                                    <span class="material-symbols-outlined">event_note</span>
-                                                    Reservations
-                                                </button>
-                                                <button class="btn btn-info btn-sm" onclick="editItem('${item._id}')">
-                                                    <span class="material-symbols-outlined">edit</span>
-                                                    Edit
-                                                </button>
-                                                    <button class="btn btn-danger btn-sm" onclick="deleteItem('${item._id}', '${label.replace(/'/g, "\\'")}')">
-                                                    <span class="material-symbols-outlined">delete</span>
-                                                    Delete
-                                                </button>
-                                                `}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                `;
-                            }).join('')}
+                            ${renderGroupedInventoryRows()}
                         </tbody>
                     </table>
                 </div>
             `;
 
             container.innerHTML = tableHTML;
+            attachNotesClickHandlers();
+        }
+
+        function attachNotesClickHandlers() {
+            const container = document.getElementById('inventoryContainer');
+            if (!container) return;
+            container.querySelectorAll('.notes-cell[data-item-id]').forEach(cell => {
+                const open = () => {
+                    const itemId = cell.getAttribute('data-item-id');
+                    const serial = decodeURIComponent(cell.getAttribute('data-serial') || 'N/A');
+                    openNotesHistory(itemId, serial);
+                };
+                cell.addEventListener('click', open);
+                cell.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        open();
+                    }
+                });
+            });
+        }
+
+        function escapeHtml(str) {
+            if (!str) return '';
+            const div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        function normalizeSerial(serial) {
+            const s = (serial || '').trim();
+            return s === '' ? 'N/A' : s;
+        }
+
+        function formatSerialDisplay(serial) {
+            return normalizeSerial(serial) === 'N/A' ? 'No Serial' : normalizeSerial(serial);
+        }
+
+        function getSiblingItems(item) {
+            if (!item || !item.label) return [];
+            return currentInventory.filter(i => i.label === item.label);
+        }
+
+        function getNotesForSerial(item, serial) {
+            const targetSerial = normalizeSerial(serial);
+            const notes = [];
+            getSiblingItems(item).forEach(doc => {
+                if (normalizeSerial(doc.serial) !== targetSerial) return;
+                (doc.notes || []).forEach(note => {
+                    const noteSerial = normalizeSerial(note.serial || doc.serial);
+                    if (noteSerial === targetSerial) notes.push(note);
+                });
+            });
+            return notes.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        }
+
+        function getLatestNoteForSerial(item, serial) {
+            const sorted = getNotesForSerial(item, serial);
+            return sorted.length > 0 ? sorted[0] : null;
+        }
+
+        function groupInventoryByModel(items) {
+            const groups = new Map();
+            items.forEach(item => {
+                const key = item.label || 'Unknown';
+                if (!groups.has(key)) {
+                    groups.set(key, { label: key, items: [] });
+                }
+                groups.get(key).items.push(item);
+            });
+            return Array.from(groups.values()).map(group => {
+                group.items.sort((a, b) => formatSerialDisplay(a.serial).localeCompare(formatSerialDisplay(b.serial)));
+                return group;
+            });
+        }
+
+        function renderSerialActions(item) {
+            const label = (item.label || '').replace(/'/g, "\\'");
+            if (manualReservationMode) {
+                return `
+                    <button class="btn btn-success btn-sm" onclick="addToManualCart('${item._id}')">
+                        <span class="material-symbols-outlined">add_shopping_cart</span>
+                        Add
+                    </button>
+                `;
+            }
+            return `
+                <button class="btn btn-warning btn-sm" onclick="openReservationsModal('${item._id}')">
+                    <span class="material-symbols-outlined">event_note</span>
+                    Reservations
+                </button>
+                <button class="btn btn-info btn-sm" onclick="editItem('${item._id}')">
+                    <span class="material-symbols-outlined">edit</span>
+                    Edit
+                </button>
+                <button class="btn btn-danger btn-sm" onclick="deleteItem('${item._id}', '${label}')">
+                    <span class="material-symbols-outlined">delete</span>
+                    Delete
+                </button>
+            `;
+        }
+
+        function renderNotesCell(item, serial) {
+            const latest = getLatestNoteForSerial(item, serial);
+            if (!latest) {
+                return '<span class="notes-preview-empty">No notes — click to add</span>';
+            }
+            const preview = latest.text.length > 80 ? latest.text.substring(0, 80) + '…' : latest.text;
+            const author = latest.createdBy?.fullName ? ` · ${escapeHtml(latest.createdBy.fullName)}` : '';
+            return `
+                <div class="notes-preview" title="Click to view notes for this serial">${escapeHtml(preview)}</div>
+                <div class="notes-timestamp">${formatDateTime(latest.createdAt)}${author}</div>
+            `;
+        }
+
+        function formatDateTime(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            if (isNaN(date.getTime())) return '';
+            return date.toLocaleString(undefined, {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+        }
+
+        function renderNotesListHTML(notes, emptyMessage) {
+            if (!notes || notes.length === 0) {
+                return `<p style="color: var(--text-muted); text-align: center; padding: 24px 0;">${emptyMessage || 'No notes yet.'}</p>`;
+            }
+            return notes.map(note => {
+                const author = note.createdBy?.fullName
+                    ? escapeHtml(note.createdBy.fullName)
+                    : 'Unknown';
+                const serialLabel = formatSerialDisplay(note.serial);
+                return `
+                    <div class="notes-entry">
+                        <div class="notes-entry-text">${escapeHtml(note.text)}</div>
+                        <div class="notes-entry-meta">${formatDateTime(note.createdAt)} · ${escapeHtml(serialLabel)} · ${author}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderGroupedInventoryRows() {
+            const groups = groupInventoryByModel(filteredInventory);
+            return groups.map(group => {
+                const labelParts = (group.label || '').split(' ');
+                const brand = labelParts[0] || 'Unknown';
+                const model = labelParts.slice(1).join(' ') || 'Unknown';
+                const totalQty = group.items.reduce((sum, i) => sum + (i.quantity || 1), 0);
+                const serialCount = group.items.length;
+                const category = group.items[0]?.category || '';
+
+                const headerRow = serialCount > 1 ? `
+                    <tr class="group-header-row">
+                        <td><strong>${escapeHtml(brand)}</strong></td>
+                        <td>${escapeHtml(model)}</td>
+                        <td>${escapeHtml(category)}</td>
+                        <td><span style="font-size: 13px; color: var(--text-muted);">${serialCount} serial${serialCount !== 1 ? 's' : ''}</span></td>
+                        <td>${totalQty}</td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                ` : '';
+
+                const serialRows = group.items.map(item => {
+                    const showModelCols = serialCount === 1;
+                    const rowClass = serialCount > 1 ? 'group-serial-row' : '';
+                    const itemId = String(item._id);
+                    const serialKey = encodeURIComponent(normalizeSerial(item.serial));
+                    const notesCell = !manualReservationMode ? `
+                        <td class="notes-cell" data-item-id="${itemId}" data-serial="${serialKey}" role="button" tabindex="0">
+                            ${renderNotesCell(item, item.serial)}
+                        </td>
+                    ` : `<td><span class="status-available">Available</span></td>`;
+
+                    return `
+                        <tr class="${rowClass}">
+                            <td>${showModelCols ? `<strong>${escapeHtml(brand)}</strong>` : ''}</td>
+                            <td>${showModelCols ? escapeHtml(model) : ''}</td>
+                            <td>${showModelCols ? escapeHtml(category) : ''}</td>
+                            <td>
+                                ${serialCount > 1 ? `<div class="serial-notes-label">Serial</div>` : ''}
+                                <span class="serial-code">${escapeHtml(formatSerialDisplay(item.serial))}</span>
+                            </td>
+                            <td>
+                                <span class="quantity-badge ${item.quantity === 1 ? 'quantity-single' : 'quantity-multiple'}">
+                                    ${item.quantity || 1}
+                                </span>
+                            </td>
+                            ${notesCell}
+                            <td>
+                                <div class="action-buttons">
+                                    ${renderSerialActions(item)}
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+                return headerRow + serialRows;
+            }).join('');
         }
 
         // Filter inventory
         function filterInventory() {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            const filtered = currentInventory.filter(item => 
-                item.label.toLowerCase().includes(searchTerm) ||
-                item.category.toLowerCase().includes(searchTerm) ||
-                item.serial.toLowerCase().includes(searchTerm)
-            );
-            renderInventory(filtered);
+            filteredInventory = currentInventory.filter(item => {
+                const notesText = (item.notes || []).map(n => `${n.text} ${n.serial || item.serial}`).join(' ').toLowerCase();
+                return item.label.toLowerCase().includes(searchTerm) ||
+                    item.category.toLowerCase().includes(searchTerm) ||
+                    (item.serial || '').toLowerCase().includes(searchTerm) ||
+                    notesText.includes(searchTerm);
+            });
+            renderInventory();
         }
 
         // Clear form
@@ -1455,9 +1893,242 @@
             document.getElementById('quantity').value = 1;
         }
 
-        // Edit item (placeholder)
+        async function handleEditItem(event) {
+            event.preventDefault();
+            if (!editingItemId) return;
+
+            const formData = new FormData(event.target);
+            const itemData = {
+                brand: formData.get('brand').trim(),
+                model: formData.get('model').trim(),
+                category: formData.get('category'),
+                serial: formData.get('serial').trim(),
+                quantity: parseInt(formData.get('quantity'), 10)
+            };
+
+            if (!itemData.brand || !itemData.model || !itemData.category || !itemData.quantity) {
+                showMessage('Please fill in all required fields.', 'error');
+                return;
+            }
+
+            if (itemData.serial && itemData.serial !== 'N/A') {
+                const existingItem = currentInventory.find(item =>
+                    item.serial === itemData.serial && String(item._id) !== String(editingItemId)
+                );
+                if (existingItem) {
+                    showMessage('Serial number already exists', 'error');
+                    return;
+                }
+            }
+
+            const submitBtn = document.getElementById('editItemSubmitBtn');
+            const originalText = submitBtn.innerHTML;
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = 'Updating...';
+
+            try {
+                const response = await fetch(`${window.API_BASE}/api/gear-inventory/${editingItemId}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({
+                        label: `${itemData.brand} ${itemData.model}`,
+                        category: itemData.category,
+                        serial: itemData.serial,
+                        quantity: itemData.quantity
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    const updatedItem = result.gear;
+                    const index = currentInventory.findIndex(item => String(item._id) === String(editingItemId));
+                    if (index !== -1 && updatedItem) {
+                        currentInventory[index] = updatedItem;
+                    }
+                    filteredInventory = [...currentInventory];
+                    showMessage('Item updated successfully!', 'success');
+                    renderInventory();
+                    closeEditModal();
+                } else {
+                    showMessage(result.error || 'Failed to update item', 'error');
+                }
+            } catch (error) {
+                console.error('Error updating item:', error);
+                showMessage('Failed to update item. Please try again.', 'error');
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalText;
+            }
+        }
+
+        function getInventoryDocForSerial(item, serial) {
+            const targetSerial = normalizeSerial(serial);
+            const sibling = getSiblingItems(item).find(i => normalizeSerial(i.serial) === targetSerial);
+            return sibling || item;
+        }
+
+        function updateNoteSerialSelect(item) {
+            const select = document.getElementById('noteSerialSelect');
+            const siblings = getSiblingItems(item);
+            const serials = [...new Set(siblings.map(i => normalizeSerial(i.serial)))].sort();
+
+            select.innerHTML = '';
+            serials.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s;
+                opt.textContent = formatSerialDisplay(s);
+                select.appendChild(opt);
+            });
+
+            const defaultSerial = editingNoteSerial || normalizeSerial(item.serial);
+            select.value = serials.includes(defaultSerial) ? defaultSerial : serials[0];
+            editingNoteSerial = select.value;
+
+            select.onchange = () => {
+                editingNoteSerial = select.value;
+                renderEditNotesHistory(item);
+            };
+        }
+
+        async function addInventoryNote() {
+            if (!editingItemId) {
+                showMessage('Open an item to edit before adding a note.', 'error');
+                return;
+            }
+
+            const item = currentInventory.find(i => String(i._id) === String(editingItemId));
+            if (!item) return;
+
+            const noteInput = document.getElementById('itemNoteInput');
+            const text = noteInput.value.trim();
+            if (!text) {
+                showMessage('Please enter note text.', 'error');
+                return;
+            }
+
+            const serial = document.getElementById('noteSerialSelect').value;
+            const targetDoc = getInventoryDocForSerial(item, serial);
+
+            const btn = document.getElementById('addNoteBtn');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = 'Saving...';
+
+            try {
+                const response = await fetch(`${window.API_BASE}/api/gear-inventory/${targetDoc._id}/notes`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({ text, serial })
+                });
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || 'Failed to add note');
+                }
+
+                const result = await response.json();
+
+                if (result.relatedItems) {
+                    result.relatedItems.forEach(updated => {
+                        const index = currentInventory.findIndex(i => String(i._id) === String(updated._id));
+                        if (index !== -1) currentInventory[index] = updated;
+                    });
+                } else if (result.gear) {
+                    const index = currentInventory.findIndex(i => String(i._id) === String(result.gear._id));
+                    if (index !== -1) currentInventory[index] = result.gear;
+                }
+
+                filteredInventory = [...currentInventory];
+                editingNoteSerial = serial;
+                noteInput.value = '';
+                renderEditNotesHistory(item);
+                renderInventory();
+                showMessage(`Note added for ${formatSerialDisplay(serial)}`, 'success');
+            } catch (error) {
+                console.error('Error adding note:', error);
+                showMessage(error.message || 'Failed to add note', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+
+        function renderEditNotesHistory(item) {
+            const container = document.getElementById('editNotesHistory');
+            const serial = document.getElementById('noteSerialSelect')?.value || editingNoteSerial || normalizeSerial(item.serial);
+            const notes = getNotesForSerial(item, serial);
+            if (notes.length === 0) {
+                container.innerHTML = `<p style="color: var(--text-muted); font-size: 13px; margin: 12px 0 0;">No notes yet for serial ${escapeHtml(formatSerialDisplay(serial))}.</p>`;
+                return;
+            }
+            container.innerHTML = `
+                <h4 style="margin: 16px 0 8px; font-size: 14px; color: var(--text-secondary);">Notes for ${escapeHtml(formatSerialDisplay(serial))}</h4>
+                ${renderNotesListHTML(notes)}
+            `;
+        }
+
         function editItem(itemId) {
-            showMessage('Edit functionality coming soon!', 'info');
+            const item = currentInventory.find(i => String(i._id) === String(itemId));
+            if (!item) return;
+
+            editingItemId = itemId;
+
+            const labelParts = (item.label || '').split(' ');
+            const brand = labelParts[0] || '';
+            const model = labelParts.slice(1).join(' ') || '';
+
+            document.getElementById('editModalTitle').textContent = `Edit — ${brand} ${model}`;
+            document.getElementById('editBrand').value = brand;
+            document.getElementById('editModel').value = model;
+            document.getElementById('editCategory').value = item.category;
+            document.getElementById('editSerial').value = item.serial === 'N/A' ? '' : item.serial;
+            document.getElementById('editQuantity').value = item.quantity;
+            document.getElementById('itemNoteInput').value = '';
+            editingNoteSerial = normalizeSerial(item.serial);
+
+            updateNoteSerialSelect(item);
+            renderEditNotesHistory(item);
+
+            document.getElementById('editItemModal').classList.add('show');
+        }
+
+        function closeEditModal() {
+            document.getElementById('editItemModal').classList.remove('show');
+            editingItemId = null;
+            editingNoteSerial = null;
+            document.getElementById('editItemForm').reset();
+            document.getElementById('itemNoteInput').value = '';
+            document.getElementById('editNotesHistory').innerHTML = '';
+            document.getElementById('noteSerialSelect').innerHTML = '';
+        }
+
+        function openNotesHistory(itemId, serial) {
+            const item = currentInventory.find(i => String(i._id) === String(itemId));
+            if (!item) return;
+
+            const labelParts = (item.label || '').split(' ');
+            const brand = labelParts[0] || 'Unknown';
+            const model = labelParts.slice(1).join(' ') || '';
+            const serialKey = serial !== undefined ? serial : normalizeSerial(item.serial);
+
+            document.getElementById('notesModalItemName').textContent =
+                `${brand} ${model} — ${formatSerialDisplay(serialKey)}`;
+            document.getElementById('notesModalContent').innerHTML = renderNotesListHTML(
+                getNotesForSerial(item, serialKey),
+                `No notes for serial ${formatSerialDisplay(serialKey)} yet. Use Edit to add one.`
+            );
+            document.getElementById('notesModal').classList.add('show');
+        }
+
+        function closeNotesModal() {
+            document.getElementById('notesModal').classList.remove('show');
         }
 
         // Delete item
@@ -1541,10 +2212,6 @@
         }
 
         // ========== MANUAL RESERVATIONS ==========
-        let manualReservationMode = false;
-        let manualCart = [];
-
-        // Note: loadManualReservations and restoreCollapsedStates are now called in initPage()
 
         // Toggle manual reservation mode
         function toggleManualReservationMode() {
@@ -1562,7 +2229,7 @@
                 document.getElementById('endDate').value = tomorrow.toISOString().split('T')[0];
                 
                 // Re-render inventory to show "Add to Cart" buttons
-                renderInventory(currentInventory);
+                renderInventory();
             } else {
                 cancelManualReservation();
             }
@@ -1584,7 +2251,7 @@
             document.getElementById('submitReservationBtn').disabled = true;
             
             // Re-render inventory without cart buttons
-            renderInventory(currentInventory);
+            renderInventory();
         }
 
         // Add item to manual cart
@@ -1905,7 +2572,6 @@
 
                 let html = '';
 
-                // Item summary
                 html += `
                     <div class="res-item-summary">
                         <h3>${item.label || 'Unknown Item'}</h3>
@@ -1918,7 +2584,6 @@
                         </div>
                     </div>`;
 
-                // Active Reservations
                 html += `<div class="res-section-title"><span class="material-symbols-outlined">event_available</span> Active Reservations (${reserved.length})</div>`;
                 if (reserved.length === 0) {
                     html += '<div class="res-empty">No active reservations</div>';
@@ -1940,7 +2605,7 @@
                                             <strong>Dates:</strong> ${fmtDate(checkOut)} - ${fmtDate(checkIn)}
                                         </div>
                                     </div>
-                                    <button class="res-btn-release" onclick="releaseReservation('${r._id}')">Release</button>
+                                    <button class="res-btn-release" onclick="releaseReservationModal('${r._id}')">Release</button>
                                 </div>
                                 <div class="res-card-details">
                                     <div class="stat"><span class="stat-label">Quantity</span><span class="stat-value">${r.quantity || 1}</span></div>
@@ -1952,7 +2617,6 @@
                     });
                 }
 
-                // Manual Reservations
                 html += `<div class="res-section-title"><span class="material-symbols-outlined">person</span> Manual Reservations (${manual.length})</div>`;
                 if (manual.length === 0) {
                     html += '<div class="res-empty">No manual reservations</div>';
@@ -1971,7 +2635,7 @@
                                             <strong>Created by:</strong> ${creator.fullName || '—'}
                                         </div>
                                     </div>
-                                    <button class="res-btn-delete" onclick="deleteManualReservation('${r._id}')">Delete</button>
+                                    <button class="res-btn-delete" onclick="deleteManualReservationModal('${r._id}')">Delete</button>
                                 </div>
                                 <div class="res-card-details">
                                     <div class="stat"><span class="stat-label">Quantity</span><span class="stat-value">${r.quantity || 1}</span></div>
@@ -1983,11 +2647,10 @@
                     });
                 }
 
-                // Footer
                 html += `
                     <div class="res-modal-footer">
                         <span class="res-count">${totalCount} reservation${totalCount !== 1 ? 's' : ''}</span>
-                        ${totalCount > 0 ? `<button class="res-btn-release" onclick="releaseAllReservations('${inventoryId}')">
+                        ${totalCount > 0 ? `<button class="res-btn-release" onclick="releaseAllReservationsModal('${inventoryId}')">
                             <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;margin-right:4px;">event_busy</span>
                             Release All Reservations
                         </button>` : ''}
@@ -2001,7 +2664,7 @@
             }
         }
 
-        async function releaseReservation(reservationId) {
+        async function releaseReservationModal(reservationId) {
             if (!confirm('Are you sure you want to release this reservation?')) return;
             try {
                 const res = await fetch(`${window.API_BASE}/api/reservations/${reservationId}`, {
@@ -2018,7 +2681,7 @@
             }
         }
 
-        async function deleteManualReservation(reservationId) {
+        async function deleteManualReservationModal(reservationId) {
             if (!confirm('Are you sure you want to delete this manual reservation?')) return;
             try {
                 const res = await fetch(`${window.API_BASE}/api/manual-reservations/${reservationId}`, {
@@ -2035,7 +2698,7 @@
             }
         }
 
-        async function releaseAllReservations(inventoryId) {
+        async function releaseAllReservationsModal(inventoryId) {
             if (!confirm('Are you sure you want to release ALL reservations for this item? This cannot be undone.')) return;
             try {
                 const res = await fetch(`${window.API_BASE}/api/inventory/${inventoryId}/reservations/all`, {
@@ -2056,7 +2719,7 @@
         // Send reservation email
         async function sendReservationEmail(ids, email) {
             const idArray = ids.split(',');
-            
+
             try {
                 const response = await fetch(`${window.API_BASE}/api/manual-reservations/send-email`, {
                     method: 'POST',
@@ -2081,4 +2744,13 @@
                 showMessage('Failed to send email', 'error');
             }
         }
+
+        document.addEventListener('click', (event) => {
+            const notesModal = document.getElementById('notesModal');
+            const editItemModal = document.getElementById('editItemModal');
+            if (event.target === notesModal) closeNotesModal();
+            if (event.target === editItemModal) closeEditModal();
+        });
     </script>
+</body>
+</html> 

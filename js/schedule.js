@@ -272,6 +272,16 @@ function formatTo12Hour(time) {
   return `${h.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')} ${ampm}`;
 }
 
+function syncTimeDisplay(input) {
+  if (!input) return;
+  const field = input.closest('.time-field');
+  if (!field) return;
+  const display = field.querySelector('.time-display');
+  if (display) {
+    display.textContent = formatTo12Hour(input.value) || '--:-- --';
+  }
+}
+
 window.initPage = async function(id) {
   console.log(`\n=== SCHEDULE INITPAGE START ===`);
   const startTime = Date.now();
@@ -401,6 +411,9 @@ window.initPage = async function(id) {
   console.log(`[INIT] Loading programs for event: ${tableId}...`);
   await loadPrograms(tableId);
   console.log(`[INIT] Programs loaded successfully`);
+
+  // Wire up right-click / long-press "Mark as Important" gestures (binds once)
+  setupScheduleImportantGestures();
 
   // Initialize dark theme if detected
   const isDarkTheme = document.querySelector('.schedule-page.dark-theme');
@@ -977,7 +990,7 @@ function renderProgramSections(hasScheduleAccess) {
 
     matchingPrograms.forEach(program => {
       const entry = document.createElement('div');
-      entry.className = 'program-entry' + (program.done ? ' done-entry' : '');
+      entry.className = 'program-entry' + (program.done ? ' done-entry' : '') + (program.important ? ' important-entry' : '');
       entry.setAttribute('data-program-index', program.__index);
       
       // Use _id if available, otherwise use _tempId for new programs
@@ -987,46 +1000,50 @@ function renderProgramSections(hasScheduleAccess) {
       }
 
       entry.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: 4px;">
-          <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0;">
-            <input type="time" placeholder="Start Time" 
-              data-field="startTime"
-              style="width: 130px; min-width: 130px; text-align: left; font-size: 12px;"
-              value="${program.startTime || ''}"
-              ${!hasScheduleAccess ? 'readonly' : ''}
-              onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
-              onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'startTime')` : ''}">
-            <input type="time" placeholder="End Time" 
-              data-field="endTime"
-              style="width: 130px; min-width: 130px; text-align: left; font-size: 12px;"
-              value="${program.endTime || ''}"
-              ${!hasScheduleAccess ? 'readonly' : ''}
-              onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
-              onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'endTime')` : ''}">
-            ${program.folder ? `<div style="display: flex; align-items: center; gap: 2px;" class="folder-field-container">
-              <span class="material-symbols-outlined folder-icon" style="font-size: 14px; color: #2563eb;">folder</span>
+        <div class="entry-top-row">
+          <div class="entry-times">
+            <label class="time-field">
+              <input type="time" class="time-input-native" placeholder="Start Time"
+                data-field="startTime"
+                value="${program.startTime || ''}"
+                ${!hasScheduleAccess ? 'readonly' : ''}
+                onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
+                oninput="syncTimeDisplay(this)"
+                onblur="${hasScheduleAccess ? `syncTimeDisplay(this); autoSave(this, '${program.date}', ${program.__index}, 'startTime')` : ''}">
+              <span class="time-display">${formatTo12Hour(program.startTime) || '--:-- --'}</span>
+              <span class="material-symbols-outlined time-icon">schedule</span>
+            </label>
+            <label class="time-field">
+              <input type="time" class="time-input-native" placeholder="End Time"
+                data-field="endTime"
+                value="${program.endTime || ''}"
+                ${!hasScheduleAccess ? 'readonly' : ''}
+                onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
+                oninput="syncTimeDisplay(this)"
+                onblur="${hasScheduleAccess ? `syncTimeDisplay(this); autoSave(this, '${program.date}', ${program.__index}, 'endTime')` : ''}">
+              <span class="time-display">${formatTo12Hour(program.endTime) || '--:-- --'}</span>
+              <span class="material-symbols-outlined time-icon">schedule</span>
+            </label>
+            ${program.folder ? `<div class="folder-field-container">
+              <span class="material-symbols-outlined folder-icon">folder</span>
               <input type="text"
                 data-field="folder"
                 class="folder-input"
                 placeholder="Folder"
                 maxlength="7"
                 ${!hasScheduleAccess ? 'readonly' : ''}
-                style="width: 70px; min-width: 70px; padding: 4px 8px; font-size: 12px;"
                 value="${program.folder || ''}"
                 onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
                 onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'folder')` : ''}">
             </div>` : ''}
           </div>
-          <div class="right-actions" style="flex-shrink: 0; margin-left: auto;">
-            <label style="display: flex; align-items: center; margin-bottom: 0;">
+          <label class="entry-done">
             <input type="checkbox" class="done-checkbox"
               data-field="done"
               data-original-value="${program.done ? 'true' : 'false'}"
-              style="width: 18px; height: 18px;"
               ${program.done ? 'checked' : ''}
               onchange="toggleDone(this, ${program.__index})">
           </label>
-        </div>
         </div>
         <div style="display: flex; align-items: center; gap: 12px;">
           <input class="program-name" type="text"
@@ -2840,6 +2857,176 @@ function autoSave(field, date, ignoredIndex, key) {
   window.currentlyEditing = null;
 }
 
+// ===== Mark as Important =====
+
+// Lightweight bottom toast (auto-hides ~1.8s)
+function showImportantToast(message) {
+  let toast = document.getElementById('scheduleImportantToast');
+  if (!toast) {
+    toast = document.createElement('div');
+    toast.id = 'scheduleImportantToast';
+    toast.className = 'schedule-important-toast';
+    document.body.appendChild(toast);
+  }
+  toast.textContent = message;
+  // Force reflow so the transition runs even on rapid repeat toggles
+  void toast.offsetWidth;
+  toast.classList.add('show');
+  clearTimeout(toast._hideTimer);
+  toast._hideTimer = setTimeout(() => toast.classList.remove('show'), 1800);
+}
+
+// Toggle the important styling on both card and table representations of a row
+function applyImportantStyles(programIndex, isImportant) {
+  const card = document.querySelector(`#programSections .program-entry[data-program-index="${programIndex}"]`);
+  if (card) card.classList.toggle('important-entry', isImportant);
+  const row = document.querySelector(`#scheduleTableView .schedule-table-section tbody tr[data-program-index="${programIndex}"]`);
+  if (row) row.classList.toggle('important-row', isImportant);
+}
+
+// Persist the important flag through the same atomic field pipeline as every
+// other program field (PATCH /program-field → server broadcast → remote apply).
+async function saveImportantField(programId, programIndex, newValue) {
+  const tableId = currentEventId || localStorage.getItem('eventId');
+  if (!tableId || !programId) {
+    // New row without a persisted _id yet — fall back to full save
+    scheduleSave();
+    return;
+  }
+
+  // Guard our own socket echo for 10s (mirrors autoSave protection)
+  const protectionKey = `${programId}-important`;
+  window.recentlyEditedFields = window.recentlyEditedFields || new Map();
+  window.recentlyEditedFields.set(protectionKey, {
+    value: newValue,
+    timestamp: Date.now(),
+    field: 'important'
+  });
+  setTimeout(() => window.recentlyEditedFields.delete(protectionKey), 10000);
+
+  try {
+    const response = await fetch(`${API_BASE}/api/tables/${tableId}/program-field`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': localStorage.getItem('token')
+      },
+      body: JSON.stringify({
+        programId,
+        field: 'important',
+        value: newValue,
+        userId: await getUserIdFromToken(),
+        sessionId: window.SimpleCollab?.getCurrentUser?.()?.sessionId
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Save failed: ${response.status}`);
+    }
+  } catch (err) {
+    console.error('[IMPORTANT] Failed to save important flag, reverting:', err);
+    // Revert optimistic local state + UI
+    safeUpdateProgram(programIndex, 'important', !newValue);
+    applyImportantStyles(programIndex, !newValue);
+    showImportantToast('Failed to update — try again');
+  }
+}
+
+// Public toggle (also invoked from gestures)
+function toggleImportant(programIndex) {
+  const program = tableData.programs[programIndex];
+  if (!program) return;
+
+  const oldValue = Boolean(program.important);
+  const newValue = !oldValue;
+
+  // Optimistic local state + UI before the network round-trip
+  safeUpdateProgram(programIndex, 'important', newValue);
+  applyImportantStyles(programIndex, newValue);
+  showImportantToast(newValue ? 'Marked important' : 'Removed important flag');
+
+  saveImportantField(program._id, programIndex, newValue);
+}
+window.toggleImportant = toggleImportant;
+
+// Desktop right-click + mobile long-press gestures to toggle important.
+// Uses delegated listeners on the persistent containers, so it only binds once.
+function setupScheduleImportantGestures() {
+  const containers = [
+    document.getElementById('programSections'),
+    document.getElementById('scheduleTableView')
+  ].filter(Boolean);
+
+  const isInteractive = (target) =>
+    target.closest('input, textarea, select, button, a, label, .delete-date-btn, .delete-row-btn, .row-action-btn');
+
+  const resolveIndex = (target) => {
+    const host = target.closest('.program-entry[data-program-index], tr[data-program-index]');
+    if (!host) return null;
+    const idx = parseInt(host.getAttribute('data-program-index'), 10);
+    return Number.isNaN(idx) ? null : idx;
+  };
+
+  containers.forEach(container => {
+    if (container.dataset.importantGesturesInit === '1') return;
+    container.dataset.importantGesturesInit = '1';
+
+    // Desktop: right-click
+    container.addEventListener('contextmenu', (e) => {
+      if (window.innerWidth <= 768) return; // mobile uses long-press
+      if (!isOwner) return;
+      if (isInteractive(e.target)) return;
+      const index = resolveIndex(e.target);
+      if (index === null) return;
+      e.preventDefault();
+      toggleImportant(index);
+    });
+
+    // Mobile: long-press (500ms), cancel if finger moves > ~12px
+    let pressTimer = null;
+    let pressHost = null;
+    let startX = 0;
+    let startY = 0;
+
+    const clearPress = () => {
+      if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+      if (pressHost) { pressHost.classList.remove('schedule-longpress-pending'); pressHost = null; }
+    };
+
+    container.addEventListener('touchstart', (e) => {
+      if (window.innerWidth > 768) return;
+      if (!isOwner) return;
+      if (isInteractive(e.target)) return;
+      const index = resolveIndex(e.target);
+      if (index === null) return;
+
+      const touch = e.touches[0];
+      startX = touch.clientX;
+      startY = touch.clientY;
+      pressHost = e.target.closest('.program-entry, tr');
+      if (pressHost) pressHost.classList.add('schedule-longpress-pending');
+
+      pressTimer = setTimeout(() => {
+        clearPress();
+        if (navigator.vibrate) { try { navigator.vibrate(20); } catch (_) {} }
+        toggleImportant(index);
+      }, 500);
+    }, { passive: true });
+
+    container.addEventListener('touchmove', (e) => {
+      if (!pressTimer) return;
+      const touch = e.touches[0];
+      if (Math.abs(touch.clientX - startX) > 12 || Math.abs(touch.clientY - startY) > 12) {
+        clearPress();
+      }
+    }, { passive: true });
+
+    container.addEventListener('touchend', clearPress);
+    container.addEventListener('touchcancel', clearPress);
+  });
+}
+window.setupScheduleImportantGestures = setupScheduleImportantGestures;
+
 // Optimistic UI: update tableData on input
 function optimisticInputHandler(e) {
   const field = e.target;
@@ -3215,6 +3402,7 @@ window.toggleDone = toggleDone;
 window.matchesSearch = matchesSearch;
 window.enableEdit = enableEdit;
 window.autoSave = autoSave;
+window.syncTimeDisplay = syncTimeDisplay;
 window.toggleNotes = toggleNotes;
 window.toggleAllNotes = toggleAllNotes;
 window.autoResizeTextarea = autoResizeTextarea;
@@ -4159,6 +4347,24 @@ if (window.socket) {
         return;
       }
       
+      // The "important" flag has no input element — toggle classes on card + table row
+      if (data.field === 'important') {
+        const protectionKey = `${data.programId}-important`;
+        const recentEdit = window.recentlyEditedFields?.get(protectionKey);
+        if (recentEdit && Date.now() - recentEdit.timestamp < 10000) {
+          console.log('[SOCKET] important recently edited locally, skipping remote apply');
+          return;
+        }
+        const isImportant = Boolean(data.value);
+        entry.classList.toggle('important-entry', isImportant);
+        const tableRow = document.querySelector(`#scheduleTableView .schedule-table-section tbody tr[data-program-id='${data.programId}']`);
+        if (tableRow) tableRow.classList.toggle('important-row', isImportant);
+        const importantIndex = tableData.programs.findIndex(p => p._id === data.programId);
+        if (importantIndex !== -1) safeUpdateProgram(importantIndex, 'important', isImportant);
+        console.log(`✅ [SOCKET] Applied important = ${isImportant} by ${data.userName || 'another user'}`);
+        return;
+      }
+      
       const fieldElement = entry.querySelector(`[data-field='${data.field}']`);
       if (!fieldElement) {
         console.warn(`[SOCKET] Field element not found: ${data.field}`);
@@ -4469,6 +4675,7 @@ function updateProgramFields(entry, program, preservationData, hasScheduleAccess
       startTimeInput.dataset.collaborativeUpdate = 'true';
       
       startTimeInput.value = program.startTime || '';
+      syncTimeDisplay(startTimeInput);
     }
   }
   
@@ -4482,6 +4689,7 @@ function updateProgramFields(entry, program, preservationData, hasScheduleAccess
       endTimeInput.dataset.collaborativeUpdate = 'true';
       
       endTimeInput.value = program.endTime || '';
+      syncTimeDisplay(endTimeInput);
     }
   }
   
@@ -4960,7 +5168,7 @@ function renderScheduleTable() {
     const tbody = document.createElement('tbody');
     matchingPrograms.forEach(program => {
       const row = document.createElement('tr');
-      row.className = program.done ? 'done-row' : '';
+      row.className = (program.done ? 'done-row' : '') + (program.important ? ' important-row' : '');
       row.setAttribute('data-program-index', program.__index);
       
       const programId = program._id || program._tempId;
@@ -5803,7 +6011,7 @@ function renderDarkThemeCardView(hasScheduleAccess) {
     // Create program entry cards
     matchingPrograms.forEach(program => {
       const entry = document.createElement('div');
-      entry.className = 'program-entry' + (program.done ? ' done-entry' : '');
+      entry.className = 'program-entry' + (program.done ? ' done-entry' : '') + (program.important ? ' important-entry' : '');
       entry.setAttribute('data-program-index', program.__index);
       
       const programId = program._id || program._tempId;
@@ -5812,36 +6020,44 @@ function renderDarkThemeCardView(hasScheduleAccess) {
       }
       
       entry.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-          <div style="display: flex; align-items: center; gap: 8px; flex: 1;">
-            <input type="time" placeholder="Start" 
-              data-field="startTime"
-              value="${program.startTime || ''}"
-              ${!hasScheduleAccess ? 'readonly' : ''}
-              onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
-              onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'startTime')` : ''}">
-            <span style="color: var(--text-muted);">→</span>
-            <input type="time" placeholder="End" 
-              data-field="endTime"
-              value="${program.endTime || ''}"
-              ${!hasScheduleAccess ? 'readonly' : ''}
-              onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
-              onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'endTime')` : ''}">
-            ${program.folder ? `<div style="display: flex; align-items: center; gap: 2px;" class="folder-field-container">
-              <span class="material-symbols-outlined folder-icon" style="font-size: 14px; color: #2563eb;">folder</span>
+        <div class="entry-top-row">
+          <div class="entry-times">
+            <label class="time-field">
+              <input type="time" class="time-input-native" placeholder="Start"
+                data-field="startTime"
+                value="${program.startTime || ''}"
+                ${!hasScheduleAccess ? 'readonly' : ''}
+                onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
+                oninput="syncTimeDisplay(this)"
+                onblur="${hasScheduleAccess ? `syncTimeDisplay(this); autoSave(this, '${program.date}', ${program.__index}, 'startTime')` : ''}">
+              <span class="time-display">${formatTo12Hour(program.startTime) || '--:-- --'}</span>
+              <span class="material-symbols-outlined time-icon">schedule</span>
+            </label>
+            <label class="time-field">
+              <input type="time" class="time-input-native" placeholder="End"
+                data-field="endTime"
+                value="${program.endTime || ''}"
+                ${!hasScheduleAccess ? 'readonly' : ''}
+                onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
+                oninput="syncTimeDisplay(this)"
+                onblur="${hasScheduleAccess ? `syncTimeDisplay(this); autoSave(this, '${program.date}', ${program.__index}, 'endTime')` : ''}">
+              <span class="time-display">${formatTo12Hour(program.endTime) || '--:-- --'}</span>
+              <span class="material-symbols-outlined time-icon">schedule</span>
+            </label>
+            ${program.folder ? `<div class="folder-field-container">
+              <span class="material-symbols-outlined folder-icon">folder</span>
               <input type="text"
                 data-field="folder"
                 class="folder-input"
                 placeholder="Folder"
                 maxlength="7"
                 ${!hasScheduleAccess ? 'readonly' : ''}
-                style="width: 70px; min-width: 70px; padding: 4px 8px; font-size: 12px;"
                 value="${program.folder || ''}"
                 onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
                 onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'folder')` : ''}">
             </div>` : ''}
           </div>
-          <label style="display: flex; align-items: center; cursor: pointer;">
+          <label class="entry-done">
             <input type="checkbox" class="done-checkbox"
               data-field="done"
               data-original-value="${program.done ? 'true' : 'false'}"

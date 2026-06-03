@@ -6020,10 +6020,12 @@ app.patch('/api/tables/:id/program-field', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Table not found' });
     }
     
-    // Check permissions
+    // Check permissions (admin, owner, lead, or shared user)
+    const isAdmin = req.user.role === 'admin';
     const isOwner = currentTable.owners.includes(req.user.id);
+    const isLead = Array.isArray(currentTable.leads) && currentTable.leads.includes(req.user.id);
     const isShared = currentTable.sharedWith.includes(req.user.id);
-    if (!isOwner && !isShared) {
+    if (!isAdmin && !isOwner && !isLead && !isShared) {
       return res.status(403).json({ error: 'Not authorized to edit this table' });
     }
     
@@ -6035,7 +6037,8 @@ app.patch('/api/tables/:id/program-field', authenticate, async (req, res) => {
     
     const oldValue = currentProgram[field];
     
-    // Use MongoDB's positional operator to update only the specific field atomically
+    // Use MongoDB's positional operator to update only the specific field atomically.
+    // $inc rev gives clients a monotonically increasing revision for ordering.
     const result = await Table.findOneAndUpdate(
       { 
         _id: req.params.id,
@@ -6046,7 +6049,8 @@ app.patch('/api/tables/:id/program-field', authenticate, async (req, res) => {
           [`programSchedule.$.${field}`]: value,
           [`programSchedule.$.lastModified`]: new Date(),
           [`programSchedule.$.lastModifiedBy`]: req.user.id
-        }
+        },
+        $inc: { 'programSchedule.$.rev': 1 }
       },
       { new: true, runValidators: true }
     );
@@ -6067,6 +6071,7 @@ app.patch('/api/tables/:id/program-field', authenticate, async (req, res) => {
         field, 
         value, 
         oldValue,
+        rev: updatedProgram.rev,
         userId: req.user.id,
         sessionId: sessionId || null,
         userName: req.user.fullName || req.user.name || 'Unknown User',

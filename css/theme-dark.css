@@ -8671,6 +8671,27 @@ img.owner-avatar {
   text-decoration: line-through;
 }
 
+/* Mark as Important — dark theme card view (must beat .program-entry background !important) */
+.schedule-page.dark-theme .program-entry.important-entry {
+  background: rgba(204, 0, 7, 0.35) !important;
+  border-color: rgba(204, 0, 7, 0.9) !important;
+  border-left: 4px solid #cc0007 !important;
+  box-shadow: inset 0 0 0 1px rgba(204, 0, 7, 0.25) !important;
+}
+
+.schedule-page.dark-theme .program-entry.important-entry:hover {
+  background: rgba(204, 0, 7, 0.42) !important;
+}
+
+.schedule-page.dark-theme .program-entry.important-entry.done-entry {
+  background: rgba(204, 0, 7, 0.2) !important;
+  opacity: 0.65;
+}
+
+.schedule-page.dark-theme .program-entry.schedule-longpress-pending {
+  background: rgba(204, 0, 7, 0.25) !important;
+}
+
 .schedule-page.dark-theme .program-entry input,
 .schedule-page.dark-theme .program-entry textarea {
   background: transparent !important;
@@ -8729,6 +8750,48 @@ img.owner-avatar {
 
 .schedule-page.dark-theme .program-entry .folder-icon {
   color: #60a5fa !important;
+}
+
+@media (max-width: 768px) {
+  .schedule-page.dark-theme .program-entry .entry-top-row {
+    gap: 4px !important;
+  }
+
+  .schedule-page.dark-theme .program-entry .entry-times {
+    gap: 6px !important;
+  }
+
+  .schedule-page.dark-theme .program-entry .folder-field-container {
+    margin-left: 8px !important;
+  }
+
+  .schedule-page.dark-theme .program-entry .time-display {
+    color: var(--text-primary) !important;
+    font-size: 12px !important;
+  }
+
+  .schedule-page.dark-theme .program-entry .time-icon {
+    color: var(--text-muted) !important;
+    font-size: 14px !important;
+  }
+
+  .schedule-page.dark-theme .program-entry .folder-input {
+    width: 48px !important;
+    min-width: 48px !important;
+    max-width: 48px !important;
+    padding: 2px 4px !important;
+    font-size: 11px !important;
+  }
+
+  .schedule-page.dark-theme .program-entry .entry-done {
+    margin-left: auto !important;
+    flex-shrink: 0 !important;
+  }
+
+  .schedule-page.dark-theme .program-entry input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+  }
 }
 
 .schedule-page.dark-theme .program-entry input[type="checkbox"] {
@@ -8919,6 +8982,29 @@ img.owner-avatar {
 
 .schedule-page.dark-theme .schedule-table-section tbody tr.done-row td {
   text-decoration: line-through;
+}
+
+/* Mark as Important — dark theme table view */
+.schedule-page.dark-theme .schedule-table-section tbody tr.important-row,
+.schedule-page.dark-theme .schedule-table-section tbody tr.important-row td {
+  background: rgba(204, 0, 7, 0.35) !important;
+}
+
+.schedule-page.dark-theme .schedule-table-section tbody tr.important-row {
+  border-left: 4px solid #cc0007 !important;
+}
+
+.schedule-page.dark-theme .schedule-table-section tbody tr.important-row:hover,
+.schedule-page.dark-theme .schedule-table-section tbody tr.important-row:hover td {
+  background: rgba(204, 0, 7, 0.42) !important;
+}
+
+.schedule-page.dark-theme .schedule-table-section tbody tr.important-row.done-row {
+  opacity: 0.65;
+}
+
+.schedule-page.dark-theme .schedule-table-section tbody tr.important-row .owner-editable:hover {
+  background: rgba(204, 0, 7, 0.45) !important;
 }
 
 .schedule-page.dark-theme .schedule-table-section td {
@@ -9393,6 +9479,18 @@ img.owner-avatar {
   
   .schedule-content {
     padding: 16px;
+  }
+  
+  /* Card view on mobile: flush content, no date-section outer box */
+  .schedule-page.dark-theme:not(:has(.schedule-table-view.active)) .schedule-content {
+    padding: 0 !important;
+  }
+
+  .schedule-page.dark-theme:not(:has(.schedule-table-view.active)) .date-section {
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
   }
   
   /* Hide some filter buttons on mobile */

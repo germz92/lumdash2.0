@@ -32,7 +32,12 @@ const programSchema = new mongoose.Schema({
   photographer: String,
   folder: String,
   notes: String,
-  done: { type: Boolean, default: false }
+  done: { type: Boolean, default: false },
+  important: { type: Boolean, default: false },
+  // Concurrency metadata for realtime field-level collaboration
+  lastModified: Date,
+  lastModifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  rev: { type: Number, default: 0 }
 }, { _id: true });
 
 // ✅ NEW: Separate crew row schema with ObjectId _id

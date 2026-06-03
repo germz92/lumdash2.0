@@ -68,8 +68,10 @@ function init(eventId, userId, userName) {
     // Start aggressive mobile notification cleanup
     startMobileNotificationCleanup();
     
-    // Join the event room for real-time collaboration
-    if (window.socket.connected) {
+    // Join the event room for real-time collaboration.
+    // CRITICAL: rejoin on EVERY connect/reconnect, not just if connected at init.
+    // Otherwise cloud/mobile clients miss all live updates after a reconnect.
+    const joinRooms = () => {
       window.socket.emit('joinEventRoom', {
         eventId: eventId,
         userId: userId,
@@ -94,6 +96,11 @@ function init(eventId, userId, userName) {
         joinedAt: Date.now()
       });
       // updateActiveUsersDisplay(); // DISABLED: prevents mobile header blocking
+    };
+
+    window.socket.on('connect', joinRooms);
+    if (window.socket.connected) {
+      joinRooms();
     }
   } else {
     console.warn('⚠️ Socket not available - collaboration disabled');

@@ -252,6 +252,54 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
     box-shadow: 0 4px 16px rgba(204,0,7,0.08);
 }
 
+/* Mark as Important — card view */
+.schedule-page .program-entry.important-entry {
+    background: rgba(204, 0, 7, 0.22) !important;
+    border-color: rgba(204, 0, 7, 0.85);
+    border-left: 4px solid #cc0007;
+    box-shadow: 0 2px 10px rgba(204, 0, 7, 0.2);
+}
+
+.schedule-page .program-entry.important-entry:hover {
+    background: rgba(204, 0, 7, 0.28) !important;
+}
+
+/* Muted tint when an important entry is also marked done */
+.schedule-page .program-entry.important-entry.done-entry {
+    background: rgba(204, 0, 7, 0.12) !important;
+    border-color: rgba(204, 0, 7, 0.5);
+}
+
+/* Subtle feedback while waiting for a long-press to register */
+.schedule-page .program-entry.schedule-longpress-pending {
+    background: rgba(204, 0, 7, 0.04) !important;
+    transition: background 0.15s ease;
+}
+
+/* Bottom toast shown when toggling the important flag */
+.schedule-important-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 28px;
+    transform: translateX(-50%) translateY(20px);
+    background: rgba(204, 0, 7, 0.95);
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 600;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    opacity: 0;
+    pointer-events: none;
+    z-index: 4000;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.schedule-important-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
 .schedule-page .program-entry input,
 .schedule-page .program-entry textarea {
     width: 100%;
@@ -389,6 +437,55 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
     margin-top: 8px;
 }
 
+/* Card entry top row — desktop defaults */
+.schedule-page .program-entry .entry-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+}
+
+.schedule-page .program-entry .entry-times {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.schedule-page .program-entry .entry-done {
+    flex-shrink: 0;
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+}
+
+.schedule-page .program-entry .time-field {
+    display: inline-flex;
+    align-items: center;
+    position: static;
+    margin: 0;
+}
+
+.schedule-page .program-entry .time-display,
+.schedule-page .program-entry .time-icon {
+    display: none;
+}
+
+.schedule-page .program-entry .time-input-native {
+    position: static;
+    opacity: 1;
+    width: auto;
+    min-width: 100px;
+    max-width: 130px;
+    font-size: 12px;
+    padding: 6px 4px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    background: transparent;
+    cursor: text;
+}
+
 /* Mobile styles */
 @media (max-width: 768px) {
     .schedule-page {
@@ -502,23 +599,80 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
         box-sizing: border-box;
     }
 
-    /* Ensure the first row with times + checkbox stays horizontal even on mobile */
-    .schedule-page .program-entry > div:first-child {
+    /* Compressed top row: times + folder left, checkbox pinned right */
+    .schedule-page .program-entry .entry-top-row {
+        display: flex !important;
         flex-direction: row !important;
         align-items: center !important;
-        justify-content: space-between !important;
-        gap: 8px !important;
+        justify-content: flex-start !important;
+        gap: 4px !important;
+        flex-wrap: nowrap !important;
+        width: 100% !important;
+    }
+
+    .schedule-page .program-entry .entry-times {
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 6px !important;
+        flex-wrap: nowrap !important;
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        overflow: hidden !important;
+    }
+
+    .schedule-page .program-entry .entry-done {
+        flex-shrink: 0 !important;
+        margin-left: auto !important;
+        display: flex !important;
+        align-items: center !important;
+    }
+
+    .schedule-page .program-entry .time-field {
+        position: relative;
+        display: inline-flex;
+        align-items: center;
+        gap: 1px;
+        flex-shrink: 0;
+        margin: 0;
+        cursor: pointer;
+    }
+
+    .schedule-page .program-entry .time-display {
+        display: inline;
+        font-size: 12px;
+        white-space: nowrap;
+        line-height: 1.2;
+        padding: 0;
+        color: inherit;
+    }
+
+    .schedule-page .program-entry .time-icon {
+        display: inline-flex;
+        font-size: 14px !important;
+        color: #888;
+        line-height: 1;
+    }
+
+    /* Ensure the first row with times + checkbox stays horizontal even on mobile */
+    .schedule-page .program-entry > div:first-child,
+    .schedule-page .program-entry .entry-top-row {
+        flex-direction: row !important;
+        align-items: center !important;
+        justify-content: flex-start !important;
+        gap: 4px !important;
         flex-wrap: nowrap !important;
     }
 
     /* Time fields container should stay horizontal */
-    .schedule-page .program-entry > div:first-child > div:first-child {
+    .schedule-page .program-entry > div:first-child > div:first-child,
+    .schedule-page .program-entry .entry-times {
         flex-direction: row !important;
         align-items: center !important;
         gap: 6px !important;
         flex-wrap: nowrap !important;
         min-width: 0 !important;
-        flex: 1 1 0% !important;
+        flex: 1 1 auto !important;
         overflow: hidden !important;
     }
 
@@ -529,20 +683,42 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
         width: 100% !important;
     }
 
-    /* Time inputs on mobile - constrained width, don't stretch to 100% */
-    .schedule-page .program-entry input[type="time"] {
+    /* Mobile: show formatted time text + clock icon, overlay native picker */
+    .schedule-page .program-entry .time-input-native {
+        position: absolute !important;
+        inset: 0 !important;
+        opacity: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        min-width: 0 !important;
+        max-width: none !important;
+        flex: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        border: none !important;
+        background: transparent !important;
+        cursor: pointer !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Time inputs on mobile - legacy fallback for entries without .time-field */
+    .schedule-page .program-entry input[type="time"]:not(.time-input-native) {
         width: auto !important;
-        min-width: 100px !important;
-        max-width: 130px !important;
-        flex: 1 1 100px !important;
+        min-width: 72px !important;
+        max-width: 88px !important;
+        flex: 0 0 auto !important;
         font-size: 12px !important;
-        padding: 6px 4px !important;
+        padding: 0 2px !important;
         border: 1px solid transparent !important;
         border-radius: 4px !important;
         background: transparent !important;
         text-align: left !important;
         transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s !important;
         box-sizing: border-box !important;
+    }
+
+    .schedule-page .program-entry input[type="time"]:not(.time-input-native)::-webkit-calendar-picker-indicator {
+        display: none;
     }
 
     /* Mobile focus and hover states */
@@ -558,12 +734,22 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
     }
 
     /* Mobile folder input styles */
+    .schedule-page .program-entry .folder-field-container {
+        flex-shrink: 0 !important;
+        gap: 2px !important;
+        margin-left: 8px !important;
+    }
+
+    .schedule-page .program-entry .folder-icon {
+        font-size: 14px !important;
+    }
+
     .schedule-page .program-entry .folder-input {
-        width: 55px !important;
-        min-width: 55px !important;
-        max-width: 55px !important;
+        width: 48px !important;
+        min-width: 48px !important;
+        max-width: 48px !important;
         font-size: 11px !important;
-        padding: 6px 2px !important;
+        padding: 2px 4px !important;
         border: 1px solid #4a90e2 !important;
         border-radius: 4px !important;
         background: #e8f4fd !important;
@@ -1568,6 +1754,29 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
 .schedule-table-section tbody tr.done-row {
   opacity: 0.6;
   text-decoration: line-through;
+}
+
+/* Mark as Important — table view */
+.schedule-table-section tbody tr.important-row {
+  border-left: 4px solid #cc0007;
+}
+
+.schedule-table-section tbody tr.important-row,
+.schedule-table-section tbody tr.important-row td {
+  background: rgba(204, 0, 7, 0.22);
+}
+
+.schedule-table-section tbody tr.important-row:hover,
+.schedule-table-section tbody tr.important-row:hover td {
+  background: rgba(204, 0, 7, 0.28);
+}
+
+/* Allow vertical scrolling without accidentally triggering long-press on touch */
+@media (max-width: 768px) {
+  .schedule-page .program-entry,
+  .schedule-table-section tbody tr {
+    touch-action: pan-y;
+  }
 }
 
 .schedule-table-section td {

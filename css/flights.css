@@ -197,7 +197,7 @@
 }
 
 .flights-dark .flights-toolbar .search-box:focus-within {
-  border-color: var(--primary-color);
+  border-color: var(--brand-red);
 }
 
 .flights-dark .flights-toolbar .search-box .material-symbols-outlined {
@@ -274,7 +274,7 @@
 
 .flights-dark .toolbar-select:focus {
   outline: none;
-  border-color: var(--primary-color);
+  border-color: var(--brand-red);
 }
 
 .flights-dark .toolbar-select option {
@@ -695,7 +695,7 @@
 
 .flights-dark .flight-duration {
   font-size: var(--font-size-xs);
-  color: var(--primary-color);
+  color: var(--brand-red);
   margin-top: 4px;
   font-weight: 500;
 }
@@ -732,7 +732,7 @@
 
 .flights-dark .booked-by-info .material-symbols-outlined {
   font-size: 14px;
-  color: var(--primary-color);
+  color: var(--brand-red);
 }
 
 /* Loading State */

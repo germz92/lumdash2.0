@@ -1026,13 +1026,14 @@ function loadPageCSS(page) {
     case 'reimbursements': cssFile = 'css/reimbursements.css'; break;
     case 'expenses': cssFile = 'css/expenses.css'; break;
     case 'post-production': cssFile = 'css/post-production.css'; break;
+    case 'timesheet': cssFile = 'css/timesheet.css'; break;
     case 'settings': cssFile = 'css/settings.css'; break;
     case 'users': cssFile = 'css/users.css'; break;
   }
   if (cssFile) {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
-    link.href = cssFile;
+    link.href = window.LumDashTheme ? window.LumDashTheme.cssHref(cssFile) : cssFile;
     link.setAttribute('data-page-css', 'true'); // Mark for easy removal
     document.head.appendChild(link);
   }

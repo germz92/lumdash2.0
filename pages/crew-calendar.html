@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#121216">
+    <script src="../js/theme-early.js?v=2.0.0"></script>
     <title>Crew Calendar - LumDash</title>
     <link rel="icon" href="../assets/favicon.png" type="image/png">
     <!-- Preconnect for faster font loading -->
@@ -10,7 +12,10 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
     <link rel="stylesheet" href="../css/general.css">
-    <link rel="stylesheet" href="../css/theme-dark.css">
+    <link rel="stylesheet" href="../css/theme-tokens.css?v=2.0.0">
+    <link rel="stylesheet" href="../css/theme-dark.css?v=2.0.0">
+    <link rel="stylesheet" href="../css/theme-light.css?v=2.0.0">
+    <script src="../js/theme.js?v=2.0.0"></script>
     <script src="../js/config.js"></script>
     <script src="../js/api.js"></script>
     <script src="../js/sidebar-dashboard.js"></script>
@@ -42,7 +47,7 @@
         align-items: center;
         justify-content: space-between;
         padding: 20px 24px;
-        background: #111111;
+        background: var(--bg-secondary);
         border-bottom: 1px solid var(--border-subtle);
         margin: -32px -32px 24px -32px;
         flex-wrap: wrap;
@@ -221,7 +226,7 @@
         box-shadow: 0 0 0 3px var(--brand-red-muted);
       }
 
-      .crew-calendar-dark .week-picker::-webkit-calendar-picker-indicator {
+      html[data-theme="dark"] .crew-calendar-dark .week-picker::-webkit-calendar-picker-indicator {
         filter: invert(1);
         cursor: pointer;
       }

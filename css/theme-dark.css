@@ -1,7 +1,7 @@
 /* ========================================
    LUMETRY DARK THEME
-   Modern dark dashboard design
-   Inspired by premium SaaS dashboards
+   Requires theme-tokens.css loaded first.
+   Color tokens also apply via :root fallback; light mode overrides in theme-light.css.
    ======================================== */
 
 /* Import distinctive fonts */
@@ -35,9 +35,11 @@
   transition: opacity 0.12s ease-out;
 }
 
-:root {
-  /* Dark Theme Colors - Softer dark grays for comfort */
-  /* Raised from near-black to dark charcoal with subtle cool tint */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Dark Theme Colors */
   --bg-primary: #121216;
   --bg-secondary: #18181c;
   --bg-tertiary: #1e1e24;
@@ -45,7 +47,7 @@
   --bg-hover: #2a2a36;
   --bg-active: #32323e;
   
-  /* Surface Colors - More distinction between layers */
+  /* Surface Colors */
   --surface-card: #1a1a20;
   --surface-modal: #1e1e26;
   --surface-input: #14141a;
@@ -54,48 +56,20 @@
   --surface-tertiary: #28282f;
   --surface-hover: #2e2e38;
   
-  /* Border Colors - More visible for better section separation */
+  /* Border Colors */
   --border-subtle: rgba(255, 255, 255, 0.06);
   --border-default: rgba(255, 255, 255, 0.10);
   --border-strong: rgba(255, 255, 255, 0.16);
   --border-focus: rgba(204, 0, 7, 0.5);
   
-  /* Text Colors - Hierarchy */
+  /* Text Colors */
   --text-primary: #ffffff;
   --text-secondary: rgba(255, 255, 255, 0.75);
   --text-tertiary: rgba(255, 255, 255, 0.5);
   --text-muted: rgba(255, 255, 255, 0.3);
   --text-disabled: rgba(255, 255, 255, 0.2);
   
-  /* Brand Colors - Lumetry Red */
-  --brand-red: #CC0007;
-  --brand-red-hover: #e6000a;
-  --brand-red-active: #b00006;
-  --brand-red-muted: rgba(204, 0, 7, 0.12);
-  --brand-red-glow: rgba(204, 0, 7, 0.4);
-  
-  /* Status Colors - Vibrant but not harsh */
-  --status-live: #10b981;
-  --status-live-bg: rgba(16, 185, 129, 0.12);
-  --status-live-border: rgba(16, 185, 129, 0.3);
-  --status-upcoming: #3b82f6;
-  --status-upcoming-bg: rgba(59, 130, 246, 0.12);
-  --status-upcoming-border: rgba(59, 130, 246, 0.3);
-  --status-past: #6b7280;
-  --status-past-bg: rgba(107, 114, 128, 0.12);
-  --status-past-border: rgba(107, 114, 128, 0.3);
-  
-  /* Row Accent Colors - For table row indicators */
-  --accent-blue: #3b82f6;
-  --accent-red: #ef4444;
-  --accent-green: #22c55e;
-  --accent-orange: #f97316;
-  --accent-purple: #a855f7;
-  --accent-cyan: #06b6d4;
-  --accent-pink: #ec4899;
-  --accent-yellow: #eab308;
-  
-  /* Shadows - Depth without being heavy */
+  /* Shadows */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
   --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.6);
@@ -103,57 +77,23 @@
   --shadow-glow-red: 0 0 24px rgba(204, 0, 7, 0.35);
   --shadow-glow-blue: 0 0 20px rgba(59, 130, 246, 0.25);
   --shadow-inner: inset 0 1px 2px rgba(0, 0, 0, 0.4);
-  
-  /* Layout Dimensions */
-  --sidebar-width: 240px;
-  --sidebar-collapsed: 72px;
-  --header-height: 64px;
-  --content-max-width: 1400px;
-  
-  /* Typography - Modern, clean */
-  --font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
-  --font-size-xs: 11px;
-  --font-size-sm: 13px;
-  --font-size-base: 14px;
-  --font-size-md: 15px;
-  --font-size-lg: 18px;
-  --font-size-xl: 24px;
-  --font-size-2xl: 32px;
-  --font-size-3xl: 40px;
-  
-  /* Font Weights */
-  --font-weight-normal: 400;
-  --font-weight-medium: 500;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
-  
-  /* Line Heights */
-  --line-height-tight: 1.25;
-  --line-height-normal: 1.5;
-  --line-height-relaxed: 1.75;
-  
-  /* Border Radius - Consistent rounding */
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
-  --radius-2xl: 20px;
-  --radius-full: 9999px;
-  
-  /* Transitions - Smooth and responsive */
-  --transition-fast: 100ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
-  
-  /* Z-index layers */
-  --z-dropdown: 100;
-  --z-sticky: 200;
-  --z-modal-backdrop: 900;
-  --z-modal: 1000;
-  --z-toast: 1100;
+
+  /* Material Design (styles.css, shotlist, etc.) */
+  --md-sys-color-surface: var(--surface-card);
+  --md-sys-color-surface-variant: var(--bg-hover);
+  --md-sys-color-on-surface: var(--text-primary);
+  --md-sys-color-on-surface-variant: var(--text-tertiary);
+  --md-sys-color-outline: var(--border-default);
+
+  /* Feedback chip surfaces (dark) */
+  --success-bg: rgba(40, 167, 69, 0.18);
+  --success-text: #4ade80;
+  --error-bg: rgba(220, 53, 69, 0.18);
+  --error-text: #f87171;
+  --warning-bg: rgba(255, 193, 7, 0.16);
+  --warning-text: #fbbf24;
+  --info-bg: rgba(59, 130, 246, 0.16);
+  --info-text: #60a5fa;
 }
 
 /* ========================================
@@ -202,14 +142,15 @@
    BASE STYLES
    ======================================== */
 
-/* Ensure the entire page has dark background */
+/* Page shell — uses theme tokens (dark or light via data-theme on html) */
 html, body {
-  background: #121216 !important;
-  background-color: #121216 !important;
+  background: var(--bg-primary);
+  background-color: var(--bg-primary);
   margin: 0;
   padding: 0;
   height: 100%;
   overflow: hidden;
+  color: var(--text-primary);
 }
 
 .dark-theme {
@@ -1000,7 +941,7 @@ img.owner-avatar {
 .calendar-title {
   font-size: 24px;
   font-weight: var(--font-weight-bold);
-  color: #fff;
+  color: var(--text-primary);
   min-width: 200px;
   text-align: center;
 }
@@ -1018,9 +959,9 @@ img.owner-avatar {
   width: 40px;
   height: 40px;
   background: var(--surface-card);
-  border: 1px solid #333;
+  border: 1px solid var(--border-default);
   border-radius: 50%;
-  color: #999;
+  color: var(--text-tertiary);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
@@ -1054,7 +995,7 @@ img.owner-avatar {
   text-align: center;
   font-size: 11px;
   font-weight: var(--font-weight-medium);
-  color: #888;
+  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.5px;
   padding: 12px 0;
@@ -1122,7 +1063,7 @@ img.owner-avatar {
 .calendar-day-num {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
-  color: #999;
+  color: var(--text-tertiary);
   text-align: right;
   padding: 4px 6px 2px 0;
   flex-shrink: 0;
@@ -1232,7 +1173,7 @@ img.owner-avatar {
   height: 18px;
   background: transparent;
   border: none;
-  color: #888;
+  color: var(--text-muted);
   cursor: pointer;
   text-align: left;
   transition: color var(--transition-fast);
@@ -1507,7 +1448,7 @@ img.owner-avatar {
 }
 
 .event-name .event-name-link:hover {
-  color: var(--primary-color);
+  color: var(--brand-red);
   text-decoration: underline;
 }
 
@@ -1548,8 +1489,8 @@ img.owner-avatar {
   align-items: center;
   justify-content: center;
   gap: 3px;
-  background: var(--primary-color);
-  color: white;
+  background: transparent;
+  color: var(--text-secondary);
   padding: 4px 0;
   border-radius: 12px;
   font-size: 12px;
@@ -1560,7 +1501,7 @@ img.owner-avatar {
 }
 
 .event-badges .flight-badge:hover {
-  background: var(--primary-color-hover);
+  color: var(--text-primary);
   transform: scale(1.05);
 }
 
@@ -2422,20 +2363,20 @@ img.owner-avatar {
 
 .task-status-badge.not-started {
   background: rgba(107, 114, 128, 0.15);
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 
 .task-status-badge.not-started .material-symbols-outlined {
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 
 .task-status-badge.no-tasks {
   background: rgba(75, 85, 99, 0.15);
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .task-status-badge.no-tasks .material-symbols-outlined {
-  color: #6b7280;
+  color: var(--text-muted);
 }
 
 .task-status-badge.due-today {
@@ -3443,7 +3384,7 @@ img.owner-avatar {
   max-height: 250px;
   overflow-y: auto;
   background: var(--surface-card) !important;
-  border: 1px solid #333 !important;
+  border: 1px solid var(--border-default) !important;
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   z-index: 999999;
@@ -3480,7 +3421,7 @@ img.owner-avatar {
   padding: 12px 16px;
   background: transparent;
   border: none;
-  color: #e0e0e0 !important;
+  color: var(--text-secondary) !important;
   font-size: 14px;
   cursor: pointer;
   transition: background 0.15s ease;
@@ -3509,7 +3450,7 @@ img.owner-avatar {
 #cameraDropdownMenu .custom-dropdown-option.add-new,
 #userDropdownMenu .custom-dropdown-option.add-new,
 #categoryDropdownMenu .custom-dropdown-option.add-new {
-  border-top: 1px solid #333;
+  border-top: 1px solid var(--border-default);
   color: #cc0007 !important;
 }
 
@@ -3735,10 +3676,10 @@ img.owner-avatar {
 .dark-modal input:-webkit-autofill:focus,
 .dark-modal input:-webkit-autofill:active {
   -webkit-box-shadow: 0 0 0 1000px var(--bg-tertiary) inset !important;
-  -webkit-text-fill-color: #ffffff !important;
+  -webkit-text-fill-color: var(--text-primary) !important;
   background-color: var(--bg-tertiary) !important;
   border-color: var(--border-strong) !important;
-  caret-color: #ffffff !important;
+  caret-color: var(--text-primary) !important;
   transition: background-color 5000s ease-in-out 0s;
 }
 
@@ -3751,7 +3692,7 @@ img.owner-avatar {
 .dark-modal textarea {
   background: var(--bg-tertiary) !important;
   background-color: var(--bg-tertiary) !important;
-  color: #ffffff !important;
+  color: var(--text-primary) !important;
 }
 
 .form-group-dark textarea {
@@ -3978,15 +3919,15 @@ img.owner-avatar {
 /* Schedule Delete Modal - Solid red confirm button */
 #scheduleDeleteModal .btn-danger,
 .dark-modal .modal-footer-dark .btn-danger.confirm-delete {
-  background: #dc3545 !important;
-  border-color: #dc3545 !important;
+  background: var(--danger) !important;
+  border-color: var(--danger) !important;
   color: #ffffff !important;
   padding: 12px 24px;
 }
 
 #scheduleDeleteModal .btn-danger:hover {
-  background: #c82333 !important;
-  border-color: #c82333 !important;
+  background: var(--danger-hover) !important;
+  border-color: var(--danger-hover) !important;
 }
 
 #scheduleDeleteModal .modal-body-dark {
@@ -4314,16 +4255,16 @@ img.owner-avatar {
 
 .share-dropdown-search {
   padding: 8px;
-  border-bottom: 1px solid #333;
+  border-bottom: 1px solid var(--border-default);
 }
 
 .share-dropdown-search input {
   width: 100%;
   padding: 10px 12px;
   background: var(--bg-hover);
-  border: 1px solid #444;
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
-  color: #fff;
+  color: var(--text-primary);
   font-size: 13px;
   outline: none;
 }
@@ -7134,7 +7075,7 @@ img.owner-avatar {
   flex: 1;
   display: flex;
   flex-direction: column;
-  margin-left: 260px;
+  margin-left: var(--sidebar-width);
   overflow: hidden;
   height: 100%;
   padding: 0;
@@ -8058,7 +7999,7 @@ img.owner-avatar {
 
 .crew-page .delete-confirm-btn {
   padding: 10px 20px;
-  background: #dc3545;
+  background: var(--danger);
   border: none;
   border-radius: var(--radius-md);
   color: #fff;
@@ -9672,7 +9613,7 @@ img.owner-avatar {
 
 .shotlist-page.dark-theme .shotlist-main {
   flex: 1;
-  margin-left: 260px;
+  margin-left: var(--sidebar-width);
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -10500,12 +10441,12 @@ img.owner-avatar {
   font-family: var(--font-family);
   color: var(--text-primary);
   
-  /* Override Material Design CSS variables for dark theme */
+  /* Override Material Design CSS variables to follow theme tokens */
   --md-sys-color-surface: var(--surface-card);
   --md-sys-color-surface-variant: var(--bg-hover);
-  --md-sys-color-on-surface: #ffffff;
-  --md-sys-color-on-surface-variant: #9ca3af;
-  --md-sys-color-outline: #333333;
+  --md-sys-color-on-surface: var(--text-primary);
+  --md-sys-color-on-surface-variant: var(--text-tertiary);
+  --md-sys-color-outline: var(--border-default);
 }
 
 .todos-page.dark-theme .todos-layout {
@@ -10516,7 +10457,7 @@ img.owner-avatar {
 
 .todos-page.dark-theme .todos-main {
   flex: 1;
-  margin-left: 260px;
+  margin-left: var(--sidebar-width);
   display: flex;
   flex-direction: column;
   height: 100%;
@@ -10757,7 +10698,7 @@ img.owner-avatar {
 /* Status select dropdowns — need the SVG chevron arrow */
 .todos-page.dark-theme .status-select.status-todo {
   background: rgba(107, 114, 128, 0.2);
-  color: #9ca3af;
+  color: var(--text-tertiary);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
 }
 
@@ -10776,7 +10717,7 @@ img.owner-avatar {
 /* Status badges — clean pill style, no background SVG */
 .todos-page.dark-theme .status-badge.status-todo {
   background: rgba(107, 114, 128, 0.2);
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 
 .todos-page.dark-theme .status-badge.status-in-progress {
@@ -10842,7 +10783,7 @@ img.owner-avatar {
 /* Status colors for inline dropdown trigger */
 .inline-dropdown-trigger.status-todo {
   background: rgba(107, 114, 128, 0.2);
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 
 .inline-dropdown-trigger.status-in-progress {
@@ -12135,7 +12076,7 @@ img.owner-avatar {
 .todos-page #editTaskModal .modal-content,
 .todos-page #deleteTaskModal .modal-content {
   background: var(--surface-card) !important;
-  border: 1px solid #333 !important;
+  border: 1px solid var(--border-default) !important;
   border-radius: 12px !important;
   width: 90%;
   max-width: 500px;
@@ -12152,14 +12093,14 @@ img.owner-avatar {
 #editTaskModal .modal-content,
 #deleteTaskModal .modal-content {
   background: var(--surface-card) !important;
-  border: 1px solid #333 !important;
+  border: 1px solid var(--border-default) !important;
   color: #ffffff !important;
 }
 
 #editTaskModal .modal-header,
 #deleteTaskModal .modal-header {
   background: transparent !important;
-  border-bottom: 1px solid #333 !important;
+  border-bottom: 1px solid var(--border-default) !important;
 }
 
 #editTaskModal .modal-header h2,
@@ -12186,7 +12127,7 @@ img.owner-avatar {
 #editTaskModal .form-input,
 #editTaskModal .form-select {
   background: var(--bg-hover) !important;
-  border: 1px solid #444 !important;
+  border: 1px solid var(--border-strong) !important;
   color: #ffffff !important;
 }
 
@@ -12198,7 +12139,7 @@ img.owner-avatar {
 
 #editTaskModal .modal-close:hover,
 #deleteTaskModal .modal-close:hover {
-  background: #333 !important;
+  background: var(--bg-active) !important;
   color: #ffffff !important;
 }
 
@@ -12207,7 +12148,7 @@ img.owner-avatar {
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid #333 !important;
+  border-bottom: 1px solid var(--border-default) !important;
   background: transparent !important;
 }
 
@@ -12232,7 +12173,7 @@ img.owner-avatar {
 }
 
 .todos-page.dark-theme .modal-close:hover {
-  background: #333 !important;
+  background: var(--bg-active) !important;
   color: #ffffff !important;
 }
 
@@ -12259,7 +12200,7 @@ img.owner-avatar {
   width: 100%;
   padding: 10px 14px;
   background: var(--bg-hover) !important;
-  border: 1px solid #444 !important;
+  border: 1px solid var(--border-strong) !important;
   border-radius: 8px !important;
   color: #ffffff !important;
   font-family: var(--font-family);
@@ -12290,7 +12231,7 @@ img.owner-avatar {
   width: 100%;
   padding: 10px 14px;
   background: var(--bg-hover) !important;
-  border: 1px solid #444 !important;
+  border: 1px solid var(--border-strong) !important;
   border-radius: 8px !important;
   color: #ffffff !important;
   font-family: var(--font-family);
@@ -12302,7 +12243,7 @@ img.owner-avatar {
 
 .todos-page.dark-theme .custom-dropdown-trigger:hover {
   border-color: #555 !important;
-  background: #333 !important;
+  background: var(--bg-active) !important;
 }
 
 .todos-page.dark-theme .custom-dropdown-trigger.open {
@@ -12335,7 +12276,7 @@ img.owner-avatar {
   max-height: 200px;
   overflow-y: auto;
   background: var(--surface-card) !important;
-  border: 1px solid #333 !important;
+  border: 1px solid var(--border-default) !important;
   border-radius: 8px !important;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6) !important;
   display: none;
@@ -12371,7 +12312,7 @@ img.owner-avatar {
   padding: 10px 14px;
   background: transparent !important;
   border: none;
-  color: #e0e0e0 !important;
+  color: var(--text-secondary) !important;
   font-family: var(--font-family);
   font-size: var(--font-size-sm);
   cursor: pointer;
@@ -12850,7 +12791,7 @@ img.owner-avatar {
 
 .card-log-page.dark-theme .card-log-main {
   flex: 1;
-  margin-left: 260px;
+  margin-left: var(--sidebar-width);
   padding: 0;
   background: var(--bg-primary);
   height: 100%;
@@ -14242,7 +14183,7 @@ img.owner-avatar {
 
 .travel-page.dark-theme .travel-main {
   flex: 1;
-  margin-left: 260px;
+  margin-left: var(--sidebar-width);
   padding: 0;
   background: var(--bg-primary);
   height: 100%;
@@ -15464,7 +15405,7 @@ img.owner-avatar {
 
 .maps-page.dark-theme .maps-main {
   flex: 1;
-  margin-left: 260px;
+  margin-left: var(--sidebar-width);
   padding: 0;
   background: var(--bg-primary);
   height: 100%;
@@ -19721,7 +19662,7 @@ img.owner-avatar {
 
 .call-times-table .date-badge.past {
   background: rgba(156, 163, 175, 0.15);
-  color: #9ca3af;
+  color: var(--text-tertiary);
 }
 
 .call-times-table .role-badge {
@@ -19951,8 +19892,11 @@ img.owner-avatar {
 }
 
 .call-times-page .form-group-dark input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(1);
   cursor: pointer;
+}
+
+html[data-theme="dark"] .call-times-page .form-group-dark input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(1);
 }
 
 .call-times-page .dark-modal-footer {
@@ -20101,7 +20045,7 @@ img.owner-avatar {
 
 .admin-notes-main {
   flex: 1;
-  margin-left: 260px;
+  margin-left: var(--sidebar-width);
   height: 100%;
   display: flex;
   flex-direction: column;

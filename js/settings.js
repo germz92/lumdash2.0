@@ -371,9 +371,34 @@
     });
   }
 
+  function setupThemeControls() {
+    const options = document.querySelectorAll('.settings-theme-option[data-theme]');
+    if (!options.length || !window.LumDashTheme) return;
+
+    const syncActive = () => {
+      const current = window.LumDashTheme.get();
+      options.forEach(btn => {
+        const active = btn.dataset.theme === current;
+        btn.classList.toggle('active', active);
+        btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+    };
+
+    options.forEach(btn => {
+      btn.addEventListener('click', () => {
+        window.LumDashTheme.set(btn.dataset.theme);
+        syncActive();
+      });
+    });
+
+    syncActive();
+    window.addEventListener('lumdash-theme-change', syncActive);
+  }
+
   window.initPage = async function() {
     try {
       await initDashboardSidebar();
+      setupThemeControls();
       await loadSettings();
     } catch (err) {
       console.error(err);

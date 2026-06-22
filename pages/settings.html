@@ -23,10 +23,9 @@
             <span class="material-symbols-outlined">group</span>
             User management
           </button>
-          <button type="button" class="settings-nav-item disabled" data-section="appearance" disabled title="Coming soon">
+          <button type="button" class="settings-nav-item" data-section="appearance">
             <span class="material-symbols-outlined">palette</span>
             Appearance
-            <span class="settings-nav-badge">Soon</span>
           </button>
           <button type="button" class="settings-nav-item disabled" data-section="privacy" disabled title="Coming soon">
             <span class="material-symbols-outlined">shield</span>
@@ -123,6 +122,25 @@
                 </table>
               </div>
               <p class="settings-users-count" id="usersCount">Showing 0 users</p>
+            </div>
+          </section>
+
+          <section class="settings-section" id="settingsSectionAppearance" data-section="appearance">
+            <div class="settings-section-header">
+              <div>
+                <h2>Appearance</h2>
+                <p class="settings-section-desc">Choose light or dark mode for the dashboard, pages, and dialogs. Your choice is saved on this device.</p>
+              </div>
+            </div>
+            <div class="settings-theme-options" id="settingsThemeOptions" role="group" aria-label="Theme">
+              <button type="button" class="settings-theme-option" data-theme="light" aria-pressed="false">
+                <span class="material-symbols-outlined">light_mode</span>
+                <span>Light</span>
+              </button>
+              <button type="button" class="settings-theme-option" data-theme="dark" aria-pressed="false">
+                <span class="material-symbols-outlined">dark_mode</span>
+                <span>Dark</span>
+              </button>
             </div>
           </section>
         </div>

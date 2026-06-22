@@ -1,0 +1,91 @@
+/* ========================================
+   LUMDASH THEME TOKENS (shared)
+   Layout, typography, brand, z-index — not theme-specific colors
+   ======================================== */
+
+:root {
+  /* Brand Colors - Lumetry Red */
+  --brand-red: #CC0007;
+  --brand-red-hover: #e6000a;
+  --brand-red-active: #b00006;
+  --brand-red-muted: rgba(204, 0, 7, 0.12);
+  --brand-red-glow: rgba(204, 0, 7, 0.4);
+
+  /* Status Colors */
+  --status-live: #10b981;
+  --status-live-bg: rgba(16, 185, 129, 0.12);
+  --status-live-border: rgba(16, 185, 129, 0.3);
+  --status-upcoming: #3b82f6;
+  --status-upcoming-bg: rgba(59, 130, 246, 0.12);
+  --status-upcoming-border: rgba(59, 130, 246, 0.3);
+  --status-past: #6b7280;
+  --status-past-bg: rgba(107, 114, 128, 0.12);
+  --status-past-border: rgba(107, 114, 128, 0.3);
+
+  /* Row Accent Colors */
+  --accent-blue: #3b82f6;
+  --accent-blue-soft: #60a5fa;
+  --accent-red: #ef4444;
+  --accent-green: #22c55e;
+  --accent-orange: #f97316;
+  --accent-purple: #a855f7;
+  --accent-cyan: #06b6d4;
+  --accent-pink: #ec4899;
+  --accent-yellow: #eab308;
+
+  /* Semantic feedback (theme-agnostic base hues) */
+  --danger: #dc3545;
+  --danger-hover: #c82333;
+  --success: #28a745;
+  --warning: #ffc107;
+  --info: #3b82f6;
+
+  /* Layout Dimensions */
+  --sidebar-width: 240px;
+  --sidebar-collapsed: 72px;
+  --header-height: 64px;
+  --content-max-width: 1400px;
+
+  /* Typography */
+  --font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+  --font-size-xs: 11px;
+  --font-size-sm: 13px;
+  --font-size-base: 14px;
+  --font-size-md: 15px;
+  --font-size-lg: 18px;
+  --font-size-xl: 24px;
+  --font-size-2xl: 32px;
+  --font-size-3xl: 40px;
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+
+  /* Border Radius */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-full: 9999px;
+
+  /* Transitions */
+  --transition-fast: 100ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Z-index layers */
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-modal-backdrop: 900;
+  --z-modal: 1000;
+  --z-toast: 1100;
+}

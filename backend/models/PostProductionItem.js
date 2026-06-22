@@ -48,7 +48,7 @@ const postProductionItemSchema = new mongoose.Schema({
   eventId: { type: mongoose.Schema.Types.ObjectId, ref: 'Table', default: null },
   editStatus: {
     type: String,
-    enum: ['', 'working', 'stuck', 'done'],
+    enum: ['', 'working', 'awaiting_client', 'stuck', 'done'],
     default: ''
   },
   qcStatus: {

@@ -6,6 +6,7 @@
   const EDIT_STATUSES = [
     { value: '', label: '—' },
     { value: 'working', label: 'Working on it' },
+    { value: 'awaiting_client', label: 'Awaiting Client' },
     { value: 'stuck', label: 'Stuck' },
     { value: 'done', label: 'Done' }
   ];
@@ -42,6 +43,43 @@
   let viewMode = localStorage.getItem(VIEW_STORAGE_KEY)
     || (MOBILE_MQ.matches ? 'card' : 'table');
   const selectedIds = new Set();
+  const PORTAL_IDS = ['ppUpdatesModal', 'ppMentionMenu', 'ppUserPickerMenu', 'ppProjectSuggestions'];
+  let commitDraftInFlight = false;
+  let submitUpdateInFlight = false;
+
+  function resetPageListeners() {
+    window.__ppListenerAbort?.abort();
+    window.__ppListenerAbort = new AbortController();
+    return window.__ppListenerAbort.signal;
+  }
+
+  function on(target, type, handler, options) {
+    if (!target) return;
+    const signal = window.__ppListenerAbort?.signal;
+    let opts = options;
+    if (signal) {
+      opts = typeof options === 'boolean'
+        ? { capture: options, signal }
+        : { ...(options || {}), signal };
+    }
+    target.addEventListener(type, handler, opts);
+  }
+
+  /** Remove update modal / menus left on body from a prior SPA visit (they keep stale listeners). */
+  function cleanupStalePortals() {
+    const container = document.getElementById('page-container');
+    PORTAL_IDS.forEach(id => {
+      document.querySelectorAll(`#${id}`).forEach(el => {
+        if (!container || !container.contains(el)) el.remove();
+      });
+    });
+  }
+
+  function isFocusMovingWithinDraftRow(el, relatedTarget) {
+    if (!relatedTarget || !el) return false;
+    const row = el.closest('tr, .pp-card');
+    return !!(row && row.contains(relatedTarget));
+  }
 
   function getToken() {
     return localStorage.getItem('token');
@@ -166,6 +204,7 @@
     const map = {
       '': 'pp-st-empty',
       working: 'pp-st-working',
+      awaiting_client: 'pp-st-awaiting-client',
       stuck: 'pp-st-stuck',
       done: 'pp-st-done',
       needs_revision: 'pp-st-needs-revision',
@@ -900,6 +939,8 @@
   }
 
   async function commitDraftRow() {
+    if (commitDraftInFlight || !hasDraftRow) return;
+
     const itemInput = getItemProjectField(DRAFT_ID, 'item');
     const projectInput = getItemProjectField(DRAFT_ID, 'project');
     if (!itemInput || !projectInput) {
@@ -916,6 +957,7 @@
       return;
     }
 
+    commitDraftInFlight = true;
     try {
       await createItem({
         item,
@@ -930,6 +972,8 @@
       await loadData();
     } catch (err) {
       alert(err.message);
+    } finally {
+      commitDraftInFlight = false;
     }
   }
 
@@ -1107,7 +1151,7 @@
     const canPost = !composeUploading && (
       text || composePendingLinks.length || composePendingAttachments.length
     );
-    if (saveBtn) saveBtn.disabled = !canPost;
+    if (saveBtn) saveBtn.disabled = submitUpdateInFlight || !canPost;
   }
 
   function addComposeLink() {
@@ -1201,10 +1245,13 @@
   }
 
   function ensureUpdatesPanelInBody() {
-    const modal = document.getElementById('ppUpdatesModal');
-    if (modal && modal.parentElement !== document.body) {
-      document.body.appendChild(modal);
-    }
+    cleanupStalePortals();
+    PORTAL_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (el && el.parentElement !== document.body) {
+        document.body.appendChild(el);
+      }
+    });
   }
 
   function onUpdatesModalKeydown(e) {
@@ -1325,8 +1372,12 @@
   async function submitUpdate() {
     const input = document.getElementById('ppUpdateInput');
     const text = input?.value?.trim() || '';
-    if (!updatesItemId || composeUploading) return;
+    if (!updatesItemId || composeUploading || submitUpdateInFlight) return;
     if (!text && !composePendingLinks.length && !composePendingAttachments.length) return;
+
+    submitUpdateInFlight = true;
+    const saveBtn = document.getElementById('ppUpdateSave');
+    if (saveBtn) saveBtn.disabled = true;
     try {
       const res = await fetch(`${API_BASE}/api/post-production/${updatesItemId}/updates`, {
         method: 'POST',
@@ -1356,6 +1407,10 @@
       }
     } catch (err) {
       alert(err.message);
+    } finally {
+      submitUpdateInFlight = false;
+      if (saveBtn) saveBtn.disabled = false;
+      updateComposeSubmitState();
     }
   }
 
@@ -1382,8 +1437,11 @@
   }
 
   function setupListeners() {
+    resetPageListeners();
+    cleanupStalePortals();
     ensureUpdatesPanelInBody();
-    document.addEventListener('visibilitychange', () => {
+
+    on(document, 'visibilitychange', () => {
       if (document.visibilityState === 'visible') {
         loadData().catch(err => console.error(err));
         if (typeof window.refreshPostProductionSidebarDot === 'function') {
@@ -1392,7 +1450,7 @@
       }
     });
     const listRoot = document.querySelector('.post-production-table-container');
-    document.getElementById('ppSearch')?.addEventListener('input', (e) => {
+    on(document.getElementById('ppSearch'), 'input', (e) => {
       clearTimeout(searchDebounce);
       searchDebounce = setTimeout(() => {
         searchQuery = e.target.value.trim();
@@ -1400,17 +1458,17 @@
       }, 300);
     });
 
-    document.getElementById('ppViewToggle')?.addEventListener('click', (e) => {
+    on(document.getElementById('ppViewToggle'), 'click', (e) => {
       const btn = e.target.closest('.pp-view-btn');
       if (!btn?.dataset.view) return;
       setViewMode(btn.dataset.view);
     });
 
-    document.getElementById('ppDueSortBtn')?.addEventListener('click', () => {
+    on(document.getElementById('ppDueSortBtn'), 'click', () => {
       toggleDueDateSort();
     });
 
-    document.getElementById('ppFilterTabs')?.addEventListener('click', (e) => {
+    on(document.getElementById('ppFilterTabs'), 'click', (e) => {
       const tab = e.target.closest('.status-tab');
       if (!tab) return;
       document.querySelectorAll('#ppFilterTabs .status-tab').forEach(t => t.classList.remove('active'));
@@ -1422,22 +1480,22 @@
       updateDueSortUI();
     });
 
-    document.getElementById('ppSelectAll')?.addEventListener('change', (e) => {
+    on(document.getElementById('ppSelectAll'), 'change', (e) => {
       toggleSelectAll(e.target.checked);
     });
 
-    document.getElementById('ppActionsBtn')?.addEventListener('click', (e) => {
+    on(document.getElementById('ppActionsBtn'), 'click', (e) => {
       e.stopPropagation();
       toggleActionsMenu();
     });
 
-    document.getElementById('ppActionsMenu')?.addEventListener('click', (e) => {
+    on(document.getElementById('ppActionsMenu'), 'click', (e) => {
       const item = e.target.closest('[data-action]');
       if (!item) return;
       runBulkAction(item.dataset.action);
     });
 
-    document.querySelector('#ppTable thead')?.addEventListener('click', (e) => {
+    on(document.querySelector('#ppTable thead'), 'click', (e) => {
       if (e.target.closest('.pp-col-select-th, .pp-row-checkbox')) return;
       const th = e.target.closest('th.sortable');
       if (!th) return;
@@ -1452,7 +1510,7 @@
       updateDueSortUI();
     });
 
-    listRoot?.addEventListener('change', async (e) => {
+    on(listRoot, 'change', async (e) => {
       const el = e.target;
       const id = el.dataset.id;
       const field = el.dataset.field;
@@ -1471,13 +1529,14 @@
       }
     });
 
-    listRoot?.addEventListener('blur', async (e) => {
+    on(listRoot, 'blur', async (e) => {
       const el = e.target;
       if (!el.matches('textarea[data-field="item"], textarea[data-field="project"]')) return;
       const id = el.dataset.id;
       const field = el.dataset.field;
       if (!id) return;
       if (id === DRAFT_ID) {
+        if (isFocusMovingWithinDraftRow(el, e.relatedTarget)) return;
         await commitDraftRow();
         return;
       }
@@ -1494,13 +1553,13 @@
       hideProjectSuggestions();
     }, true);
 
-    listRoot?.addEventListener('focus', (e) => {
+    on(listRoot, 'focus', (e) => {
       if (e.target.matches('.pp-project-input')) {
         showProjectSuggestions(e.target);
       }
     }, true);
 
-    listRoot?.addEventListener('input', (e) => {
+    on(listRoot, 'input', (e) => {
       if (e.target.matches('.pp-text-field')) {
         syncTextareaHeights(e.target.parentElement || listRoot);
       }
@@ -1510,7 +1569,7 @@
       }
     });
 
-    listRoot?.addEventListener('click', (e) => {
+    on(listRoot, 'click', (e) => {
       const rowCb = e.target.closest('.pp-row-checkbox[data-select-id]');
       if (rowCb) {
         e.stopPropagation();
@@ -1544,7 +1603,7 @@
       }
     });
 
-    document.getElementById('ppUserPickerMenu')?.addEventListener('click', async (e) => {
+    on(document.getElementById('ppUserPickerMenu'), 'click', async (e) => {
       const opt = e.target.closest('[data-user-id]');
       if (!opt || !userPickerTarget) return;
       try {
@@ -1577,7 +1636,7 @@
       }
     });
 
-    document.getElementById('ppProjectSuggestions')?.addEventListener('click', async (e) => {
+    on(document.getElementById('ppProjectSuggestions'), 'click', async (e) => {
       const opt = e.target.closest('.pp-suggestion-item');
       if (!opt || !projectSuggestTarget) return;
       const input = projectSuggestTarget;
@@ -1600,7 +1659,7 @@
       }
     });
 
-    document.addEventListener('click', (e) => {
+    on(document, 'click', (e) => {
       if (!e.target.closest('#ppUserPickerMenu') && !e.target.closest('[data-user-picker]')) {
         hideUserPickerMenu();
       }
@@ -1615,42 +1674,42 @@
       }
     });
 
-    document.getElementById('ppAddBtn')?.addEventListener('click', () => {
+    on(document.getElementById('ppAddBtn'), 'click', () => {
       insertDraftRow();
     });
 
-    document.getElementById('ppUpdatesClose')?.addEventListener('click', closeUpdatesModal);
-    document.getElementById('ppUpdatesModal')?.addEventListener('click', (e) => {
+    on(document.getElementById('ppUpdatesClose'), 'click', closeUpdatesModal);
+    on(document.getElementById('ppUpdatesModal'), 'click', (e) => {
       if (e.target.id === 'ppUpdatesModal') closeUpdatesModal();
     });
-    document.getElementById('ppUpdateSave')?.addEventListener('click', () => {
+    on(document.getElementById('ppUpdateSave'), 'click', () => {
       submitUpdate().catch(err => alert(err.message));
     });
-    document.getElementById('ppUpdateInput')?.addEventListener('input', (e) => {
+    on(document.getElementById('ppUpdateInput'), 'input', (e) => {
       handleMentionInput(e.target);
       updateComposeSubmitState();
     });
-    document.getElementById('ppAttachBtn')?.addEventListener('click', () => {
+    on(document.getElementById('ppAttachBtn'), 'click', () => {
       document.getElementById('ppAttachInput')?.click();
     });
-    document.getElementById('ppAttachInput')?.addEventListener('change', (e) => {
+    on(document.getElementById('ppAttachInput'), 'change', (e) => {
       const file = e.target.files?.[0];
       if (file) uploadComposeAttachment(file);
     });
-    document.getElementById('ppAddLinkBtn')?.addEventListener('click', () => {
+    on(document.getElementById('ppAddLinkBtn'), 'click', () => {
       const form = document.getElementById('ppLinkForm');
       if (!form?.classList.contains('is-open')) showLinkForm();
       else hideLinkForm();
     });
-    document.getElementById('ppLinkAdd')?.addEventListener('click', addComposeLink);
-    document.getElementById('ppLinkCancel')?.addEventListener('click', hideLinkForm);
-    document.getElementById('ppLinkUrl')?.addEventListener('keydown', (e) => {
+    on(document.getElementById('ppLinkAdd'), 'click', addComposeLink);
+    on(document.getElementById('ppLinkCancel'), 'click', hideLinkForm);
+    on(document.getElementById('ppLinkUrl'), 'keydown', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
         addComposeLink();
       }
     });
-    document.getElementById('ppComposePending')?.addEventListener('click', (e) => {
+    on(document.getElementById('ppComposePending'), 'click', (e) => {
       const linkIdx = e.target.closest('[data-remove-link]')?.dataset.removeLink;
       if (linkIdx != null) {
         composePendingLinks.splice(Number(linkIdx), 1);
@@ -1665,18 +1724,18 @@
         updateComposeSubmitState();
       }
     });
-    document.getElementById('ppUpdateInput')?.addEventListener('keydown', (e) => {
+    on(document.getElementById('ppUpdateInput'), 'keydown', (e) => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         submitUpdate().catch(err => alert(err.message));
       }
     });
-    document.getElementById('ppMentionMenu')?.addEventListener('click', (e) => {
+    on(document.getElementById('ppMentionMenu'), 'click', (e) => {
       const opt = e.target.closest('[data-user-id]');
       if (!opt) return;
       insertMention(opt.dataset.userId, opt.dataset.userName);
     });
-    document.getElementById('ppUpdatesFeed')?.addEventListener('click', (e) => {
+    on(document.getElementById('ppUpdatesFeed'), 'click', (e) => {
       const replyBtn = e.target.closest('[data-reply-to]');
       if (!replyBtn || !updatesItemId) return;
       const updateId = replyBtn.dataset.replyTo;
@@ -1712,6 +1771,14 @@
 
   window.initPage = async function() {
     try {
+      document.removeEventListener('keydown', onUpdatesModalKeydown);
+      updatesItemId = null;
+      replyToUpdateId = null;
+      hasDraftRow = false;
+      commitDraftInFlight = false;
+      submitUpdateInFlight = false;
+      resetComposeState();
+
       await initDashboardSidebar();
       if (typeof window.markPostProductionVisited === 'function') {
         await window.markPostProductionVisited();

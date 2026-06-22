@@ -16,6 +16,7 @@
   --chat-text-primary: #ffffff;
   --chat-text-secondary: rgba(255, 255, 255, 0.75);
   --chat-text-tertiary: rgba(255, 255, 255, 0.5);
+  --chat-on-brand: #ffffff;
   --chat-brand-red: #CC0007;
   --chat-brand-red-hover: #e6000a;
   --chat-brand-red-glow: rgba(204, 0, 7, 0.4);
@@ -38,7 +39,7 @@
   width: 56px;
   height: 56px;
   background: var(--chat-brand-red);
-  color: var(--chat-text-primary);
+  color: var(--chat-on-brand);
   border-radius: var(--chat-radius-full);
   display: flex !important;
   align-items: center;
@@ -120,7 +121,7 @@
 .chat-header {
   padding: 16px 20px;
   background: linear-gradient(135deg, var(--chat-brand-red) 0%, #a00006 100%);
-  color: var(--chat-text-primary);
+  color: var(--chat-on-brand);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -164,7 +165,7 @@
 .close-chat-btn {
   background: rgba(255, 255, 255, 0.1);
   border: none;
-  color: var(--chat-text-primary);
+  color: var(--chat-on-brand);
   cursor: pointer;
   padding: 8px;
   border-radius: 8px;
@@ -256,7 +257,7 @@
 
 .chat-message.user .message-content {
   background: var(--chat-brand-red);
-  color: var(--chat-text-primary);
+  color: var(--chat-on-brand);
   border-bottom-right-radius: 4px;
 }
 
@@ -375,7 +376,7 @@
 
 .send-btn {
   background: var(--chat-brand-red);
-  color: var(--chat-text-primary);
+  color: var(--chat-on-brand);
   border: none;
   border-radius: var(--chat-radius-full);
   width: 44px;

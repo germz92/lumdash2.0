@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#121216">
+    <script src="../js/theme-early.js?v=2.0.0"></script>
     <title>Inventory Management - LumDash</title>
     <link rel="icon" href="../assets/favicon.png" type="image/png">
     <!-- Preconnect for faster font loading -->
@@ -10,8 +12,11 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
     <link rel="stylesheet" href="../css/general.css">
-    <link rel="stylesheet" href="../css/theme-dark.css">
+    <link rel="stylesheet" href="../css/theme-tokens.css?v=2.0.0">
+    <link rel="stylesheet" href="../css/theme-dark.css?v=2.0.0">
+    <link rel="stylesheet" href="../css/theme-light.css?v=2.0.0">
     <link rel="stylesheet" href="../css/chat.css">
+    <script src="../js/theme.js?v=2.0.0"></script>
     <script src="../js/config.js"></script>
     <script src="../js/sidebar-dashboard.js"></script>
     <script src="../js/chat.js"></script>
@@ -264,7 +269,7 @@
         position: fixed;
         z-index: 2000;
         inset: 0;
-        background: rgba(0, 0, 0, 0.7);
+        background: var(--surface-overlay);
         backdrop-filter: blur(4px);
         justify-content: center;
         align-items: flex-start;
@@ -609,7 +614,7 @@
         position: fixed;
         z-index: 2100;
         inset: 0;
-        background: rgba(0, 0, 0, 0.7);
+        background: var(--surface-overlay);
         backdrop-filter: blur(4px);
         justify-content: center;
         align-items: flex-start;
@@ -1138,8 +1143,8 @@
       }
 
       .inventory-dark .btn-success:disabled {
-        background: #374151;
-        color: #6b7280;
+        background: var(--bg-active);
+        color: var(--text-disabled);
         cursor: not-allowed;
         box-shadow: none;
       }

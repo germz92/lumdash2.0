@@ -1,0 +1,371 @@
+/* ========================================
+   LUMDASH LIGHT THEME
+   Color tokens + global overrides for data-theme="light"
+   ======================================== */
+
+html[data-theme="light"] {
+  color-scheme: light;
+
+  /* Backgrounds */
+  --bg-primary: #f3f4f6;
+  --bg-secondary: #ffffff;
+  --bg-tertiary: #f9fafb;
+  --bg-elevated: #ffffff;
+  --bg-hover: #f0f1f3;
+  --bg-active: #e5e7eb;
+
+  /* Surfaces */
+  --surface-card: #ffffff;
+  --surface-modal: #ffffff;
+  --surface-input: #ffffff;
+  --surface-overlay: rgba(15, 23, 42, 0.45);
+  --surface-secondary: #f9fafb;
+  --surface-tertiary: #f3f4f6;
+  --surface-hover: #eef0f3;
+
+  /* Borders */
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-default: rgba(0, 0, 0, 0.12);
+  --border-strong: rgba(0, 0, 0, 0.2);
+  --border-focus: rgba(204, 0, 7, 0.45);
+
+  /* Text */
+  --text-primary: rgba(0, 0, 0, 0.87);
+  --text-secondary: rgba(0, 0, 0, 0.65);
+  --text-tertiary: rgba(0, 0, 0, 0.45);
+  --text-muted: rgba(0, 0, 0, 0.38);
+  --text-disabled: rgba(0, 0, 0, 0.26);
+
+  /* Brand muted tint for light surfaces */
+  --brand-red-muted: rgba(204, 0, 7, 0.08);
+  --brand-red-glow: rgba(204, 0, 7, 0.2);
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.12);
+  --shadow-glow-red: 0 0 20px rgba(204, 0, 7, 0.15);
+  --shadow-glow-blue: 0 0 16px rgba(59, 130, 246, 0.12);
+  --shadow-inner: inset 0 1px 2px rgba(0, 0, 0, 0.06);
+
+  /* Feedback chip surfaces (light) */
+  --success-bg: #d4edda;
+  --success-text: #155724;
+  --error-bg: #f8d7da;
+  --error-text: #721c24;
+  --warning-bg: #fff3cd;
+  --warning-text: #856404;
+  --info-bg: #e7f1ff;
+  --info-text: #1d4ed8;
+
+  /* Material Design (styles.css, shotlist, etc.) */
+  --md-sys-color-surface: var(--surface-card);
+  --md-sys-color-surface-variant: var(--bg-hover);
+  --md-sys-color-on-surface: var(--text-primary);
+  --md-sys-color-on-surface-variant: var(--text-tertiary);
+  --md-sys-color-outline: var(--border-default);
+
+  /* Auth pages (login/register) */
+  --auth-bg-primary: #f3f4f6;
+  --auth-bg-secondary: #ffffff;
+  --auth-bg-card: #ffffff;
+  --auth-bg-input: #ffffff;
+  --auth-border: rgba(0, 0, 0, 0.12);
+  --auth-border-focus: rgba(204, 0, 7, 0.45);
+  --auth-text-primary: rgba(0, 0, 0, 0.87);
+  --auth-text-secondary: rgba(0, 0, 0, 0.65);
+  --auth-text-muted: rgba(0, 0, 0, 0.45);
+
+  /* Chat widget */
+  --chat-bg-primary: #f3f4f6;
+  --chat-bg-secondary: #ffffff;
+  --chat-bg-elevated: #ffffff;
+  --chat-bg-hover: #f0f1f3;
+  --chat-surface-card: #ffffff;
+  --chat-surface-input: #ffffff;
+  --chat-border-subtle: rgba(0, 0, 0, 0.06);
+  --chat-border-default: rgba(0, 0, 0, 0.12);
+  --chat-text-primary: rgba(0, 0, 0, 0.87);
+  --chat-text-secondary: rgba(0, 0, 0, 0.65);
+  --chat-text-tertiary: rgba(0, 0, 0, 0.45);
+  --chat-on-brand: #ffffff;
+  --chat-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.1);
+  --chat-shadow-glow: 0 0 20px rgba(204, 0, 7, 0.15);
+}
+
+/* ========================================
+   GLOBAL BASE — LIGHT
+   ======================================== */
+
+html[data-theme="light"] html,
+html[data-theme="light"] body {
+  background: var(--bg-primary) !important;
+  background-color: var(--bg-primary) !important;
+  color: var(--text-primary);
+}
+
+html[data-theme="light"] #page-container {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+html[data-theme="light"] .dark-theme {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+html[data-theme="light"] input,
+html[data-theme="light"] select,
+html[data-theme="light"] textarea {
+  color-scheme: light;
+}
+
+/* Modals inherit token swap; ensure overlay readability */
+html[data-theme="light"] .dark-modal,
+html[data-theme="light"] .modal-overlay {
+  background: var(--surface-overlay);
+}
+
+html[data-theme="light"] .dark-modal-content {
+  background: var(--surface-modal);
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-xl);
+}
+
+html[data-theme="light"] .modal-header-dark,
+html[data-theme="light"] .modal-footer-dark {
+  border-color: var(--border-subtle);
+}
+
+html[data-theme="light"] .modal-footer-dark {
+  background: var(--bg-tertiary);
+}
+
+html[data-theme="light"] .modal-header-dark h3 {
+  color: var(--text-primary);
+}
+
+html[data-theme="light"] .modal-close-btn {
+  color: var(--text-tertiary);
+}
+
+html[data-theme="light"] .modal-close-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Logo swap — show the dark-on-light logo in light mode.
+   Uses CSS `content` so every SPA-injected sidebar picks it up without HTML edits. */
+html[data-theme="light"] .sidebar-logo-img,
+html[data-theme="light"] .auth-logo {
+  content: url('../assets/Logo - Light BG.png');
+}
+
+/* Sidebar & nav */
+html[data-theme="light"] .dashboard-sidebar,
+html[data-theme="light"] .general-sidebar {
+  background: var(--bg-secondary);
+  border-color: var(--border-subtle);
+}
+
+html[data-theme="light"] .sidebar-header,
+html[data-theme="light"] .sidebar-user,
+html[data-theme="light"] .general-sidebar .sidebar-header {
+  border-color: var(--border-subtle);
+}
+
+html[data-theme="light"] .nav-item {
+  color: var(--text-secondary);
+}
+
+html[data-theme="light"] .nav-item:hover,
+html[data-theme="light"] .general-sidebar .nav-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+html[data-theme="light"] .nav-item.active,
+html[data-theme="light"] .general-sidebar .nav-item.active {
+  background: var(--brand-red-muted);
+  color: var(--brand-red);
+}
+
+html[data-theme="light"] .nav-item-dot {
+  box-shadow: 0 0 0 2px var(--bg-secondary);
+}
+
+/* Buttons */
+html[data-theme="light"] .btn-secondary {
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+html[data-theme="light"] .btn-secondary:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+html[data-theme="light"] .btn-ghost {
+  color: var(--text-secondary);
+}
+
+html[data-theme="light"] .btn-ghost:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Form controls using theme tokens */
+html[data-theme="light"] .form-input-dark,
+html[data-theme="light"] .form-select-dark,
+html[data-theme="light"] .form-textarea-dark {
+  background: var(--surface-input);
+  border-color: var(--border-default);
+  color: var(--text-primary);
+}
+
+html[data-theme="light"] .form-input-dark:focus,
+html[data-theme="light"] .form-select-dark:focus,
+html[data-theme="light"] .form-textarea-dark:focus {
+  border-color: var(--brand-red);
+  box-shadow: 0 0 0 3px var(--brand-red-muted);
+}
+
+/* Card log / modal inputs that force color-scheme: dark */
+html[data-theme="light"] .card-log-page.dark-theme #date-modal input,
+html[data-theme="light"] .card-log-page.dark-theme #card-entry-modal input,
+html[data-theme="light"] .card-log-page.dark-theme #date-modal select,
+html[data-theme="light"] .card-log-page.dark-theme #card-entry-modal select {
+  color-scheme: light;
+}
+
+/* Settings appearance controls */
+.settings-theme-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.settings-theme-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 24px;
+  min-width: 120px;
+  background: var(--bg-secondary);
+  border: 2px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  font-family: var(--font-family);
+  color: var(--text-primary);
+}
+
+.settings-theme-option:hover {
+  border-color: var(--border-strong);
+}
+
+.settings-theme-option.active {
+  border-color: var(--brand-red);
+  box-shadow: 0 0 0 3px var(--brand-red-muted);
+}
+
+.settings-theme-option .material-symbols-outlined {
+  font-size: 28px;
+  color: var(--text-secondary);
+}
+
+.settings-theme-option.active .material-symbols-outlined {
+  color: var(--brand-red);
+}
+
+.settings-theme-option span:last-child {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Standalone /pages/ shells (event calendar, crew planner, flights, etc.) */
+html[data-theme="light"] .flights-dark,
+html[data-theme="light"] .timesheets-dark,
+html[data-theme="light"] body.crew-planner-dark,
+html[data-theme="light"] .crew-calendar-dark,
+html[data-theme="light"] .event-calendar-page {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+html[data-theme="light"] .dark-theme.post-production-page {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+html[data-theme="light"] .dark-theme.travel-page,
+html[data-theme="light"] .dark-theme.card-log-page {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+html[data-theme="light"] .dark-theme.timesheet-page,
+html[data-theme="light"] .timesheet-page {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* Date picker icons — don't invert in light mode */
+html[data-theme="light"] input[type="date"]::-webkit-calendar-picker-indicator,
+html[data-theme="light"] .week-picker::-webkit-calendar-picker-indicator {
+  filter: none;
+}
+
+/* ========================================
+   P3 — SPA PAGE SHELLS (LIGHT)
+   ======================================== */
+
+html[data-theme="light"] .dark-theme.call-times-page,
+html[data-theme="light"] .dark-theme.users-page,
+html[data-theme="light"] .dark-theme.reimbursements-page,
+html[data-theme="light"] .dark-theme.expenses-page,
+html[data-theme="light"] .dark-theme.shotlist-page,
+html[data-theme="light"] .dark-theme.exec-summary-page,
+html[data-theme="light"] .dark-theme.admin-notes-page,
+html[data-theme="light"] .dark-theme.todos-page,
+html[data-theme="light"] .dark-theme.crew-page,
+html[data-theme="light"] .my-tasks-page {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+/* Reimbursements — light-mode select chevron */
+html[data-theme="light"] .reimb-filter-group select {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='rgba(0,0,0,0.45)' viewBox='0 0 16 16'%3E%3Cpath d='M1.5 5.5l6.5 6 6.5-6'/%3E%3C/svg%3E");
+}
+
+/* ========================================
+   AUTH PAGES (LIGHT)
+   ======================================== */
+
+html[data-theme="light"] body.login-page::before,
+html[data-theme="light"] body.register-page::before {
+  background:
+    radial-gradient(ellipse at 20% 20%, rgba(204, 0, 7, 0.06) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 80%, rgba(204, 0, 7, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(255, 255, 255, 1) 0%, var(--auth-bg-primary) 100%);
+}
+
+html[data-theme="light"] input[type="email"]:hover,
+html[data-theme="light"] input[type="text"]:hover,
+html[data-theme="light"] input[type="password"]:hover {
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+html[data-theme="light"] .auth-note {
+  color: var(--auth-text-muted);
+}
+
+/* Chat widget — light scrollbar */
+html[data-theme="light"] .chat-messages::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.12);
+}

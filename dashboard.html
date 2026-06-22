@@ -11,7 +11,8 @@
   
   <!-- PWA Meta Tags -->
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#cc0007">
+  <meta name="theme-color" content="#121216">
+  <script src="js/theme-early.js?v=2.0.0"></script>
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -25,8 +26,9 @@
   <!-- Add Material Symbols with display=block to prevent FOUT -->
   <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet" />
   <link rel="stylesheet" href="css/styles.css">
-  <!-- Dark Theme CSS -->
-  <link rel="stylesheet" href="css/theme-dark.css">
+  <link rel="stylesheet" href="css/theme-tokens.css?v=2.0.0">
+  <link rel="stylesheet" href="css/theme-dark.css?v=2.0.0">
+  <link rel="stylesheet" href="css/theme-light.css?v=2.0.0">
   
   <!-- Page-specific CSS -->
   <link rel="stylesheet" href="css/crew.css">
@@ -151,6 +153,7 @@
   </script>
   
   <!-- Load other scripts after config.js -->
+  <script src="js/theme.js?v=2.0.0"></script>
   <script src="js/api.js"></script>
   <script src="js/app.js"></script>
   

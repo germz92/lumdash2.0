@@ -9,7 +9,7 @@
         padding: 0;
         height: 100%;
         overflow: hidden;
-        background: #080808 !important;
+        background: var(--bg-primary) !important;
     }
 
     /* Override #page-container styles for gear page (SPA host container) 
@@ -32,18 +32,18 @@
 
     /* Category Cards - Dark Theme */
     .gear-page.dark-theme .category-card {
-        background: #1a1a1a !important;
+        background: var(--surface-card) !important;
         border-radius: 12px;
         padding: 20px;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        border: 1px solid #333 !important;
+        border: 1px solid var(--border-default) !important;
         transition: all 0.2s ease;
     }
 
     .gear-page.dark-theme .category-card:hover {
         transform: translateY(-2px);
         box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
-        border-color: #cc0007 !important;
+        border-color: var(--brand-red) !important;
     }
 
     .gear-page.dark-theme .category-header {
@@ -52,26 +52,26 @@
         align-items: center;
         margin-bottom: 16px;
         padding-bottom: 12px;
-        border-bottom: 2px solid #333 !important;
+        border-bottom: 2px solid var(--border-default) !important;
     }
 
     .gear-page.dark-theme .category-title {
         font-size: 18px;
         font-weight: 600;
-        color: #ffffff !important;
+        color: var(--text-primary) !important;
         display: flex;
         align-items: center;
         gap: 8px;
     }
 
     .gear-page.dark-theme .category-icon {
-        color: #cc0007;
+        color: var(--brand-red);
         font-size: 24px;
     }
 
     .gear-page.dark-theme .category-count {
-        background: #2a2a2a !important;
-        color: #aaa !important;
+        background: var(--surface-hover) !important;
+        color: var(--text-secondary) !important;
         padding: 4px 12px;
         border-radius: 12px;
         font-size: 12px;
@@ -89,16 +89,16 @@
         display: flex;
         align-items: center;
         padding: 12px 16px;
-        background: #0f0f0f !important;
-        border: 1px solid #333 !important;
+        background: var(--bg-tertiary) !important;
+        border: 1px solid var(--border-default) !important;
         border-radius: 8px;
         transition: all 0.2s ease;
         gap: 12px;
     }
 
     .gear-page.dark-theme .gear-item:hover {
-        background: #1a1a1a !important;
-        border-color: #cc0007 !important;
+        background: var(--surface-card) !important;
+        border-color: var(--brand-red) !important;
     }
 
     .gear-page.dark-theme .gear-item.packed {
@@ -112,13 +112,13 @@
 
     .gear-page.dark-theme .gear-name {
         font-weight: 500;
-        color: #ffffff !important;
+        color: var(--text-primary) !important;
         margin-bottom: 4px;
     }
 
     .gear-page.dark-theme .gear-details {
         font-size: 13px;
-        color: #888 !important;
+        color: var(--text-tertiary) !important;
         display: flex;
         gap: 12px;
         flex-wrap: wrap;
@@ -126,8 +126,8 @@
 
     .gear-page.dark-theme .serial-code {
         font-family: 'Courier New', monospace;
-        background: #2a2a2a !important;
-        color: #aaa !important;
+        background: var(--surface-hover) !important;
+        color: var(--text-secondary) !important;
         padding: 2px 6px;
         border-radius: 4px;
         font-size: 12px;
@@ -169,12 +169,12 @@
     .gear-page.dark-theme .empty-category {
         text-align: center;
         padding: 40px 20px;
-        color: #666 !important;
+        color: var(--text-muted) !important;
     }
 
     .gear-page.dark-theme .empty-category .material-symbols-outlined {
         font-size: 48px;
-        color: #444 !important;
+        color: var(--text-disabled) !important;
         margin-bottom: 12px;
     }
 
@@ -182,22 +182,22 @@
         margin: 0 0 8px 0;
         font-size: 16px;
         font-weight: 500;
-        color: #888 !important;
+        color: var(--text-tertiary) !important;
     }
 
     .gear-page.dark-theme .empty-category small {
         font-size: 14px;
-        color: #666 !important;
+        color: var(--text-muted) !important;
     }
 
     /* Progress Section - Dark Theme */
     .gear-page.dark-theme .progress-section {
-        background: #1a1a1a !important;
+        background: var(--surface-card) !important;
         padding: 20px;
         border-radius: 12px;
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
         margin-bottom: 24px;
-        border: 1px solid #333;
+        border: 1px solid var(--border-default);
     }
 
     .gear-page.dark-theme .progress-header {
@@ -210,18 +210,18 @@
     .gear-page.dark-theme .progress-title {
         font-size: 18px;
         font-weight: 600;
-        color: #ffffff !important;
+        color: var(--text-primary) !important;
     }
 
     .gear-page.dark-theme .progress-stats {
         font-size: 14px;
-        color: #888 !important;
+        color: var(--text-tertiary) !important;
     }
 
     .gear-page.dark-theme .progress-bar {
         width: 100%;
         height: 12px;
-        background: #333 !important;
+        background: var(--bg-active) !important;
         border-radius: 6px;
         overflow: hidden;
     }
@@ -236,14 +236,14 @@
     .gear-page.dark-theme .loading {
         text-align: center;
         padding: 60px 20px;
-        color: #888 !important;
+        color: var(--text-tertiary) !important;
     }
 
     .gear-page.dark-theme .loading-spinner {
         width: 40px;
         height: 40px;
-        border: 4px solid #333 !important;
-        border-top: 4px solid #cc0007 !important;
+        border: 4px solid var(--border-default) !important;
+        border-top: 4px solid var(--brand-red) !important;
         border-radius: 50%;
         animation: spin 1s linear infinite;
         margin: 0 auto 16px;
@@ -268,12 +268,12 @@
         top: 0;
         width: 100%;
         height: 100%;
-        background: rgba(0, 0, 0, 0.7);
+        background: var(--surface-overlay);
         backdrop-filter: blur(4px);
     }
 
     .gear-page.dark-theme .modal-content {
-        background: #1a1a1a !important;
+        background: var(--surface-card) !important;
         margin: 5% auto;
         padding: 0;
         border-radius: 16px;
@@ -282,18 +282,18 @@
         max-width: 500px;
         max-height: 80vh;
         overflow: hidden;
-        border: 1px solid #333;
+        border: 1px solid var(--border-default);
     }
 
     .gear-page.dark-theme .modal-header {
         padding: 24px;
-        border-bottom: 1px solid #333 !important;
-        background: #0f0f0f !important;
+        border-bottom: 1px solid var(--border-default) !important;
+        background: var(--bg-tertiary) !important;
     }
 
     .gear-page.dark-theme .modal-header h3 {
         margin: 0;
-        color: #ffffff !important;
+        color: var(--text-primary) !important;
         font-size: 20px;
         font-weight: 600;
     }
@@ -302,13 +302,13 @@
         padding: 24px;
         max-height: 400px;
         overflow-y: auto;
-        background: #1a1a1a;
+        background: var(--surface-card);
     }
 
     .gear-page.dark-theme .modal-footer {
         padding: 20px 24px;
-        border-top: 1px solid #333 !important;
-        background: #0f0f0f !important;
+        border-top: 1px solid var(--border-default) !important;
+        background: var(--bg-tertiary) !important;
         display: flex;
         gap: 12px;
         justify-content: flex-end;
@@ -323,22 +323,22 @@
         display: block;
         margin-bottom: 4px;
         font-weight: 500;
-        color: #ffffff !important;
+        color: var(--text-primary) !important;
     }
 
     .gear-page.dark-theme .form-group input {
         width: 100%;
         padding: 12px;
-        border: 2px solid #333 !important;
+        border: 2px solid var(--border-default) !important;
         border-radius: 6px;
         font-size: 14px;
-        background: #0f0f0f !important;
-        color: #ffffff !important;
+        background: var(--bg-tertiary) !important;
+        color: var(--text-primary) !important;
     }
 
     .gear-page.dark-theme .form-group input:focus {
         outline: none;
-        border-color: #cc0007 !important;
+        border-color: var(--brand-red) !important;
     }
 
     /* Package Items - Dark Theme */
@@ -347,11 +347,11 @@
         justify-content: space-between;
         align-items: center;
         padding: 16px;
-        border: 2px solid #333 !important;
+        border: 2px solid var(--border-default) !important;
         border-radius: 8px;
         margin-bottom: 12px;
         transition: all 0.2s ease;
-        background: #0f0f0f !important;
+        background: var(--bg-tertiary) !important;
     }
 
     .gear-page.dark-theme .package-item.available {
@@ -371,13 +371,13 @@
 
     .gear-page.dark-theme .package-item-name {
         font-weight: 600;
-        color: #ffffff !important;
+        color: var(--text-primary) !important;
         margin-bottom: 4px;
     }
 
     .gear-page.dark-theme .package-item-details {
         font-size: 14px;
-        color: #888 !important;
+        color: var(--text-tertiary) !important;
         display: flex;
         gap: 16px;
         flex-wrap: wrap;
@@ -399,27 +399,27 @@
         justify-content: space-between;
         align-items: center;
         padding: 12px 16px;
-        border: 2px solid #333 !important;
+        border: 2px solid var(--border-default) !important;
         border-radius: 8px;
         margin-bottom: 8px;
         cursor: pointer;
         transition: all 0.2s ease;
-        background: #0f0f0f !important;
+        background: var(--bg-tertiary) !important;
     }
 
     .gear-page.dark-theme .serial-option:hover {
-        border-color: #cc0007 !important;
-        background: #1a1a1a !important;
+        border-color: var(--brand-red) !important;
+        background: var(--surface-card) !important;
     }
 
     .gear-page.dark-theme .serial-option.selected {
-        border-color: #cc0007 !important;
+        border-color: var(--brand-red) !important;
         background: rgba(204, 0, 7, 0.1) !important;
     }
 
     .gear-page.dark-theme .serial-info {
         flex: 1;
-        color: #ffffff;
+        color: var(--text-primary);
     }
 
     /* Manual Items - Dark Theme */
@@ -433,8 +433,8 @@
         align-items: center;
         width: 100%;
         padding: 16px 20px;
-        background: #0f0f0f !important;
-        border-bottom: 1px solid #333 !important;
+        background: var(--bg-tertiary) !important;
+        border-bottom: 1px solid var(--border-default) !important;
     }
 
     .gear-page.dark-theme .manual-items-category .gear-item:last-child {
@@ -451,13 +451,13 @@
     .gear-page.dark-theme .manual-items-category .item-name {
         font-size: 16px;
         font-weight: 600;
-        color: #ffffff !important;
+        color: var(--text-primary) !important;
         margin-bottom: 4px;
     }
 
     .gear-page.dark-theme .manual-items-category .item-meta {
         font-size: 12px;
-        color: #888 !important;
+        color: var(--text-tertiary) !important;
     }
 
     /* ---- All-Lists Expandable Progress ---- */
@@ -585,7 +585,7 @@
         }
 
         .gear-page.dark-theme .date-controls label {
-            color: #888 !important;
+            color: var(--text-tertiary) !important;
         }
     }
 
@@ -623,10 +623,10 @@
 
     /* Serial checkbox styles */
     .serial-checkbox {
-        accent-color: #cc0007;
+        accent-color: var(--brand-red);
     }
     .serial-checkbox:checked {
-        accent-color: #cc0007;
+        accent-color: var(--brand-red);
     }
 
     /* Add Items / Add Available button styles in table */
@@ -640,29 +640,29 @@
         box-shadow: none;
     }
     .pkg-table .package-btn.primary {
-        background: #cc0007;
+        background: var(--brand-red);
         color: white;
         border: none;
     }
     .pkg-table .package-btn.primary:hover {
-        background: #a30006;
+        background: var(--brand-red-active);
     }
 
     /* Dark theme overrides for package modals */
     .gear-page.dark-theme .pkg-table th {
-        color: #aaa;
+        color: var(--text-secondary);
     }
     .gear-page.dark-theme .pkg-table td {
-        color: #ddd;
+        color: var(--text-secondary);
     }
     .gear-page.dark-theme .pkg-table tr {
-        border-bottom-color: #333 !important;
+        border-bottom-color: var(--border-default) !important;
     }
     .gear-page.dark-theme .pkg-table tr:hover {
-        background-color: rgba(255,255,255,0.03);
+        background-color: var(--bg-hover);
     }
     .gear-page.dark-theme .pkg-table thead tr {
-        border-bottom-color: #444 !important;
+        border-bottom-color: var(--border-strong) !important;
     }
 
     /* ============================================
@@ -1757,7 +1757,7 @@
             } catch (error) {
                 console.error('Error loading gear:', error);
                 document.getElementById('gearContainer').innerHTML = `
-                    <div style="text-align: center; padding: 60px 20px; color: #666;">
+                    <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
                         <div style="font-size: 64px; color: #ccc; margin-bottom: 16px;">⚠️</div>
                         <h3>Failed to load gear</h3>
                         <p>Please refresh the page to try again.</p>
@@ -1811,7 +1811,7 @@
                 
                 const manualItemsHTML = renderManualItems();
                 container.innerHTML = `
-                    <div style="text-align: center; padding: 60px 20px; color: #666;">
+                    <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
                         <div style="font-size: 64px; color: #ccc; margin-bottom: 16px;">📦</div>
                         <h3>No gear in "${getListDisplayName(currentListName)}" yet</h3>
                         <p>${emptyMessage}</p>

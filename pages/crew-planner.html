@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#121216">
+    <script src="../js/theme-early.js?v=2.0.0"></script>
     <title>Crew Planner - LumDash</title>
     <link rel="icon" href="../assets/favicon.png" type="image/png">
     <!-- Preconnect for faster font loading -->
@@ -11,8 +13,11 @@
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
     <link rel="stylesheet" href="../css/general.css">
     <link rel="stylesheet" href="../css/crew-planner.css">
-    <link rel="stylesheet" href="../css/theme-dark.css">
+    <link rel="stylesheet" href="../css/theme-tokens.css?v=2.0.0">
+    <link rel="stylesheet" href="../css/theme-dark.css?v=2.0.0">
+    <link rel="stylesheet" href="../css/theme-light.css?v=2.0.0">
     <link rel="stylesheet" href="../css/chat.css">
+    <script src="../js/theme.js?v=2.0.0"></script>
     <script src="../js/api.js"></script>
     <script src="../js/config.js"></script>
     <script src="../js/chat.js"></script>
@@ -258,7 +263,7 @@
         box-shadow: 0 0 0 3px var(--brand-red-muted);
       }
 
-      .crew-planner-dark input[type="date"]::-webkit-calendar-picker-indicator {
+      html[data-theme="dark"] .crew-planner-dark input[type="date"]::-webkit-calendar-picker-indicator {
         filter: invert(1);
         cursor: pointer;
       }
@@ -312,7 +317,7 @@
       .crew-planner-dark .date-header {
         width: 140px;
         min-width: 140px;
-        border-right: 4px solid #4a4a4a !important;
+        border-right: 4px solid var(--border-strong) !important;
         font-size: 12px;
       }
 
@@ -357,24 +362,24 @@
 
       /* Event separator - thick vertical line between events */
       .crew-planner-dark .event-separator {
-        border-left: 4px solid #4a4a4a !important;
+        border-left: 4px solid var(--border-strong) !important;
       }
       
       .crew-planner-dark .event-header.event-separator {
-        border-left: 4px solid #4a4a4a !important;
+        border-left: 4px solid var(--border-strong) !important;
       }
       
       .crew-planner-dark .event-subheader.event-separator {
-        border-left: 4px solid #4a4a4a !important;
+        border-left: 4px solid var(--border-strong) !important;
       }
       
       .crew-planner-dark .crew-cell.event-separator {
-        border-left: 4px solid #4a4a4a !important;
+        border-left: 4px solid var(--border-strong) !important;
       }
 
       /* Date separator - thick horizontal line between dates */
       .crew-planner-dark .date-separator td {
-        border-top: 4px solid #4a4a4a !important;
+        border-top: 4px solid var(--border-strong) !important;
       }
 
       .crew-planner-dark .event-subheader {
@@ -401,7 +406,7 @@
         background: var(--bg-tertiary);
         font-weight: var(--font-weight-medium);
         position: sticky;
-        border-right: 4px solid #4a4a4a !important;
+        border-right: 4px solid var(--border-strong) !important;
         left: 0;
         z-index: 5;
         color: var(--text-primary);
@@ -547,7 +552,7 @@
       .crew-planner-dark .custom-dropdown-menu {
         display: none;
         position: fixed;
-        background: #1a1a1a !important;
+        background: var(--surface-card) !important;
         border: 1px solid var(--border-highlight);
         border-radius: var(--radius-md);
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
@@ -562,7 +567,7 @@
       .crew-planner-dark .custom-dropdown-search {
         padding: 8px;
         border-bottom: 1px solid var(--border-subtle);
-        background: #1a1a1a !important;
+        background: var(--surface-card) !important;
       }
 
       .crew-planner-dark .custom-dropdown-search input {
@@ -588,13 +593,13 @@
       .crew-planner-dark .custom-dropdown-options {
         max-height: 200px;
         overflow-y: auto;
-        background: #1a1a1a !important;
+        background: var(--surface-card) !important;
       }
 
       .crew-planner-dark .custom-dropdown-option {
         width: 100%;
         padding: 10px 12px;
-        background: #1a1a1a !important;
+        background: var(--surface-card) !important;
         border: none;
         color: var(--text-primary);
         font-size: var(--font-size-sm);
@@ -607,7 +612,7 @@
       }
 
       .crew-planner-dark .custom-dropdown-option:hover {
-        background: #2a2a2a !important;
+        background: var(--surface-hover) !important;
       }
 
       .crew-planner-dark .custom-dropdown-option.selected {
@@ -618,11 +623,11 @@
       .crew-planner-dark .custom-dropdown-option.add-new {
         border-top: 1px solid var(--border-subtle);
         color: var(--brand-red);
-        background: #1a1a1a !important;
+        background: var(--surface-card) !important;
       }
 
       .crew-planner-dark .custom-dropdown-option.add-new:hover {
-        background: #2a2a2a !important;
+        background: var(--surface-hover) !important;
       }
 
       .crew-planner-dark .custom-dropdown-option.add-new .material-symbols-outlined {
@@ -634,7 +639,7 @@
         text-align: center;
         color: var(--text-muted);
         font-size: var(--font-size-sm);
-        background: #1a1a1a !important;
+        background: var(--surface-card) !important;
       }
 
       /* Buttons */

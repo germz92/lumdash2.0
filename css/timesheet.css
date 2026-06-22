@@ -11,7 +11,7 @@ body:has(.timesheet-page) #page-container {
 /* ===== TIMESHEET PAGE STYLES ===== */
 .timesheet-page {
   min-height: auto;
-  background: linear-gradient(145deg, #fafbfc 0%, #f0f2f5 100%);
+  background: var(--bg-primary);
   padding: 0;
   margin: 0;
   width: 100%;
@@ -21,9 +21,9 @@ body:has(.timesheet-page) #page-container {
 }
 
 .timesheet-header {
-  background: #fff;
+  background: var(--bg-secondary);
   padding: 12px 16px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-sm);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -40,7 +40,7 @@ body:has(.timesheet-page) #page-container {
   margin: 0;
   font-size: 1.4rem;
   font-weight: 700;
-  color: #CC0007;
+  color: var(--brand-red);
   flex: 1;
 }
 
@@ -65,13 +65,13 @@ body:has(.timesheet-page) #page-container {
 
 .timesheet-summary-inline .summary-label {
   font-size: 14px;
-  color: #666;
+  color: var(--text-tertiary);
 }
 
 .timesheet-summary-inline .summary-value {
   font-size: 1.4rem;
   font-weight: 700;
-  color: #CC0007;
+  color: var(--brand-red);
 }
 
 .timesheet-summary-inline .filter-dropdown {
@@ -97,34 +97,34 @@ body:has(.timesheet-page) #page-container {
   gap: 8px;
   margin-top: 10px;
   padding: 10px 12px;
-  background: #f8f9fa;
+  background: var(--bg-tertiary);
   border-radius: 8px;
 }
 
 .custom-date-range input[type="date"] {
   padding: 8px 12px;
   font-size: 13px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--border-default);
   border-radius: 6px;
-  background: #fff;
+  background: var(--bg-secondary);
   flex: 1;
   min-width: 0;
 }
 
 .custom-date-range input[type="date"]:focus {
   outline: none;
-  border-color: #CC0007;
+  border-color: var(--brand-red);
 }
 
 .custom-date-range .date-separator {
-  color: #666;
+  color: var(--text-tertiary);
   font-size: 13px;
   flex-shrink: 0;
 }
 
 .custom-date-range .btn-apply-range {
   padding: 8px 16px;
-  background: #CC0007;
+  background: var(--brand-red);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -136,7 +136,7 @@ body:has(.timesheet-page) #page-container {
 }
 
 .custom-date-range .btn-apply-range:hover {
-  background: #a30006;
+  background: var(--brand-red-active);
 }
 
 .btn-back {
@@ -144,8 +144,8 @@ body:has(.timesheet-page) #page-container {
   height: 40px;
   border-radius: 50%;
   background: transparent;
-  border: 1px solid #e0e0e0;
-  color: #666;
+  border: 1px solid var(--border-default);
+  color: var(--text-tertiary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -156,9 +156,9 @@ body:has(.timesheet-page) #page-container {
 }
 
 .btn-back:hover {
-  background: #f5f5f5;
-  color: #CC0007;
-  border-color: #CC0007;
+  background: var(--bg-hover);
+  color: var(--brand-red);
+  border-color: var(--brand-red);
   box-shadow: none;
 }
 
@@ -248,8 +248,8 @@ body:has(.timesheet-page) #page-container {
   font-weight: 600;
   font-size: 14px;
   background: transparent;
-  color: #666;
-  border: 2px solid #e0e0e0;
+  color: var(--text-tertiary);
+  border: 2px solid var(--border-default);
   cursor: pointer;
   transition: all 0.2s ease;
   text-transform: none;
@@ -257,16 +257,16 @@ body:has(.timesheet-page) #page-container {
 }
 
 .btn-edit-mode:hover {
-  border-color: #CC0007;
-  color: #CC0007;
+  border-color: var(--brand-red);
+  color: var(--brand-red);
   background: rgba(204, 0, 7, 0.04);
   box-shadow: none;
 }
 
 .btn-edit-mode.active {
-  background: #CC0007;
+  background: var(--brand-red);
   color: #fff;
-  border-color: #CC0007;
+  border-color: var(--brand-red);
 }
 
 /* Legacy summary styles - keeping for compatibility */
@@ -276,9 +276,9 @@ body:has(.timesheet-page) #page-container {
 
 /* Action buttons section */
 .timesheet-actions-footer {
-  background: #fff;
+  background: var(--bg-secondary);
   padding: 16px;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border-subtle);
 }
 
 .timesheet-actions-footer .action-group {
@@ -302,40 +302,40 @@ body:has(.timesheet-page) #page-container {
   display: flex;
   align-items: baseline;
   gap: 12px;
-  background: #fff;
+  background: var(--bg-secondary);
   padding: 16px 24px;
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-md);
 }
 
 .summary-label {
   font-size: 16px;
   font-weight: 500;
-  color: #666;
+  color: var(--text-tertiary);
 }
 
 .summary-value {
   font-size: 2rem;
   font-weight: 700;
-  color: #CC0007;
+  color: var(--brand-red);
 }
 
 .filter-dropdown select {
   padding: 12px 40px 12px 16px;
   font-size: 14px;
   font-weight: 500;
-  border: 2px solid #e0e0e0;
+  border: 2px solid var(--border-default);
   border-radius: 10px;
-  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E") no-repeat right 16px center;
+  background: var(--bg-secondary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E") no-repeat right 16px center;
   appearance: none;
   cursor: pointer;
   transition: border-color 0.2s ease;
-  color: #333;
+  color: var(--text-primary);
 }
 
 .filter-dropdown select:focus {
   outline: none;
-  border-color: #CC0007;
+  border-color: var(--brand-red);
 }
 
 .timesheet-table-container {
@@ -346,15 +346,15 @@ body:has(.timesheet-page) #page-container {
 
 .timesheet-table {
   width: 100%;
-  background: #fff;
+  background: var(--bg-secondary);
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-sm);
   border-collapse: collapse;
 }
 
 .timesheet-table thead {
-  background: linear-gradient(135deg, #f8f9fa 0%, #f0f2f5 100%);
+  background: var(--bg-tertiary);
 }
 
 .timesheet-table th {
@@ -364,8 +364,8 @@ body:has(.timesheet-page) #page-container {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: #666;
-  border-bottom: 2px solid #e9ecef;
+  color: var(--text-tertiary);
+  border-bottom: 2px solid var(--border-default);
 }
 
 .timesheet-table th:first-child {
@@ -379,29 +379,29 @@ body:has(.timesheet-page) #page-container {
 }
 
 .timesheet-table tbody tr {
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid var(--border-subtle);
   transition: background 0.15s ease;
 }
 
 .timesheet-table tbody tr:hover {
-  background: #fafbfc;
+  background: var(--bg-tertiary);
 }
 
 .timesheet-table tbody tr.entry-row-in {
-  border-left: 3px solid #28a745;
+  border-left: 3px solid var(--success);
 }
 
 .timesheet-table tbody tr.entry-row-out {
-  border-left: 3px solid #dc3545;
+  border-left: 3px solid var(--danger);
 }
 
 .timesheet-table tbody tr.entry-row-travel {
-  border-left: 3px solid #6c757d;
+  border-left: 3px solid var(--text-tertiary);
 }
 
 .timesheet-table td {
   padding: 14px;
-  color: #333;
+  color: var(--text-primary);
   font-size: 14px;
 }
 
@@ -421,27 +421,27 @@ body:has(.timesheet-page) #page-container {
 }
 
 .entry-type-badge.type-in {
-  background: rgba(40, 167, 69, 0.12);
-  color: #28a745;
+  background: var(--success-bg);
+  color: var(--success-text);
 }
 
 .entry-type-badge.type-out {
-  background: rgba(220, 53, 69, 0.12);
-  color: #dc3545;
+  background: var(--error-bg);
+  color: var(--error-text);
 }
 
 .entry-type-badge.type-travel {
-  background: rgba(108, 117, 125, 0.12);
-  color: #6c757d;
+  background: var(--bg-active);
+  color: var(--text-tertiary);
 }
 
 .entry-hours {
   font-weight: 600;
-  color: #CC0007;
+  color: var(--brand-red);
 }
 
 .entry-notes {
-  color: #666;
+  color: var(--text-tertiary);
   max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -454,8 +454,8 @@ body:has(.timesheet-page) #page-container {
   height: 36px;
   border-radius: 8px;
   background: transparent;
-  border: 1px solid #e0e0e0;
-  color: #999;
+  border: 1px solid var(--border-default);
+  color: var(--text-muted);
   display: none;
   align-items: center;
   justify-content: center;
@@ -486,9 +486,9 @@ body:has(.timesheet-page) #page-container {
   display: none;
   padding: 6px 10px;
   font-size: 13px;
-  border: 2px solid #CC0007;
+  border: 2px solid var(--brand-red);
   border-radius: 6px;
-  background: #fff;
+  background: var(--bg-secondary);
   width: 100%;
   max-width: 140px;
   box-sizing: border-box;
@@ -497,7 +497,7 @@ body:has(.timesheet-page) #page-container {
 .inline-edit-input:focus,
 .inline-edit-select:focus {
   outline: none;
-  border-color: #a30006;
+  border-color: var(--brand-red-active);
   box-shadow: 0 0 0 3px rgba(204, 0, 7, 0.1);
 }
 
@@ -547,26 +547,26 @@ body:has(.timesheet-page) #page-container {
 .empty-state {
   text-align: center;
   padding: 60px 20px;
-  background: #fff;
+  background: var(--bg-secondary);
   border-radius: 12px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+  box-shadow: var(--shadow-sm);
 }
 
 .empty-icon {
   font-size: 64px;
-  color: #ccc;
+  color: var(--text-disabled);
   margin-bottom: 16px;
 }
 
 .empty-state h3 {
   font-size: 1.3rem;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
   margin: 0 0 8px;
 }
 
 .empty-state p {
-  color: #666;
+  color: var(--text-tertiary);
   margin: 0;
 }
 
@@ -582,7 +582,7 @@ body #editEntryModal,
   bottom: 0 !important;
   width: 100% !important;
   height: 100% !important;
-  background: rgba(0, 0, 0, 0.5) !important;
+  background: var(--surface-overlay) !important;
   align-items: center !important;
   justify-content: center !important;
   z-index: 999999 !important;
@@ -593,7 +593,7 @@ body #editEntryModal,
 
 #manualEntryModal .modal-content,
 #editEntryModal .modal-content {
-  background: #fff !important;
+  background: var(--bg-secondary) !important;
   border-radius: 16px !important;
   width: 100% !important;
   max-width: 400px !important;
@@ -629,7 +629,7 @@ body.modal-open {
   justify-content: space-between;
   align-items: center;
   padding: 16px;
-  border-bottom: 1px solid #f0f2f5;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 #manualEntryModal .modal-header h3,
@@ -637,7 +637,7 @@ body.modal-open {
   margin: 0;
   font-size: 1.2rem;
   font-weight: 600;
-  color: #333;
+  color: var(--text-primary);
 }
 
 #manualEntryModal .close-btn,
@@ -647,7 +647,7 @@ body.modal-open {
   border-radius: 50%;
   background: transparent;
   border: none;
-  color: #666;
+  color: var(--text-tertiary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -659,7 +659,7 @@ body.modal-open {
 
 #manualEntryModal .close-btn:hover,
 #editEntryModal .close-btn:hover {
-  background: #f5f5f5;
+  background: var(--bg-hover);
   box-shadow: none;
 }
 
@@ -687,7 +687,7 @@ body.modal-open {
   display: block;
   font-size: 14px;
   font-weight: 500;
-  color: #333;
+  color: var(--text-primary);
   margin-bottom: 8px;
 }
 
@@ -700,7 +700,7 @@ body.modal-open {
   min-width: 0 !important;
   padding: 12px 16px !important;
   font-size: 15px !important;
-  border: 2px solid #e0e0e0 !important;
+  border: 2px solid var(--border-default) !important;
   border-radius: 10px !important;
   transition: border-color 0.2s ease;
   box-sizing: border-box !important;
@@ -712,7 +712,7 @@ body.modal-open {
 #editEntryModal .form-group input:focus,
 #editEntryModal .form-group select:focus {
   outline: none;
-  border-color: #CC0007;
+  border-color: var(--brand-red);
 }
 
 #manualEntryModal .form-select,
@@ -721,13 +721,13 @@ body.modal-open {
   max-width: none !important;
   padding: 12px 16px;
   font-size: 15px;
-  border: 2px solid #e0e0e0;
+  border: 2px solid var(--border-default);
   border-radius: 10px;
-  background: #fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E") no-repeat right 16px center;
+  background: var(--bg-secondary) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23666' d='M6 9L1 4h10z'/%3E%3C/svg%3E") no-repeat right 16px center;
   appearance: none;
   cursor: pointer;
   transition: border-color 0.2s ease;
-  color: #333;
+  color: var(--text-primary);
   box-sizing: border-box;
 }
 
@@ -737,13 +737,13 @@ body.modal-open {
   justify-content: flex-end;
   gap: 12px;
   padding: 16px;
-  border-top: 1px solid #f0f2f5;
+  border-top: 1px solid var(--border-subtle);
 }
 
 #manualEntryModal .btn-primary,
 #editEntryModal .btn-primary {
   padding: 12px 24px;
-  background: linear-gradient(135deg, #CC0007 0%, #a30006 100%);
+  background: linear-gradient(135deg, var(--brand-red) 0%, var(--brand-red-active) 100%);
   color: #fff;
   border: none;
   border-radius: 10px;
@@ -754,7 +754,7 @@ body.modal-open {
 
 #manualEntryModal .btn-primary:hover,
 #editEntryModal .btn-primary:hover {
-  background: linear-gradient(135deg, #a30006 0%, #8a0005 100%);
+  background: linear-gradient(135deg, var(--brand-red-active) 0%, #8a0005 100%);
   box-shadow: 0 4px 12px rgba(204, 0, 7, 0.25);
 }
 
@@ -762,8 +762,8 @@ body.modal-open {
 #editEntryModal .btn-outlined {
   padding: 12px 24px;
   background: transparent;
-  color: #666;
-  border: 2px solid #e0e0e0;
+  color: var(--text-tertiary);
+  border: 2px solid var(--border-default);
   border-radius: 10px;
   font-weight: 600;
   cursor: pointer;
@@ -773,8 +773,8 @@ body.modal-open {
 
 #manualEntryModal .btn-outlined:hover,
 #editEntryModal .btn-outlined:hover {
-  border-color: #999;
-  color: #333;
+  border-color: var(--text-muted);
+  color: var(--text-primary);
   box-shadow: none;
 }
 
@@ -803,11 +803,11 @@ body.modal-open {
 }
 
 .timesheet-table tbody tr.pair-end {
-  background: #fafbfc;
+  background: var(--bg-tertiary);
 }
 
 .pair-group {
-  border: 1px solid #e9ecef;
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   margin: 8px 0;
 }
@@ -904,10 +904,10 @@ body.modal-open {
   
   .entry-card {
     display: block;
-    background: #fff;
+    background: var(--bg-secondary);
     border-radius: 12px;
     margin-bottom: 10px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    box-shadow: var(--shadow-md);
     overflow: hidden;
   }
   
@@ -920,15 +920,15 @@ body.modal-open {
   }
   
   .entry-card.entry-row-in {
-    border-left: 4px solid #28a745;
+    border-left: 4px solid var(--success);
   }
   
   .entry-card.entry-row-out {
-    border-left: 4px solid #dc3545;
+    border-left: 4px solid var(--danger);
   }
   
   .entry-card.entry-row-travel {
-    border-left: 4px solid #6c757d;
+    border-left: 4px solid var(--text-tertiary);
   }
   
   /* Paired card styles (clock in + clock out together) */
@@ -942,19 +942,19 @@ body.modal-open {
     justify-content: space-between;
     align-items: center;
     padding: 12px 16px 8px;
-    border-bottom: 1px solid #f0f2f5;
+    border-bottom: 1px solid var(--border-subtle);
   }
   
   .entry-card-pair-date {
     font-size: 14px;
     font-weight: 600;
-    color: #333;
+    color: var(--text-primary);
   }
   
   .entry-card-pair-hours {
     font-size: 18px;
     font-weight: 700;
-    color: #CC0007;
+    color: var(--brand-red);
   }
   
   .entry-card-pair-times {
@@ -979,8 +979,8 @@ body.modal-open {
   /* Highlight IN/OUT areas in edit mode */
   .edit-mode-active .entry-card-pair-time {
     cursor: pointer;
-    background: #f5f5f5;
-    border: 1px dashed #ccc;
+    background: var(--bg-hover);
+    border: 1px dashed var(--border-default);
     position: relative;
   }
   
@@ -991,22 +991,22 @@ body.modal-open {
     left: 50%;
     transform: translateX(-50%);
     font-size: 9px;
-    color: #999;
+    color: var(--text-muted);
   }
   
   .edit-mode-active .entry-card-pair-time:hover {
-    background: #e8f4fd;
-    border-color: #2196F3;
+    background: var(--info-bg);
+    border-color: var(--accent-blue);
   }
   
   .entry-card-pair-time .time-value {
     font-size: 15px;
     font-weight: 500;
-    color: #333;
+    color: var(--text-primary);
   }
   
   .entry-card-pair-arrow {
-    color: #999;
+    color: var(--text-muted);
     display: flex;
     align-items: center;
   }
@@ -1023,27 +1023,27 @@ body.modal-open {
   .entry-card-date {
     font-size: 14px;
     font-weight: 500;
-    color: #333;
+    color: var(--text-primary);
   }
   
   .entry-card-time {
     font-size: 14px;
-    color: #666;
+    color: var(--text-tertiary);
     text-align: center;
   }
   
   .entry-card-hours {
     font-size: 14px;
     font-weight: 600;
-    color: #CC0007;
+    color: var(--brand-red);
     text-align: right;
   }
   
   /* Collapsible notes */
   .entry-card-notes {
     display: block;
-    background: #f8f9fa;
-    border-top: 1px solid #eee;
+    background: var(--bg-tertiary);
+    border-top: 1px solid var(--border-subtle);
     overflow: hidden;
     max-height: 0;
     transition: max-height 0.3s ease, padding 0.3s ease;
@@ -1057,7 +1057,7 @@ body.modal-open {
   
   .entry-card-notes-content {
     font-size: 13px;
-    color: #666;
+    color: var(--text-tertiary);
     line-height: 1.4;
   }
   
@@ -1066,19 +1066,19 @@ body.modal-open {
     align-items: center;
     justify-content: center;
     padding: 8px;
-    background: #f8f9fa;
+    background: var(--bg-tertiary);
     border: none;
     cursor: pointer;
     width: 100%;
-    color: #999;
+    color: var(--text-muted);
     font-size: 12px;
     gap: 4px;
     transition: background 0.15s ease;
   }
   
   .entry-card-notes-toggle:hover {
-    background: #f0f2f5;
-    color: #666;
+    background: var(--bg-hover);
+    color: var(--text-tertiary);
   }
   
   .entry-card-notes-toggle .material-symbols-outlined {
@@ -1111,7 +1111,7 @@ body.modal-open {
     text-align: center;
     padding: 8px;
     background: rgba(204, 0, 7, 0.05);
-    color: #CC0007;
+    color: var(--brand-red);
     font-size: 12px;
     font-weight: 500;
   }

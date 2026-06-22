@@ -11751,6 +11751,7 @@ const PP_STATUS_LABELS = {
   editStatus: {
     '': '—',
     working: 'Working on it',
+    awaiting_client: 'Awaiting Client',
     stuck: 'Stuck',
     done: 'Done'
   },

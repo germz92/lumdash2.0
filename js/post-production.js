@@ -65,13 +65,24 @@
     target.addEventListener(type, handler, opts);
   }
 
-  /** Remove update modal / menus left on body from a prior SPA visit (they keep stale listeners). */
+  /** Remove duplicate portal nodes from a prior SPA visit; keep the live copy on body. */
   function cleanupStalePortals() {
     const container = document.getElementById('page-container');
     PORTAL_IDS.forEach(id => {
-      document.querySelectorAll(`#${id}`).forEach(el => {
-        if (!container || !container.contains(el)) el.remove();
-      });
+      const all = [...document.querySelectorAll(`#${id}`)];
+      if (all.length <= 1) return;
+
+      const inPage = container
+        ? all.filter(el => container.contains(el))
+        : [];
+
+      if (inPage.length > 0) {
+        // Fresh page inject: drop orphaned copies left on body from the last visit
+        all.filter(el => !container.contains(el)).forEach(el => el.remove());
+      } else {
+        // Only body-mounted copies — drop extras, keep the last one
+        all.slice(0, -1).forEach(el => el.remove());
+      }
     });
   }
 

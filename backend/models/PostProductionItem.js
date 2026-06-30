@@ -13,6 +13,15 @@ const postProductionAttachmentSchema = new mongoose.Schema({
   cloudinaryPublicId: { type: String, default: '' }
 }, { _id: true });
 
+const postProductionVersionSchema = new mongoose.Schema({
+  url: { type: String, required: true },
+  name: { type: String, default: '' },
+  description: { type: String, default: '' },
+  addedById: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  addedByName: { type: String, default: '' },
+  createdAt: { type: Date, default: Date.now }
+}, { _id: true });
+
 const postProductionReplySchema = new mongoose.Schema({
   text: { type: String, default: '' },
   authorId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -67,6 +76,12 @@ const postProductionItemSchema = new mongoose.Schema({
   collaboratorIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   dueDate: { type: Date, default: null },
+  versions: [postProductionVersionSchema],
+  /** @deprecated Single-link fields — migrated into versions[] on read/write */
+  latestVersionUrl: { type: String, default: '' },
+  latestVersionAt: { type: Date, default: null },
+  latestVersionById: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  latestVersionByName: { type: String, default: '' },
   updates: [postProductionUpdateSchema],
   notes: [postProductionNoteSchema],
   archived: { type: Boolean, default: false, index: true },

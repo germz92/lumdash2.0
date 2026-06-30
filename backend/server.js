@@ -11699,6 +11699,58 @@ async function getPostProductionSidebarIndicator(user) {
   return { hasNew: hasUnread || hasNewAssignment };
 }
 
+function formatPostProductionVersions(o) {
+  const list = (o.versions || []).map(v => ({
+    _id: v._id,
+    url: v.url || '',
+    name: v.name || '',
+    description: v.description || '',
+    addedByName: v.addedByName || '',
+    createdAt: v.createdAt || null
+  }));
+  // Legacy single-link fallback (display only) when no versions recorded yet
+  if (!list.length && o.latestVersionUrl) {
+    list.push({
+      _id: 'legacy',
+      url: o.latestVersionUrl,
+      name: '',
+      description: '',
+      addedByName: o.latestVersionByName || '',
+      createdAt: o.latestVersionAt || null
+    });
+  }
+  return list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+}
+
+/** Move a legacy single-link (latestVersionUrl) into versions[] before mutating versions. */
+function migrateLegacyPostProductionVersion(doc) {
+  if ((!doc.versions || doc.versions.length === 0) && doc.latestVersionUrl) {
+    doc.versions.push({
+      url: doc.latestVersionUrl,
+      name: '',
+      description: '',
+      addedById: doc.latestVersionById || null,
+      addedByName: doc.latestVersionByName || '',
+      createdAt: doc.latestVersionAt || new Date()
+    });
+  }
+  if (doc.latestVersionUrl || doc.latestVersionAt || doc.latestVersionById || doc.latestVersionByName) {
+    doc.latestVersionUrl = '';
+    doc.latestVersionAt = null;
+    doc.latestVersionById = null;
+    doc.latestVersionByName = '';
+  }
+}
+
+function isValidHttpUrl(value) {
+  try {
+    const parsed = new URL(String(value || '').trim());
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch (_) {
+    return false;
+  }
+}
+
 function formatPostProductionItem(doc, usersById = {}, readOptions = {}) {
   const o = doc.toObject ? doc.toObject() : doc;
   const editorIds = getPostProductionEditorIds(o);
@@ -11733,6 +11785,7 @@ function formatPostProductionItem(doc, usersById = {}, readOptions = {}) {
     ownerName: owner?.fullName || owner?.email || '',
     ownerPhoto: owner?.profilePhoto || null,
     dueDate: o.dueDate || null,
+    versions: formatPostProductionVersions(o),
     updates,
     updateCount,
     unreadUpdateCount,
@@ -12674,6 +12727,77 @@ app.put('/api/post-production/:id', authenticate, async (req, res) => {
     }));
   } catch (err) {
     console.error('Error updating post production item:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Add a version link to an item's history (owner/editor/collaborator/admin/event owner)
+app.post('/api/post-production/:id/versions', authenticate, async (req, res) => {
+  try {
+    const doc = await PostProductionItem.findById(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Item not found' });
+    if (!(await canAccessPostProductionItem(req.user, doc))) {
+      return res.status(403).json({ error: 'You do not have access to this item' });
+    }
+
+    const url = String(req.body.url || '').trim();
+    if (!isValidHttpUrl(url)) {
+      return res.status(400).json({ error: 'Enter a valid http or https link' });
+    }
+    const name = String(req.body.name || '').trim().slice(0, 200);
+    const description = String(req.body.description || '').trim().slice(0, 2000);
+
+    migrateLegacyPostProductionVersion(doc);
+
+    const versionUser = await User.findById(req.user.id).select('fullName email').lean();
+    doc.versions.push({
+      url,
+      name,
+      description,
+      addedById: req.user.id,
+      addedByName: versionUser?.fullName || versionUser?.email || 'Unknown',
+      createdAt: new Date()
+    });
+    doc.updatedBy = req.user.id;
+    await doc.save();
+
+    const usersById = await postProductionUsersById(doc);
+    const read = await PostProductionUpdateRead.findOne({ userId: req.user.id, itemId: doc._id }).select('lastReadAt').lean();
+    res.status(201).json(formatPostProductionItem(doc, usersById, {
+      userId: req.user.id,
+      lastReadAt: read?.lastReadAt || null
+    }));
+  } catch (err) {
+    console.error('Error adding post production version:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Remove a version link from an item's history
+app.delete('/api/post-production/:id/versions/:versionId', authenticate, async (req, res) => {
+  try {
+    const doc = await PostProductionItem.findById(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Item not found' });
+    if (!(await canAccessPostProductionItem(req.user, doc))) {
+      return res.status(403).json({ error: 'You do not have access to this item' });
+    }
+
+    migrateLegacyPostProductionVersion(doc);
+
+    const exists = doc.versions.id(req.params.versionId);
+    if (!exists) return res.status(404).json({ error: 'Version not found' });
+    doc.versions.pull({ _id: req.params.versionId });
+    doc.updatedBy = req.user.id;
+    await doc.save();
+
+    const usersById = await postProductionUsersById(doc);
+    const read = await PostProductionUpdateRead.findOne({ userId: req.user.id, itemId: doc._id }).select('lastReadAt').lean();
+    res.json(formatPostProductionItem(doc, usersById, {
+      userId: req.user.id,
+      lastReadAt: read?.lastReadAt || null
+    }));
+  } catch (err) {
+    console.error('Error removing post production version:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

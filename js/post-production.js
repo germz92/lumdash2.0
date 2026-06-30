@@ -35,6 +35,10 @@
   let mentionMenuState = null;
   let userPickerTarget = null;
   let projectSuggestTarget = null;
+  let versionMenuTarget = null;
+  let versionPressTimer = null;
+  let suppressVersionClick = false;
+  const VERSION_LONGPRESS_MS = 450;
   let searchDebounce = null;
   const DRAFT_ID = '__draft__';
   let hasDraftRow = false;
@@ -43,7 +47,7 @@
   let viewMode = localStorage.getItem(VIEW_STORAGE_KEY)
     || (MOBILE_MQ.matches ? 'card' : 'table');
   const selectedIds = new Set();
-  const PORTAL_IDS = ['ppUpdatesModal', 'ppMentionMenu', 'ppUserPickerMenu', 'ppProjectSuggestions'];
+  const PORTAL_IDS = ['ppUpdatesModal', 'ppMentionMenu', 'ppUserPickerMenu', 'ppProjectSuggestions', 'ppVersionMenu'];
   let commitDraftInFlight = false;
   let submitUpdateInFlight = false;
 
@@ -366,6 +370,30 @@
     </button></div>`;
   }
 
+  function getRowVersions(row) {
+    return Array.isArray(row?.versions) ? row.versions : [];
+  }
+
+  function latestVersionOf(row) {
+    return getRowVersions(row)[0] || null;
+  }
+
+  function versionButton(row) {
+    if (row._id === DRAFT_ID) return '<span class="pp-version-empty" aria-hidden="true">—</span>';
+    const versions = getRowVersions(row);
+    const latest = versions[0] || null;
+    const count = versions.length;
+    const title = latest
+      ? `${latest.name || 'Latest version'}${latest.addedByName ? ` · ${latest.addedByName}` : ''}${latest.createdAt ? ` · ${formatUpdateDate(latest.createdAt)}` : ''}\nClick to open · long-press to edit`
+      : 'Add a version link';
+    const cls = latest ? 'pp-version-btn has-link' : 'pp-version-btn';
+    const icon = latest ? 'link' : 'add_link';
+    const badge = count > 1 ? `<span class="pp-version-count">${count > 99 ? '99+' : count}</span>` : '';
+    return `<div class="pp-version-cell-inner"><button type="button" class="${cls}" data-version="${esc(row._id)}" title="${esc(title)}" aria-label="${esc(title)}">
+      <span class="material-symbols-outlined">${icon}</span>${badge}
+    </button></div>`;
+  }
+
   function renderUpdateEntry(entry, { isReply = false, updateId = null } = {}) {
     const replyBtn = !isReply && updateId
       ? `<div class="pp-update-actions"><button type="button" class="pp-update-reply-btn" data-reply-to="${esc(updateId)}">Reply</button></div>`
@@ -383,10 +411,10 @@
     if (!updates.length) {
       return '<p class="pp-updates-empty">No updates yet. Post the first update above.</p>';
     }
-    const sorted = [...updates].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    const sorted = [...updates].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
     return sorted.map(u => {
       const replies = [...(u.replies || [])]
-        .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
         .map(r => renderUpdateEntry(r, { isReply: true }))
         .join('');
       return `
@@ -411,7 +439,7 @@
       countEl.textContent = total === 1 ? '1 update' : `${total} updates`;
     }
     feed.innerHTML = renderUpdatesFeed(updates);
-    feed.scrollTop = feed.scrollHeight;
+    feed.scrollTop = 0;
   }
 
   function td(label, content, cellClass) {
@@ -629,7 +657,8 @@
       tableCollaboratorsBtn: usersPickerBtn(row, 'collaboratorIds', collaboratorUsers, true),
       tableOwnerBtn: userPickerBtn(row, 'ownerId', ownerUser, true),
       dueInput: `<div class="pp-date-input-wrap"><input type="date" data-field="dueDate" data-id="${row._id}" value="${formatDueDate(row.dueDate)}"></div>`,
-      updatesBtn: updatesButton(row)
+      updatesBtn: updatesButton(row),
+      versionBtn: versionButton(row)
     };
   }
 
@@ -661,6 +690,7 @@
           ${td('Collaborators', p.tableCollaboratorsBtn, 'pp-td-avatar')}
           ${td('QC', p.qcSelect, 'pp-td-status')}
           ${td('Delivery', p.deliverySelect, 'pp-td-status')}
+          ${td('Latest Version', p.versionBtn, 'pp-td-version')}
         </tr>`;
     }).join('');
 
@@ -731,6 +761,10 @@
             <div class="pp-card-field pp-card-footer-owner">
               <span class="pp-card-label">Owner</span>
               ${p.ownerBtn}
+            </div>
+            <div class="pp-card-field pp-card-footer-version">
+              <span class="pp-card-label">Latest Version</span>
+              ${p.versionBtn}
             </div>
             ${p.updatesBtn}
           </div>
@@ -1078,6 +1112,145 @@
     const box = document.getElementById('ppProjectSuggestions');
     if (box) box.style.display = 'none';
     projectSuggestTarget = null;
+  }
+
+  function versionHistoryHtml(row) {
+    const versions = getRowVersions(row);
+    if (!versions.length) {
+      return '<p class="pp-version-history-empty">No versions yet. Add the first link above.</p>';
+    }
+    return versions.map(v => {
+      const url = esc(v.url || '#');
+      const name = esc(v.name || 'Untitled version');
+      const meta = `${v.addedByName ? esc(v.addedByName) + ' · ' : ''}${v.createdAt ? esc(formatUpdateDate(v.createdAt)) : ''}`;
+      const desc = v.description
+        ? `<div class="pp-version-item-desc">${esc(v.description)}</div>`
+        : '';
+      const removable = v._id && v._id !== 'legacy'
+        ? `<button type="button" class="pp-version-item-remove" data-version-remove="${esc(v._id)}" title="Remove" aria-label="Remove version"><span class="material-symbols-outlined">delete</span></button>`
+        : '';
+      return `
+        <li class="pp-version-item">
+          <a class="pp-version-item-main" href="${url}" target="_blank" rel="noopener noreferrer">
+            <span class="pp-version-item-name">${name}</span>
+            <span class="pp-version-item-meta">${meta}</span>
+            ${desc}
+          </a>
+          ${removable}
+        </li>`;
+    }).join('');
+  }
+
+  function renderVersionMenu(row) {
+    const menu = document.getElementById('ppVersionMenu');
+    if (!menu) return;
+    menu.innerHTML = `
+      <div class="pp-version-menu-inner">
+        <div class="pp-version-menu-header">Version history</div>
+        <form class="pp-version-add" data-version-add-form>
+          <input type="url" class="pp-version-input" data-version-field="url" placeholder="https://… (required)" autocomplete="off" required>
+          <input type="text" class="pp-version-input" data-version-field="name" placeholder="Name (optional)" autocomplete="off">
+          <textarea class="pp-version-textarea" data-version-field="description" rows="2" placeholder="Description (optional)"></textarea>
+          <button type="submit" class="pp-version-save">Add version</button>
+        </form>
+        <ul class="pp-version-history">${versionHistoryHtml(row)}</ul>
+      </div>`;
+  }
+
+  function showVersionMenu(anchor, itemId) {
+    const menu = document.getElementById('ppVersionMenu');
+    if (!menu) return;
+    const row = items.find(i => i._id === itemId);
+    if (!row || row._id === DRAFT_ID) return;
+    versionMenuTarget = { itemId };
+
+    renderVersionMenu(row);
+
+    const rect = anchor.getBoundingClientRect();
+    const menuWidth = 320;
+    const menuMaxHeight = 360;
+    menu.style.display = 'block';
+
+    let left = rect.left;
+    if (left + menuWidth > window.innerWidth - 12) {
+      left = Math.max(12, window.innerWidth - menuWidth - 12);
+    }
+    menu.style.left = `${left}px`;
+    menu.style.width = `${menuWidth}px`;
+
+    // Flip above the anchor if there isn't room below
+    if (rect.bottom + menuMaxHeight > window.innerHeight - 12 && rect.top > menuMaxHeight) {
+      menu.style.top = 'auto';
+      menu.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+    } else {
+      menu.style.bottom = 'auto';
+      menu.style.top = `${rect.bottom + 4}px`;
+    }
+
+    menu.querySelector('[data-version-field="url"]')?.focus();
+  }
+
+  function hideVersionMenu() {
+    const menu = document.getElementById('ppVersionMenu');
+    if (menu) menu.style.display = 'none';
+    versionMenuTarget = null;
+  }
+
+  function refreshVersionMenuIfOpen() {
+    const menu = document.getElementById('ppVersionMenu');
+    if (!menu || menu.style.display === 'none' || !versionMenuTarget) return;
+    const row = items.find(i => i._id === versionMenuTarget.itemId);
+    if (row) renderVersionMenu(row);
+    else hideVersionMenu();
+  }
+
+  async function addVersionFromMenu() {
+    if (!versionMenuTarget) return;
+    const menu = document.getElementById('ppVersionMenu');
+    if (!menu) return;
+    const url = (menu.querySelector('[data-version-field="url"]')?.value || '').trim();
+    const name = (menu.querySelector('[data-version-field="name"]')?.value || '').trim();
+    const description = (menu.querySelector('[data-version-field="description"]')?.value || '').trim();
+    if (!url) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/post-production/${versionMenuTarget.itemId}/versions`, {
+        method: 'POST',
+        headers: authHeaders(),
+        body: JSON.stringify({ url, name, description })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to add version');
+      }
+      const updated = await res.json();
+      const idx = items.findIndex(i => i._id === updated._id);
+      if (idx >= 0) items[idx] = updated;
+      renderLists();
+      refreshVersionMenuIfOpen();
+    } catch (err) {
+      alert(err.message);
+    }
+  }
+
+  async function removeVersionFromMenu(versionId) {
+    if (!versionMenuTarget || !versionId) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/post-production/${versionMenuTarget.itemId}/versions/${versionId}`, {
+        method: 'DELETE',
+        headers: authHeaders()
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to remove version');
+      }
+      const updated = await res.json();
+      const idx = items.findIndex(i => i._id === updated._id);
+      if (idx >= 0) items[idx] = updated;
+      renderLists();
+      refreshVersionMenuIfOpen();
+    } catch (err) {
+      alert(err.message);
+    }
   }
 
   function clearReplyTarget() {
@@ -1599,6 +1772,22 @@
         );
         return;
       }
+      const versionBtn = e.target.closest('[data-version]');
+      if (versionBtn) {
+        e.stopPropagation();
+        if (suppressVersionClick) {
+          suppressVersionClick = false;
+          return;
+        }
+        const row = items.find(i => i._id === versionBtn.dataset.version);
+        const latest = latestVersionOf(row);
+        if (latest?.url) {
+          window.open(latest.url, '_blank', 'noopener');
+        } else {
+          showVersionMenu(versionBtn, versionBtn.dataset.version);
+        }
+        return;
+      }
       const updatesBtn = e.target.closest('[data-updates]');
       if (updatesBtn) {
         openUpdatesModal(updatesBtn.dataset.updates);
@@ -1670,12 +1859,59 @@
       }
     });
 
+    // Long-press a version button to open the editor; quick tap opens the latest link
+    on(listRoot, 'pointerdown', (e) => {
+      const btn = e.target.closest('[data-version]');
+      if (!btn) return;
+      suppressVersionClick = false;
+      clearTimeout(versionPressTimer);
+      versionPressTimer = setTimeout(() => {
+        suppressVersionClick = true;
+        showVersionMenu(btn, btn.dataset.version);
+      }, VERSION_LONGPRESS_MS);
+    });
+    const cancelVersionPress = () => clearTimeout(versionPressTimer);
+    on(listRoot, 'pointerup', cancelVersionPress);
+    on(listRoot, 'pointerleave', cancelVersionPress);
+    on(listRoot, 'pointercancel', cancelVersionPress);
+
+    on(listRoot, 'contextmenu', (e) => {
+      const btn = e.target.closest('[data-version]');
+      if (!btn) return;
+      e.preventDefault();
+      clearTimeout(versionPressTimer);
+      suppressVersionClick = true;
+      showVersionMenu(btn, btn.dataset.version);
+    });
+
+    on(document.getElementById('ppVersionMenu'), 'submit', (e) => {
+      if (e.target.closest('[data-version-add-form]')) {
+        e.preventDefault();
+        addVersionFromMenu();
+      }
+    });
+
+    on(document.getElementById('ppVersionMenu'), 'click', (e) => {
+      const removeBtn = e.target.closest('[data-version-remove]');
+      if (removeBtn) {
+        e.preventDefault();
+        removeVersionFromMenu(removeBtn.dataset.versionRemove);
+      }
+    });
+
+    on(document.getElementById('ppVersionMenu'), 'keydown', (e) => {
+      if (e.key === 'Escape') hideVersionMenu();
+    });
+
     on(document, 'click', (e) => {
       if (!e.target.closest('#ppUserPickerMenu') && !e.target.closest('[data-user-picker]')) {
         hideUserPickerMenu();
       }
       if (!e.target.closest('#ppProjectSuggestions') && !e.target.closest('.pp-project-input')) {
         hideProjectSuggestions();
+      }
+      if (!e.target.closest('#ppVersionMenu') && !e.target.closest('[data-version]')) {
+        hideVersionMenu();
       }
       if (!e.target.closest('#ppMentionMenu') && !e.target.closest('#ppUpdateInput')) {
         hideMentionMenu();

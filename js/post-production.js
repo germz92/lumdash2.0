@@ -244,17 +244,67 @@
     });
   }
 
-  function dueRowClass(row) {
-    if (row.completed) return 'row-completed';
-    if (!row.dueDate) return '';
+  function dueDaysDiff(row) {
+    if (!row.dueDate) return null;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const due = new Date(row.dueDate);
     due.setHours(0, 0, 0, 0);
-    const diff = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
-    if (diff < 0) return 'row-overdue';
-    if (diff <= 3) return 'row-due-soon';
-    return '';
+    if (Number.isNaN(due.getTime())) return null;
+    return Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+  }
+
+  // Monday.com-style due indicator shown next to the date.
+  // The pie drains as the deadline nears (filled = remaining time / 7 days).
+  //   overdue -> exclamation, due today -> solid circle, 7+ days / no date -> nothing.
+  function dueIndicatorHtml(row) {
+    if (row.completed) {
+      return '<span class="pp-due-ind pp-due-done" data-tip="Completed">'
+        + '<span class="material-symbols-outlined">check</span></span>';
+    }
+    const diff = dueDaysDiff(row);
+    if (diff === null) return '';
+    if (diff < 0) {
+      const n = Math.abs(diff);
+      return `<span class="pp-due-ind pp-due-overdue" data-tip="Overdue by ${n} Day${n === 1 ? '' : 's'}">!</span>`;
+    }
+    if (diff === 0) {
+      return '<span class="pp-due-ind pp-due-today" data-tip="Due Today"></span>';
+    }
+    if (diff >= 7) return '';
+    const deg = Math.round((diff / 7) * 360);
+    return `<span class="pp-due-ind pp-due-pie" style="--pp-pie-deg:${deg}deg" data-tip="${diff} Day${diff === 1 ? '' : 's'} Left"></span>`;
+  }
+
+  // Floating tooltip for the due-date indicator (position: fixed so the table's
+  // scroll container never clips it).
+  let dueTipEl = null;
+  function ensureDueTip() {
+    if (dueTipEl && document.body.contains(dueTipEl)) return dueTipEl;
+    dueTipEl = document.createElement('div');
+    dueTipEl.className = 'pp-due-tip';
+    dueTipEl.setAttribute('role', 'tooltip');
+    document.body.appendChild(dueTipEl);
+    return dueTipEl;
+  }
+  function showDueTip(anchor) {
+    const text = anchor.getAttribute('data-tip');
+    if (!text) return;
+    const tip = ensureDueTip();
+    tip.textContent = text;
+    tip.classList.remove('visible');
+    const a = anchor.getBoundingClientRect();
+    const t = tip.getBoundingClientRect();
+    let left = a.left + a.width / 2 - t.width / 2;
+    left = Math.max(6, Math.min(left, window.innerWidth - t.width - 6));
+    let top = a.top - t.height - 8;
+    if (top < 6) top = a.bottom + 8;
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+    tip.classList.add('visible');
+  }
+  function hideDueTip() {
+    if (dueTipEl) dueTipEl.classList.remove('visible');
   }
 
   function formatDueDate(iso) {
@@ -638,13 +688,13 @@
     const collaboratorUsers = resolveRowUsers(row, 'collaboratorIds');
     const ownerUser = resolveRowUser(row, 'ownerId', 'ownerName', 'ownerPhoto');
     const isDraft = row._id === DRAFT_ID;
+    const dueIndicator = dueIndicatorHtml(row);
 
     return {
       editorUsers,
       collaboratorUsers,
       ownerUser,
       isDraft,
-      dueClass: dueRowClass(row),
       itemInput: textField('item', row.item, row._id),
       projectInput: `<div class="project-cell"><textarea data-field="project" data-id="${row._id}" data-event-id="${row.eventId || ''}" class="pp-text-field pp-project-input" rows="1" autocomplete="off">${esc(row.project)}</textarea></div>`,
       editSelect: statusSelect('editStatus', EDIT_STATUSES, row.editStatus, row._id),
@@ -656,18 +706,10 @@
       tableEditorsBtn: usersPickerBtn(row, 'editorIds', editorUsers, true),
       tableCollaboratorsBtn: usersPickerBtn(row, 'collaboratorIds', collaboratorUsers, true),
       tableOwnerBtn: userPickerBtn(row, 'ownerId', ownerUser, true),
-      dueInput: `<div class="pp-date-input-wrap"><input type="date" data-field="dueDate" data-id="${row._id}" value="${formatDueDate(row.dueDate)}"></div>`,
+      dueInput: `<div class="pp-date-input-wrap${dueIndicator ? ' has-due-ind' : ''}">${dueIndicator}<input type="date" data-field="dueDate" data-id="${row._id}" value="${formatDueDate(row.dueDate)}"></div>`,
       updatesBtn: updatesButton(row),
       versionBtn: versionButton(row)
     };
-  }
-
-  function dueBadgeHtml(row) {
-    const cls = dueRowClass(row);
-    if (cls === 'row-overdue') return '<span class="pp-card-badge pp-card-badge-overdue">Overdue</span>';
-    if (cls === 'row-due-soon') return '<span class="pp-card-badge pp-card-badge-soon">Due soon</span>';
-    if (cls === 'row-completed') return '<span class="pp-card-badge pp-card-badge-done">Completed</span>';
-    return '';
   }
 
   function renderTableRows() {
@@ -678,7 +720,7 @@
       const p = getRowParts(row);
       const selectedCls = isSelected(row._id) ? ' pp-row-selected' : '';
       return `
-        <tr class="${p.dueClass}${selectedCls}" data-id="${row._id}">
+        <tr class="${selectedCls}" data-id="${row._id}">
           ${checkboxCell(row._id)}
           ${td('Item', p.itemInput, 'pp-td-item')}
           ${td('Updates', p.updatesBtn, 'pp-td-updates')}
@@ -711,13 +753,12 @@
 
     container.innerHTML = items.map(row => {
       const p = getRowParts(row);
-      const badge = dueBadgeHtml(row);
       const selectedCls = isSelected(row._id) ? ' pp-row-selected' : '';
       return `
-        <article class="pp-card ${p.dueClass}${selectedCls}" data-id="${row._id}">
+        <article class="pp-card${selectedCls}" data-id="${row._id}">
           <div class="pp-card-top-bar">
             ${cardCheckbox(row._id)}
-            <div class="pp-card-badges">${badge}</div>
+            <div class="pp-card-badges"></div>
           </div>
           <div class="pp-card-header">
             <div class="pp-card-field">
@@ -1883,6 +1924,17 @@
       suppressVersionClick = true;
       showVersionMenu(btn, btn.dataset.version);
     });
+
+    // Hover tooltip for the due-date indicator ("6 Days Left", "Overdue by 2 Days", ...)
+    on(document, 'mouseover', (e) => {
+      const ind = e.target.closest?.('.pp-due-ind');
+      if (ind) showDueTip(ind);
+    });
+    on(document, 'mouseout', (e) => {
+      const ind = e.target.closest?.('.pp-due-ind');
+      if (ind && !ind.contains(e.relatedTarget)) hideDueTip();
+    });
+    on(document, 'scroll', hideDueTip, true);
 
     on(document.getElementById('ppVersionMenu'), 'submit', (e) => {
       if (e.target.closest('[data-version-add-form]')) {

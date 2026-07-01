@@ -301,7 +301,7 @@
 .post-production-table .pp-col-status { width: 144px; }
 .post-production-table .pp-col-user { width: 190px; }
 .post-production-table .pp-col-avatar { width: 128px; }
-.post-production-table .pp-col-due { width: 140px; }
+.post-production-table .pp-col-due { width: 172px; }
 .post-production-table .pp-col-version { width: 120px; }
 
 .post-production-table th.pp-th-version,
@@ -518,6 +518,107 @@
   min-height: 38px;
 }
 
+/* Monday.com-style due indicator (pie / exclamation / done check) */
+.pp-due-ind {
+  --pp-pie-fill: #3b6fe0;
+  --pp-pie-track: color-mix(in srgb, var(--pp-pie-fill) 22%, transparent);
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  pointer-events: auto;
+  cursor: default;
+}
+
+/* Floating hover tooltip for the due indicator */
+.pp-due-tip {
+  position: fixed;
+  z-index: 4000;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: #1f2430;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease;
+}
+
+.pp-due-tip.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Light mode: date inputs force color-scheme:dark elsewhere, which renders the
+   native calendar glyph white (invisible on the light background). Force the
+   light scheme so the glyph stays dark and visible. */
+html[data-theme="light"] .post-production-page input[type="date"] {
+  color-scheme: light;
+}
+
+html[data-theme="light"] .post-production-page input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: none;
+  opacity: 0.7;
+}
+
+/* Partial pie: filled wedge = remaining time (drains toward the deadline) */
+.pp-due-pie {
+  background: conic-gradient(var(--pp-pie-fill) var(--pp-pie-deg, 0deg), var(--pp-pie-track) 0);
+  box-shadow: inset 0 0 0 1px var(--pp-pie-track);
+}
+
+/* Due today: solid filled circle */
+.pp-due-today {
+  background: var(--pp-pie-fill);
+  box-shadow: inset 0 0 0 1px var(--pp-pie-fill);
+}
+
+/* Overdue: red circle with exclamation */
+.pp-due-overdue {
+  background: #ef4444;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+/* Completed: green check */
+.pp-due-done {
+  background: #22c55e;
+  color: #fff;
+}
+
+.pp-due-done .material-symbols-outlined {
+  font-size: 12px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+/* Make room for the indicator so it doesn't overlap the date text.
+   Specificity must beat .dark-theme.post-production-page .post-production-table input[type="date"]. */
+.dark-theme.post-production-page .post-production-table .pp-date-input-wrap.has-due-ind input[type="date"],
+.pp-date-input-wrap.has-due-ind input[type="date"] {
+  padding-left: 34px !important;
+}
+
+.dark-theme.post-production-page .pp-card-field-due .pp-date-input-wrap.has-due-ind input[type="date"],
+.post-production-page .pp-card-field-due .pp-date-input-wrap.has-due-ind input[type="date"] {
+  padding-left: 34px !important;
+}
+
 .post-production-table input[type="date"],
 .post-production-table select:not(.pp-status-select),
 .pp-card select:not(.pp-status-select) {
@@ -585,6 +686,12 @@
   border: none;
   border-radius: 0;
   background: transparent;
+}
+
+/* Item names stand out */
+.post-production-table textarea.pp-text-field[data-field="item"],
+.pp-card textarea.pp-text-field[data-field="item"] {
+  font-weight: 600;
 }
 
 .post-production-table textarea.pp-text-field:hover {
@@ -756,21 +863,9 @@
   background-color: var(--pp-row-bg);
 }
 
-/* Row status colors — CSS vars on <tr>, applied to every <td> */
+/* Row background — neutral for all rows (due status shown via pie icon). */
 .post-production-table tbody tr {
   --pp-row-bg: var(--bg-secondary);
-}
-
-.post-production-table tbody tr.row-overdue {
-  --pp-row-bg: color-mix(in srgb, var(--bg-secondary) 76%, #ef4444 24%);
-}
-
-.post-production-table tbody tr.row-due-soon {
-  --pp-row-bg: color-mix(in srgb, var(--bg-secondary) 94%, #f59e0b 6%);
-}
-
-.post-production-table tbody tr.row-completed {
-  --pp-row-bg: color-mix(in srgb, var(--bg-secondary) 75%, black 25%);
 }
 
 .post-production-table tbody td {
@@ -783,29 +878,13 @@
   vertical-align: stretch;
 }
 
-.post-production-table tbody tr.row-overdue:hover {
-  --pp-row-bg: color-mix(in srgb, var(--bg-secondary) 72%, #ef4444 28%);
-}
-
-.post-production-table tbody tr.row-due-soon:hover {
-  --pp-row-bg: color-mix(in srgb, var(--bg-secondary) 92%, #f59e0b 8%);
-}
-
-.post-production-table tbody tr.row-completed:hover {
-  --pp-row-bg: color-mix(in srgb, var(--bg-secondary) 72%, black 28%);
-}
-
-.post-production-table tbody tr:not(.row-overdue):not(.row-due-soon):not(.row-completed):hover {
+.post-production-table tbody tr:hover {
   --pp-row-bg: var(--bg-hover);
 }
 
 /* Prevent global tr:hover from bleeding through sticky cells */
 .post-production-page.dark-theme .post-production-table tbody tr:hover {
   background-color: transparent;
-}
-
-.post-production-table tbody tr.row-completed td:not(.pp-td-select):not(.pp-td-item):not(.pp-td-updates) {
-  opacity: 0.75;
 }
 
 .post-production-table tr:last-child td {
@@ -830,44 +909,6 @@
 @keyframes pp-highlight-pulse-sticky {
   0%, 15% { background-color: color-mix(in srgb, var(--bg-secondary) 82%, #cc0007 18%); }
   100% { background-color: var(--bg-secondary); }
-}
-
-.post-production-table tr.pp-highlight.row-overdue td:not(.pp-td-select):not(.pp-td-item):not(.pp-td-updates):not(.pp-td-status) {
-  animation-name: pp-highlight-pulse-overdue;
-}
-
-.post-production-table tr.pp-highlight.row-due-soon td:not(.pp-td-select):not(.pp-td-item):not(.pp-td-updates):not(.pp-td-status) {
-  animation-name: pp-highlight-pulse-soon;
-}
-
-@keyframes pp-highlight-pulse-overdue {
-  0%, 15% { background-color: color-mix(in srgb, var(--bg-secondary) 70%, #ef4444 30%); }
-  100% { background-color: color-mix(in srgb, var(--bg-secondary) 76%, #ef4444 24%); }
-}
-
-@keyframes pp-highlight-pulse-soon {
-  0%, 15% { background-color: color-mix(in srgb, var(--bg-secondary) 82%, #cc0007 18%); }
-  100% { background-color: color-mix(in srgb, var(--bg-secondary) 94%, #f59e0b 6%); }
-}
-
-.post-production-table tr.pp-highlight.row-overdue td.pp-td-item,
-.post-production-table tr.pp-highlight.row-overdue td.pp-td-updates {
-  animation-name: pp-highlight-pulse-sticky-overdue;
-}
-
-.post-production-table tr.pp-highlight.row-due-soon td.pp-td-item,
-.post-production-table tr.pp-highlight.row-due-soon td.pp-td-updates {
-  animation-name: pp-highlight-pulse-sticky-soon;
-}
-
-@keyframes pp-highlight-pulse-sticky-overdue {
-  0%, 15% { background-color: color-mix(in srgb, var(--bg-secondary) 70%, #ef4444 30%); }
-  100% { background-color: color-mix(in srgb, var(--bg-secondary) 76%, #ef4444 24%); }
-}
-
-@keyframes pp-highlight-pulse-sticky-soon {
-  0%, 15% { background-color: color-mix(in srgb, var(--bg-secondary) 82%, #cc0007 18%); }
-  100% { background-color: color-mix(in srgb, var(--bg-secondary) 94%, #f59e0b 6%); }
 }
 
 .dark-theme.post-production-page select.pp-status-select {
@@ -2126,24 +2167,6 @@
   overflow: visible;
 }
 
-.pp-card.row-overdue {
-  --pp-row-bg: color-mix(in srgb, var(--bg-secondary) 76%, #ef4444 24%);
-  border-color: rgba(239, 68, 68, 0.65);
-  background: color-mix(in srgb, var(--bg-secondary) 76%, #ef4444 24%);
-  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.2);
-}
-
-.pp-card.row-due-soon {
-  --pp-row-bg: color-mix(in srgb, var(--bg-secondary) 94%, #f59e0b 6%);
-  border-color: rgba(245, 158, 11, 0.4);
-  background: color-mix(in srgb, var(--bg-secondary) 94%, #f59e0b 6%);
-}
-
-.pp-card.row-completed {
-  --pp-row-bg: color-mix(in srgb, var(--bg-secondary) 75%, black 25%);
-  opacity: 0.85;
-}
-
 .pp-card-header {
   display: flex;
   flex-direction: column;
@@ -2203,33 +2226,6 @@
   max-width: none;
   margin: 0;
   flex: 0 0 auto;
-}
-
-.pp-card-badge {
-  display: inline-flex;
-  padding: 3px 8px;
-  border-radius: 999px;
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-}
-
-.pp-card-badge-overdue {
-  background: rgba(239, 68, 68, 0.38);
-  color: #fecaca;
-  border: 1px solid rgba(248, 113, 113, 0.55);
-  box-shadow: 0 0 8px rgba(239, 68, 68, 0.25);
-}
-
-.pp-card-badge-soon {
-  background: rgba(245, 158, 11, 0.2);
-  color: #fcd34d;
-}
-
-.pp-card-badge-done {
-  background: rgba(34, 197, 94, 0.15);
-  color: #86efac;
 }
 
 .pp-card-label {

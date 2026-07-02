@@ -29,7 +29,8 @@ const postProductionReplySchema = new mongoose.Schema({
   mentionIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
   links: [postProductionLinkSchema],
   attachments: [postProductionAttachmentSchema],
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  editedAt: { type: Date, default: null }
 }, { _id: true });
 
 const postProductionUpdateSchema = new mongoose.Schema({
@@ -40,7 +41,12 @@ const postProductionUpdateSchema = new mongoose.Schema({
   links: [postProductionLinkSchema],
   attachments: [postProductionAttachmentSchema],
   replies: [postProductionReplySchema],
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  editedAt: { type: Date, default: null },
+  // Soft-delete tombstone: set when an update with replies is deleted so the
+  // thread (and others' replies) is preserved.
+  deleted: { type: Boolean, default: false },
+  deletedAt: { type: Date, default: null }
 }, { _id: true });
 
 /** @deprecated Legacy notes — migrated to updates on read */

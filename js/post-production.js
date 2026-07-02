@@ -32,6 +32,7 @@
   let composePendingLinks = [];
   let composePendingAttachments = [];
   let composeUploading = false;
+  let entryEditState = null;
   let mentionMenuState = null;
   let userPickerTarget = null;
   let projectSuggestTarget = null;
@@ -104,6 +105,43 @@
     const h = { Authorization: getToken() };
     if (json) h['Content-Type'] = 'application/json';
     return h;
+  }
+
+  function decodeTokenPayload() {
+    try {
+      const t = getToken();
+      if (!t) return {};
+      return JSON.parse(atob(t.split('.')[1])) || {};
+    } catch {
+      return {};
+    }
+  }
+
+  function currentUserId() {
+    const p = decodeTokenPayload();
+    return String(p.userId || p.id || p.sub || '');
+  }
+
+  function currentUserIsAdmin() {
+    return decodeTokenPayload().role === 'admin';
+  }
+
+  function canManageUpdateEntry(entry) {
+    const uid = currentUserId();
+    const authorId = String(entry?.authorId || '');
+    return currentUserIsAdmin() || (!!uid && !!authorId && uid === authorId);
+  }
+
+  function extractMentionIdsFromText(text) {
+    const ids = [];
+    const t = String(text || '');
+    users.forEach(u => {
+      const name = userDisplayName(u);
+      if (!name) return;
+      const re = new RegExp(`@${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?!\\w)`);
+      if (re.test(t)) ids.push(String(u._id));
+    });
+    return ids;
   }
 
   function esc(s) {
@@ -445,15 +483,41 @@
   }
 
   function renderUpdateEntry(entry, { isReply = false, updateId = null } = {}) {
-    const replyBtn = !isReply && updateId
-      ? `<div class="pp-update-actions"><button type="button" class="pp-update-reply-btn" data-reply-to="${esc(updateId)}">Reply</button></div>`
+    const baseCls = isReply ? 'pp-update-reply' : 'pp-update-entry';
+    if (entry.deleted) {
+      return `
+        <div class="${baseCls} pp-update-deleted" data-entry-id="${esc(entry._id)}">
+          <div class="pp-update-body pp-update-body-muted">This ${isReply ? 'reply' : 'update'} was deleted</div>
+        </div>`;
+    }
+    const cls = baseCls;
+    const entryId = esc(entry._id);
+    const parentId = esc(updateId || '');
+    const replyFlag = isReply ? '1' : '0';
+    const edited = entry.editedAt
+      ? '<span class="pp-update-edited">(edited)</span>'
       : '';
-    const cls = isReply ? 'pp-update-reply' : 'pp-update-entry';
+    const replyBtn = (!isReply && updateId)
+      ? `<button type="button" class="pp-update-reply-btn" data-reply-to="${entryId}">Reply</button>`
+      : '';
+    const manageBtns = canManageUpdateEntry(entry)
+      ? `<div class="pp-update-icon-actions">
+          <button type="button" class="pp-update-icon-btn" data-edit-entry="${entryId}" data-parent-id="${parentId}" data-is-reply="${replyFlag}" title="Edit" aria-label="Edit">
+            <span class="material-symbols-outlined">edit</span>
+          </button>
+          <button type="button" class="pp-update-icon-btn pp-update-icon-danger" data-delete-entry="${entryId}" data-parent-id="${parentId}" data-is-reply="${replyFlag}" title="Delete" aria-label="Delete">
+            <span class="material-symbols-outlined">delete</span>
+          </button>
+        </div>`
+      : '';
+    const actionsHtml = (replyBtn || manageBtns)
+      ? `<div class="pp-update-actions">${replyBtn}${manageBtns}</div>`
+      : '';
     return `
-      <div class="${cls}">
-        <div class="pp-update-meta">${esc(entry.authorName || 'Unknown')} · ${formatUpdateDate(entry.createdAt)}</div>
-        ${renderUpdateBody(entry)}
-        ${replyBtn}
+      <div class="${cls}" data-entry-id="${entryId}" data-parent-id="${parentId}" data-is-reply="${replyFlag}">
+        <div class="pp-update-meta">${esc(entry.authorName || 'Unknown')} · ${formatUpdateDate(entry.createdAt)} ${edited}</div>
+        <div class="pp-update-content" data-entry-text="${esc(entry.text || '')}">${renderUpdateBody(entry)}</div>
+        ${actionsHtml}
       </div>`;
   }
 
@@ -465,7 +529,7 @@
     return sorted.map(u => {
       const replies = [...(u.replies || [])]
         .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-        .map(r => renderUpdateEntry(r, { isReply: true }))
+        .map(r => renderUpdateEntry(r, { isReply: true, updateId: u._id }))
         .join('');
       return `
         <article class="pp-update-thread" data-update-id="${esc(u._id)}">
@@ -483,6 +547,7 @@
     const feed = document.getElementById('ppUpdatesFeed');
     const countEl = document.getElementById('ppUpdatesFeedCount');
     if (!feed) return;
+    entryEditState = null;
     const updates = row?.updates || [];
     const total = row?.updateCount ?? countUpdates(updates);
     if (countEl) {
@@ -1360,6 +1425,7 @@
     composePendingLinks = [];
     composePendingAttachments = [];
     composeUploading = false;
+    entryEditState = null;
     const input = document.getElementById('ppUpdateInput');
     if (input) input.value = '';
     clearReplyTarget();
@@ -1636,6 +1702,263 @@
       submitUpdateInFlight = false;
       if (saveBtn) saveBtn.disabled = false;
       updateComposeSubmitState();
+    }
+  }
+
+  function entryEditUrl(entryId, parentId, isReply) {
+    return isReply
+      ? `${API_BASE}/api/post-production/${updatesItemId}/updates/${parentId}/replies/${entryId}`
+      : `${API_BASE}/api/post-production/${updatesItemId}/updates/${entryId}`;
+  }
+
+  function applyUpdatedItem(updated) {
+    const idx = items.findIndex(i => i._id === updatesItemId);
+    if (idx >= 0) items[idx] = updated;
+    setUpdatesFeed(updated);
+    renderLists();
+    updateBulkActionsUI();
+  }
+
+  function findModelEntry(entryId, parentId, isReply) {
+    const row = items.find(i => i._id === updatesItemId);
+    const updates = row?.updates || [];
+    if (isReply) {
+      const parent = updates.find(u => String(u._id) === String(parentId));
+      return (parent?.replies || []).find(r => String(r._id) === String(entryId)) || null;
+    }
+    return updates.find(u => String(u._id) === String(entryId)) || null;
+  }
+
+  function renderEditPending() {
+    if (!entryEditState) return;
+    const box = entryEditState.form?.querySelector('.pp-update-edit-pending');
+    if (!box) return;
+    const links = entryEditState.links || [];
+    const attachments = entryEditState.attachments || [];
+    if (!links.length && !attachments.length) {
+      box.hidden = true;
+      box.innerHTML = '';
+      return;
+    }
+    box.hidden = false;
+    const linkItems = links.map((l, i) => `
+      <div class="pp-compose-pending-item">
+        <span class="material-symbols-outlined">link</span>
+        <span class="pp-compose-pending-label">${esc(l.label || l.url)}</span>
+        <button type="button" class="pp-compose-pending-remove" data-edit-remove-link="${i}" aria-label="Remove link">&times;</button>
+      </div>`).join('');
+    const fileItems = attachments.map((a, i) => `
+      <div class="pp-compose-pending-item">
+        <span class="material-symbols-outlined">${isImageFileType(a.fileType) ? 'image' : 'description'}</span>
+        <span class="pp-compose-pending-label">${esc(a.originalName || 'File')}</span>
+        <button type="button" class="pp-compose-pending-remove" data-edit-remove-attachment="${i}" aria-label="Remove attachment">&times;</button>
+      </div>`).join('');
+    box.innerHTML = linkItems + fileItems;
+  }
+
+  function updateEditSaveState() {
+    if (!entryEditState) return;
+    const saveBtn = entryEditState.form?.querySelector('.pp-update-edit-save');
+    if (!saveBtn) return;
+    const ta = entryEditState.form.querySelector('.pp-update-edit-input');
+    const text = String(ta?.value || '').trim();
+    const hasContent = text || (entryEditState.links || []).length || (entryEditState.attachments || []).length;
+    saveBtn.disabled = entryEditState.uploading || entryEditState.saving || !hasContent;
+  }
+
+  function startEntryEdit(entryEl) {
+    if (!entryEl || entryEl.querySelector('.pp-update-edit-form')) return;
+    if (entryEditState) cancelEntryEdit(entryEditState.entryEl);
+    const contentEl = entryEl.querySelector('.pp-update-content');
+    if (!contentEl) return;
+    const entryId = entryEl.dataset.entryId;
+    const parentId = entryEl.dataset.parentId;
+    const isReply = entryEl.dataset.isReply === '1';
+    const modelEntry = findModelEntry(entryId, parentId, isReply);
+    const currentText = contentEl.dataset.entryText || '';
+
+    const form = document.createElement('div');
+    form.className = 'pp-update-edit-form';
+    form.innerHTML = `
+      <textarea class="pp-update-edit-input" rows="3">${esc(currentText)}</textarea>
+      <div class="pp-update-edit-pending" hidden></div>
+      <div class="pp-update-edit-linkrow" hidden>
+        <input type="url" class="pp-update-edit-linkurl" placeholder="https://…">
+        <input type="text" class="pp-update-edit-linklabel" placeholder="Label (optional)">
+        <button type="button" class="pp-update-edit-linkadd">Add</button>
+        <button type="button" class="pp-update-edit-linkcancel">Cancel</button>
+      </div>
+      <div class="pp-update-edit-toolbar">
+        <div class="pp-update-edit-tools">
+          <button type="button" class="pp-update-edit-attach pp-update-edit-tool" title="Attach file" aria-label="Attach file"><span class="material-symbols-outlined">attach_file</span></button>
+          <button type="button" class="pp-update-edit-addlink pp-update-edit-tool" title="Add link" aria-label="Add link"><span class="material-symbols-outlined">link</span></button>
+          <input type="file" class="pp-update-edit-fileinput" accept="image/*,application/pdf" hidden>
+        </div>
+        <div class="pp-update-edit-actions">
+          <button type="button" class="pp-update-edit-save">Save</button>
+          <button type="button" class="pp-update-edit-cancel">Cancel</button>
+        </div>
+      </div>`;
+    contentEl.style.display = 'none';
+    contentEl.insertAdjacentElement('afterend', form);
+
+    entryEditState = {
+      entryEl,
+      form,
+      entryId,
+      parentId,
+      isReply,
+      links: (modelEntry?.links || []).map(l => ({ url: l.url, label: l.label || '' })),
+      attachments: (modelEntry?.attachments || []).map(a => ({ ...a })),
+      uploading: false,
+      saving: false
+    };
+    renderEditPending();
+    updateEditSaveState();
+
+    const ta = form.querySelector('textarea');
+    ta.focus();
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+  }
+
+  function cancelEntryEdit(entryEl) {
+    const el = entryEl || entryEditState?.entryEl;
+    if (!el) return;
+    el.querySelector('.pp-update-edit-form')?.remove();
+    const contentEl = el.querySelector('.pp-update-content');
+    if (contentEl) contentEl.style.display = '';
+    if (entryEditState && entryEditState.entryEl === el) entryEditState = null;
+  }
+
+  function toggleEditLinkRow(show) {
+    const row = entryEditState?.form?.querySelector('.pp-update-edit-linkrow');
+    if (!row) return;
+    row.hidden = !show;
+    if (show) row.querySelector('.pp-update-edit-linkurl')?.focus();
+  }
+
+  function addEditLink() {
+    if (!entryEditState) return;
+    const row = entryEditState.form.querySelector('.pp-update-edit-linkrow');
+    const urlInput = row?.querySelector('.pp-update-edit-linkurl');
+    const labelInput = row?.querySelector('.pp-update-edit-linklabel');
+    const raw = urlInput?.value?.trim();
+    if (!raw) return;
+    try {
+      const parsed = new URL(raw);
+      if (!['http:', 'https:'].includes(parsed.protocol)) {
+        alert('Please enter a valid http or https link.');
+        return;
+      }
+      if (entryEditState.links.length >= 10) {
+        alert('Maximum 10 links per update.');
+        return;
+      }
+      entryEditState.links.push({ url: parsed.href, label: labelInput?.value?.trim() || '' });
+      if (urlInput) urlInput.value = '';
+      if (labelInput) labelInput.value = '';
+      toggleEditLinkRow(false);
+      renderEditPending();
+      updateEditSaveState();
+    } catch (_) {
+      alert('Please enter a valid URL.');
+    }
+  }
+
+  async function uploadEditAttachment(file) {
+    if (!entryEditState || !updatesItemId || !file) return;
+    if (entryEditState.attachments.length >= 10) {
+      alert('Maximum 10 attachments per update.');
+      return;
+    }
+    entryEditState.uploading = true;
+    updateEditSaveState();
+    const attachBtn = entryEditState.form.querySelector('.pp-update-edit-attach');
+    if (attachBtn) attachBtn.disabled = true;
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_BASE}/api/post-production/${updatesItemId}/updates/attachments`, {
+        method: 'POST',
+        headers: { Authorization: getToken() },
+        body: formData
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to upload file');
+      }
+      const data = await res.json();
+      if (data.attachment && entryEditState) {
+        entryEditState.attachments.push(data.attachment);
+        renderEditPending();
+      }
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      if (entryEditState) entryEditState.uploading = false;
+      if (attachBtn) attachBtn.disabled = false;
+      updateEditSaveState();
+    }
+  }
+
+  async function saveEntryEdit(entryEl) {
+    if (!entryEditState || !updatesItemId) return;
+    if (entryEditState.uploading) return;
+    const { entryId, parentId, isReply, form } = entryEditState;
+    const ta = form.querySelector('.pp-update-edit-input');
+    const text = String(ta?.value || '').trim();
+    if (!text && !entryEditState.links.length && !entryEditState.attachments.length) {
+      alert('Add a message, link, or attachment.');
+      return;
+    }
+    entryEditState.saving = true;
+    updateEditSaveState();
+    try {
+      const res = await fetch(entryEditUrl(entryId, parentId, isReply), {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: JSON.stringify({
+          text,
+          mentionIds: extractMentionIdsFromText(text),
+          links: entryEditState.links,
+          attachments: entryEditState.attachments
+        })
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to save changes');
+      }
+      entryEditState = null;
+      applyUpdatedItem(await res.json());
+    } catch (err) {
+      if (entryEditState) entryEditState.saving = false;
+      updateEditSaveState();
+      alert(err.message);
+    }
+  }
+
+  async function deleteEntry(entryEl) {
+    if (!entryEl || !updatesItemId) return;
+    const entryId = entryEl.dataset.entryId;
+    const parentId = entryEl.dataset.parentId;
+    const isReply = entryEl.dataset.isReply === '1';
+    if (!confirm(`Delete this ${isReply ? 'reply' : 'update'}? This can't be undone.`)) return;
+    try {
+      const res = await fetch(entryEditUrl(entryId, parentId, isReply), {
+        method: 'DELETE',
+        headers: authHeaders()
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to delete');
+      }
+      applyUpdatedItem(await res.json());
+      loadData().catch(err => console.error(err));
+      if (typeof window.refreshPostProductionSidebarDot === 'function') {
+        window.refreshPostProductionSidebarDot();
+      }
+    } catch (err) {
+      alert(err.message);
     }
   }
 
@@ -2035,12 +2358,93 @@
       insertMention(opt.dataset.userId, opt.dataset.userName);
     });
     on(document.getElementById('ppUpdatesFeed'), 'click', (e) => {
+      if (!updatesItemId) return;
+
       const replyBtn = e.target.closest('[data-reply-to]');
-      if (!replyBtn || !updatesItemId) return;
-      const updateId = replyBtn.dataset.replyTo;
-      const row = items.find(i => i._id === updatesItemId);
-      const update = (row?.updates || []).find(u => String(u._id) === String(updateId));
-      setReplyTarget(update);
+      if (replyBtn) {
+        const updateId = replyBtn.dataset.replyTo;
+        const row = items.find(i => i._id === updatesItemId);
+        const update = (row?.updates || []).find(u => String(u._id) === String(updateId));
+        setReplyTarget(update);
+        return;
+      }
+
+      const editBtn = e.target.closest('[data-edit-entry]');
+      if (editBtn) {
+        startEntryEdit(editBtn.closest('[data-entry-id]'));
+        return;
+      }
+
+      const deleteBtn = e.target.closest('[data-delete-entry]');
+      if (deleteBtn) {
+        deleteEntry(deleteBtn.closest('[data-entry-id]')).catch(err => alert(err.message));
+        return;
+      }
+
+      const removeLink = e.target.closest('[data-edit-remove-link]');
+      if (removeLink && entryEditState) {
+        entryEditState.links.splice(Number(removeLink.dataset.editRemoveLink), 1);
+        renderEditPending();
+        updateEditSaveState();
+        return;
+      }
+
+      const removeAtt = e.target.closest('[data-edit-remove-attachment]');
+      if (removeAtt && entryEditState) {
+        entryEditState.attachments.splice(Number(removeAtt.dataset.editRemoveAttachment), 1);
+        renderEditPending();
+        updateEditSaveState();
+        return;
+      }
+
+      if (e.target.closest('.pp-update-edit-attach')) {
+        entryEditState?.form.querySelector('.pp-update-edit-fileinput')?.click();
+        return;
+      }
+
+      if (e.target.closest('.pp-update-edit-addlink')) {
+        const row = entryEditState?.form.querySelector('.pp-update-edit-linkrow');
+        toggleEditLinkRow(row?.hidden);
+        return;
+      }
+
+      if (e.target.closest('.pp-update-edit-linkadd')) {
+        addEditLink();
+        return;
+      }
+
+      if (e.target.closest('.pp-update-edit-linkcancel')) {
+        toggleEditLinkRow(false);
+        return;
+      }
+
+      if (e.target.closest('.pp-update-edit-save')) {
+        saveEntryEdit(e.target.closest('[data-entry-id]')).catch(err => alert(err.message));
+        return;
+      }
+
+      if (e.target.closest('.pp-update-edit-cancel')) {
+        cancelEntryEdit(e.target.closest('[data-entry-id]'));
+      }
+    });
+
+    on(document.getElementById('ppUpdatesFeed'), 'change', (e) => {
+      if (e.target.classList.contains('pp-update-edit-fileinput')) {
+        const file = e.target.files?.[0];
+        if (file) uploadEditAttachment(file);
+        e.target.value = '';
+      }
+    });
+
+    on(document.getElementById('ppUpdatesFeed'), 'input', (e) => {
+      if (e.target.classList.contains('pp-update-edit-input')) updateEditSaveState();
+    });
+
+    on(document.getElementById('ppUpdatesFeed'), 'keydown', (e) => {
+      if (e.target.classList.contains('pp-update-edit-linkurl') && e.key === 'Enter') {
+        e.preventDefault();
+        addEditLink();
+      }
     });
   }
 

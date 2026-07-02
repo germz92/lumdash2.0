@@ -11908,8 +11908,14 @@ const ppUpdateUpload = multer({
 });
 
 async function uploadPostProductionAttachment(file, itemId) {
-  const isImage = (file.mimetype || '').startsWith('image/');
-  const resourceType = isImage ? 'image' : 'raw';
+  const mimetype = file.mimetype || '';
+  const isImage = mimetype.startsWith('image/');
+  const isPdf = mimetype === 'application/pdf';
+  // Cloudinary rasterizes PDFs under the "image" resource type. Uploading them as
+  // "raw" and then rewriting the URL to /image/upload/ produces a 404 because the
+  // asset only exists under the raw resource type. Match the (working) documents
+  // path: PDFs and images both go through resource_type "image".
+  const resourceType = (isImage || isPdf) ? 'image' : 'raw';
   const cleanFilename = file.originalname.replace(/\.[^/.]+$/, '');
   const sanitizedFilename = cleanFilename.replace(/[^a-zA-Z0-9.-]/g, '_');
 
@@ -11922,7 +11928,9 @@ async function uploadPostProductionAttachment(file, itemId) {
         use_filename: false,
         unique_filename: true,
         type: 'upload',
-        access_mode: 'public'
+        access_mode: 'public',
+        // Serve PDFs inline in the browser instead of forcing a download.
+        ...(isPdf && { flags: 'attachment:false' })
       },
       (error, result) => {
         if (error) reject(error);
@@ -11933,8 +11941,8 @@ async function uploadPostProductionAttachment(file, itemId) {
   });
 
   let url = uploadResult.secure_url;
-  if (!isImage && file.mimetype === 'application/pdf' && url.includes('/raw/upload/')) {
-    url = url.replace('/raw/upload/', '/image/upload/fl_attachment:false/');
+  if (isPdf && url.includes('/image/upload/') && !url.includes('fl_attachment')) {
+    url = url.replace('/image/upload/', '/image/upload/fl_attachment:false/');
   }
 
   return {
@@ -12895,6 +12903,151 @@ app.post('/api/post-production/:id/updates', authenticate, async (req, res) => {
     }));
   } catch (err) {
     console.error('Error adding post production update:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Only the author of an entry (or a post-production admin) may edit/delete it.
+function canManagePostProductionEntry(user, entry) {
+  if (!entry) return false;
+  if (isPostProductionAdmin(user)) return true;
+  const authorId = entry.authorId ? String(entry.authorId) : '';
+  return !!authorId && authorId === String(user.id);
+}
+
+async function respondWithPostProductionItem(req, res, doc) {
+  doc.updatedBy = req.user.id;
+  await doc.save();
+  const usersById = await postProductionUsersById(doc);
+  const read = await PostProductionUpdateRead.findOne({ userId: req.user.id, itemId: doc._id }).select('lastReadAt').lean();
+  res.json(formatPostProductionItem(doc, usersById, {
+    userId: req.user.id,
+    lastReadAt: read?.lastReadAt || null
+  }));
+}
+
+// Apply an edit to an update/reply subdocument. Text is always updated; links,
+// attachments and mentions are only touched when included in the request body.
+function applyPostProductionEntryEdit(entry, req) {
+  if (req.body.text !== undefined) entry.text = String(req.body.text || '').trim();
+  if (req.body.text !== undefined || req.body.mentionIds !== undefined) {
+    entry.mentionIds = normalizePostProductionMentionIds(req.body);
+  }
+  if (req.body.links !== undefined) entry.links = normalizePostProductionLinks(req.body);
+  if (req.body.attachments !== undefined) entry.attachments = normalizePostProductionAttachments(req.body);
+  entry.editedAt = new Date();
+}
+
+function postProductionEntryIsEmpty(entry) {
+  return !String(entry.text || '').trim()
+    && !(entry.links || []).length
+    && !(entry.attachments || []).length;
+}
+
+// Edit an update
+app.put('/api/post-production/:id/updates/:updateId', authenticate, async (req, res) => {
+  try {
+    const doc = await PostProductionItem.findById(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Item not found' });
+    if (!(await canAccessPostProductionItem(req.user, doc))) {
+      return res.status(403).json({ error: 'You do not have access to this item' });
+    }
+    const update = doc.updates.id(req.params.updateId);
+    if (!update) return res.status(404).json({ error: 'Update not found' });
+    if (!canManagePostProductionEntry(req.user, update)) {
+      return res.status(403).json({ error: 'You can only edit your own updates' });
+    }
+    applyPostProductionEntryEdit(update, req);
+    if (postProductionEntryIsEmpty(update)) {
+      return res.status(400).json({ error: 'An update needs a message, link, or attachment' });
+    }
+    await respondWithPostProductionItem(req, res, doc);
+  } catch (err) {
+    console.error('Error editing post production update:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Delete an update
+app.delete('/api/post-production/:id/updates/:updateId', authenticate, async (req, res) => {
+  try {
+    const doc = await PostProductionItem.findById(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Item not found' });
+    if (!(await canAccessPostProductionItem(req.user, doc))) {
+      return res.status(403).json({ error: 'You do not have access to this item' });
+    }
+    const update = doc.updates.id(req.params.updateId);
+    if (!update) return res.status(404).json({ error: 'Update not found' });
+    if (!canManagePostProductionEntry(req.user, update)) {
+      return res.status(403).json({ error: 'You can only delete your own updates' });
+    }
+    if ((update.replies || []).length) {
+      // Preserve the thread (and others' replies): tombstone instead of removing.
+      update.deleted = true;
+      update.deletedAt = new Date();
+      update.text = '';
+      update.links = [];
+      update.attachments = [];
+      update.mentionIds = [];
+    } else {
+      update.deleteOne();
+    }
+    await respondWithPostProductionItem(req, res, doc);
+  } catch (err) {
+    console.error('Error deleting post production update:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Edit a reply
+app.put('/api/post-production/:id/updates/:updateId/replies/:replyId', authenticate, async (req, res) => {
+  try {
+    const doc = await PostProductionItem.findById(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Item not found' });
+    if (!(await canAccessPostProductionItem(req.user, doc))) {
+      return res.status(403).json({ error: 'You do not have access to this item' });
+    }
+    const update = doc.updates.id(req.params.updateId);
+    if (!update) return res.status(404).json({ error: 'Update not found' });
+    const reply = update.replies.id(req.params.replyId);
+    if (!reply) return res.status(404).json({ error: 'Reply not found' });
+    if (!canManagePostProductionEntry(req.user, reply)) {
+      return res.status(403).json({ error: 'You can only edit your own replies' });
+    }
+    applyPostProductionEntryEdit(reply, req);
+    if (postProductionEntryIsEmpty(reply)) {
+      return res.status(400).json({ error: 'A reply needs a message, link, or attachment' });
+    }
+    await respondWithPostProductionItem(req, res, doc);
+  } catch (err) {
+    console.error('Error editing post production reply:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Delete a reply
+app.delete('/api/post-production/:id/updates/:updateId/replies/:replyId', authenticate, async (req, res) => {
+  try {
+    const doc = await PostProductionItem.findById(req.params.id);
+    if (!doc) return res.status(404).json({ error: 'Item not found' });
+    if (!(await canAccessPostProductionItem(req.user, doc))) {
+      return res.status(403).json({ error: 'You do not have access to this item' });
+    }
+    const update = doc.updates.id(req.params.updateId);
+    if (!update) return res.status(404).json({ error: 'Update not found' });
+    const reply = update.replies.id(req.params.replyId);
+    if (!reply) return res.status(404).json({ error: 'Reply not found' });
+    if (!canManagePostProductionEntry(req.user, reply)) {
+      return res.status(403).json({ error: 'You can only delete your own replies' });
+    }
+    reply.deleteOne();
+    // If this was the last reply on a tombstoned update, clean up the tombstone.
+    if (update.deleted && !(update.replies || []).length) {
+      update.deleteOne();
+    }
+    await respondWithPostProductionItem(req, res, doc);
+  } catch (err) {
+    console.error('Error deleting post production reply:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

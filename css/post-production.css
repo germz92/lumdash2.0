@@ -1499,6 +1499,7 @@ html[data-theme="light"] .post-production-page input[type="date"]::-webkit-calen
   line-height: 1;
   cursor: pointer;
   padding: 0 4px;
+  flex-shrink: 0;
 }
 
 .pp-compose-pending-remove:hover {
@@ -1697,6 +1698,9 @@ html[data-theme="light"] .post-production-page input[type="date"]::-webkit-calen
 
 .pp-update-actions {
   margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
 .pp-update-reply-btn {
@@ -1711,6 +1715,213 @@ html[data-theme="light"] .post-production-page input[type="date"]::-webkit-calen
 
 .pp-update-reply-btn:hover {
   color: var(--accent-red, #cc0007);
+}
+
+.pp-update-icon-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.pp-update-entry:hover .pp-update-icon-actions,
+.pp-update-reply:hover .pp-update-icon-actions,
+.pp-update-icon-actions:focus-within {
+  opacity: 1;
+}
+
+.pp-update-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0;
+}
+
+.pp-update-icon-btn .material-symbols-outlined {
+  font-size: 17px;
+}
+
+.pp-update-icon-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.pp-update-icon-danger:hover {
+  background: color-mix(in srgb, var(--danger-text, #ef4444) 16%, transparent);
+  color: var(--danger-text, #ef4444);
+}
+
+.pp-update-edited {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.pp-update-deleted .pp-update-body-muted {
+  opacity: 0.8;
+}
+
+.pp-update-edit-form {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pp-update-edit-input {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 60px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.pp-update-edit-input:focus {
+  outline: none;
+  border-color: var(--border-strong);
+}
+
+.pp-update-edit-pending {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pp-update-edit-linkrow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.pp-update-edit-linkrow input {
+  flex: 1 1 140px;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.8rem;
+}
+
+.pp-update-edit-linkrow input:focus {
+  outline: none;
+  border-color: var(--border-strong);
+}
+
+.pp-update-edit-linkadd,
+.pp-update-edit-linkcancel {
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.76rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.pp-update-edit-linkadd:hover,
+.pp-update-edit-linkcancel:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.pp-update-edit-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pp-update-edit-tools {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pp-update-edit-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0;
+}
+
+.pp-update-edit-tool .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.pp-update-edit-tool:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.pp-update-edit-tool:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.pp-update-edit-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.pp-update-edit-save,
+.pp-update-edit-cancel {
+  padding: 5px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  border: 1px solid var(--border-default);
+}
+
+.pp-update-edit-save {
+  background: var(--accent-blue, #3b6fe0);
+  color: #fff;
+  border-color: transparent;
+}
+
+.pp-update-edit-save:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.pp-update-edit-cancel {
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.pp-update-edit-cancel:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
 }
 
 .pp-update-replies {

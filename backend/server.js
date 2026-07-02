@@ -11529,7 +11529,7 @@ function formatPostProductionUpdates(rawDoc) {
     })),
     attachments: (entry.attachments || []).map(a => ({
       _id: a._id,
-      url: a.url || '',
+      url: sanitizePostProductionAttachmentUrl(a.url || ''),
       originalName: a.originalName || '',
       fileType: a.fileType || '',
       size: a.size || 0,
@@ -11928,9 +11928,7 @@ async function uploadPostProductionAttachment(file, itemId) {
         use_filename: false,
         unique_filename: true,
         type: 'upload',
-        access_mode: 'public',
-        // Serve PDFs inline in the browser instead of forcing a download.
-        ...(isPdf && { flags: 'attachment:false' })
+        access_mode: 'public'
       },
       (error, result) => {
         if (error) reject(error);
@@ -11940,18 +11938,23 @@ async function uploadPostProductionAttachment(file, itemId) {
     uploadStream.end(file.buffer);
   });
 
-  let url = uploadResult.secure_url;
-  if (isPdf && url.includes('/image/upload/') && !url.includes('fl_attachment')) {
-    url = url.replace('/image/upload/', '/image/upload/fl_attachment:false/');
-  }
-
+  // Deliver the asset as-is. For image-resource PDFs the secure_url already ends
+  // in .pdf and serves inline with the correct content type. Do NOT append
+  // fl_attachment:false — Cloudinary interprets "false" as the download filename.
   return {
-    url,
+    url: sanitizePostProductionAttachmentUrl(uploadResult.secure_url),
     originalName: file.originalname,
     fileType: file.mimetype,
     size: file.size,
     cloudinaryPublicId: uploadResult.public_id
   };
+}
+
+// Strip the legacy fl_attachment:false transformation that caused PDFs to download
+// with the filename "false"; leaves other URLs untouched.
+function sanitizePostProductionAttachmentUrl(url) {
+  if (typeof url !== 'string' || !url) return '';
+  return url.replace('/fl_attachment:false/', '/');
 }
 
 async function sendPostProductionUpdateEmail(recipient, data) {

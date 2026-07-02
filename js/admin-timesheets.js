@@ -73,22 +73,23 @@
       customRange.style.display = 'flex';
     } else {
       customRange.style.display = 'none';
-      applyFilter();
+      applyFilter().catch(err => console.error('[TIMESHEETS] applyFilter failed:', err));
     }
   }
 
   function handleCustomDateApply() {
-    applyFilter();
+    applyFilter().catch(err => console.error('[TIMESHEETS] applyFilter failed:', err));
   }
 
-  function applyFilter() {
-    // Re-render based on current view
+  async function applyFilter() {
+    // The summary API is scoped to the selected range, so refetch instead of
+    // re-filtering the already-loaded (current-month) data — otherwise other
+    // ranges render blank. loadTimesheetData() re-renders the users list.
+    await loadTimesheetData();
     if (currentUserId) {
-      // If viewing a user's detail, refresh their data
+      // If viewing a user's detail, refresh their data with the new range
       showUserDetail(currentUserId);
     }
-    // Always re-render the users list (even if hidden, so it's ready when going back)
-    renderUsersList();
   }
 
   function getDateRange() {

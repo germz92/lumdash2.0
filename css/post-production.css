@@ -265,9 +265,11 @@
   padding: 16px 24px 32px;
 }
 
-/* Card view: avoid clipping date inputs on the right (iOS Safari) */
+/* Card view: no horizontal scroll. overflow-y is auto here, so an overflow-x of
+   "visible" gets promoted to "auto" by the spec and silently scrolls sideways.
+   Use "hidden" (a scroll value, not promoted) to keep the card list vertical-only. */
 .post-production-page.card-view-mode .post-production-table-container {
-  overflow-x: visible;
+  overflow-x: hidden;
 }
 
 .post-production-table-wrap {
@@ -518,10 +520,12 @@
   min-height: 38px;
 }
 
-/* Monday.com-style due indicator (pie / exclamation / done check) */
+/* Monday.com-style due indicator (pie / exclamation / done check).
+   Black & white: fill follows the theme text color (black on light, white on
+   dark) so the pie is visible in both themes; the empty wedge shows through. */
 .pp-due-ind {
-  --pp-pie-fill: #3b6fe0;
-  --pp-pie-track: color-mix(in srgb, var(--pp-pie-fill) 22%, transparent);
+  --pp-pie-fill: var(--text-primary);
+  --pp-pie-track: transparent;
   position: absolute;
   left: 10px;
   top: 50%;
@@ -574,10 +578,18 @@ html[data-theme="light"] .post-production-page input[type="date"]::-webkit-calen
   opacity: 0.7;
 }
 
-/* Partial pie: filled wedge = remaining time (drains toward the deadline) */
+/* Partial pie: black wedge fills up clockwise as the deadline nears (filled =
+   elapsed fraction of the 7-day window). 6 days = single ~1/7 slice, 1 day =
+   nearly full, filled solid. */
 .pp-due-pie {
   background: conic-gradient(var(--pp-pie-fill) var(--pp-pie-deg, 0deg), var(--pp-pie-track) 0);
-  box-shadow: inset 0 0 0 1px var(--pp-pie-track);
+  box-shadow: inset 0 0 0 1px var(--pp-pie-fill);
+}
+
+/* 7+ days out: solid white (empty) circle — the pie hasn't started filling. */
+.pp-due-far {
+  background: #fff;
+  box-shadow: inset 0 0 0 1px var(--pp-pie-fill);
 }
 
 /* Due today: solid filled circle */
@@ -2353,6 +2365,8 @@ html[data-theme="light"] .post-production-page input[type="date"]::-webkit-calen
 .pp-cards-container {
   display: none;
   gap: 12px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .post-production-page.card-view-mode .pp-cards-container[aria-hidden="false"] {
@@ -2376,6 +2390,9 @@ html[data-theme="light"] .post-production-page input[type="date"]::-webkit-calen
   padding: 14px 16px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
   overflow: visible;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .pp-card-header {
@@ -2519,6 +2536,14 @@ html[data-theme="light"] .post-production-page input[type="date"]::-webkit-calen
   grid-template-columns: 1fr 1fr;
   gap: 10px;
   margin-bottom: 0;
+}
+
+/* Grid cells default to min-width:auto, so a long editor/collaborator name would
+   force the track wider than the card (pushing collaborators off-screen). Let the
+   cells shrink so the button label can truncate. */
+.pp-card-people-row .pp-card-field,
+.pp-card-status-grid .pp-card-field {
+  min-width: 0;
 }
 
 .pp-avatars-stack {

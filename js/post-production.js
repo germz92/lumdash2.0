@@ -23,7 +23,7 @@
   let users = [];
   let permissions = { isAdmin: false, canCreate: false };
   let searchQuery = '';
-  let statusFilter = 'all';
+  let statusFilter = 'pending';
   let sortField = 'dueDate';
   let sortOrder = 'asc';
   let updatesItemId = null;
@@ -284,17 +284,22 @@
 
   function dueDaysDiff(row) {
     if (!row.dueDate) return null;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
     const due = new Date(row.dueDate);
-    due.setHours(0, 0, 0, 0);
     if (Number.isNaN(due.getTime())) return null;
-    return Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+    // dueDate is stored as UTC midnight of the chosen calendar day (matching how
+    // formatDueDate renders it), so read its day in UTC. Compare against today's
+    // local calendar day as a UTC-midnight timestamp to avoid a timezone off-by-one.
+    const dueUTC = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
+    const now = new Date();
+    const todayUTC = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+    return Math.round((dueUTC - todayUTC) / (1000 * 60 * 60 * 24));
   }
 
   // Monday.com-style due indicator shown next to the date.
-  // The pie drains as the deadline nears (filled = remaining time / 7 days).
-  //   overdue -> exclamation, due today -> solid circle, 7+ days / no date -> nothing.
+  // The pie fills with black clockwise as the deadline nears (filled = elapsed
+  // fraction of the 7-day window, so 6 days = 1 slice ... 1 day = nearly full).
+  //   overdue -> exclamation, due today -> solid circle, 7+ days -> solid white
+  //   (empty) circle, no date -> nothing.
   function dueIndicatorHtml(row) {
     if (row.completed) {
       return '<span class="pp-due-ind pp-due-done" data-tip="Completed">'
@@ -309,8 +314,10 @@
     if (diff === 0) {
       return '<span class="pp-due-ind pp-due-today" data-tip="Due Today"></span>';
     }
-    if (diff >= 7) return '';
-    const deg = Math.round((diff / 7) * 360);
+    if (diff >= 7) {
+      return `<span class="pp-due-ind pp-due-far" data-tip="${diff} Days Left"></span>`;
+    }
+    const deg = Math.round(((7 - diff) / 7) * 360);
     return `<span class="pp-due-ind pp-due-pie" style="--pp-pie-deg:${deg}deg" data-tip="${diff} Day${diff === 1 ? '' : 's'} Left"></span>`;
   }
 
@@ -2488,6 +2495,9 @@
       }
       setupListeners();
       updateViewToggleUI();
+      document.querySelectorAll('#ppFilterTabs .status-tab').forEach(t => {
+        t.classList.toggle('active', (t.dataset.filter || 'all') === statusFilter);
+      });
       await loadData();
 
       const openUpdates = sessionStorage.getItem('openPostProductionUpdates') === '1'

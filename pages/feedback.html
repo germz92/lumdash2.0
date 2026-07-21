@@ -1,0 +1,152 @@
+<link rel="stylesheet" href="css/theme-dark.css">
+<link rel="stylesheet" href="css/feedback.css">
+<style>
+  body:has(.feedback-page) #page-container,
+  #page-container:has(.feedback-page) {
+    padding: 0 !important;
+    overflow: hidden !important;
+    height: 100% !important;
+  }
+</style>
+
+<div class="dark-theme feedback-page">
+  <div class="fb-layout" id="fbPageLayout">
+
+    <!-- Sidebar will be injected here by sidebar-dashboard.js -->
+
+    <main class="fb-main">
+      <header class="fb-header">
+        <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+        <div class="fb-header-left">
+          <h1>Feedback</h1>
+          <div class="fb-header-subtitle">Report bugs and request features</div>
+        </div>
+        <div class="fb-header-actions">
+          <button class="fb-submit-btn" id="newFeedbackBtn">
+            <span class="material-symbols-outlined">add</span>
+            <span>Submit Feedback</span>
+          </button>
+        </div>
+      </header>
+
+      <div class="fb-toolbar">
+        <div class="fb-search">
+          <span class="material-symbols-outlined">search</span>
+          <input type="text" id="fbSearch" placeholder="Search by title, description, or name...">
+        </div>
+
+        <div class="fb-type-tabs" id="typeTabs">
+          <button class="fb-type-tab active" data-type="all">All</button>
+          <button class="fb-type-tab" data-type="bug">Bugs</button>
+          <button class="fb-type-tab" data-type="feature">Features</button>
+        </div>
+
+        <div class="fb-filter-group">
+          <select id="filterStatus">
+            <option value="all">All Statuses</option>
+            <option value="new">New</option>
+            <option value="in_progress">In Progress</option>
+            <option value="completed">Completed</option>
+            <option value="declined">Declined</option>
+          </select>
+          <button class="fb-mine-toggle" id="mineToggle">
+            <span class="material-symbols-outlined">person</span>
+            <span>Mine</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="fb-content">
+        <div id="fbCount" class="fb-count"></div>
+        <div id="fbContainer">
+          <div style="text-align:center;padding:60px;color:var(--text-muted);">Loading...</div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="fb-modal-overlay" id="fbDetailModal">
+  <div class="fb-modal">
+    <div class="fb-modal-header">
+      <h2 id="detailTitle">Feedback</h2>
+      <button class="fb-modal-close" id="detailClose">&times;</button>
+    </div>
+    <div class="fb-modal-body" id="detailBody"></div>
+    <div class="fb-modal-footer" id="detailFooter"></div>
+  </div>
+</div>
+
+<!-- Submit / Edit Modal -->
+<div class="fb-modal-overlay" id="fbFormModal">
+  <div class="fb-modal">
+    <div class="fb-modal-header">
+      <h2 id="formTitle">Submit Feedback</h2>
+      <button class="fb-modal-close" id="formClose">&times;</button>
+    </div>
+    <div class="fb-modal-body">
+      <div class="fb-form-field">
+        <label>Type</label>
+        <div class="fb-type-picker" id="formTypePicker">
+          <button type="button" class="fb-type-option selected" data-type="bug">
+            <span class="material-symbols-outlined">bug_report</span> Bug
+          </button>
+          <button type="button" class="fb-type-option" data-type="feature">
+            <span class="material-symbols-outlined">lightbulb</span> Feature Request
+          </button>
+        </div>
+      </div>
+      <div class="fb-form-field">
+        <label for="formTitleInput">Title</label>
+        <input type="text" id="formTitleInput" maxlength="140" placeholder="Short summary of the bug or idea">
+      </div>
+      <div class="fb-form-field">
+        <label for="formPageSelect">Area of the app <span class="fb-optional">(optional)</span></label>
+        <select id="formPageSelect">
+          <option value="">Not sure / general</option>
+          <option>Dashboard / Events</option>
+          <option>General Info</option>
+          <option>Crew</option>
+          <option>Schedule</option>
+          <option>Gear</option>
+          <option>Travel / Accommodation</option>
+          <option>Card Log</option>
+          <option>Call Times</option>
+          <option>My Tasks</option>
+          <option>Post Production</option>
+          <option>Reimbursements</option>
+          <option>Timesheets</option>
+          <option>Flights</option>
+          <option>Inventory</option>
+          <option>Notifications</option>
+          <option>Settings</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="fb-form-field">
+        <label for="formDescInput">Description</label>
+        <textarea id="formDescInput" rows="5" placeholder="For bugs: what happened, and what did you expect? For features: what would you like and why?"></textarea>
+      </div>
+      <div class="fb-form-field" id="screenshotField">
+        <label>Screenshot <span class="fb-optional">(optional, recommended for bugs)</span></label>
+        <input type="file" id="formScreenshot" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+        <button type="button" class="fb-screenshot-btn" id="screenshotPickBtn">
+          <span class="material-symbols-outlined">add_photo_alternate</span>
+          <span id="screenshotBtnLabel">Attach a screenshot</span>
+        </button>
+        <div class="fb-screenshot-preview" id="screenshotPreview" hidden>
+          <img id="screenshotPreviewImg" alt="Screenshot preview">
+          <button type="button" class="fb-screenshot-remove" id="screenshotRemoveBtn" title="Remove">&times;</button>
+        </div>
+      </div>
+      <div class="fb-form-error" id="formError" hidden></div>
+    </div>
+    <div class="fb-modal-footer">
+      <button class="fb-btn secondary" id="formCancelBtn">Cancel</button>
+      <button class="fb-btn primary" id="formSubmitBtn">Submit</button>
+    </div>
+  </div>
+</div>

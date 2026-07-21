@@ -374,6 +374,19 @@
         }
       };
     }
+
+    const feedbackMenuItem = document.getElementById('feedbackMenuItem');
+    if (feedbackMenuItem) {
+      feedbackMenuItem.onclick = function(e) {
+        e.stopPropagation();
+        document.getElementById('userMenuDropdown')?.classList.remove('show');
+        if (typeof window.navigate === 'function') {
+          window.navigate('feedback');
+        } else {
+          window.location.href = '/dashboard.html#feedback';
+        }
+      };
+    }
   }
   
   /**

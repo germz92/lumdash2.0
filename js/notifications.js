@@ -30,6 +30,8 @@
     post_production_status_changed: { icon: 'sync_alt',  color: '#f59e0b' },
     post_production_update: { icon: 'forum',            color: '#6366f1' },
     crew_availability_response: { icon: 'how_to_reg',   color: '#22c55e' },
+    feedback_submitted:     { icon: 'bug_report',       color: '#f59e0b' },
+    feedback_status_changed:{ icon: 'rate_review',      color: '#8b5cf6' },
     general:                { icon: 'notifications',    color: '#6b7280' }
   };
 
@@ -311,6 +313,9 @@
       } else if (typeof window.navigate === 'function') {
         if (notification.link.params?.reimbursementId) {
           sessionStorage.setItem('openReimbursementId', notification.link.params.reimbursementId);
+        }
+        if (notification.link.params?.feedbackId) {
+          sessionStorage.setItem('openFeedbackId', notification.link.params.feedbackId);
         }
         if (notification.link.params?.itemId) {
           sessionStorage.setItem('openPostProductionItemId', notification.link.params.itemId);

@@ -1492,6 +1492,7 @@ const PostProductionUpdateRead = require('./models/PostProductionUpdateRead');
 const PostProductionAssignmentSeen = require('./models/PostProductionAssignmentSeen');
 const DashboardNavVisit = require('./models/DashboardNavVisit');
 const CrewAvailabilityRequest = require('./models/CrewAvailabilityRequest');
+const Feedback = require('./models/Feedback');
 
 
 
@@ -14252,6 +14253,228 @@ app.get('/api/tables/:id/documents/:documentId/view', authenticate, async (req, 
   } catch (error) {
     console.error('View document error:', error);
     res.status(500).json({ error: 'Failed to view document' });
+  }
+});
+
+// =============== FEEDBACK (bug reports & feature requests) ===============
+
+const FEEDBACK_STATUSES = ['new', 'in_progress', 'completed', 'declined'];
+const FEEDBACK_STATUS_LABELS = {
+  new: 'New',
+  in_progress: 'In Progress',
+  completed: 'Completed',
+  declined: 'Declined'
+};
+
+const feedbackScreenshotUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPG, PNG, WebP, and GIF images are allowed.'), false);
+    }
+  }
+});
+
+function isFeedbackAdmin(user) {
+  return /^admin$/i.test(user?.role || '');
+}
+
+// Create a bug report / feature request (optionally with screenshot)
+app.post('/api/feedback', authenticate, feedbackScreenshotUpload.single('screenshot'), async (req, res) => {
+  try {
+    const type = String(req.body.type || '').toLowerCase();
+    const title = String(req.body.title || '').trim();
+    const description = String(req.body.description || '').trim();
+    const page = String(req.body.page || '').trim();
+
+    if (!['bug', 'feature'].includes(type)) {
+      return res.status(400).json({ error: 'type must be "bug" or "feature"' });
+    }
+    if (!title) {
+      return res.status(400).json({ error: 'Title is required' });
+    }
+
+    let screenshotUrl = '';
+    let screenshotPublicId = '';
+    if (req.file) {
+      const uploadResult = await new Promise((resolve, reject) => {
+        const uploadStream = cloudinary.uploader.upload_stream(
+          {
+            resource_type: 'image',
+            folder: 'lumdash/feedback',
+            public_id: `feedback_${req.user.id}_${Date.now()}`,
+            transformation: [{ quality: 'auto', fetch_format: 'auto' }]
+          },
+          (error, result) => error ? reject(error) : resolve(result)
+        );
+        uploadStream.end(req.file.buffer);
+      });
+      screenshotUrl = uploadResult.secure_url;
+      screenshotPublicId = uploadResult.public_id;
+    }
+
+    const item = await Feedback.create({
+      type,
+      title,
+      description,
+      page,
+      screenshotUrl,
+      screenshotPublicId,
+      submittedBy: req.user.id,
+      submittedByName: req.user.fullName || req.user.email || ''
+    });
+
+    // Alert admins (skips the submitter automatically if they are an admin)
+    try {
+      const admins = await findSystemAdminUsers();
+      const typeLabel = type === 'bug' ? 'bug report' : 'feature request';
+      await createNotificationBulk(admins.map(a => a._id.toString()), {
+        type: 'feedback_submitted',
+        title: `New ${typeLabel}`,
+        message: `${item.submittedByName || 'Someone'}: "${title}"`,
+        link: { page: 'feedback', params: { feedbackId: item._id.toString() } },
+        actorId: req.user.id,
+        metadata: { feedbackId: item._id.toString(), feedbackType: type }
+      });
+    } catch (notifyErr) {
+      console.error('Feedback admin notification failed:', notifyErr);
+    }
+
+    res.status(201).json(item);
+  } catch (err) {
+    console.error('Error creating feedback:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// List feedback — visible to all authenticated users (helps avoid duplicate reports)
+app.get('/api/feedback', authenticate, async (req, res) => {
+  try {
+    const query = {};
+    if (req.query.type && ['bug', 'feature'].includes(req.query.type)) {
+      query.type = req.query.type;
+    }
+    if (req.query.status && FEEDBACK_STATUSES.includes(req.query.status)) {
+      query.status = req.query.status;
+    }
+    if (req.query.mine === '1') {
+      query.submittedBy = req.user.id;
+    }
+    const items = await Feedback.find(query).sort({ createdAt: -1 }).lean();
+    res.json(items);
+  } catch (err) {
+    console.error('Error listing feedback:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Edit title/description/page — own items while still "new", admins anytime
+app.put('/api/feedback/:id', authenticate, async (req, res) => {
+  try {
+    const item = await Feedback.findById(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Feedback not found' });
+
+    const isOwn = item.submittedBy.toString() === req.user.id;
+    const admin = isFeedbackAdmin(req.user);
+    if (!admin && (!isOwn || item.status !== 'new')) {
+      return res.status(403).json({ error: 'You can only edit your own feedback while it is still new' });
+    }
+
+    if (req.body.title !== undefined) {
+      const title = String(req.body.title).trim();
+      if (!title) return res.status(400).json({ error: 'Title is required' });
+      item.title = title;
+    }
+    if (req.body.description !== undefined) item.description = String(req.body.description).trim();
+    if (req.body.page !== undefined) item.page = String(req.body.page).trim();
+    if (req.body.type !== undefined && ['bug', 'feature'].includes(req.body.type)) {
+      item.type = req.body.type;
+    }
+
+    await item.save();
+    res.json(item);
+  } catch (err) {
+    console.error('Error updating feedback:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Update status + admin note (admin only); notifies the submitter
+app.put('/api/feedback/:id/status', authenticate, async (req, res) => {
+  try {
+    if (!isFeedbackAdmin(req.user)) {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const item = await Feedback.findById(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Feedback not found' });
+
+    const status = String(req.body.status || '').toLowerCase();
+    if (!FEEDBACK_STATUSES.includes(status)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+
+    const statusChanged = item.status !== status;
+    item.status = status;
+    if (req.body.adminNote !== undefined) item.adminNote = String(req.body.adminNote).trim();
+    item.updatedBy = req.user.id;
+    item.updatedByName = req.user.fullName || req.user.email || '';
+    if (statusChanged) item.statusChangedAt = new Date();
+    await item.save();
+
+    if (statusChanged) {
+      try {
+        const typeLabel = item.type === 'bug' ? 'bug report' : 'feature request';
+        await createNotification({
+          recipientId: item.submittedBy.toString(),
+          type: 'feedback_status_changed',
+          title: `Your ${typeLabel} is now ${FEEDBACK_STATUS_LABELS[status]}`,
+          message: `"${item.title}"${item.adminNote ? ` — ${item.adminNote}` : ''}`,
+          link: { page: 'feedback', params: { feedbackId: item._id.toString() } },
+          actorId: req.user.id,
+          metadata: { feedbackId: item._id.toString(), status }
+        });
+      } catch (notifyErr) {
+        console.error('Feedback status notification failed:', notifyErr);
+      }
+    }
+
+    res.json(item);
+  } catch (err) {
+    console.error('Error updating feedback status:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Delete — own items while still "new", admins anytime
+app.delete('/api/feedback/:id', authenticate, async (req, res) => {
+  try {
+    const item = await Feedback.findById(req.params.id);
+    if (!item) return res.status(404).json({ error: 'Feedback not found' });
+
+    const isOwn = item.submittedBy.toString() === req.user.id;
+    const admin = isFeedbackAdmin(req.user);
+    if (!admin && (!isOwn || item.status !== 'new')) {
+      return res.status(403).json({ error: 'You can only delete your own feedback while it is still new' });
+    }
+
+    if (item.screenshotPublicId) {
+      try {
+        await cloudinary.uploader.destroy(item.screenshotPublicId, { resource_type: 'image' });
+      } catch (cloudErr) {
+        console.error('Failed to delete feedback screenshot from Cloudinary:', cloudErr);
+      }
+    }
+
+    await Feedback.deleteOne({ _id: item._id });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting feedback:', err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 

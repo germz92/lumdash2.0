@@ -27,6 +27,8 @@ const notificationSchema = new mongoose.Schema({
       'post_production_status_changed', // Status updated on an item you own
       'post_production_update',      // New update or reply on a post production item
       'crew_availability_response',  // Crew member responded to an availability request
+      'feedback_submitted',      // New bug report / feature request (for admins)
+      'feedback_status_changed', // Status changed on feedback you submitted
       'general'                  // Catch-all for future types
     ]
   },

@@ -162,6 +162,28 @@ const NOTIFICATION_SECTION = {
       ]
     },
     {
+      id: 'feedback',
+      title: 'Feedback & bug reports',
+      items: [
+        {
+          key: 'feedback_submitted',
+          label: 'New feedback submitted',
+          description: 'When someone submits a bug report or feature request (admins).',
+          roles: ['admin'],
+          defaults: { toast: true, email: false },
+          channels: { toast: true, email: false }
+        },
+        {
+          key: 'feedback_status_changed',
+          label: 'Your feedback status changed',
+          description: 'When a bug you reported or feature you requested is updated.',
+          roles: ALL_ROLES,
+          defaults: { toast: true, email: false },
+          channels: { toast: true, email: false }
+        }
+      ]
+    },
+    {
       id: 'other',
       title: 'Other',
       items: [

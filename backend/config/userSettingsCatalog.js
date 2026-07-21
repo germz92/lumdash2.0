@@ -118,6 +118,20 @@ const NOTIFICATION_SECTION = {
       ]
     },
     {
+      id: 'crew',
+      title: 'Crew',
+      items: [
+        {
+          key: 'crew_availability_response',
+          label: 'Crew availability response',
+          description: 'When a crew member accepts or declines an availability request on your event.',
+          roles: ALL_ROLES,
+          defaults: { toast: true, email: true },
+          channels: { toast: true, email: true }
+        }
+      ]
+    },
+    {
       id: 'post_production',
       title: 'Post production',
       items: [

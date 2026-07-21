@@ -26,6 +26,7 @@ const notificationSchema = new mongoose.Schema({
       'post_production_assigned',    // Assigned as editor or owner on post production
       'post_production_status_changed', // Status updated on an item you own
       'post_production_update',      // New update or reply on a post production item
+      'crew_availability_response',  // Crew member responded to an availability request
       'general'                  // Catch-all for future types
     ]
   },

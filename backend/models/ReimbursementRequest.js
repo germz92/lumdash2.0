@@ -28,6 +28,7 @@ const reimbursementRequestSchema = new mongoose.Schema({
   totalAmount: { type: Number, default: 0 },
   items: [reimbursementItemSchema],
   reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+  reviewedByName: { type: String, default: '' },
   reviewedAt: Date,
   reviewNotes: { type: String, default: '' }
 }, {

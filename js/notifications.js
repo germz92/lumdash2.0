@@ -29,6 +29,7 @@
     post_production_assigned: { icon: 'movie_edit',      color: '#6366f1' },
     post_production_status_changed: { icon: 'sync_alt',  color: '#f59e0b' },
     post_production_update: { icon: 'forum',            color: '#6366f1' },
+    crew_availability_response: { icon: 'how_to_reg',   color: '#22c55e' },
     general:                { icon: 'notifications',    color: '#6b7280' }
   };
 

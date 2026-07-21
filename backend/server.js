@@ -966,6 +966,67 @@ async function resolveReimbursementEvent(request) {
 }
 
 /**
+ * Enrich reimbursement docs (lean objects) with:
+ *  - ownerName: comma-separated full names of the event's owner(s)
+ *  - reviewedByName: full name of the reviewer (backfilled from reviewedBy if not stored)
+ * Batches DB lookups so it can be used on a list or a single request.
+ */
+async function enrichReimbursements(requests) {
+  const list = Array.isArray(requests) ? requests : [requests];
+  if (!list.length) return requests;
+
+  // Resolve the LumDash event (Table) for each request, cached by id/name.
+  const eventCache = new Map();
+  const eventIds = [...new Set(list.filter(r => r.eventId).map(r => r.eventId.toString()))];
+  if (eventIds.length) {
+    const tables = await Table.find({ _id: { $in: eventIds } }).select('_id title owners').lean();
+    tables.forEach(t => eventCache.set('id:' + t._id.toString(), t));
+  }
+  for (const r of list) {
+    if (r.eventId && eventCache.has('id:' + r.eventId.toString())) continue;
+    const name = (r.eventName || '').trim();
+    if (!name) continue;
+    const key = 'name:' + name.toLowerCase();
+    if (!eventCache.has(key)) {
+      eventCache.set(key, (await resolveReimbursementEvent(r)) || null);
+    }
+  }
+
+  const tableForRequest = new Map();
+  const userIds = new Set();
+  list.forEach(r => {
+    let table = r.eventId ? eventCache.get('id:' + r.eventId.toString()) : null;
+    if (!table) {
+      const name = (r.eventName || '').trim();
+      if (name) table = eventCache.get('name:' + name.toLowerCase());
+    }
+    tableForRequest.set(r, table || null);
+    if (table?.owners) table.owners.forEach(id => userIds.add(id.toString()));
+    if (r.reviewedBy && !r.reviewedByName) userIds.add(r.reviewedBy.toString());
+  });
+
+  const userMap = {};
+  if (userIds.size) {
+    const users = await User.find({ _id: { $in: [...userIds] } }).select('fullName email').lean();
+    users.forEach(u => { userMap[u._id.toString()] = u.fullName || u.email || ''; });
+  }
+
+  list.forEach(r => {
+    const table = tableForRequest.get(r);
+    if (table?.owners?.length) {
+      r.ownerName = table.owners.map(id => userMap[id.toString()]).filter(Boolean).join(', ');
+    } else {
+      r.ownerName = r.ownerName || '';
+    }
+    if (!r.reviewedByName && r.reviewedBy) {
+      r.reviewedByName = userMap[r.reviewedBy.toString()] || '';
+    }
+  });
+
+  return requests;
+}
+
+/**
  * Resolve real submitter name/email from reimbursement doc + User collection.
  */
 function normalizeReimbursementUserId(request) {
@@ -1424,6 +1485,7 @@ const PostProductionItem = require('./models/PostProductionItem');
 const PostProductionUpdateRead = require('./models/PostProductionUpdateRead');
 const PostProductionAssignmentSeen = require('./models/PostProductionAssignmentSeen');
 const DashboardNavVisit = require('./models/DashboardNavVisit');
+const CrewAvailabilityRequest = require('./models/CrewAvailabilityRequest');
 
 
 
@@ -13127,6 +13189,8 @@ app.get('/api/reimbursements', authenticate, async (req, res) => {
       });
     }
 
+    await enrichReimbursements(requests);
+
     res.json(requests);
   } catch (err) {
     console.error('Error fetching reimbursements:', err);
@@ -13153,6 +13217,8 @@ app.get('/api/reimbursements/:id', authenticate, async (req, res) => {
       }
     }
 
+    await enrichReimbursements(request);
+
     res.json(request);
   } catch (err) {
     console.error('Error fetching reimbursement:', err);
@@ -13174,6 +13240,7 @@ app.put('/api/reimbursements/:id/approve', authenticate, async (req, res) => {
 
     request.status = 'approved';
     request.reviewedBy = req.user.id;
+    request.reviewedByName = req.user.fullName || '';
     request.reviewedAt = new Date();
     request.reviewNotes = req.body.reviewNotes || '';
     await request.save();
@@ -13208,6 +13275,7 @@ app.put('/api/reimbursements/:id/reject', authenticate, async (req, res) => {
 
     request.status = 'rejected';
     request.reviewedBy = req.user.id;
+    request.reviewedByName = req.user.fullName || '';
     request.reviewedAt = new Date();
     request.reviewNotes = req.body.reviewNotes;
     await request.save();
@@ -13330,18 +13398,6 @@ app.post('/api/reimbursements/:id/resend-notifications', authenticate, async (re
 // SERVER
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => console.log(`Server started on port ${PORT}`));
-
-// Catch-all for SPA routing (should be last!)
-app.get('/folder-logs.html', (req, res) => {
-  res.sendFile(path.join(__dirname, '../folder-logs.html'));
-});
-
-app.get('*', (req, res) => {
-  if (req.path.startsWith('/api/')) {
-    return res.status(404).json({ error: 'API route not found' });
-  }
-  res.sendFile(path.join(__dirname, '../dashboard.html'));
-});
 
 // --- SHARE TABLE WITH USER (OWNER/LEAD/SHARED) ---
 app.post('/api/tables/:id/share', authenticate, async (req, res) => {
@@ -13521,10 +13577,15 @@ app.put('/api/tables/:id/crew-bulk', authenticate, async (req, res) => {
       for (const { rowId, data } of updates) {
         if (!rowId || !data) continue;
         const setFields = {};
-        for (const field of ['date', 'name', 'role', 'startTime', 'endTime', 'totalHours', 'notes']) {
+        for (const field of ['date', 'name', 'role', 'startTime', 'endTime', 'totalHours', 'notes', 'userId']) {
           if (data[field] !== undefined) {
             setFields[`rows.$.${field}`] = data[field];
           }
+        }
+        // Changing who is assigned resets the availability workflow for that row
+        if (data.name !== undefined && data.resetAvailability) {
+          setFields['rows.$.availabilityStatus'] = 'tentative';
+          setFields['rows.$.availabilityRespondedAt'] = null;
         }
         if (Object.keys(setFields).length > 0) {
           await Table.updateOne(
@@ -13547,6 +13608,438 @@ app.put('/api/tables/:id/crew-bulk', authenticate, async (req, res) => {
     res.status(500).json({ error: 'Failed to process bulk update' });
   }
 });
+
+// ========= CREW AVAILABILITY REQUESTS API =========
+// Per-day availability workflow: tentative → requested → accepted/declined → confirmed.
+// Crew respond via a public magic-link page (no login), same token pattern as invites.
+
+/** Format a crew-row date string ("YYYY-MM-DD") for messages without timezone shifting */
+function formatCrewDay(dateStr) {
+  if (!dateStr) return '—';
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateStr).trim());
+  const d = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return String(dateStr);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/**
+ * Email the request sender (falling back to all event owners) when a crew
+ * member responds. Non-blocking; respects each recipient's email preference.
+ */
+async function sendCrewAvailabilityResponseEmails(request, table, applied) {
+  if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) {
+    console.warn('📧 Crew availability response email skipped: SendGrid not configured');
+    return;
+  }
+
+  // Prefer the owner who sent the request; fall back to all event owners
+  let recipientIds = request.sentBy ? [request.sentBy.toString()] : [];
+  if (recipientIds.length === 0) {
+    recipientIds = (table.owners || []).map(String);
+  }
+  if (recipientIds.length === 0) return;
+
+  const recipients = await User.find({ _id: { $in: recipientIds } })
+    .select('fullName email settings role').lean();
+
+  const { isNotificationChannelEnabled } = require('./lib/userSettings');
+  const {
+    buildCrewAvailabilityResponseSubject,
+    buildCrewAvailabilityResponseEmail,
+    buildCrewAvailabilityResponseText
+  } = require('./emails/crewAvailabilityResponseEmail');
+
+  const appUrl = (process.env.APP_URL || 'https://beta.lumdash.app').replace(/\/$/, '');
+  const crewUrl = `${appUrl}/dashboard.html#crew?id=${table._id.toString()}`;
+
+  const sends = recipients.map(async (recipient) => {
+    if (!recipient.email) return;
+    if (!isNotificationChannelEnabled(recipient, 'crew_availability_response', 'email')) {
+      console.log(`📧 Crew availability response email skipped (user pref): ${recipient.email}`);
+      return;
+    }
+
+    const data = {
+      recipientName: (recipient.fullName || '').split(' ')[0] || 'there',
+      crewName: request.name || 'A crew member',
+      crewEmail: request.email || '',
+      eventName: table.title || 'your event',
+      responses: applied,
+      crewUrl
+    };
+
+    await sgMail.send({
+      to: recipient.email,
+      from: process.env.SENDGRID_FROM_EMAIL,
+      subject: buildCrewAvailabilityResponseSubject(data),
+      html: buildCrewAvailabilityResponseEmail(data),
+      text: buildCrewAvailabilityResponseText(data)
+    });
+    console.log(`📧 Crew availability response email sent to ${recipient.email}`);
+  });
+
+  const results = await Promise.allSettled(sends);
+  results.forEach((r, i) => {
+    if (r.status === 'rejected') {
+      console.error(`📧 Crew availability response email failed for ${recipients[i]?.email}:`, r.reason?.response?.body || r.reason?.message || r.reason);
+    }
+  });
+}
+
+// Bulk send availability requests — one email per person covering their selected days
+app.post('/api/tables/:id/crew-requests', authenticate, async (req, res) => {
+  try {
+    const table = await Table.findById(req.params.id).select('title owners rows general');
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+    if (!hasEventAccess(table, req.user, true)) {
+      return res.status(403).json({ error: 'Only event owners can send availability requests' });
+    }
+
+    const rowIds = Array.isArray(req.body.rowIds) ? req.body.rowIds.map(String) : [];
+    if (rowIds.length === 0) {
+      return res.status(400).json({ error: 'rowIds is required' });
+    }
+
+    // Eligible rows: selected, named, and not already confirmed
+    const rows = table.rows.filter(r =>
+      rowIds.includes(r._id.toString()) &&
+      (r.name || '').trim() &&
+      r.availabilityStatus !== 'confirmed'
+    );
+    if (rows.length === 0) {
+      return res.status(400).json({ error: 'No eligible rows to request (rows must have a name and not be confirmed)' });
+    }
+
+    // Group rows by person (prefer userId link, fall back to name)
+    const groups = new Map();
+    rows.forEach(r => {
+      const key = r.userId ? `id:${r.userId.toString()}` : `name:${r.name.trim().toLowerCase()}`;
+      if (!groups.has(key)) groups.set(key, { userId: r.userId || null, name: r.name.trim(), rows: [] });
+      groups.get(key).rows.push(r);
+    });
+
+    // Resolve emails from User accounts
+    const idsToLookup = [...groups.values()].filter(g => g.userId).map(g => g.userId.toString());
+    const usersById = {};
+    if (idsToLookup.length) {
+      (await User.find({ _id: { $in: idsToLookup } }).select('fullName email').lean())
+        .forEach(u => { usersById[u._id.toString()] = u; });
+    }
+
+    // Requests stay valid until well after the event ends (fallback: 60 days)
+    let expiresAt = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000);
+    const eventEnd = new Date(table.general?.end || '');
+    if (!Number.isNaN(eventEnd.getTime())) {
+      expiresAt = new Date(eventEnd.getTime() + 7 * 24 * 60 * 60 * 1000);
+    }
+
+    const appUrl = (process.env.APP_URL || 'https://beta.lumdash.app').replace(/\/$/, '');
+    const {
+      buildCrewAvailabilitySubject,
+      buildCrewAvailabilityEmail,
+      buildCrewAvailabilityText
+    } = require('./emails/crewAvailabilityEmail');
+
+    const results = [];
+    const requestedRowIds = [];
+
+    for (const group of groups.values()) {
+      let user = group.userId ? usersById[group.userId.toString()] : null;
+      if (!user) {
+        user = await User.findOne({
+          fullName: { $regex: new RegExp(`^${escapeRegex(group.name)}$`, 'i') }
+        }).select('fullName email').lean();
+      }
+
+      if (!user?.email) {
+        results.push({ name: group.name, email: null, sent: false, error: 'No user account / email found' });
+        continue;
+      }
+
+      // Roll this person's still-unanswered "requested" days into the new request,
+      // since sending revokes their older link — keeps one live link covering all open days
+      const groupRowIds = new Set(group.rows.map(r => r._id.toString()));
+      table.rows.forEach(r => {
+        if (groupRowIds.has(r._id.toString())) return;
+        if (r.availabilityStatus !== 'requested') return;
+        const sameById = group.userId && r.userId && r.userId.toString() === group.userId.toString();
+        const sameByName = (r.name || '').trim().toLowerCase() === group.name.toLowerCase();
+        if (sameById || sameByName) {
+          group.rows.push(r);
+          groupRowIds.add(r._id.toString());
+        }
+      });
+
+      const sortedRows = [...group.rows].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+      const days = sortedRows.map(r => ({ date: r.date, role: r.role || '' }));
+
+      // Revoke older unanswered requests for the same person+event so only one link is live
+      await CrewAvailabilityRequest.updateMany(
+        { eventId: table._id, email: user.email.toLowerCase(), revokedAt: null, respondedAt: null },
+        { $set: { revokedAt: new Date() } }
+      );
+
+      const request = await CrewAvailabilityRequest.create({
+        eventId: table._id,
+        userId: user._id || group.userId || null,
+        email: user.email,
+        name: user.fullName || group.name,
+        rowIds: sortedRows.map(r => r._id),
+        sentBy: req.user.id,
+        expiresAt
+      });
+
+      const responseUrl = `${appUrl}/crew-response.html?token=${request.token}`;
+      console.log(`🔗 Crew availability link for ${user.email}: ${responseUrl}`);
+      const emailData = {
+        recipientName: (user.fullName || group.name).split(' ')[0],
+        eventName: table.title || 'an event',
+        senderName: req.user.fullName || '',
+        days,
+        responseUrl,
+        acceptAllUrl: `${responseUrl}&preselect=accept`
+      };
+
+      if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) {
+        results.push({ name: group.name, email: user.email, sent: false, error: 'Email not configured (SendGrid)' });
+        continue;
+      }
+
+      try {
+        await sgMail.send({
+          to: user.email,
+          from: process.env.SENDGRID_FROM_EMAIL,
+          subject: buildCrewAvailabilitySubject(emailData),
+          html: buildCrewAvailabilityEmail(emailData),
+          text: buildCrewAvailabilityText(emailData)
+        });
+        requestedRowIds.push(...sortedRows.map(r => r._id));
+        results.push({ name: group.name, email: user.email, sent: true, days: days.length });
+        console.log(`📬 Crew availability request sent to ${user.email} (${days.length} day(s), event "${table.title}")`);
+      } catch (err) {
+        await CrewAvailabilityRequest.updateOne({ _id: request._id }, { $set: { revokedAt: new Date() } });
+        console.error(`📬 Crew availability email failed for ${user.email}:`, err.response?.body || err.message || err);
+        results.push({ name: group.name, email: user.email, sent: false, error: 'Email send failed' });
+      }
+    }
+
+    // Mark successfully-requested rows
+    if (requestedRowIds.length > 0) {
+      await Table.updateOne(
+        { _id: table._id },
+        { $set: { 'rows.$[r].availabilityStatus': 'requested' } },
+        { arrayFilters: [{ 'r._id': { $in: requestedRowIds } }] }
+      );
+      notifyDataChange('crewChanged', null, req.params.id);
+    }
+
+    res.json({ results, requested: requestedRowIds.length });
+  } catch (err) {
+    console.error('Error sending crew availability requests:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Public: fetch request details for the response page (magic link, no auth)
+app.get('/api/crew-availability/:token', async (req, res) => {
+  try {
+    const request = await CrewAvailabilityRequest.findOne({ token: req.params.token }).lean();
+    if (!request || request.revokedAt) {
+      return res.status(404).json({ error: 'This request link is no longer valid. Please ask for a new one.' });
+    }
+
+    const table = await Table.findById(request.eventId).select('title rows general').lean();
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+
+    const rowMap = {};
+    (table.rows || []).forEach(r => { rowMap[r._id.toString()] = r; });
+
+    const days = (request.rowIds || [])
+      .map(id => rowMap[id.toString()])
+      .filter(Boolean)
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+      .map(r => ({
+        rowId: r._id,
+        date: r.date,
+        role: r.role || '',
+        status: r.availabilityStatus || 'requested'
+      }));
+
+    res.json({
+      eventName: table.title || 'Event',
+      name: request.name,
+      expired: request.expiresAt <= new Date(),
+      respondedAt: request.respondedAt,
+      days
+    });
+  } catch (err) {
+    console.error('Error fetching crew availability request:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Public: submit per-day accept/decline responses (magic link, no auth)
+app.post('/api/crew-availability/:token/respond', async (req, res) => {
+  try {
+    const request = await CrewAvailabilityRequest.findOne({ token: req.params.token });
+    if (!request || request.revokedAt) {
+      return res.status(404).json({ error: 'This request link is no longer valid. Please ask for a new one.' });
+    }
+    if (request.expiresAt <= new Date()) {
+      return res.status(410).json({ error: 'This request has expired. Please ask for a new one.' });
+    }
+
+    const allowedRowIds = new Set((request.rowIds || []).map(id => id.toString()));
+    const responses = (Array.isArray(req.body.responses) ? req.body.responses : [])
+      .filter(r => r && allowedRowIds.has(String(r.rowId)) && ['accepted', 'declined'].includes(r.status));
+    if (responses.length === 0) {
+      return res.status(400).json({ error: 'No valid responses provided' });
+    }
+
+    const table = await Table.findById(request.eventId).select('title owners leads sharedWith rows');
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+
+    const rowMap = {};
+    table.rows.forEach(r => { rowMap[r._id.toString()] = r; });
+
+    const now = new Date();
+    const applied = [];
+    for (const resp of responses) {
+      const row = rowMap[String(resp.rowId)];
+      // Confirmed rows are locked — the owner has committed them
+      if (!row || row.availabilityStatus === 'confirmed') continue;
+
+      await Table.updateOne(
+        { _id: table._id, 'rows._id': row._id },
+        { $set: {
+          'rows.$.availabilityStatus': resp.status,
+          'rows.$.availabilityRespondedAt': now
+        }}
+      );
+      applied.push({ rowId: row._id, date: row.date, role: row.role || '', status: resp.status });
+    }
+
+    if (applied.length === 0) {
+      return res.status(400).json({ error: 'These days can no longer be changed' });
+    }
+
+    // Store/refresh response snapshot on the request
+    const responseByRowId = {};
+    (request.responses || []).forEach(r => { responseByRowId[r.rowId.toString()] = r; });
+    applied.forEach(a => { responseByRowId[a.rowId.toString()] = a; });
+    request.responses = Object.values(responseByRowId);
+    request.respondedAt = now;
+    await request.save();
+
+    notifyDataChange('crewChanged', null, table._id.toString());
+
+    // Auto-share the event with the crew member once they accept a day,
+    // so it shows up on their own dashboard (same as the manual Share button)
+    const acceptedAny = applied.some(a => a.status === 'accepted');
+    if (acceptedAny) {
+      try {
+        let crewUser = request.userId
+          ? await User.findById(request.userId).select('_id fullName').lean()
+          : null;
+        if (!crewUser && request.email) {
+          crewUser = await User.findOne({ email: request.email.toLowerCase() }).select('_id fullName').lean();
+        }
+
+        if (crewUser) {
+          const uid = crewUser._id.toString();
+          const alreadyHasAccess =
+            (table.owners || []).some(id => id.toString() === uid) ||
+            (table.leads || []).some(id => id.toString() === uid) ||
+            (table.sharedWith || []).some(id => id.toString() === uid);
+
+          if (!alreadyHasAccess) {
+            await Table.updateOne(
+              { _id: table._id },
+              { $addToSet: { sharedWith: crewUser._id } }
+            );
+            notifyDataChange('tableUpdated', { tableId: table._id });
+            console.log(`🤝 Event "${table.title}" auto-shared with ${request.name || uid} (accepted availability)`);
+
+            createNotification({
+              recipientId: uid,
+              type: 'event_shared',
+              title: 'Added to event as collaborator',
+              message: `You were added to "${table.title || 'an event'}" after accepting the availability request`,
+              link: { page: 'general', eventId: table._id.toString() },
+              actorId: null,
+              eventId: table._id.toString(),
+              metadata: { role: 'collaborator', autoShared: true }
+            });
+          }
+        }
+      } catch (shareErr) {
+        console.error('🤝 Auto-share after accept failed (response still saved):', shareErr);
+      }
+    }
+
+    // Notify event owners in-app
+    const accepted = applied.filter(a => a.status === 'accepted').map(a => formatCrewDay(a.date));
+    const declined = applied.filter(a => a.status === 'declined').map(a => formatCrewDay(a.date));
+    const parts = [];
+    if (accepted.length) parts.push(`accepted ${accepted.join(', ')}`);
+    if (declined.length) parts.push(`declined ${declined.join(', ')}`);
+    const message = `${request.name || 'A crew member'} ${parts.join(' and ')} for ${table.title || 'your event'}`;
+
+    createNotificationBulk((table.owners || []).map(String), {
+      type: 'crew_availability_response',
+      title: 'Crew Availability Response',
+      message,
+      link: { page: 'crew', eventId: table._id.toString(), params: null },
+      actorId: request.userId ? request.userId.toString() : null,
+      eventId: table._id,
+      metadata: { crewRequestId: request._id.toString() }
+    }).catch(err => console.error('🔔 Crew availability notification failed:', err));
+
+    // Email the owner(s): the sender of the request, falling back to all event owners
+    sendCrewAvailabilityResponseEmails(request, table, applied)
+      .catch(err => console.error('📧 Crew availability response email failed:', err));
+
+    res.json({ message: 'Response saved', applied: applied.length });
+  } catch (err) {
+    console.error('Error saving crew availability response:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Manually set a row's availability (commit to confirmed, or reset to tentative)
+app.put('/api/tables/:id/rows/:rowId/availability', authenticate, async (req, res) => {
+  try {
+    const status = req.body.status;
+    if (!['tentative', 'confirmed'].includes(status)) {
+      return res.status(400).json({ error: 'status must be "tentative" or "confirmed"' });
+    }
+
+    const table = await Table.findById(req.params.id).select('owners leads sharedWith');
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+    if (!hasEventAccess(table, req.user, true)) {
+      return res.status(403).json({ error: 'Only event owners can change availability status' });
+    }
+
+    const setFields = { 'rows.$.availabilityStatus': status };
+    if (status === 'tentative') setFields['rows.$.availabilityRespondedAt'] = null;
+
+    const result = await Table.updateOne(
+      { _id: req.params.id, 'rows._id': req.params.rowId },
+      { $set: setFields }
+    );
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: 'Row not found' });
+    }
+
+    notifyDataChange('crewChanged', null, req.params.id);
+    res.json({ message: 'Availability updated', status });
+  } catch (err) {
+    console.error('Error updating row availability:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ========= END CREW AVAILABILITY REQUESTS API =========
 
 // PATCH endpoint for partial updates (e.g., crewRates)
 app.patch('/api/tables/:id', authenticate, async (req, res) => {
@@ -13753,4 +14246,16 @@ app.get('/api/tables/:id/documents/:documentId/view', authenticate, async (req, 
     console.error('View document error:', error);
     res.status(500).json({ error: 'Failed to view document' });
   }
+});
+
+// Catch-all for SPA routing — must be registered after every other route
+app.get('/folder-logs.html', (req, res) => {
+  res.sendFile(path.join(__dirname, '../folder-logs.html'));
+});
+
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API route not found' });
+  }
+  res.sendFile(path.join(__dirname, '../dashboard.html'));
 });

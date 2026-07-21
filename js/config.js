@@ -141,6 +141,7 @@ console.log('✅ Config loaded - Version:', window.LUMDASH_VERSION);
     pathname.endsWith('/index.html') ||
     pathname.endsWith('/register.html') || // ✅ Allow registration page
     pathname.endsWith('/reset-password.html') || // ✅ Allow reset password page
+    pathname.endsWith('/crew-response.html') || // ✅ Allow public crew availability response page
     pathname.endsWith('/dashboard.html') || // ✅ Allow dashboard to load SPA
     pathname.endsWith('/inventory-management.html') || // ✅ Allow inventory page
     pathname.endsWith('/crew-planner.html') || // ✅ Allow crew planner page

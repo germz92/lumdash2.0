@@ -138,6 +138,10 @@
         </div>
         <div class="filter-right">
           <input type="text" id="searchInput" class="crew-search-input" placeholder="Search crew...">
+          <button class="filter-action-btn" id="requestAvailabilityBtn" style="display: none;">
+            <span class="material-symbols-outlined">mark_email_unread</span>
+            <span>Request Availability</span>
+          </button>
           <button class="filter-action-btn" id="crewListBtn" style="display: none;">
             <span class="material-symbols-outlined">list</span>
             <span>Crew List</span>
@@ -179,6 +183,18 @@
 
 <!-- Row Action Dropdown -->
 <div class="row-action-dropdown" id="rowActionDropdown">
+  <button class="action-menu-item" id="requestShiftAction">
+    <span class="material-symbols-outlined">mark_email_unread</span>
+    <span>Send Request</span>
+  </button>
+  <button class="action-menu-item" id="commitShiftAction">
+    <span class="material-symbols-outlined">verified</span>
+    <span>Mark Confirmed</span>
+  </button>
+  <button class="action-menu-item" id="resetAvailabilityAction">
+    <span class="material-symbols-outlined">restart_alt</span>
+    <span>Reset to Tentative</span>
+  </button>
   <button class="action-menu-item" id="duplicateShiftAction">
     <span class="material-symbols-outlined">content_copy</span>
     <span>Duplicate</span>

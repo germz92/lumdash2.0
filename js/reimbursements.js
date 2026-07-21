@@ -176,6 +176,7 @@
       list = list.filter(r =>
         (r.userName || '').toLowerCase().includes(q) ||
         (r.eventName || '').toLowerCase().includes(q) ||
+        (r.ownerName || '').toLowerCase().includes(q) ||
         (r.description || '').toLowerCase().includes(q) ||
         (r.userEmail || '').toLowerCase().includes(q)
       );
@@ -192,6 +193,10 @@
         case 'eventName':
           va = (a.eventName || '').toLowerCase();
           vb = (b.eventName || '').toLowerCase();
+          return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+        case 'ownerName':
+          va = (a.ownerName || '').toLowerCase();
+          vb = (b.ownerName || '').toLowerCase();
           return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
         case 'totalAmount':
           va = a.totalAmount || 0;
@@ -259,6 +264,7 @@
             <tr>
               <th data-sort="userName">User ${sortIcon('userName')}</th>
               <th data-sort="eventName">Event ${sortIcon('eventName')}</th>
+              <th data-sort="ownerName">Owner ${sortIcon('ownerName')}</th>
               <th>Description</th>
               <th data-sort="totalAmount">Amount ${sortIcon('totalAmount')}</th>
               <th data-sort="status">Status ${sortIcon('status')}</th>
@@ -270,6 +276,7 @@
               <tr data-id="${r._id}">
                 <td>${r.userName || '—'}</td>
                 <td>${r.eventName || '—'}</td>
+                <td>${r.ownerName || '—'}</td>
                 <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">${r.description || '—'}</td>
                 <td class="amount-cell">${fmtCurrency(r.totalAmount)}</td>
                 <td>${statusBadge(r.status)}</td>
@@ -299,6 +306,7 @@
               ${statusBadge(r.status)}
             </div>
             <div class="reimb-card-event">${r.eventName || '—'}</div>
+            ${r.ownerName ? `<div class="reimb-card-owner">Owner: ${r.ownerName}</div>` : ''}
             ${r.description ? `<div class="reimb-card-desc">${r.description}</div>` : ''}
             <div class="reimb-card-bottom">
               <span class="reimb-card-amount">${fmtCurrency(r.totalAmount)}</span>
@@ -377,6 +385,15 @@
           <span class="reimb-info-value">${r.eventName || '—'}</span>
         </div>
         <div class="reimb-info-item">
+          <span class="reimb-info-label">Event Owner</span>
+          <span class="reimb-info-value">${r.ownerName || '—'}</span>
+        </div>
+        ${(r.status === 'approved' || r.status === 'rejected') ? `
+        <div class="reimb-info-item">
+          <span class="reimb-info-label">${r.status === 'approved' ? 'Approved By' : 'Reviewed By'}</span>
+          <span class="reimb-info-value">${r.reviewedByName || '—'}</span>
+        </div>` : ''}
+        <div class="reimb-info-item">
           <span class="reimb-info-label">Total Amount</span>
           <span class="reimb-info-value" style="font-size:1.1rem;font-weight:700;">${fmtCurrency(r.totalAmount)}</span>
         </div>
@@ -424,7 +441,7 @@
       footer.innerHTML = `
         ${deleteBtnHtml}
         <div class="review-info">
-          ${r.reviewedAt ? `Reviewed on ${fmtDate(r.reviewedAt)}` : ''}
+          ${r.reviewedAt ? `${r.status === 'approved' ? 'Approved' : 'Rejected'}${r.reviewedByName ? ` by ${r.reviewedByName}` : ''} on ${fmtDate(r.reviewedAt)}` : ''}
           ${r.reviewNotes ? ` — "${r.reviewNotes}"` : ''}
         </div>`;
       if (isAdmin) {

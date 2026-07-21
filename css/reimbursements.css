@@ -744,6 +744,14 @@
   text-overflow: ellipsis;
 }
 
+.reimb-card-owner {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .reimb-card-desc {
   font-size: 0.8rem;
   color: var(--text-secondary);

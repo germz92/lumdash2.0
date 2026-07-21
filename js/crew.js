@@ -314,6 +314,29 @@ function getUserPhoto(name) {
   return user?.profilePhoto || user?.photo || null;
 }
 
+// Find a cached user record by (case-insensitive) name
+function findUserByName(name) {
+  if (!name) return null;
+  const lowerName = name.toLowerCase().trim();
+  return cachedUsers.find(u => (u.name || '').toLowerCase().trim() === lowerName) || null;
+}
+
+// Availability workflow: tentative → requested → accepted/declined → confirmed
+const AVAILABILITY_LABELS = {
+  tentative: 'Tentative',
+  requested: 'Requested',
+  accepted: 'Accepted',
+  declined: 'Declined',
+  confirmed: 'Confirmed'
+};
+
+function availabilityBadgeHtml(row) {
+  if (!row.name || !row.name.trim()) return '';
+  const status = row.availabilityStatus || 'tentative';
+  const label = AVAILABILITY_LABELS[status] || status;
+  return `<span class="avail-badge avail-${status}" title="Availability: ${label}">${label}</span>`;
+}
+
 // Track currently selected row for action menu
 let selectedRowId = null;
 
@@ -476,6 +499,7 @@ function renderTableSection() {
               ${photo ? `<img src="${photo}" alt="${row.name || ''}">` : initials}
             </div>
             <span class="crew-member-name cell-display">${row.name || (isOwner ? 'Click to add' : '')}</span>
+            ${availabilityBadgeHtml(row)}
           </div>
           </td>
         <td class="editable-cell time-cell ${isOwner ? 'owner-editable' : ''}" data-row-id="${rowId}" data-field="startTime">
@@ -578,6 +602,7 @@ function updateOwnerButtons() {
   const exportCsvBtn = document.getElementById('exportCsvBtn');
   const addDateBtn = document.getElementById('addDateBtn');
   const saveStatus = document.getElementById('saveStatus');
+  const requestAvailabilityBtn = document.getElementById('requestAvailabilityBtn');
   
   if (isOwner) {
     if (crewListBtn) crewListBtn.style.display = 'inline-flex';
@@ -585,12 +610,14 @@ function updateOwnerButtons() {
     if (exportCsvBtn) exportCsvBtn.style.display = 'inline-flex';
     if (addDateBtn) addDateBtn.style.display = 'inline-flex';
     if (saveStatus) saveStatus.style.display = 'block';
+    if (requestAvailabilityBtn) requestAvailabilityBtn.style.display = 'inline-flex';
   } else {
     if (crewListBtn) crewListBtn.style.display = 'none';
     if (crewCostCalcBtn) crewCostCalcBtn.style.display = 'none';
     if (exportCsvBtn) exportCsvBtn.style.display = 'none';
     if (addDateBtn) addDateBtn.style.display = 'none';
     if (saveStatus) saveStatus.style.display = 'none';
+    if (requestAvailabilityBtn) requestAvailabilityBtn.style.display = 'none';
   }
 }
 
@@ -607,10 +634,31 @@ function showRowActionMenu(rowId, button) {
     return;
   }
   
+  // Contextualize availability actions for this row's status
+  const row = tableData?.rows?.find(r => r._id === rowId);
+  const status = row?.availabilityStatus || 'tentative';
+  const hasName = !!(row?.name && row.name.trim());
+  
+  const requestAction = document.getElementById('requestShiftAction');
+  const commitAction = document.getElementById('commitShiftAction');
+  const resetAction = document.getElementById('resetAvailabilityAction');
+  
+  if (requestAction) {
+    requestAction.style.display = (hasName && status !== 'confirmed' && status !== 'accepted') ? '' : 'none';
+    const label = requestAction.querySelector('span:last-child');
+    if (label) label.textContent = (status === 'requested' || status === 'declined') ? 'Resend Request' : 'Send Request';
+  }
+  if (commitAction) {
+    commitAction.style.display = (hasName && status !== 'confirmed') ? '' : 'none';
+  }
+  if (resetAction) {
+    resetAction.style.display = (hasName && status !== 'tentative') ? '' : 'none';
+  }
+  
   // Position the dropdown near the button
   const rect = button.getBoundingClientRect();
-  const menuHeight = 90;
-  const menuWidth = 150;
+  const menuHeight = 230; // up to 5 items incl. availability actions
+  const menuWidth = 180;
   
   // Check if there's enough space below
   const spaceBelow = window.innerHeight - rect.bottom;
@@ -725,6 +773,42 @@ function hideRowActionModal() {
 
 // Setup action menu handlers
 function setupActionMenuHandlers() {
+  // Send/resend availability request action
+  const requestAction = document.getElementById('requestShiftAction');
+  if (requestAction && !requestAction._listenerAttached) {
+    requestAction._listenerAttached = true;
+    requestAction.onclick = (e) => {
+      e.stopPropagation();
+      const rowId = selectedRowId; // Capture before hiding
+      hideRowActionModal();
+      if (rowId) sendAvailabilityRequests([rowId]);
+    };
+  }
+  
+  // Commit (mark confirmed) action
+  const commitAction = document.getElementById('commitShiftAction');
+  if (commitAction && !commitAction._listenerAttached) {
+    commitAction._listenerAttached = true;
+    commitAction.onclick = (e) => {
+      e.stopPropagation();
+      const rowId = selectedRowId; // Capture before hiding
+      hideRowActionModal();
+      if (rowId) setRowAvailability(rowId, 'confirmed');
+    };
+  }
+  
+  // Reset to tentative action
+  const resetAction = document.getElementById('resetAvailabilityAction');
+  if (resetAction && !resetAction._listenerAttached) {
+    resetAction._listenerAttached = true;
+    resetAction.onclick = (e) => {
+      e.stopPropagation();
+      const rowId = selectedRowId; // Capture before hiding
+      hideRowActionModal();
+      if (rowId) setRowAvailability(rowId, 'tentative');
+    };
+  }
+  
   // Duplicate shift action
   const duplicateAction = document.getElementById('duplicateShiftAction');
   if (duplicateAction && !duplicateAction._listenerAttached) {
@@ -808,7 +892,15 @@ async function saveShiftFromModal() {
   }
   
   try {
-    row.name = document.getElementById('editShiftName').value;
+    const newName = document.getElementById('editShiftName').value;
+    if (newName !== row.name) {
+      const matchedUser = findUserByName(newName);
+      row.userId = matchedUser?._id || null;
+      row.availabilityStatus = 'tentative';
+      row.availabilityRespondedAt = null;
+      row.__resetAvailability = true;
+    }
+    row.name = newName;
     row.role = document.getElementById('editShiftRole').value;
     row.startTime = document.getElementById('editShiftStart').value;
     row.endTime = document.getElementById('editShiftEnd').value;
@@ -845,7 +937,8 @@ async function duplicateRow(rowId) {
       endTime: row.endTime,
       totalHours: row.totalHours,
       notes: row.notes,
-      locationBadge: row.locationBadge
+      locationBadge: row.locationBadge,
+      userId: row.userId || null
     };
     
     suppressNextSocketEvent();
@@ -878,6 +971,210 @@ async function duplicateRow(rowId) {
     console.error('Duplicate error:', err);
     showMessage('Failed to duplicate shift', 'error');
   }
+}
+
+// ===== Crew availability workflow =====
+
+// Manually set a row's availability (commit to confirmed, or reset to tentative)
+async function setRowAvailability(rowId, status) {
+  if (!isOwner) return;
+  
+  try {
+    suppressNextSocketEvent(); // Don't reload from our own change
+    
+    const response = await fetch(`${API_BASE}/api/tables/${tableId}/rows/${rowId}/availability`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: token
+      },
+      body: JSON.stringify({ status })
+    });
+    
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.error || `Failed (${response.status})`);
+    }
+    
+    // Update local data + re-render
+    const row = tableData.rows.find(r => r._id === rowId);
+    if (row) {
+      row.availabilityStatus = status;
+      if (status === 'tentative') row.availabilityRespondedAt = null;
+    }
+    renderTableSection();
+    showMessage(status === 'confirmed' ? 'Crew member confirmed!' : 'Reset to tentative', 'success');
+  } catch (err) {
+    console.error('Failed to update availability:', err);
+    showMessage(err.message || 'Failed to update availability', 'error');
+  }
+}
+
+// Send availability request emails for the given crew rows (grouped per person server-side)
+async function sendAvailabilityRequests(rowIds, resultCallback = null) {
+  if (!isOwner || !rowIds.length) return;
+  
+  // Flush pending edits first so the emails reflect current data
+  if (hasUnsavedChanges) await saveAllChanges(true);
+  
+  try {
+    showMessage('Sending availability request...', 'info');
+    suppressNextSocketEvent(); // Don't reload from our own change
+    
+    const response = await fetch(`${API_BASE}/api/tables/${tableId}/crew-requests`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: token
+      },
+      body: JSON.stringify({ rowIds })
+    });
+    
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(result.error || `Failed (${response.status})`);
+    }
+    
+    // Update local rows that are now "requested"
+    const sentNames = new Set(
+      (result.results || []).filter(r => r.sent).map(r => (r.name || '').toLowerCase().trim())
+    );
+    tableData.rows.forEach(row => {
+      if (rowIds.includes(row._id) &&
+          sentNames.has((row.name || '').toLowerCase().trim()) &&
+          row.availabilityStatus !== 'confirmed') {
+        row.availabilityStatus = 'requested';
+      }
+    });
+    renderTableSection();
+    
+    const failed = (result.results || []).filter(r => !r.sent);
+    const sentCount = (result.results || []).filter(r => r.sent).length;
+    if (failed.length === 0) {
+      showMessage(`Availability request${sentCount !== 1 ? 's' : ''} sent to ${sentCount} crew member${sentCount !== 1 ? 's' : ''}!`, 'success');
+    } else if (sentCount > 0) {
+      showMessage(`Sent to ${sentCount}, failed for: ${failed.map(f => f.name).join(', ')}`, 'error');
+    } else {
+      showMessage(`Failed to send: ${failed.map(f => `${f.name} (${f.error})`).join(', ')}`, 'error');
+    }
+    
+    if (resultCallback) resultCallback(result.results || []);
+  } catch (err) {
+    console.error('Failed to send availability requests:', err);
+    showMessage(err.message || 'Failed to send availability requests', 'error');
+    if (resultCallback) resultCallback(null);
+  }
+}
+
+// Bulk "Request Availability" modal — groups unconfirmed rows by person
+function showRequestAvailabilityModal() {
+  if (!isOwner) return;
+  
+  // Group requestable rows (named, not confirmed/accepted) by person
+  const rows = (tableData.rows || []).filter(r =>
+    r.role !== '__placeholder__' &&
+    r.name && r.name.trim() &&
+    r.availabilityStatus !== 'confirmed' &&
+    r.availabilityStatus !== 'accepted'
+  );
+  
+  if (rows.length === 0) {
+    showMessage('No crew to request — everyone is already accepted or confirmed.', 'info');
+    return;
+  }
+  
+  const groups = new Map();
+  rows.forEach(r => {
+    const key = r.name.trim().toLowerCase();
+    if (!groups.has(key)) {
+      const user = findUserByName(r.name);
+      groups.set(key, { name: r.name.trim(), email: user?.email || null, rows: [] });
+    }
+    groups.get(key).rows.push(r);
+  });
+  
+  const people = [...groups.values()].sort((a, b) => a.name.localeCompare(b.name));
+  
+  let modal = document.getElementById('requestAvailabilityModal');
+  if (modal) modal.remove();
+  
+  modal = document.createElement('div');
+  modal.id = 'requestAvailabilityModal';
+  modal.className = 'dark-modal show';
+  modal.innerHTML = `
+    <div class="dark-modal-content" style="max-width:560px;width:94vw;max-height:88vh;display:flex;flex-direction:column;">
+      <div class="modal-header-dark">
+        <h3>Request Availability</h3>
+        <button class="modal-close-btn" id="closeRequestAvailModalBtn">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body-dark" style="flex:1;overflow-y:auto;padding:16px 24px;">
+        <p style="color:var(--text-secondary);font-size:0.85rem;margin:0 0 14px;">
+          Each person gets one email listing their days with Accept / Decline links — no login needed.
+          Days that are already accepted or confirmed are not included.
+        </p>
+        <label style="display:flex;align-items:center;gap:8px;padding:6px 0 12px;color:var(--text-secondary);font-size:0.85rem;cursor:pointer;border-bottom:1px solid var(--border-default);margin-bottom:10px;">
+          <input type="checkbox" id="reqAvailSelectAll" checked> Select all
+        </label>
+        <div id="reqAvailPeople">
+          ${people.map((p, i) => {
+            const sortedDates = p.rows.map(r => r.date).filter(Boolean).sort();
+            const dayList = sortedDates.map(d => formatDateLocal(d)).join(', ');
+            const alreadyRequested = p.rows.every(r => r.availabilityStatus === 'requested');
+            return `
+              <label style="display:flex;align-items:flex-start;gap:10px;padding:12px;margin-bottom:8px;background:var(--bg-tertiary);border-radius:8px;cursor:pointer;">
+                <input type="checkbox" class="req-avail-person" data-index="${i}" ${p.email && !alreadyRequested ? 'checked' : ''} ${p.email ? '' : 'disabled'} style="margin-top:3px;">
+                <span style="flex:1;">
+                  <span style="display:block;font-weight:600;color:var(--text-primary);font-size:0.95rem;">
+                    ${p.name}
+                    ${alreadyRequested ? '<span style="color:#f59e0b;font-size:0.75rem;font-weight:500;"> · already requested</span>' : ''}
+                  </span>
+                  <span style="display:block;color:${p.email ? 'var(--text-secondary)' : '#ef4444'};font-size:0.8rem;margin-top:2px;">
+                    ${p.email || 'No user account with email found — cannot send'}
+                  </span>
+                  <span style="display:block;color:var(--text-muted);font-size:0.8rem;margin-top:2px;">
+                    ${p.rows.length} day${p.rows.length !== 1 ? 's' : ''}: ${dayList}
+                  </span>
+                </span>
+              </label>`;
+          }).join('')}
+        </div>
+      </div>
+      <div class="modal-footer-dark">
+        <button class="btn-secondary" id="cancelRequestAvailBtn">Cancel</button>
+        <button class="btn-primary" id="sendRequestAvailBtn">Send Requests</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  
+  const close = () => modal.remove();
+  document.getElementById('closeRequestAvailModalBtn').onclick = close;
+  document.getElementById('cancelRequestAvailBtn').onclick = close;
+  modal.onclick = (e) => { if (e.target === modal) close(); };
+  
+  const selectAll = document.getElementById('reqAvailSelectAll');
+  selectAll.onchange = () => {
+    modal.querySelectorAll('.req-avail-person:not(:disabled)').forEach(cb => {
+      cb.checked = selectAll.checked;
+    });
+  };
+  
+  const sendBtn = document.getElementById('sendRequestAvailBtn');
+  sendBtn.onclick = async () => {
+    const checkedIndexes = [...modal.querySelectorAll('.req-avail-person:checked')].map(cb => Number(cb.dataset.index));
+    if (checkedIndexes.length === 0) {
+      showMessage('Select at least one crew member.', 'error');
+      return;
+    }
+    
+    const rowIds = checkedIndexes.flatMap(i => people[i].rows.map(r => r._id));
+    sendBtn.disabled = true;
+    sendBtn.textContent = 'Sending...';
+    
+    await sendAvailabilityRequests(rowIds, () => close());
+  };
 }
 
 // Create custom dropdown component
@@ -1070,6 +1367,13 @@ function makeEditable(cell, row) {
       (value) => {
         if (value !== currentValue) {
           row[field] = value;
+          // Link the row to the user account (for availability request emails)
+          const matchedUser = findUserByName(value);
+          row.userId = matchedUser?._id || null;
+          // Reassigning resets the availability workflow
+          row.availabilityStatus = 'tentative';
+          row.availabilityRespondedAt = null;
+          row.__resetAvailability = true;
           displaySpan.textContent = value;
           markChanged(rowId);
         }
@@ -1321,7 +1625,9 @@ async function saveAllChanges(silent = false) {
             startTime: row.startTime,
             endTime: row.endTime,
             totalHours: row.totalHours,
-            notes: row.notes
+            notes: row.notes,
+            userId: row.userId || null,
+            resetAvailability: row.__resetAvailability ? true : undefined
           }
         });
       }
@@ -1361,6 +1667,7 @@ async function saveAllChanges(silent = false) {
     changedRows.clear();
     deletedRows.clear();
     hasUnsavedChanges = false;
+    tableData.rows.forEach(r => { delete r.__resetAvailability; });
     
     // Clear localStorage backup
     clearLocalStorage();
@@ -2312,6 +2619,9 @@ function attachEventListeners() {
   const crewListBtn = document.getElementById('crewListBtn');
   if (crewListBtn) crewListBtn.onclick = showCrewListModal;
   
+  const requestAvailabilityBtn = document.getElementById('requestAvailabilityBtn');
+  if (requestAvailabilityBtn) requestAvailabilityBtn.onclick = showRequestAvailabilityModal;
+  
   // Setup action menu handlers
   setupActionMenuHandlers();
   
@@ -2467,5 +2777,8 @@ window.showCrewCostCalcModal = showCrewCostCalcModal;
 window.hideRowActionModal = hideRowActionModal;
 window.openEditShiftModal = openEditShiftModal;
 window.duplicateRow = duplicateRow;
+window.showRequestAvailabilityModal = showRequestAvailabilityModal;
+window.setRowAvailability = setRowAvailability;
+window.sendAvailabilityRequests = sendAvailabilityRequests;
 
 })();

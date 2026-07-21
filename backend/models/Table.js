@@ -48,7 +48,16 @@ const crewRowSchema = new mongoose.Schema({
   startTime: String,
   endTime: String,
   totalHours: Number,
-  notes: String
+  notes: String,
+  // Link to the User account (set when name is picked from the user dropdown)
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+  // Availability workflow: tentative → requested → accepted/declined → confirmed
+  availabilityStatus: {
+    type: String,
+    enum: ['tentative', 'requested', 'accepted', 'declined', 'confirmed'],
+    default: 'tentative'
+  },
+  availabilityRespondedAt: { type: Date, default: null }
 }, { _id: true }); // ✅ Adds _id to each row for bulletproof tracking
 
 const tableSchema = new mongoose.Schema({

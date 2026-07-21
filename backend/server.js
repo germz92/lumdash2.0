@@ -15,6 +15,12 @@ require('dotenv').config();
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 console.log('SENDGRID_API_KEY loaded:', !!process.env.SENDGRID_API_KEY);
 console.log('SENDGRID_FROM_EMAIL:', process.env.SENDGRID_FROM_EMAIL);
+// Friendly sender name shown in inboxes ("LumDash <info@...>"). Set per message,
+// so it never affects other platforms sending from the same address.
+const SENDGRID_FROM = {
+  email: process.env.SENDGRID_FROM_EMAIL,
+  name: process.env.SENDGRID_FROM_NAME || 'LumDash'
+};
 console.log('APP_URL:', process.env.APP_URL);
 
 // Configure Cloudinary
@@ -1165,7 +1171,7 @@ async function sendReimbursementSubmittedEmails(request, reviewers, submitter) {
 
       await sgMail.send({
         to,
-        from: process.env.SENDGRID_FROM_EMAIL,
+        from: SENDGRID_FROM,
         subject: buildReimbursementSubmittedSubject(data),
         html: buildReimbursementSubmittedEmail(data),
         text: buildReimbursementSubmittedText(data)
@@ -1228,7 +1234,7 @@ async function sendReimbursementApprovedEmail(request) {
   try {
     await sgMail.send({
       to,
-      from: process.env.SENDGRID_FROM_EMAIL,
+      from: SENDGRID_FROM,
       subject: buildReimbursementApprovedSubject(data),
       html: buildReimbursementApprovedEmail(data),
       text: buildReimbursementApprovedText(data)
@@ -1573,7 +1579,7 @@ async function sendInviteEmail(invite, inviteUrl, inviterName) {
   try {
     await sgMail.send({
       to,
-      from: process.env.SENDGRID_FROM_EMAIL,
+      from: SENDGRID_FROM,
       subject: 'You\'re invited to LumDash',
       html: `
         <p>Hello,</p>
@@ -1892,7 +1898,7 @@ app.post('/api/auth/forgot-password', async (req, res) => {
   const resetUrl = `${process.env.APP_URL}/reset-password.html?token=${token}`;
   const msg = {
     to: user.email,
-    from: process.env.SENDGRID_FROM_EMAIL,
+    from: SENDGRID_FROM,
     subject: 'Password Reset Request',
     html: `<p>You requested a password reset for your LumDash account.</p>
            <p><a href="${resetUrl}">Click here to reset your password</a></p>
@@ -9967,7 +9973,7 @@ app.post('/api/manual-reservations/bulk', authenticate, async (req, res) => {
 
       const msg = {
         to: personEmail.trim().toLowerCase(),
-        from: process.env.SENDGRID_FROM_EMAIL,
+        from: SENDGRID_FROM,
         subject: 'Gear Reservation Confirmation - Lumetry Media',
         html: emailHtml
       };
@@ -10070,7 +10076,7 @@ app.post('/api/manual-reservations', authenticate, async (req, res) => {
 
       const msg = {
         to: personEmail.trim().toLowerCase(),
-        from: process.env.SENDGRID_FROM_EMAIL,
+        from: SENDGRID_FROM,
         subject: 'Gear Reservation Confirmation - Lumetry Media',
         html: emailHtml
       };
@@ -10149,7 +10155,7 @@ app.post('/api/manual-reservations/send-email', authenticate, async (req, res) =
 
     const msg = {
       to: personEmail.trim().toLowerCase(),
-      from: process.env.SENDGRID_FROM_EMAIL,
+      from: SENDGRID_FROM,
       subject: 'Gear Reservation Summary - Lumetry Media',
       html: emailHtml
     };
@@ -12045,7 +12051,7 @@ async function sendPostProductionUpdateEmail(recipient, data) {
   try {
     await sgMail.send({
       to,
-      from: process.env.SENDGRID_FROM_EMAIL,
+      from: SENDGRID_FROM,
       subject: buildPostProductionUpdateSubject(payload),
       html: buildPostProductionUpdateEmail(payload),
       text: buildPostProductionUpdateText(payload)
@@ -12129,7 +12135,7 @@ async function sendPostProductionAssignedEmail(recipient, data) {
   try {
     await sgMail.send({
       to,
-      from: process.env.SENDGRID_FROM_EMAIL,
+      from: SENDGRID_FROM,
       subject: buildPostProductionAssignedSubject(payload),
       html: buildPostProductionAssignedEmail(payload),
       text: buildPostProductionAssignedText(payload)
@@ -12165,7 +12171,7 @@ async function sendPostProductionStatusChangedEmail(recipient, data) {
   try {
     await sgMail.send({
       to,
-      from: process.env.SENDGRID_FROM_EMAIL,
+      from: SENDGRID_FROM,
       subject: buildPostProductionStatusChangedSubject(payload),
       html: buildPostProductionStatusChangedEmail(payload),
       text: buildPostProductionStatusChangedText(payload)
@@ -13480,7 +13486,7 @@ app.post('/api/tables/:id/share', authenticate, async (req, res) => {
 
       await sgMail.send({
         to: user.email,
-        from: process.env.SENDGRID_FROM_EMAIL,
+        from: SENDGRID_FROM,
         subject,
         html
       });
@@ -13670,7 +13676,7 @@ async function sendCrewAvailabilityResponseEmails(request, table, applied) {
 
     await sgMail.send({
       to: recipient.email,
-      from: process.env.SENDGRID_FROM_EMAIL,
+      from: SENDGRID_FROM,
       subject: buildCrewAvailabilityResponseSubject(data),
       html: buildCrewAvailabilityResponseEmail(data),
       text: buildCrewAvailabilityResponseText(data)
@@ -13808,7 +13814,7 @@ app.post('/api/tables/:id/crew-requests', authenticate, async (req, res) => {
       try {
         await sgMail.send({
           to: user.email,
-          from: process.env.SENDGRID_FROM_EMAIL,
+          from: SENDGRID_FROM,
           subject: buildCrewAvailabilitySubject(emailData),
           html: buildCrewAvailabilityEmail(emailData),
           text: buildCrewAvailabilityText(emailData)

@@ -110,6 +110,40 @@
     .cr-msg.err { color: #f87171; }
     .cr-note { margin-top: 16px; color: #7a7b81; font-size: 0.8rem; text-align: center; line-height: 1.5; }
     .cr-loading { text-align: center; color: #9a9ba1; padding: 40px 0; }
+    .cr-modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.65);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      z-index: 100;
+    }
+    .cr-modal {
+      background: #1a1b1e;
+      border: 1px solid #2a2b2f;
+      border-radius: 14px;
+      padding: 32px 24px 24px;
+      max-width: 360px;
+      width: 100%;
+      text-align: center;
+    }
+    .cr-modal-emoji { font-size: 2.4rem; margin-bottom: 12px; }
+    .cr-modal-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 10px; }
+    .cr-modal-text { color: #9a9ba1; font-size: 0.95rem; line-height: 1.5; margin-bottom: 22px; }
+    .cr-modal-btn {
+      width: 100%;
+      padding: 13px 0;
+      border: none;
+      border-radius: 10px;
+      background: #CC0007;
+      color: #fff;
+      font-size: 1rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>

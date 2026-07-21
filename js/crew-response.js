@@ -96,6 +96,21 @@
     if (submitBtn) submitBtn.addEventListener('click', submit);
   }
 
+  function showAcceptedDialog() {
+    const overlay = document.createElement('div');
+    overlay.className = 'cr-modal-overlay';
+    overlay.innerHTML = `
+      <div class="cr-modal">
+        <div class="cr-modal-emoji">&#127881;</div>
+        <div class="cr-modal-title">See you there!</div>
+        <div class="cr-modal-text">This event will automatically be added to your dashboard.</div>
+        <button type="button" class="cr-modal-btn">Got it</button>
+      </div>`;
+    overlay.querySelector('.cr-modal-btn').addEventListener('click', () => overlay.remove());
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+  }
+
   async function submit() {
     const msg = document.getElementById('crMsg');
     const btn = document.getElementById('crSubmit');
@@ -128,6 +143,9 @@
       msg.textContent = 'Thanks! Your availability has been sent to the event team.';
       btn.disabled = false;
       btn.textContent = 'Update Availability';
+      if (responses.some(r => r.status === 'accepted')) {
+        showAcceptedDialog();
+      }
     } catch (err) {
       msg.className = 'cr-msg err';
       msg.textContent = 'Network error — please try again.';

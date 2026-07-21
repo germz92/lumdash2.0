@@ -13800,6 +13800,7 @@ app.post('/api/tables/:id/crew-requests', authenticate, async (req, res) => {
       const emailData = {
         recipientName: (user.fullName || group.name).split(' ')[0],
         eventName: table.title || 'an event',
+        location: [table.general?.city, table.general?.state].map(s => (s || '').trim()).filter(Boolean).join(', '),
         senderName: req.user.fullName || '',
         days,
         responseUrl,

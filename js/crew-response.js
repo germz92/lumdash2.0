@@ -73,6 +73,10 @@
       <div class="cr-title">Hi ${escapeHtml(firstName || 'there')},</div>
       <div class="cr-subtitle">Please confirm your availability for the day${d.days.length !== 1 ? 's' : ''} below. Exact call times will be shared closer to the event.</div>
       <div class="cr-event">${escapeHtml(d.eventName)}</div>
+      <div class="cr-disclaimer">
+        <span class="cr-disclaimer-icon">&#9992;&#65039;</span>
+        <span>The dates below are <strong>event days only</strong>. If this event requires travel, please keep the day before and the day after open for travel.</span>
+      </div>
       ${dayCards}
       ${openDays.length > 0 ? '<button class="cr-submit" id="crSubmit">Submit Availability</button>' : ''}
       <div class="cr-msg" id="crMsg"></div>`;

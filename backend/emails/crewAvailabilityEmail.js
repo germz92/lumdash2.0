@@ -32,6 +32,7 @@ function formatDay(dateStr) {
  * @param {Object} data
  * @param {string} data.recipientName - Crew member receiving the email
  * @param {string} data.eventName
+ * @param {string} [data.location] - City/state of the event, e.g. "San Diego, CA"
  * @param {string} [data.senderName] - Who sent the request
  * @param {Array<{date: string, role: string}>} data.days - Days being requested
  * @param {string} data.responseUrl - Public magic-link response page
@@ -46,6 +47,7 @@ function buildCrewAvailabilitySubject(data) {
 function buildCrewAvailabilityEmail(data) {
   const recipientName = escapeHtml(data.recipientName || 'there');
   const eventName = escapeHtml(data.eventName || 'an event');
+  const location = data.location ? escapeHtml(data.location) : '';
   const senderName = data.senderName ? escapeHtml(data.senderName) : '';
   const responseUrl = escapeHtml(data.responseUrl || '#');
   const acceptAllUrl = data.acceptAllUrl ? escapeHtml(data.acceptAllUrl) : '';
@@ -89,7 +91,7 @@ function buildCrewAvailabilityEmail(data) {
               <p style="margin:0 0 16px;font-size:15px;">Hi ${recipientName},</p>
               <p style="margin:0 0 24px;font-size:15px;color:#444;">
                 ${senderName ? `<strong>${senderName}</strong> would like` : 'We would like'} to book you for
-                <strong>${eventName}</strong> on the day${days.length !== 1 ? 's' : ''} below.
+                <strong>${eventName}</strong>${location ? ` in <strong>${location}</strong>` : ''} on the day${days.length !== 1 ? 's' : ''} below.
                 Please confirm which days you're available.
               </p>
 
@@ -145,7 +147,7 @@ function buildCrewAvailabilityText(data) {
   const lines = [
     `Hi ${data.recipientName || 'there'},`,
     '',
-    `${data.senderName ? `${data.senderName} would like` : 'We would like'} to book you for ${data.eventName || 'an event'} on the following day${days.length !== 1 ? 's' : ''}:`,
+    `${data.senderName ? `${data.senderName} would like` : 'We would like'} to book you for ${data.eventName || 'an event'}${data.location ? ` in ${data.location}` : ''} on the following day${days.length !== 1 ? 's' : ''}:`,
     ''
   ];
   days.forEach(day => {
@@ -169,6 +171,7 @@ function getSampleCrewAvailabilityEmailData() {
   return {
     recipientName: 'Chris Angeles',
     eventName: 'Conference Direct - APM 2026',
+    location: 'San Diego, CA',
     senderName: 'Germaine David',
     days: [
       { date: '2026-08-04', role: 'Additional Photographer' },

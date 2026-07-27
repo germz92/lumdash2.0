@@ -257,6 +257,46 @@
   color: inherit;
 }
 
+/* Filter by person (admins & event owners) */
+.pp-user-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px 0 10px;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.pp-user-filter .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.pp-user-filter select {
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 7px 4px;
+  outline: none;
+  cursor: pointer;
+  max-width: 160px;
+}
+
+.pp-user-filter select option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.pp-user-filter.active {
+  border-color: var(--accent-red, #cc0007);
+  color: var(--accent-red, #cc0007);
+}
+
 .post-production-table-container {
   flex: 1;
   min-height: 0;

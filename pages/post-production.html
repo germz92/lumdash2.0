@@ -54,6 +54,12 @@
           <span>Due date</span>
           <span class="material-symbols-outlined pp-due-sort-icon" id="ppDueSortIcon">arrow_upward</span>
         </button>
+        <div class="pp-user-filter" id="ppUserFilterWrap" style="display: none;" title="Filter by person">
+          <span class="material-symbols-outlined">person</span>
+          <select id="ppUserFilter" aria-label="Filter by person">
+            <option value="">Everyone</option>
+          </select>
+        </div>
         <div class="status-filter-tabs" id="ppFilterTabs">
           <button type="button" class="status-tab" data-filter="all">All</button>
           <button type="button" class="status-tab active" data-filter="pending">Pending</button>

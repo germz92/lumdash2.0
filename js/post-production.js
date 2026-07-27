@@ -24,6 +24,7 @@
   let permissions = { isAdmin: false, canCreate: false };
   let searchQuery = '';
   let statusFilter = 'pending';
+  let userFilter = '';
   let sortField = 'dueDate';
   let sortOrder = 'asc';
   let updatesItemId = null;
@@ -606,7 +607,7 @@
   }
 
   function selectableItems() {
-    return items.filter(r => r._id !== DRAFT_ID);
+    return visibleItems().filter(r => r._id !== DRAFT_ID);
   }
 
   function isSelected(id) {
@@ -784,11 +785,26 @@
     };
   }
 
+  /** True if the given user is involved on the row as owner, editor, or collaborator */
+  function rowInvolvesUser(row, uid) {
+    if (!uid) return true;
+    if (row.ownerId && String(row.ownerId) === uid) return true;
+    if ((row.editorIds || []).some(id => String(id) === uid)) return true;
+    if ((row.collaboratorIds || []).some(id => String(id) === uid)) return true;
+    return false;
+  }
+
+  /** Items to render — applies the person filter; draft rows always stay visible */
+  function visibleItems() {
+    if (!userFilter) return items;
+    return items.filter(row => row._id === DRAFT_ID || rowInvolvesUser(row, userFilter));
+  }
+
   function renderTableRows() {
     const tbody = document.getElementById('ppTableBody');
     if (!tbody) return;
 
-    tbody.innerHTML = items.map(row => {
+    tbody.innerHTML = visibleItems().map(row => {
       const p = getRowParts(row);
       const selectedCls = isSelected(row._id) ? ' pp-row-selected' : '';
       return `
@@ -823,7 +839,7 @@
     const container = document.getElementById('ppCardsContainer');
     if (!container) return;
 
-    container.innerHTML = items.map(row => {
+    container.innerHTML = visibleItems().map(row => {
       const p = getRowParts(row);
       const selectedCls = isSelected(row._id) ? ' pp-row-selected' : '';
       return `
@@ -893,7 +909,7 @@
 
     if (loading) loading.style.display = 'none';
 
-    const hasRows = items.length > 0 || hasDraftRow;
+    const hasRows = visibleItems().length > 0 || hasDraftRow;
 
     if (!hasRows) {
       if (wrap) wrap.style.display = 'none';
@@ -1004,6 +1020,7 @@
     const addBtn = document.getElementById('ppAddBtn');
     if (addBtn) addBtn.style.display = permissions.canCreate ? 'inline-flex' : 'none';
 
+    updateUserFilterUI();
     updateBulkActionsUI();
     renderLists();
 
@@ -1015,6 +1032,44 @@
         fetchItemWithUpdates(updatesItemId).then(setUpdatesFeed).catch(() => {});
       }
     }
+  }
+
+  /**
+   * Person filter — visible only to admins and event owners (permissions.canCreate
+   * covers both). Options are the people actually on the loaded items.
+   */
+  function updateUserFilterUI() {
+    const wrap = document.getElementById('ppUserFilterWrap');
+    const select = document.getElementById('ppUserFilter');
+    if (!wrap || !select) return;
+
+    const allowed = permissions.isAdmin || permissions.canCreate;
+    wrap.style.display = allowed ? 'inline-flex' : 'none';
+    if (!allowed) {
+      userFilter = '';
+      return;
+    }
+
+    const involved = new Set();
+    items.forEach(row => {
+      if (row._id === DRAFT_ID) return;
+      if (row.ownerId) involved.add(String(row.ownerId));
+      (row.editorIds || []).forEach(id => involved.add(String(id)));
+      (row.collaboratorIds || []).forEach(id => involved.add(String(id)));
+    });
+    // Keep the current selection listed even if that person has no items on this tab
+    if (userFilter) involved.add(userFilter);
+
+    const nameById = {};
+    users.forEach(u => { nameById[String(u._id)] = u.name || u.email || 'Unknown'; });
+
+    const options = [...involved]
+      .map(id => ({ id, name: nameById[id] || 'Unknown' }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    select.innerHTML = '<option value="">Everyone</option>' +
+      options.map(o => `<option value="${o.id}"${o.id === userFilter ? ' selected' : ''}>${esc(o.name)}</option>`).join('');
+    wrap.classList.toggle('active', !!userFilter);
   }
 
   async function fetchItemWithUpdates(itemId) {
@@ -2033,6 +2088,15 @@
       hideActionsMenu();
       loadData().catch(err => console.error(err));
       updateDueSortUI();
+    });
+
+    on(document.getElementById('ppUserFilter'), 'change', (e) => {
+      userFilter = e.target.value || '';
+      document.getElementById('ppUserFilterWrap')?.classList.toggle('active', !!userFilter);
+      selectedIds.clear();
+      hideActionsMenu();
+      updateBulkActionsUI();
+      renderLists();
     });
 
     on(document.getElementById('ppSelectAll'), 'change', (e) => {

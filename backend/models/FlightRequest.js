@@ -80,12 +80,12 @@ const flightRequestSchema = new mongoose.Schema({
   // Time preferences
   departTimePreference: {
     type: String,
-    enum: ['any', 'morning', 'afternoon', 'evening', 'redeye'],
+    enum: ['any', 'early_morning', 'morning', 'midday', 'afternoon', 'evening', 'night', 'redeye'],
     default: 'any'
   },
   returnTimePreference: {
     type: String,
-    enum: ['any', 'morning', 'afternoon', 'evening', 'redeye'],
+    enum: ['any', 'early_morning', 'morning', 'midday', 'afternoon', 'evening', 'night', 'redeye'],
     default: 'any'
   },
   

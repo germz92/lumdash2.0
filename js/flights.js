@@ -1208,9 +1208,12 @@
   function formatTimePreference(pref) {
     if (!pref || pref === 'any') return 'Any';
     const preferences = {
+      'early_morning': 'Early Morning',
       'morning': 'Morning',
+      'midday': 'Midday',
       'afternoon': 'Afternoon',
       'evening': 'Evening',
+      'night': 'Night',
       'redeye': 'Red-eye'
     };
     return preferences[pref] || pref;

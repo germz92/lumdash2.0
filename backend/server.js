@@ -11885,6 +11885,7 @@ const PP_STATUS_LABELS = {
   deliveryStatus: {
     '': '—',
     working: 'Working on it',
+    awaiting_client: 'Awaiting Client',
     stuck: 'Stuck',
     done: 'Done'
   }

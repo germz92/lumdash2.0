@@ -73,7 +73,7 @@ const postProductionItemSchema = new mongoose.Schema({
   },
   deliveryStatus: {
     type: String,
-    enum: ['', 'working', 'stuck', 'done'],
+    enum: ['', 'working', 'awaiting_client', 'stuck', 'done'],
     default: ''
   },
   /** @deprecated Use editorIds — kept for legacy queries and sort */

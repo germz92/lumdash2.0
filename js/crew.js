@@ -603,7 +603,8 @@ function updateOwnerButtons() {
   const addDateBtn = document.getElementById('addDateBtn');
   const saveStatus = document.getElementById('saveStatus');
   const requestAvailabilityBtn = document.getElementById('requestAvailabilityBtn');
-  
+  const shareEventBtn = document.getElementById('shareEventBtn');
+
   if (isOwner) {
     if (crewListBtn) crewListBtn.style.display = 'inline-flex';
     if (crewCostCalcBtn) crewCostCalcBtn.style.display = 'inline-flex';
@@ -611,6 +612,7 @@ function updateOwnerButtons() {
     if (addDateBtn) addDateBtn.style.display = 'inline-flex';
     if (saveStatus) saveStatus.style.display = 'block';
     if (requestAvailabilityBtn) requestAvailabilityBtn.style.display = 'inline-flex';
+    if (shareEventBtn) shareEventBtn.style.display = 'inline-flex';
   } else {
     if (crewListBtn) crewListBtn.style.display = 'none';
     if (crewCostCalcBtn) crewCostCalcBtn.style.display = 'none';
@@ -618,6 +620,7 @@ function updateOwnerButtons() {
     if (addDateBtn) addDateBtn.style.display = 'none';
     if (saveStatus) saveStatus.style.display = 'none';
     if (requestAvailabilityBtn) requestAvailabilityBtn.style.display = 'none';
+    if (shareEventBtn) shareEventBtn.style.display = 'none';
   }
 }
 
@@ -2326,7 +2329,7 @@ function showCrewListModal() {
       </div>
       <div class="modal-footer-dark">
         <button class="btn-secondary" id="closeCrewListModalBtn">Close</button>
-        <button class="btn-primary" id="emailEveryoneBtn">Email Everyone</button>
+        <button class="btn-primary" id="copyEmailListBtn">Copy Email List</button>
       </div>
     </div>
   `;
@@ -2335,16 +2338,40 @@ function showCrewListModal() {
   const closeBtn = document.getElementById('closeCrewListModalBtn');
   closeBtn.onclick = () => modal.remove();
   
-  const emailBtn = document.getElementById('emailEveryoneBtn');
-  emailBtn.onclick = () => {
-    const allEmails = crewArr.filter(c => c.email).map(c => c.email).join(',');
-    if (allEmails) {
-      const mailto = `mailto:${allEmails}`;
-      window.location.href = mailto;
-      showMessage('Opening email client...', 'success');
-    } else {
+  const copyBtn = document.getElementById('copyEmailListBtn');
+  copyBtn.onclick = async () => {
+    // Exclude the logged-in user's own email from the copied list
+    let myEmail = '';
+    try {
+      const payload = JSON.parse(atob(token.replace(/^Bearer\s+/i, '').split('.')[1]));
+      const me = cachedUsers.find(u => (u._id || '').toString() === (payload.id || '').toString());
+      myEmail = (me?.email || '').toLowerCase();
+    } catch { /* fall through — copy the full list */ }
+
+    const emails = crewArr
+      .filter(c => c.email && c.email.toLowerCase() !== myEmail)
+      .map(c => c.email);
+    const allEmails = emails.join(', ');
+    if (!allEmails) {
       showMessage('No emails found for crew.', 'error');
+      return;
     }
+    try {
+      await navigator.clipboard.writeText(allEmails);
+    } catch (err) {
+      // Clipboard API can fail on insecure contexts — fall back to a temp textarea
+      const ta = document.createElement('textarea');
+      ta.value = allEmails;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    showMessage(`Copied ${emails.length} email${emails.length !== 1 ? 's' : ''} to clipboard`, 'success');
+    copyBtn.textContent = 'Copied!';
+    setTimeout(() => { copyBtn.textContent = 'Copy Email List'; }, 2000);
   };
   
   // Close on backdrop click
@@ -2621,6 +2648,17 @@ function attachEventListeners() {
   
   const requestAvailabilityBtn = document.getElementById('requestAvailabilityBtn');
   if (requestAvailabilityBtn) requestAvailabilityBtn.onclick = showRequestAvailabilityModal;
+
+  const shareEventBtn = document.getElementById('shareEventBtn');
+  if (shareEventBtn) {
+    shareEventBtn.onclick = () => {
+      if (window.ShareModal && typeof window.ShareModal.open === 'function') {
+        window.ShareModal.open(tableId);
+      } else {
+        showMessage('Share is unavailable — please refresh the page.', 'error');
+      }
+    };
+  }
   
   // Setup action menu handlers
   setupActionMenuHandlers();

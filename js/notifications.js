@@ -32,6 +32,11 @@
     crew_availability_response: { icon: 'how_to_reg',   color: '#22c55e' },
     feedback_submitted:     { icon: 'bug_report',       color: '#f59e0b' },
     feedback_status_changed:{ icon: 'rate_review',      color: '#8b5cf6' },
+    portal_comment:         { icon: 'comment',          color: '#3b82f6' },
+    portal_decision:        { icon: 'verified',         color: '#22c55e' },
+    portal_feedback_due:    { icon: 'event',            color: '#f59e0b' },
+    portal_mention:         { icon: 'alternate_email',  color: '#38bdf8' },
+    portal_comment_digest:  { icon: 'inbox',            color: '#a78bfa' },
     general:                { icon: 'notifications',    color: '#6b7280' }
   };
 
@@ -316,6 +321,9 @@
         }
         if (notification.link.params?.feedbackId) {
           sessionStorage.setItem('openFeedbackId', notification.link.params.feedbackId);
+        }
+        if (notification.link.params?.projectId && page === 'video-portal') {
+          sessionStorage.setItem('openVideoProjectId', notification.link.params.projectId);
         }
         if (notification.link.params?.itemId) {
           sessionStorage.setItem('openPostProductionItemId', notification.link.params.itemId);

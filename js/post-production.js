@@ -474,19 +474,16 @@
     return getRowVersions(row)[0] || null;
   }
 
-  function versionButton(row) {
+  function portalButton(row) {
     if (row._id === DRAFT_ID) return '<span class="pp-version-empty" aria-hidden="true">—</span>';
-    const versions = getRowVersions(row);
-    const latest = versions[0] || null;
-    const count = versions.length;
-    const title = latest
-      ? `${latest.name || 'Latest version'}${latest.addedByName ? ` · ${latest.addedByName}` : ''}${latest.createdAt ? ` · ${formatUpdateDate(latest.createdAt)}` : ''}\nClick to open · long-press to edit`
-      : 'Add a version link';
-    const cls = latest ? 'pp-version-btn has-link' : 'pp-version-btn';
-    const icon = latest ? 'link' : 'add_link';
-    const badge = count > 1 ? `<span class="pp-version-count">${count > 99 ? '99+' : count}</span>` : '';
-    return `<div class="pp-version-cell-inner"><button type="button" class="${cls}" data-version="${esc(row._id)}" title="${esc(title)}" aria-label="${esc(title)}">
-      <span class="material-symbols-outlined">${icon}</span>${badge}
+    if (row.portalProjectId) {
+      const title = row.portalProjectTitle || 'Video portal project';
+      return `<div class="pp-version-cell-inner"><button type="button" class="pp-version-btn has-link" data-portal-open="${esc(row.portalProjectId)}" data-portal-item="${esc(row._id)}" title="Open “${esc(title)}” in Video Portal&#10;Long-press to change or unlink" aria-label="Open portal project">
+        <span class="material-symbols-outlined">play_circle</span>
+      </button></div>`;
+    }
+    return `<div class="pp-version-cell-inner"><button type="button" class="pp-version-btn" data-portal-link="${esc(row._id)}" title="Link a Video Portal project" aria-label="Link Video Portal project">
+      <span class="material-symbols-outlined">add_link</span>
     </button></div>`;
   }
 
@@ -781,7 +778,7 @@
       tableOwnerBtn: userPickerBtn(row, 'ownerId', ownerUser, true),
       dueInput: `<div class="pp-date-input-wrap${dueIndicator ? ' has-due-ind' : ''}">${dueIndicator}<input type="date" data-field="dueDate" data-id="${row._id}" value="${formatDueDate(row.dueDate)}"></div>`,
       updatesBtn: updatesButton(row),
-      versionBtn: versionButton(row)
+      versionBtn: portalButton(row)
     };
   }
 
@@ -820,7 +817,7 @@
           ${td('Collaborators', p.tableCollaboratorsBtn, 'pp-td-avatar')}
           ${td('QC', p.qcSelect, 'pp-td-status')}
           ${td('Delivery', p.deliverySelect, 'pp-td-status')}
-          ${td('Latest Version', p.versionBtn, 'pp-td-version')}
+          ${td('Portal', p.versionBtn, 'pp-td-version')}
         </tr>`;
     }).join('');
 
@@ -892,7 +889,7 @@
               ${p.ownerBtn}
             </div>
             <div class="pp-card-field pp-card-footer-version">
-              <span class="pp-card-label">Latest Version</span>
+              <span class="pp-card-label">Portal</span>
               ${p.versionBtn}
             </div>
             ${p.updatesBtn}
@@ -1362,6 +1359,100 @@
     const menu = document.getElementById('ppVersionMenu');
     if (menu) menu.style.display = 'none';
     versionMenuTarget = null;
+  }
+
+  function openPortalProject(projectId) {
+    if (!projectId) return;
+    sessionStorage.setItem('openVideoProjectId', String(projectId));
+    if (typeof window.navigate === 'function') window.navigate('video-portal');
+    else location.hash = `#video-portal?projectId=${encodeURIComponent(projectId)}`;
+  }
+
+  function positionFloatingMenu(menu, anchor, menuWidth = 320, menuMaxHeight = 360) {
+    const rect = anchor.getBoundingClientRect();
+    menu.style.display = 'block';
+    let left = rect.left;
+    if (left + menuWidth > window.innerWidth - 12) {
+      left = Math.max(12, window.innerWidth - menuWidth - 12);
+    }
+    menu.style.left = `${left}px`;
+    menu.style.width = `${menuWidth}px`;
+    if (rect.bottom + menuMaxHeight > window.innerHeight - 12 && rect.top > menuMaxHeight) {
+      menu.style.top = 'auto';
+      menu.style.bottom = `${window.innerHeight - rect.top + 4}px`;
+    } else {
+      menu.style.bottom = 'auto';
+      menu.style.top = `${rect.bottom + 4}px`;
+    }
+  }
+
+  async function showPortalLinkMenu(anchor, itemId) {
+    const menu = document.getElementById('ppVersionMenu');
+    if (!menu) return;
+    const row = items.find(i => i._id === itemId);
+    if (!row || row._id === DRAFT_ID) return;
+    versionMenuTarget = { itemId, mode: 'portal' };
+
+    let projects = [];
+    try {
+      const res = await fetch(`${API_BASE}/api/video-projects`, { headers: authHeaders() });
+      const data = await res.json().catch(() => ([]));
+      if (!res.ok) throw new Error(data.error || 'Failed to load portal projects');
+      projects = Array.isArray(data) ? data : [];
+    } catch (err) {
+      alert(err.message);
+      return;
+    }
+
+    const linkedId = row.portalProjectId ? String(row.portalProjectId) : '';
+    const options = projects
+      .filter(p => p.status !== 'archived')
+      .map(p => {
+        const id = String(p._id);
+        const selected = linkedId && id === linkedId ? ' style="outline:1px solid var(--accent-red, #CC0007);"' : '';
+        return `<button type="button" class="pp-version-item-main" data-portal-pick="${esc(id)}"${selected}>
+          <span class="pp-version-item-name">${esc(p.title || 'Untitled')}</span>
+          <span class="pp-version-item-meta">${esc(p.clientName || '')}${p.status ? ` · ${esc(p.status)}` : ''}</span>
+        </button>`;
+      }).join('');
+
+    menu.innerHTML = `
+      <div class="pp-version-menu-inner">
+        <div class="pp-version-menu-header">${linkedId ? 'Change portal project' : 'Link portal project'}</div>
+        <input type="search" class="pp-version-input" data-portal-filter placeholder="Search projects…" autocomplete="off">
+        <div class="pp-portal-options" style="max-height:240px;overflow:auto;display:flex;flex-direction:column;gap:4px;margin-top:8px;">
+          ${options || '<p class="pp-version-history-empty">No video portal projects yet.</p>'}
+        </div>
+        ${linkedId ? `<button type="button" class="pp-version-save" data-portal-unlink style="margin-top:10px;background:transparent;color:var(--text-muted);border:1px solid var(--border-default);">Unlink portal</button>` : ''}
+      </div>`;
+
+    positionFloatingMenu(menu, anchor);
+    const filter = menu.querySelector('[data-portal-filter]');
+    filter?.addEventListener('input', () => {
+      const q = filter.value.trim().toLowerCase();
+      menu.querySelectorAll('[data-portal-pick]').forEach(btn => {
+        btn.style.display = !q || btn.textContent.toLowerCase().includes(q) ? '' : 'none';
+      });
+    });
+    filter?.focus();
+  }
+
+  async function setPortalLink(itemId, videoProjectId) {
+    const res = await fetch(`${API_BASE}/api/post-production/${itemId}/portal-project`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify({ videoProjectId })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to update portal link');
+    const row = items.find(i => i._id === itemId);
+    if (row) {
+      row.portalProjectId = data.portalProjectId || null;
+      row.portalProjectTitle = data.portalProjectTitle || '';
+      row.portalProjectStatus = data.portalProjectStatus || '';
+    }
+    hideVersionMenu();
+    renderLists();
   }
 
   function refreshVersionMenuIfOpen() {
@@ -2207,20 +2298,24 @@
         );
         return;
       }
-      const versionBtn = e.target.closest('[data-version]');
-      if (versionBtn) {
+      const portalOpenBtn = e.target.closest('[data-portal-open]');
+      if (portalOpenBtn) {
         e.stopPropagation();
         if (suppressVersionClick) {
           suppressVersionClick = false;
           return;
         }
-        const row = items.find(i => i._id === versionBtn.dataset.version);
-        const latest = latestVersionOf(row);
-        if (latest?.url) {
-          window.open(latest.url, '_blank', 'noopener');
-        } else {
-          showVersionMenu(versionBtn, versionBtn.dataset.version);
+        openPortalProject(portalOpenBtn.dataset.portalOpen);
+        return;
+      }
+      const portalLinkBtn = e.target.closest('[data-portal-link]');
+      if (portalLinkBtn) {
+        e.stopPropagation();
+        if (suppressVersionClick) {
+          suppressVersionClick = false;
+          return;
         }
+        showPortalLinkMenu(portalLinkBtn, portalLinkBtn.dataset.portalLink);
         return;
       }
       const updatesBtn = e.target.closest('[data-updates]');
@@ -2294,15 +2389,16 @@
       }
     });
 
-    // Long-press a version button to open the editor; quick tap opens the latest link
+    // Long-press a portal button to link / change / unlink
     on(listRoot, 'pointerdown', (e) => {
-      const btn = e.target.closest('[data-version]');
+      const btn = e.target.closest('[data-portal-open], [data-portal-link]');
       if (!btn) return;
       suppressVersionClick = false;
       clearTimeout(versionPressTimer);
       versionPressTimer = setTimeout(() => {
         suppressVersionClick = true;
-        showVersionMenu(btn, btn.dataset.version);
+        const itemId = btn.dataset.portalItem || btn.dataset.portalLink;
+        if (itemId) showPortalLinkMenu(btn, itemId);
       }, VERSION_LONGPRESS_MS);
     });
     const cancelVersionPress = () => clearTimeout(versionPressTimer);
@@ -2311,12 +2407,13 @@
     on(listRoot, 'pointercancel', cancelVersionPress);
 
     on(listRoot, 'contextmenu', (e) => {
-      const btn = e.target.closest('[data-version]');
+      const btn = e.target.closest('[data-portal-open], [data-portal-link]');
       if (!btn) return;
       e.preventDefault();
       clearTimeout(versionPressTimer);
       suppressVersionClick = true;
-      showVersionMenu(btn, btn.dataset.version);
+      const itemId = btn.dataset.portalItem || btn.dataset.portalLink;
+      if (itemId) showPortalLinkMenu(btn, itemId);
     });
 
     // Hover tooltip for the due-date indicator ("6 Days Left", "Overdue by 2 Days", ...)
@@ -2337,11 +2434,31 @@
       }
     });
 
-    on(document.getElementById('ppVersionMenu'), 'click', (e) => {
+    on(document.getElementById('ppVersionMenu'), 'click', async (e) => {
       const removeBtn = e.target.closest('[data-version-remove]');
       if (removeBtn) {
         e.preventDefault();
         removeVersionFromMenu(removeBtn.dataset.versionRemove);
+        return;
+      }
+      const pick = e.target.closest('[data-portal-pick]');
+      if (pick && versionMenuTarget?.itemId) {
+        e.preventDefault();
+        try {
+          await setPortalLink(versionMenuTarget.itemId, pick.dataset.portalPick);
+        } catch (err) {
+          alert(err.message);
+        }
+        return;
+      }
+      const unlink = e.target.closest('[data-portal-unlink]');
+      if (unlink && versionMenuTarget?.itemId) {
+        e.preventDefault();
+        try {
+          await setPortalLink(versionMenuTarget.itemId, null);
+        } catch (err) {
+          alert(err.message);
+        }
       }
     });
 
@@ -2356,7 +2473,7 @@
       if (!e.target.closest('#ppProjectSuggestions') && !e.target.closest('.pp-project-input')) {
         hideProjectSuggestions();
       }
-      if (!e.target.closest('#ppVersionMenu') && !e.target.closest('[data-version]')) {
+      if (!e.target.closest('#ppVersionMenu') && !e.target.closest('[data-portal-open]') && !e.target.closest('[data-portal-link]') && !e.target.closest('[data-version]')) {
         hideVersionMenu();
       }
       if (!e.target.closest('#ppMentionMenu') && !e.target.closest('#ppUpdateInput')) {

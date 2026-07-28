@@ -29,6 +29,11 @@ const notificationSchema = new mongoose.Schema({
       'crew_availability_response',  // Crew member responded to an availability request
       'feedback_submitted',      // New bug report / feature request (for admins)
       'feedback_status_changed', // Status changed on feedback you submitted
+      'portal_comment',          // Client commented on a video in the portal
+      'portal_decision',         // Client approved a cut
+      'portal_feedback_due',     // Feedback due date reminder for the team
+      'portal_mention',          // You were @mentioned on a portal comment
+      'portal_comment_digest',   // Daily digest of open client comments
       'general'                  // Catch-all for future types
     ]
   },

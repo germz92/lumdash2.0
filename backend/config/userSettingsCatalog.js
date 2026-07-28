@@ -184,6 +184,52 @@ const NOTIFICATION_SECTION = {
       ]
     },
     {
+      id: 'video_portal',
+      title: 'Video portal',
+      items: [
+        {
+          key: 'portal_comment',
+          label: 'Client video comments',
+          description: 'Batched alerts when a client leaves comments on a video you uploaded or a project you created. Rapid comments in one session are grouped into a single notification/email.',
+          roles: ALL_ROLES,
+          defaults: { toast: true, email: true },
+          channels: { toast: true, email: true }
+        },
+        {
+          key: 'portal_decision',
+          label: 'Client approved a cut',
+          description: 'When a client approves a cut on a portal project.',
+          roles: ALL_ROLES,
+          defaults: { toast: true, email: true },
+          channels: { toast: true, email: true }
+        },
+        {
+          key: 'portal_feedback_due',
+          label: 'Feedback due reminders',
+          description: 'When a portal project’s client feedback due date is approaching or past.',
+          roles: ALL_ROLES,
+          defaults: { toast: true, email: true },
+          channels: { toast: true, email: true }
+        },
+        {
+          key: 'portal_mention',
+          label: 'Portal @mentions',
+          description: 'When someone @mentions you on a video portal comment.',
+          roles: ALL_ROLES,
+          defaults: { toast: true, email: true },
+          channels: { toast: true, email: true }
+        },
+        {
+          key: 'portal_comment_digest',
+          label: 'Daily open-comment digest',
+          description: 'A once-daily email summarizing unresolved client comments on your portal projects.',
+          roles: ALL_ROLES,
+          defaults: { toast: false, email: true },
+          channels: { toast: false, email: true }
+        }
+      ]
+    },
+    {
       id: 'other',
       title: 'Other',
       items: [

@@ -1,0 +1,290 @@
+<link rel="stylesheet" href="css/theme-dark.css">
+<link rel="stylesheet" href="css/video-portal.css">
+<style>
+  body:has(.video-portal-page) #page-container,
+  #page-container:has(.video-portal-page) {
+    padding: 0 !important;
+    overflow: hidden !important;
+    height: 100% !important;
+  }
+</style>
+
+<div class="dark-theme video-portal-page">
+  <div class="vp-layout" id="vpPageLayout">
+
+    <!-- Sidebar will be injected here by sidebar-dashboard.js -->
+
+    <main class="vp-main">
+      <header class="vp-header" id="vpHeader">
+        <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+        <div class="vp-header-left">
+          <h1>Video Portal</h1>
+          <div class="vp-header-subtitle">Client galleries, review cuts, and revision comments</div>
+        </div>
+        <div class="vp-header-actions">
+          <button class="vp-btn secondary" id="manageClientsBtn">
+            <span class="material-symbols-outlined">group</span>
+            <span>Clients</span>
+          </button>
+          <button class="vp-btn primary" id="newProjectBtn">
+            <span class="material-symbols-outlined">add</span>
+            <span>New Project</span>
+          </button>
+        </div>
+      </header>
+
+      <div class="vp-toolbar" id="vpToolbar">
+        <div class="vp-search">
+          <span class="material-symbols-outlined">search</span>
+          <input type="text" id="vpSearch" placeholder="Search projects or clients...">
+        </div>
+        <div class="vp-status-tabs" id="vpStatusTabs">
+          <button class="vp-status-tab active" data-status="all">All</button>
+          <button class="vp-status-tab" data-status="in_review">In Review</button>
+          <button class="vp-status-tab" data-status="delivered">Delivered</button>
+          <button class="vp-status-tab" data-status="archived">Archived</button>
+        </div>
+        <select id="vpClientFilter">
+          <option value="">All clients</option>
+        </select>
+      </div>
+
+      <div class="vp-content" id="vpContainer">
+        <div class="vp-empty">Loading…</div>
+      </div>
+
+      <!-- Full-page project detail view (replaces the grid when a project is open) -->
+      <div class="vp-detail-view" id="vpDetailView" style="display:none;">
+        <div class="vp-detail-topbar">
+          <button type="button" class="vp-back-btn" id="vpBackBtn">
+            <span class="material-symbols-outlined">arrow_back</span>
+            <span>All projects</span>
+          </button>
+          <div class="vp-detail-titles">
+            <h2 id="detailTitle">Project</h2>
+            <div class="vp-detail-sub" id="detailSub"></div>
+            <div class="vp-detail-folder">
+              <label for="detailFolderSelect">Folder</label>
+              <select id="detailFolderSelect">
+                <option value="">No folder</option>
+              </select>
+            </div>
+          </div>
+          <div class="vp-detail-header-actions">
+            <button class="vp-icon-btn danger" id="deleteProjectBtn" title="Delete project" style="display:none;">
+              <span class="material-symbols-outlined">delete</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="vp-detail-body">
+          <div class="vp-detail-player-col">
+            <div class="vp-version-bar">
+              <select id="versionSelect"></select>
+              <span class="vp-version-status" id="versionStatus"></span>
+              <button type="button" class="vp-btn secondary small" id="compareToggleBtn" title="Compare two versions" style="display:none;">
+                <span class="material-symbols-outlined">compare</span>
+                <span>Compare</span>
+              </button>
+            </div>
+            <div class="vp-player-stack" id="playerStack">
+              <div class="vp-player-wrap" id="playerWrap">
+                <div class="vp-player-placeholder" id="playerPlaceholder">No video uploaded yet</div>
+              </div>
+              <div class="vp-compare-pane" id="comparePane" style="display:none;">
+                <div class="vp-version-bar">
+                  <select id="compareVersionSelect"></select>
+                  <span class="vp-version-status">Compare</span>
+                </div>
+                <div class="vp-player-wrap" id="comparePlayerWrap"></div>
+              </div>
+            </div>
+            <div class="vp-marker-rail" id="commentMarkerRail" hidden aria-label="Comment markers on timeline"></div>
+            <div class="vp-annotate-bar" id="annotateBar">
+              <button type="button" class="vp-tool-btn" id="annotatePenBtn" title="Draw on frame">&#9998;</button>
+              <button type="button" class="vp-tool-btn" id="annotateArrowBtn" title="Arrow">&#8599;</button>
+              <button type="button" class="vp-tool-btn" id="annotateClearBtn" title="Clear drawing">&#10005;</button>
+              <span class="vp-annotate-hint" id="annotateHint"></span>
+            </div>
+
+            <div class="vp-upload-box">
+              <div class="vp-thumb-label" id="uploadBoxLabel">Upload version</div>
+              <div class="vp-upload-row">
+                <input type="file" id="versionFile" accept="video/*">
+                <label class="vp-check"><input type="checkbox" id="notifyClientCheck" checked> Email client</label>
+                <button class="vp-btn primary small" id="uploadVersionBtn">
+                  <span class="material-symbols-outlined">upload</span>
+                  <span id="uploadVersionBtnLabel">Upload version</span>
+                </button>
+              </div>
+              <input type="text" id="versionNotes" placeholder="What changed in this cut? (goes in the client email)">
+              <div class="vp-upload-hint" id="uploadBoxHint"></div>
+              <div class="vp-upload-progress" id="uploadProgress" style="display:none;"></div>
+            </div>
+
+            <div class="vp-review-box">
+              <div class="vp-review-status" id="reviewDecisionStatus">Awaiting client approval</div>
+              <div class="vp-review-row">
+                <label class="vp-field-label">Feedback due
+                  <input type="date" id="feedbackDueInput">
+                </label>
+                <button class="vp-btn secondary small" id="saveDueBtn">Save due date</button>
+                <button class="vp-btn secondary small" id="notifyClientsBtn" title="Email all contacts the latest version is ready">
+                  <span class="material-symbols-outlined">campaign</span>
+                  <span>Notify clients</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="vp-deliver-box">
+              <div class="vp-deliver-status" id="deliverStatus"></div>
+              <div class="vp-deliver-row">
+                <input type="url" id="masterUrlInput" placeholder="Master file link (Google Drive)">
+                <button type="button" class="vp-btn secondary small" id="openMasterBtn" style="display:none;" title="Download the delivered master file">
+                  <span class="material-symbols-outlined">download</span>
+                  <span>Download</span>
+                </button>
+                <button class="vp-btn success small" id="deliverBtn">Mark Delivered</button>
+              </div>
+              <label class="vp-check">
+                <input type="checkbox" id="allowDownloadCheck" checked>
+                Allow client to download / open the master link
+              </label>
+            </div>
+
+            <div class="vp-thumb-box">
+              <div class="vp-thumb-label">Custom thumbnail</div>
+              <div class="vp-thumb-row">
+                <div class="vp-thumb-preview" id="thumbPreview">
+                  <span class="material-symbols-outlined">image</span>
+                </div>
+                <div class="vp-thumb-actions">
+                  <input type="file" id="thumbFile" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+                  <div class="vp-thumb-btn-row">
+                    <button type="button" class="vp-btn secondary small" id="thumbFromFrameBtn" title="Pause on the frame you want, then click">
+                      <span class="material-symbols-outlined">photo_camera</span>
+                      <span>Use current frame</span>
+                    </button>
+                    <button type="button" class="vp-btn secondary small" id="thumbPickBtn">
+                      <span class="material-symbols-outlined">upload</span>
+                      <span>Upload image</span>
+                    </button>
+                    <button type="button" class="vp-btn secondary small" id="thumbClearBtn" style="display:none;">Remove</button>
+                  </div>
+                  <div class="vp-thumb-hint">Shown on the gallery card. Pause the player and use the current frame, or upload a JPG/PNG.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="vp-detail-comments-col">
+            <div class="vp-comments-head">
+              <div class="vp-side-tabs" role="tablist">
+                <button type="button" class="vp-side-tab active" role="tab" aria-selected="true" data-side-tab="comments" id="sideTabComments">Comments</button>
+                <button type="button" class="vp-side-tab" role="tab" aria-selected="false" data-side-tab="activity" id="sideTabActivity">Activity</button>
+              </div>
+              <label class="vp-check" id="hideResolvedWrap"><input type="checkbox" id="hideResolvedCheck"> Hide resolved</label>
+            </div>
+            <div class="vp-side-panel" id="commentsSidePanel">
+              <div class="vp-comments-list" id="commentsList"></div>
+              <div class="vp-comment-compose">
+                <div class="vp-mention-wrap">
+                  <textarea id="commentText" rows="2" placeholder="Add a comment… Time follows the playhead. Use @ to mention an editor"></textarea>
+                  <div class="vp-mention-menu" id="mentionMenu" style="display:none;"></div>
+                </div>
+                <div class="vp-compose-row">
+                  <button class="vp-tc-btn active" id="commentAtTimeBtn" title="Remove timestamp from this comment">
+                    <span class="material-symbols-outlined">schedule</span>
+                    <span id="commentTcLabel">0:00</span>
+                  </button>
+                  <button class="vp-tc-btn" id="commentEndTimeBtn" title="Lock this time as the start, then scrub to set the end" style="display:inline-flex;">
+                    <span id="commentEndLabel">Add end time</span>
+                  </button>
+                  <button class="vp-btn primary small" id="sendCommentBtn">Send</button>
+                </div>
+              </div>
+            </div>
+            <div class="vp-side-panel" id="activitySidePanel" hidden>
+              <div class="vp-activity-list" id="activityList"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Full-page clients management -->
+      <div class="vp-clients-view" id="vpClientsView" style="display:none;">
+        <div class="vp-detail-topbar">
+          <button type="button" class="vp-back-btn" id="vpClientsBackBtn">
+            <span class="material-symbols-outlined">arrow_back</span>
+            <span>All projects</span>
+          </button>
+          <div class="vp-detail-titles">
+            <h2>Clients</h2>
+            <div class="vp-detail-sub">Open a client to manage branding, folders, and contacts</div>
+          </div>
+        </div>
+        <div class="vp-clients-body">
+          <form class="vp-clients-add" id="newClientForm">
+            <input type="text" id="newClientName" placeholder="New client name (e.g. Conference Direct)" required>
+            <button type="submit" class="vp-btn primary small">
+              <span class="material-symbols-outlined">add</span>
+              <span>Add Client</span>
+            </button>
+          </form>
+          <div class="vp-clients-grid" id="clientsList"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Edit client modal -->
+  <div class="vp-modal-overlay" id="clientEditModal" style="display:none;">
+    <div class="vp-modal vp-modal-wide vp-client-edit-modal">
+      <div class="vp-modal-header" id="clientEditHeader">
+        <div>
+          <h2 id="clientEditTitle">Client</h2>
+          <div class="vp-detail-sub" id="clientEditSub"></div>
+        </div>
+        <div class="vp-detail-header-actions">
+          <button type="button" class="vp-icon-btn" id="clientEditArchiveBtn" title="Archive client">
+            <span class="material-symbols-outlined">archive</span>
+          </button>
+          <button type="button" class="vp-icon-btn danger" id="clientEditDeleteBtn" title="Delete client" style="display:none;">
+            <span class="material-symbols-outlined">delete</span>
+          </button>
+          <button class="vp-icon-btn" data-close="clientEditModal"><span class="material-symbols-outlined">close</span></button>
+        </div>
+      </div>
+      <div class="vp-modal-body" id="clientEditBody"></div>
+    </div>
+  </div>
+
+  <!-- New project modal -->
+  <div class="vp-modal-overlay" id="projectModal" style="display:none;">
+    <div class="vp-modal">
+      <div class="vp-modal-header">
+        <h2>New Project</h2>
+        <button class="vp-icon-btn" data-close="projectModal"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="vp-modal-body">
+        <form id="newProjectForm">
+          <label class="vp-label">Client</label>
+          <select id="projClient" required></select>
+          <label class="vp-label">Title</label>
+          <input type="text" id="projTitle" placeholder="e.g. Highlight Reel — APM 2026" required>
+          <label class="vp-label">Folder <span class="vp-label-hint">(optional — groups the client gallery)</span></label>
+          <select id="projFolder">
+            <option value="">No folder</option>
+          </select>
+          <div class="vp-form-actions">
+            <button type="button" class="vp-btn secondary" data-close="projectModal">Cancel</button>
+            <button type="submit" class="vp-btn primary">Create Project</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+</div>

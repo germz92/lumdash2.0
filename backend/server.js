@@ -1493,6 +1493,10 @@ const PostProductionAssignmentSeen = require('./models/PostProductionAssignmentS
 const DashboardNavVisit = require('./models/DashboardNavVisit');
 const CrewAvailabilityRequest = require('./models/CrewAvailabilityRequest');
 const Feedback = require('./models/Feedback');
+const Client = require('./models/Client');
+const VideoProject = require('./models/VideoProject');
+const VideoComment = require('./models/VideoComment');
+const VideoPortalActivity = require('./models/VideoPortalActivity');
 
 
 
@@ -12433,6 +12437,26 @@ app.get('/api/post-production', authenticate, async (req, res) => {
       lastReadAt: readMap.get(i._id.toString()) || null
     }));
 
+    // Attach linked video-portal projects (VideoProject.postProductionItemId → this row)
+    if (rows.length) {
+      const portalProjects = await VideoProject.find({
+        postProductionItemId: { $in: rows.map(r => r._id) }
+      }).select('_id title status postProductionItemId').lean();
+      const portalByPp = {};
+      portalProjects.forEach(p => {
+        if (p.postProductionItemId) portalByPp[p.postProductionItemId.toString()] = p;
+      });
+      rows = rows.map(r => {
+        const linked = portalByPp[r._id.toString()];
+        return {
+          ...r,
+          portalProjectId: linked?._id || null,
+          portalProjectTitle: linked?.title || '',
+          portalProjectStatus: linked?.status || ''
+        };
+      });
+    }
+
     const q = String(search || '').trim().toLowerCase();
     if (q) {
       rows = rows.filter(r => {
@@ -13132,9 +13156,60 @@ app.delete('/api/post-production/:id', authenticate, async (req, res) => {
     }
     const doc = await PostProductionItem.findByIdAndDelete(req.params.id);
     if (!doc) return res.status(404).json({ error: 'Item not found' });
+    await VideoProject.updateMany(
+      { postProductionItemId: doc._id },
+      { $set: { postProductionItemId: null } }
+    );
     res.json({ message: 'Deleted' });
   } catch (err) {
     console.error('Error deleting post production item:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Link / unlink a Video Portal project to this post-production item
+app.put('/api/post-production/:id/portal-project', authenticate, async (req, res) => {
+  try {
+    const item = await PostProductionItem.findById(req.params.id).select('_id item project archived');
+    if (!item || item.archived) return res.status(404).json({ error: 'Item not found' });
+
+    const rawId = req.body.videoProjectId;
+    // Unlink
+    if (rawId === null || rawId === '' || rawId === undefined) {
+      await VideoProject.updateMany(
+        { postProductionItemId: item._id },
+        { $set: { postProductionItemId: null } }
+      );
+      return res.json({
+        portalProjectId: null,
+        portalProjectTitle: '',
+        portalProjectStatus: ''
+      });
+    }
+
+    const project = await VideoProject.findById(rawId);
+    if (!project) return res.status(404).json({ error: 'Video portal project not found' });
+
+    // One PP item ↔ one portal project
+    await VideoProject.updateMany(
+      {
+        $or: [
+          { postProductionItemId: item._id },
+          { _id: project._id }
+        ]
+      },
+      { $set: { postProductionItemId: null } }
+    );
+    project.postProductionItemId = item._id;
+    await project.save();
+
+    res.json({
+      portalProjectId: project._id,
+      portalProjectTitle: project.title || '',
+      portalProjectStatus: project.status || ''
+    });
+  } catch (err) {
+    console.error('Error linking portal project to post-production:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
@@ -14475,6 +14550,2089 @@ app.delete('/api/feedback/:id', authenticate, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('Error deleting feedback:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// =============== VIDEO PORTAL (clients, projects, review comments) ===============
+
+const bunnyStream = require('./lib/bunnyStream');
+const { buildPortalInviteSubject, buildPortalInviteEmail, buildPortalInviteText } = require('./emails/portalInviteEmail');
+const { buildPortalNewVersionSubject, buildPortalNewVersionEmail, buildPortalNewVersionText } = require('./emails/portalNewVersionEmail');
+
+const portalVideoUpload = multer({
+  storage: multer.diskStorage({ destination: require('os').tmpdir() }),
+  limits: { fileSize: 2 * 1024 * 1024 * 1024 }, // 2GB — larger masters stay in Drive
+  fileFilter: (req, file, cb) => {
+    if (/^video\//.test(file.mimetype) || /\.(mp4|mov|m4v|webm|mkv)$/i.test(file.originalname || '')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only video files can be uploaded.'), false);
+    }
+  }
+});
+
+const portalThumbnailUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 8 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+    if (allowed.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('Only JPG, PNG, WebP, or GIF images are allowed.'), false);
+  }
+});
+
+function projectThumbnailUrl(project, latestReadyVersion = null) {
+  if (project?.customThumbnailUrl) {
+    // Cache-bust so gallery refreshes after a replace
+    const sep = project.customThumbnailUrl.includes('?') ? '&' : '?';
+    const stamp = project.updatedAt ? new Date(project.updatedAt).getTime() : Date.now();
+    return `${project.customThumbnailUrl}${sep}v=${stamp}`;
+  }
+  if (latestReadyVersion?.bunnyVideoId && bunnyStream.isConfigured()) {
+    return bunnyStream.getThumbnailUrl(latestReadyVersion.bunnyVideoId);
+  }
+  return null;
+}
+
+function isPortalAdmin(user) {
+  return /^admin$/i.test(user?.role || '');
+}
+
+function normalizePortalAccent(color) {
+  const raw = String(color || '').trim();
+  if (/^#[0-9A-Fa-f]{6}$/.test(raw)) return raw.toUpperCase();
+  if (/^#[0-9A-Fa-f]{3}$/.test(raw)) {
+    const [, a, b, c] = raw;
+    return `#${a}${a}${b}${b}${c}${c}`.toUpperCase();
+  }
+  return null;
+}
+
+function portalBrandingPayload(client) {
+  const b = client?.branding || {};
+  return {
+    displayName: String(b.displayName || '').trim() || client?.name || '',
+    logoUrl: b.logoUrl || '',
+    accentColor: normalizePortalAccent(b.accentColor) || '#CC0007'
+  };
+}
+
+function portalFoldersPayload(client) {
+  return [...(client?.folders || [])]
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || String(a.name).localeCompare(String(b.name)))
+    .map(f => ({ _id: f._id, name: f.name, sortOrder: f.sortOrder || 0 }));
+}
+
+function findClientFolder(client, folderId) {
+  if (!folderId || !client) return null;
+  const id = String(folderId);
+  if (typeof client.folders?.id === 'function') {
+    const sub = client.folders.id(folderId);
+    if (sub) return sub;
+  }
+  return (client.folders || []).find(f => String(f._id) === id) || null;
+}
+
+async function applyProjectFolder(project, client, folderId) {
+  if (folderId === null || folderId === '' || folderId === undefined) {
+    project.folderId = null;
+    if (folderId === null || folderId === '') project.category = '';
+    return;
+  }
+  const folder = findClientFolder(client, folderId);
+  if (!folder) {
+    const err = new Error('Folder not found on this client');
+    err.status = 400;
+    throw err;
+  }
+  project.folderId = folder._id;
+  project.category = folder.name || '';
+}
+
+function buildPortalUrl(token, projectId = null) {
+  const base = (process.env.APP_URL || 'https://beta.lumdash.app').replace(/\/$/, '');
+  return `${base}/portal.html?token=${encodeURIComponent(token)}${projectId ? `&project=${projectId}` : ''}`;
+}
+
+function formatTimecode(seconds) {
+  if (seconds == null || Number.isNaN(Number(seconds))) return null;
+  const s = Math.max(0, Math.floor(Number(seconds)));
+  const m = Math.floor(s / 60);
+  return `${m}:${String(s % 60).padStart(2, '0')}`;
+}
+
+function formatTimecodeRange(start, end) {
+  const a = formatTimecode(start);
+  if (!a) return null;
+  const b = formatTimecode(end);
+  if (b && Number(end) > Number(start)) return `${a}–${b}`;
+  return a;
+}
+
+/** Parse optional start/end timecodes from a comment create body */
+function parseTimecodeFields(body = {}) {
+  const rawStart = body.timecodeSeconds;
+  const rawEnd = body.timecodeEndSeconds;
+  if (rawStart === null || rawStart === undefined || rawStart === '') {
+    return { timecodeSeconds: null, timecodeEndSeconds: null };
+  }
+  const start = Math.max(0, Math.floor(Number(rawStart)));
+  if (!Number.isFinite(start)) return { timecodeSeconds: null, timecodeEndSeconds: null };
+
+  if (rawEnd === null || rawEnd === undefined || rawEnd === '') {
+    return { timecodeSeconds: start, timecodeEndSeconds: null };
+  }
+  const end = Math.max(0, Math.floor(Number(rawEnd)));
+  if (!Number.isFinite(end) || end <= start) {
+    return { timecodeSeconds: start, timecodeEndSeconds: null };
+  }
+  return { timecodeSeconds: start, timecodeEndSeconds: end };
+}
+
+/** Public-safe payload for one version (signed playback link only when transcoded) */
+function portalVersionPayload(v) {
+  const ready = v.videoStatus === 'ready' && v.bunnyVideoId && bunnyStream.isConfigured();
+  return {
+    _id: v._id,
+    versionNumber: v.versionNumber,
+    videoStatus: v.videoStatus,
+    durationSeconds: v.durationSeconds || 0,
+    notes: v.notes || '',
+    uploadedByName: v.uploadedByName || '',
+    uploadedAt: v.uploadedAt,
+    embedUrl: ready ? bunnyStream.getSignedEmbedUrl(v.bunnyVideoId) : null,
+    thumbnailUrl: ready ? bunnyStream.getThumbnailUrl(v.bunnyVideoId) : null
+  };
+}
+
+function portalCommentPayload(c) {
+  return {
+    _id: c._id,
+    versionId: c.versionId,
+    timecodeSeconds: c.timecodeSeconds,
+    timecodeEndSeconds: c.timecodeEndSeconds ?? null,
+    text: c.text,
+    mustFix: !!c.mustFix,
+    annotation: c.annotation || null,
+    mentions: (c.mentions || []).map(m => ({
+      userId: m.userId,
+      name: m.name || ''
+    })),
+    authorType: c.authorType,
+    authorName: c.authorName || (c.authorType === 'client' ? 'Client' : 'Lumetry Media'),
+    resolved: !!c.resolved,
+    resolvedByName: c.resolvedByName || '',
+    createdAt: c.createdAt,
+    replies: (c.replies || []).map(r => ({
+      _id: r._id,
+      text: r.text,
+      authorType: r.authorType,
+      authorName: r.authorName || (r.authorType === 'client' ? 'Client' : 'Lumetry Media'),
+      createdAt: r.createdAt
+    }))
+  };
+}
+
+function clamp01(n) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return 0;
+  return Math.max(0, Math.min(1, x));
+}
+
+/** Normalize / cap drawing payload from clients */
+function sanitizeAnnotation(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const strokes = [];
+  for (const s of (Array.isArray(raw.strokes) ? raw.strokes : []).slice(0, 40)) {
+    if (!s || !Array.isArray(s.points) || s.points.length < 2) continue;
+    strokes.push({
+      color: String(s.color || '#FF3B30').slice(0, 20),
+      width: Math.max(1, Math.min(12, Number(s.width) || 3)),
+      points: s.points.slice(0, 500).map(p => ({ x: clamp01(p?.x), y: clamp01(p?.y) }))
+    });
+  }
+  const arrows = [];
+  for (const a of (Array.isArray(raw.arrows) ? raw.arrows : []).slice(0, 20)) {
+    if (!a?.from || !a?.to) continue;
+    arrows.push({
+      color: String(a.color || '#FF3B30').slice(0, 20),
+      width: Math.max(1, Math.min(12, Number(a.width) || 3)),
+      from: { x: clamp01(a.from.x), y: clamp01(a.from.y) },
+      to: { x: clamp01(a.to.x), y: clamp01(a.to.y) }
+    });
+  }
+  if (!strokes.length && !arrows.length) return null;
+  return { strokes, arrows };
+}
+
+function portalMasterDownloadUrl(project) {
+  if (project.status !== 'delivered') return '';
+  if (project.allowClientDownload === false) return '';
+  return project.masterFileUrl || '';
+}
+
+async function resolvePortalMentions(ids) {
+  const unique = [...new Set((Array.isArray(ids) ? ids : []).map(id => String(id || '').trim()).filter(Boolean))].slice(0, 20);
+  if (!unique.length) return [];
+  const users = await User.find({ _id: { $in: unique } }).select('fullName email').lean();
+  return users.map(u => ({ userId: u._id, name: u.fullName || u.email || '' }));
+}
+
+async function notifyPortalMentions({ project, mentions, actorName, text }) {
+  if (!mentions?.length) return;
+  const recipients = [...new Set(mentions.map(m => m.userId.toString()))];
+  if (!recipients.length) return;
+
+  await createNotificationBulk(recipients, {
+    type: 'portal_mention',
+    title: `${actorName} mentioned you on "${project.title}"`,
+    message: text.length > 140 ? `${text.slice(0, 140)}…` : text,
+    link: { page: 'video-portal', params: { projectId: project._id.toString() } },
+    metadata: { projectId: project._id.toString() }
+  });
+
+  if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) return;
+  try {
+    const { isNotificationChannelEnabled } = require('./lib/userSettings');
+    const users = await User.find({ _id: { $in: recipients } }).select('email fullName settings role').lean();
+    const appUrl = (process.env.APP_URL || 'https://beta.lumdash.app').replace(/\/$/, '');
+    const pageUrl = `${appUrl}/dashboard.html#video-portal`;
+    for (const u of users) {
+      if (!u.email || !isNotificationChannelEnabled(u, 'portal_mention', 'email')) continue;
+      await sgMail.send({
+        to: u.email.trim().toLowerCase(),
+        from: SENDGRID_FROM,
+        subject: `Mentioned on ${project.title}`,
+        html: `<p>Hi ${(u.fullName || '').split(' ')[0] || 'there'},</p>
+               <p><strong>${String(actorName).replace(/</g, '&lt;')}</strong> mentioned you on <strong>${String(project.title).replace(/</g, '&lt;')}</strong>:</p>
+               <p>${String(text).replace(/</g, '&lt;').slice(0, 500)}</p>
+               <p><a href="${pageUrl}" style="color:#CC0007;font-weight:600;">Open the Video Portal</a></p>`
+      });
+    }
+  } catch (emailErr) {
+    console.error('Portal mention email failed:', emailErr);
+  }
+}
+
+/**
+ * Resolve a portal magic-link token to { client, contact, shared }; null if invalid.
+ * Personal contact tokens identify one person; the client-level shareToken is a
+ * single link for the whole client team (shared: true, contact: null).
+ */
+async function resolvePortalToken(token) {
+  if (!token) return null;
+  const client = await Client.findOne({
+    $or: [{ 'contacts.token': token }, { shareToken: token }],
+    archived: false
+  });
+  if (!client) return null;
+
+  if (client.shareToken === token) {
+    return { client, contact: null, shared: true };
+  }
+  const contact = client.contacts.find(c => c.token === token && !c.revokedAt);
+  if (!contact) return null;
+  return { client, contact, shared: false };
+}
+
+/** Team members who should hear about client activity on a project */
+function portalTeamRecipients(project) {
+  const ids = new Set();
+  if (project.createdBy) ids.add(project.createdBy.toString());
+  (project.versions || []).forEach(v => { if (v.uploadedBy) ids.add(v.uploadedBy.toString()); });
+  return [...ids];
+}
+
+async function logPortalActivity({
+  projectId,
+  clientId = null,
+  type,
+  actorType = 'team',
+  actorName = '',
+  actorEmail = '',
+  actorId = null,
+  message = '',
+  metadata = {}
+}) {
+  try {
+    await VideoPortalActivity.create({
+      projectId,
+      clientId,
+      type,
+      actorType,
+      actorName,
+      actorEmail,
+      actorId,
+      message,
+      metadata
+    });
+  } catch (err) {
+    console.error('Portal activity log failed:', err.message);
+  }
+}
+
+async function notifyTeamPortalEvent({
+  project,
+  type,
+  title,
+  message = '',
+  emailSubject = null,
+  emailHtmlExtra = null
+}) {
+  const recipients = portalTeamRecipients(project);
+  if (recipients.length === 0) return;
+
+  await createNotificationBulk(recipients, {
+    type,
+    title,
+    message,
+    link: { page: 'video-portal', params: { projectId: project._id.toString() } },
+    metadata: { projectId: project._id.toString(), clientId: project.clientId?.toString?.() || project.clientId }
+  });
+
+  if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) return;
+  try {
+    const { isNotificationChannelEnabled } = require('./lib/userSettings');
+    const users = await User.find({ _id: { $in: recipients } }).select('email fullName settings role').lean();
+    const appUrl = (process.env.APP_URL || 'https://beta.lumdash.app').replace(/\/$/, '');
+    const pageUrl = `${appUrl}/dashboard.html#video-portal`;
+    for (const u of users) {
+      if (!u.email || !isNotificationChannelEnabled(u, type, 'email')) continue;
+      const body = emailHtmlExtra || `<p>${String(message || title).replace(/</g, '&lt;').replace(/\n/g, '<br>')}</p>
+               <p><a href="${pageUrl}" style="color:#CC0007;font-weight:600;">Open the Video Portal in LumDash</a></p>`;
+      await sgMail.send({
+        to: u.email.trim().toLowerCase(),
+        from: SENDGRID_FROM,
+        subject: emailSubject || title,
+        html: `<p>Hi ${(u.fullName || '').split(' ')[0] || 'there'},</p>
+               <p>${String(title).replace(/</g, '&lt;')}</p>
+               ${body}`
+      });
+    }
+  } catch (emailErr) {
+    console.error('Portal team email failed:', emailErr);
+  }
+}
+
+/** In-app notification + (preference-gated) email to the team about a client comment/reply.
+ * Rapid comments on the same project are batched so 10 comments in one session
+ * become one toast + one email after a quiet period.
+ */
+const PORTAL_COMMENT_BATCH_MS = Math.max(
+  15000,
+  Number(process.env.PORTAL_COMMENT_BATCH_MS) || 5 * 60 * 1000
+);
+const portalCommentBatches = new Map(); // projectId -> { timer, project, client, items[] }
+
+function queuePortalCommentNotify({
+  project,
+  client,
+  authorName,
+  text,
+  timecodeSeconds = null,
+  timecodeEndSeconds = null,
+  isReply = false
+}) {
+  const key = project._id.toString();
+  let batch = portalCommentBatches.get(key);
+  if (!batch) {
+    batch = { projectId: key, project, client, items: [], timer: null };
+    portalCommentBatches.set(key, batch);
+  } else {
+    batch.project = project;
+    batch.client = client;
+  }
+
+  batch.items.push({
+    authorName: authorName || client?.name || 'Client',
+    text: String(text || '').trim(),
+    timecodeSeconds,
+    timecodeEndSeconds,
+    isReply: !!isReply,
+    at: new Date()
+  });
+
+  if (batch.timer) clearTimeout(batch.timer);
+  batch.timer = setTimeout(() => {
+    flushPortalCommentBatch(key).catch(err =>
+      console.error('Portal comment batch flush failed:', err)
+    );
+  }, PORTAL_COMMENT_BATCH_MS);
+}
+
+async function flushPortalCommentBatch(projectId) {
+  const batch = portalCommentBatches.get(projectId);
+  if (!batch) return;
+  portalCommentBatches.delete(projectId);
+  if (batch.timer) {
+    clearTimeout(batch.timer);
+    batch.timer = null;
+  }
+
+  const items = batch.items || [];
+  if (!items.length) return;
+
+  const project = batch.project;
+  const client = batch.client;
+  const authors = [...new Set(items.map(i => i.authorName).filter(Boolean))];
+  const who = authors.length === 1
+    ? authors[0]
+    : (authors.length > 1 ? `${authors.length} reviewers` : (client?.name || 'Client'));
+  const n = items.length;
+  const replyOnly = items.every(i => i.isReply);
+
+  let title;
+  if (n === 1) {
+    const one = items[0];
+    const tc = formatTimecodeRange(one.timecodeSeconds, one.timecodeEndSeconds);
+    title = one.isReply
+      ? `${who} replied on "${project.title}"`
+      : `${who} commented on "${project.title}"${tc ? ` at ${tc}` : ''}`;
+  } else if (replyOnly) {
+    title = `${who} left ${n} replies on "${project.title}"`;
+  } else {
+    title = `${who} left ${n} comments on "${project.title}"`;
+  }
+
+  const previewLines = items.slice(0, 12).map(i => {
+    const tc = formatTimecodeRange(i.timecodeSeconds, i.timecodeEndSeconds);
+    const prefix = i.isReply ? 'Reply' : (tc ? tc : 'Note');
+    const body = i.text.length > 120 ? `${i.text.slice(0, 120)}…` : i.text;
+    return `${prefix}: ${body}`;
+  });
+  const message = previewLines.join('\n');
+  const more = n > 12 ? `\n…and ${n - 12} more` : '';
+
+  await notifyTeamPortalEvent({
+    project,
+    type: 'portal_comment',
+    title,
+    message: (message + more).slice(0, 2000),
+    emailSubject: n === 1
+      ? `Client feedback — ${project.title}`
+      : `${n} new comments — ${project.title}`,
+    emailHtmlExtra: buildPortalCommentBatchEmailHtml(items, project)
+  });
+}
+
+function buildPortalCommentBatchEmailHtml(items, project) {
+  const appUrl = (process.env.APP_URL || 'https://beta.lumdash.app').replace(/\/$/, '');
+  const pageUrl = `${appUrl}/dashboard.html#video-portal`;
+  const lis = items.slice(0, 20).map(i => {
+    const tc = formatTimecodeRange(i.timecodeSeconds, i.timecodeEndSeconds);
+    const who = String(i.authorName || 'Client').replace(/</g, '&lt;');
+    const body = String(i.text || '').replace(/</g, '&lt;');
+    const meta = [
+      i.isReply ? 'Reply' : 'Comment',
+      tc ? `at ${tc}` : null
+    ].filter(Boolean).join(' · ');
+    return `<li style="margin:0 0 10px;">
+      <div style="font-size:12px;color:#666;margin-bottom:2px;"><strong>${who}</strong> · ${meta}</div>
+      <div style="font-size:14px;color:#222;">${body}</div>
+    </li>`;
+  }).join('');
+  const more = items.length > 20
+    ? `<p style="color:#666;font-size:13px;">…and ${items.length - 20} more</p>`
+    : '';
+  return `
+    <p><strong>${items.length}</strong> new note${items.length === 1 ? '' : 's'} on
+       <strong>${String(project.title).replace(/</g, '&lt;')}</strong>:</p>
+    <ul style="padding-left:18px;margin:12px 0;">${lis}</ul>
+    ${more}
+    <p><a href="${pageUrl}" style="color:#CC0007;font-weight:600;">Open the Video Portal in LumDash</a></p>`;
+}
+
+async function notifyTeamOfPortalComment(project, client, authorName, text, timecodeSeconds, isReply = false, timecodeEndSeconds = null) {
+  queuePortalCommentNotify({
+    project,
+    client,
+    authorName,
+    text,
+    timecodeSeconds,
+    timecodeEndSeconds,
+    isReply
+  });
+}
+
+async function sendPortalNewVersionEmails(project, versionNumber, notes) {
+  if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) {
+    return { sent: 0, error: 'Email is not configured on the server' };
+  }
+  const client = project.clientId?.contacts
+    ? project.clientId
+    : await Client.findById(project.clientId).select('name contacts shareToken');
+  if (!client) return { sent: 0, error: 'Client not found' };
+
+  const shareToken = client.shareToken;
+  const contacts = (client.contacts || []).filter(c => !c.revokedAt && c.email);
+  let sent = 0;
+  for (const contact of contacts) {
+    try {
+      const data = {
+        recipientName: (contact.name || '').split(' ')[0] || 'there',
+        projectTitle: project.title,
+        versionNumber,
+        notes: notes || '',
+        reviewUrl: buildPortalUrl(shareToken || contact.token, project._id.toString())
+      };
+      await sgMail.send({
+        to: contact.email,
+        from: SENDGRID_FROM,
+        subject: buildPortalNewVersionSubject(data),
+        html: buildPortalNewVersionEmail(data),
+        text: buildPortalNewVersionText(data)
+      });
+      sent += 1;
+    } catch (emailErr) {
+      console.error(`Portal new-version email failed for ${contact.email}:`, emailErr);
+    }
+  }
+  return { sent, total: contacts.length };
+}
+
+async function checkPortalFeedbackDueReminders() {
+  try {
+    const now = new Date();
+    const soon = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const dueProjects = await VideoProject.find({
+      status: 'in_review',
+      feedbackDueAt: { $ne: null, $lte: soon },
+      feedbackReminderSentAt: null,
+      $or: [
+        { 'reviewDecision.status': 'none' },
+        { 'reviewDecision.status': { $exists: false } },
+        { reviewDecision: null },
+        { reviewDecision: { $exists: false } }
+      ]
+    }).limit(50);
+
+    for (const project of dueProjects) {
+      const due = new Date(project.feedbackDueAt);
+      const past = due < now;
+      const dueLabel = due.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+      await notifyTeamPortalEvent({
+        project,
+        type: 'portal_feedback_due',
+        title: past
+          ? `Feedback overdue — "${project.title}"`
+          : `Feedback due soon — "${project.title}"`,
+        message: past
+          ? `Client feedback was due ${dueLabel}.`
+          : `Client feedback is due ${dueLabel}.`,
+        emailSubject: past
+          ? `Overdue feedback — ${project.title}`
+          : `Feedback due soon — ${project.title}`
+      });
+      project.feedbackReminderSentAt = now;
+      await project.save();
+      await logPortalActivity({
+        projectId: project._id,
+        clientId: project.clientId,
+        type: 'due_set',
+        actorType: 'system',
+        actorName: 'LumDash',
+        message: past ? `Overdue reminder sent (due ${dueLabel})` : `Due-soon reminder sent (due ${dueLabel})`
+      });
+    }
+  } catch (err) {
+    console.error('Portal feedback due reminder check failed:', err);
+  }
+}
+
+// Kick off due-date reminder sweep shortly after boot, then hourly
+setTimeout(() => {
+  checkPortalFeedbackDueReminders();
+  setInterval(checkPortalFeedbackDueReminders, 60 * 60 * 1000);
+}, 15000);
+
+async function sendPortalCommentDigest() {
+  try {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const already = await VideoPortalActivity.findOne({
+      type: 'digest_sent',
+      createdAt: { $gte: startOfDay }
+    }).select('_id').lean();
+    if (already) return;
+
+    // Prefer mid-morning local server time so digests aren't noisy overnight
+    const hour = new Date().getHours();
+    if (hour < 8 || hour > 18) return;
+
+    const openComments = await VideoComment.find({
+      authorType: 'client',
+      resolved: false
+    }).sort({ createdAt: -1 }).limit(400).lean();
+    if (!openComments.length) return;
+
+    const projectIds = [...new Set(openComments.map(c => c.projectId.toString()))];
+    const projects = await VideoProject.find({
+      _id: { $in: projectIds },
+      status: 'in_review'
+    }).select('title createdBy versions clientId').lean();
+    if (!projects.length) return;
+
+    const projectMap = Object.fromEntries(projects.map(p => [p._id.toString(), p]));
+    const byRecipient = new Map(); // userId -> { projects: Map }
+
+    for (const comment of openComments) {
+      const project = projectMap[comment.projectId.toString()];
+      if (!project) continue;
+      const recipients = portalTeamRecipients(project);
+      for (const rid of recipients) {
+        if (!byRecipient.has(rid)) byRecipient.set(rid, new Map());
+        const pm = byRecipient.get(rid);
+        const pid = project._id.toString();
+        if (!pm.has(pid)) pm.set(pid, { title: project.title, items: [] });
+        const bucket = pm.get(pid);
+        if (bucket.items.length < 8) {
+          const tc = formatTimecodeRange(comment.timecodeSeconds, comment.timecodeEndSeconds);
+          const flag = comment.mustFix ? ' [MUST FIX]' : '';
+          bucket.items.push(`${flag}${tc ? ` @ ${tc}` : ''} ${comment.authorName || 'Client'}: ${comment.text}`.trim());
+        }
+      }
+    }
+
+    if (!byRecipient.size) return;
+
+    const { isNotificationChannelEnabled } = require('./lib/userSettings');
+    const appUrl = (process.env.APP_URL || 'https://beta.lumdash.app').replace(/\/$/, '');
+    const pageUrl = `${appUrl}/dashboard.html#video-portal`;
+    let emailed = 0;
+
+    for (const [userId, projectBuckets] of byRecipient.entries()) {
+      const lines = [];
+      for (const [, bucket] of projectBuckets.entries()) {
+        lines.push(`<p><strong>${String(bucket.title).replace(/</g, '&lt;')}</strong></p><ul>${
+          bucket.items.map(i => `<li>${String(i).replace(/</g, '&lt;').slice(0, 220)}</li>`).join('')
+        }</ul>`);
+      }
+      const title = `Open client comments (${projectBuckets.size} project${projectBuckets.size === 1 ? '' : 's'})`;
+      await createNotificationBulk([userId], {
+        type: 'portal_comment_digest',
+        title,
+        message: 'Daily digest of unresolved client feedback on your portal projects.',
+        link: { page: 'video-portal', params: {} },
+        metadata: {}
+      });
+
+      if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) continue;
+      const user = await User.findById(userId).select('email fullName settings role').lean();
+      if (!user?.email || !isNotificationChannelEnabled(user, 'portal_comment_digest', 'email')) continue;
+      try {
+        await sgMail.send({
+          to: user.email.trim().toLowerCase(),
+          from: SENDGRID_FROM,
+          subject: `Video portal digest — ${projectBuckets.size} open project${projectBuckets.size === 1 ? '' : 's'}`,
+          html: `<p>Hi ${(user.fullName || '').split(' ')[0] || 'there'},</p>
+                 <p>Here’s a quick digest of unresolved client comments:</p>
+                 ${lines.join('')}
+                 <p><a href="${pageUrl}" style="color:#CC0007;font-weight:600;">Open the Video Portal</a></p>`
+        });
+        emailed += 1;
+      } catch (emailErr) {
+        console.error('Portal comment digest email failed:', emailErr);
+      }
+    }
+
+    await logPortalActivity({
+      type: 'digest_sent',
+      actorType: 'system',
+      actorName: 'LumDash',
+      message: `Daily comment digest sent (${emailed} emails)`
+    });
+  } catch (err) {
+    console.error('Portal comment digest failed:', err);
+  }
+}
+
+setTimeout(() => {
+  sendPortalCommentDigest();
+  setInterval(sendPortalCommentDigest, 60 * 60 * 1000);
+}, 45000);
+
+// ---------- Internal: clients ----------
+
+// List clients with project counts
+app.get('/api/portal-clients', authenticate, async (req, res) => {
+  try {
+    // Backfill share tokens for clients created before shared links existed
+    const missingShare = await Client.find({ $or: [{ shareToken: { $exists: false } }, { shareToken: null }, { shareToken: '' }] });
+    for (const c of missingShare) {
+      c.shareToken = require('crypto').randomBytes(32).toString('hex');
+      await c.save();
+    }
+
+    const includeArchived = req.query.archived === '1';
+    const clients = await Client.find(includeArchived ? {} : { archived: false }).sort({ name: 1 }).lean();
+    const counts = await VideoProject.aggregate([
+      { $group: { _id: { clientId: '$clientId', status: '$status' }, n: { $sum: 1 } } }
+    ]);
+    const countMap = {};
+    counts.forEach(c => {
+      const id = c._id.clientId.toString();
+      countMap[id] = countMap[id] || { total: 0, in_review: 0, delivered: 0, archived: 0 };
+      countMap[id][c._id.status] = c.n;
+      countMap[id].total += c.n;
+    });
+    res.json(clients.map(c => ({ ...c, projectCounts: countMap[c._id.toString()] || { total: 0, in_review: 0, delivered: 0, archived: 0 } })));
+  } catch (err) {
+    console.error('Error listing portal clients:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Create client (optionally with initial contacts)
+app.post('/api/portal-clients', authenticate, async (req, res) => {
+  try {
+    const name = String(req.body.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Client name is required' });
+
+    const contacts = (Array.isArray(req.body.contacts) ? req.body.contacts : [])
+      .map(c => ({ name: String(c.name || '').trim(), email: String(c.email || '').trim().toLowerCase() }))
+      .filter(c => c.email);
+
+    const client = await Client.create({
+      name,
+      notes: String(req.body.notes || '').trim(),
+      contacts,
+      createdBy: req.user.id,
+      createdByName: req.user.fullName || req.user.email || ''
+    });
+    res.status(201).json(client);
+  } catch (err) {
+    console.error('Error creating portal client:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Edit client name/notes/archived/folders/branding
+app.put('/api/portal-clients/:id', authenticate, async (req, res) => {
+  try {
+    const client = await Client.findById(req.params.id);
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+
+    if (req.body.name !== undefined) {
+      const name = String(req.body.name).trim();
+      if (!name) return res.status(400).json({ error: 'Client name is required' });
+      client.name = name;
+    }
+    if (req.body.notes !== undefined) client.notes = String(req.body.notes).trim();
+    if (req.body.archived !== undefined) client.archived = !!req.body.archived;
+
+    if (req.body.branding && typeof req.body.branding === 'object') {
+      if (!client.branding) client.branding = {};
+      if (req.body.branding.displayName !== undefined) {
+        client.branding.displayName = String(req.body.branding.displayName || '').trim();
+      }
+      if (req.body.branding.accentColor !== undefined) {
+        const accent = normalizePortalAccent(req.body.branding.accentColor);
+        if (!accent) return res.status(400).json({ error: 'Accent color must be a hex value like #CC0007' });
+        client.branding.accentColor = accent;
+      }
+      client.markModified('branding');
+    }
+
+    if (Array.isArray(req.body.folders)) {
+      const oldIds = (client.folders || []).map(f => String(f._id));
+      const incoming = req.body.folders
+        .map((f, i) => ({
+          _id: f._id || f.id || null,
+          name: String(f.name || '').trim(),
+          sortOrder: Number.isFinite(Number(f.sortOrder)) ? Number(f.sortOrder) : i
+        }))
+        .filter(f => f.name);
+
+      const nextFolders = [];
+      for (const item of incoming) {
+        const existing = item._id ? findClientFolder(client, item._id) : null;
+        if (existing) {
+          existing.name = item.name;
+          existing.sortOrder = item.sortOrder;
+          nextFolders.push(existing);
+        } else {
+          nextFolders.push({ name: item.name, sortOrder: item.sortOrder });
+        }
+      }
+      client.folders = nextFolders;
+      await client.save();
+
+      const stillIds = new Set((client.folders || []).map(f => String(f._id)));
+      const removed = oldIds.filter(id => !stillIds.has(id));
+      if (removed.length) {
+        await VideoProject.updateMany(
+          { clientId: client._id, folderId: { $in: removed } },
+          { $set: { folderId: null, category: '' } }
+        );
+      }
+      for (const folder of client.folders) {
+        await VideoProject.updateMany(
+          { clientId: client._id, folderId: folder._id },
+          { $set: { category: folder.name } }
+        );
+      }
+      return res.json(client);
+    }
+
+    await client.save();
+    res.json(client);
+  } catch (err) {
+    console.error('Error updating portal client:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Upload / replace client portal logo
+app.post('/api/portal-clients/:id/logo', authenticate, portalThumbnailUpload.single('logo'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No image file provided' });
+    const client = await Client.findById(req.params.id);
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+
+    const uploadResult = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          resource_type: 'image',
+          folder: 'lumdash/portal-client-logos',
+          public_id: `client_logo_${client._id}_${Date.now()}`,
+          transformation: [
+            { width: 400, height: 400, crop: 'limit' },
+            { quality: 'auto', fetch_format: 'auto' }
+          ]
+        },
+        (error, result) => error ? reject(error) : resolve(result)
+      );
+      uploadStream.end(req.file.buffer);
+    });
+
+    if (!client.branding) client.branding = {};
+    if (client.branding.logoPublicId) {
+      try {
+        await cloudinary.uploader.destroy(client.branding.logoPublicId, { resource_type: 'image' });
+      } catch (cloudErr) {
+        console.error('Failed to delete old client logo:', cloudErr);
+      }
+    }
+    client.branding.logoUrl = uploadResult.secure_url;
+    client.branding.logoPublicId = uploadResult.public_id;
+    client.markModified('branding');
+    await client.save();
+    res.json({ branding: portalBrandingPayload(client), logoPublicId: client.branding.logoPublicId });
+  } catch (err) {
+    console.error('Error uploading client logo:', err);
+    res.status(500).json({ error: err.message || 'Failed to upload logo' });
+  }
+});
+
+app.delete('/api/portal-clients/:id/logo', authenticate, async (req, res) => {
+  try {
+    const client = await Client.findById(req.params.id);
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+    if (!client.branding) client.branding = {};
+    if (client.branding.logoPublicId) {
+      try {
+        await cloudinary.uploader.destroy(client.branding.logoPublicId, { resource_type: 'image' });
+      } catch (cloudErr) {
+        console.error('Failed to delete client logo:', cloudErr);
+      }
+    }
+    client.branding.logoUrl = '';
+    client.branding.logoPublicId = '';
+    client.markModified('branding');
+    await client.save();
+    res.json({ branding: portalBrandingPayload(client) });
+  } catch (err) {
+    console.error('Error removing client logo:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Create folders from distinct project category strings and assign matching projects
+app.post('/api/portal-clients/:id/folders/from-categories', authenticate, async (req, res) => {
+  try {
+    const client = await Client.findById(req.params.id);
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+
+    const projects = await VideoProject.find({
+      clientId: client._id,
+      $or: [{ folderId: null }, { folderId: { $exists: false } }],
+      category: { $nin: [null, ''] }
+    }).select('_id category');
+
+    const byCat = new Map();
+    for (const p of projects) {
+      const cat = String(p.category || '').trim();
+      if (!cat) continue;
+      if (!byCat.has(cat)) byCat.set(cat, []);
+      byCat.get(cat).push(p._id);
+    }
+
+    const existingNames = new Set((client.folders || []).map(f => f.name.toLowerCase()));
+    let sortBase = (client.folders || []).reduce((m, f) => Math.max(m, f.sortOrder || 0), -1) + 1;
+    let created = 0;
+
+    for (const [cat, ids] of byCat.entries()) {
+      let folder = (client.folders || []).find(f => f.name.toLowerCase() === cat.toLowerCase());
+      if (!folder) {
+        client.folders.push({ name: cat, sortOrder: sortBase++ });
+        created++;
+        await client.save();
+        folder = client.folders[client.folders.length - 1];
+      } else if (!existingNames.has(cat.toLowerCase())) {
+        // already counted
+      }
+      await VideoProject.updateMany(
+        { _id: { $in: ids }, clientId: client._id },
+        { $set: { folderId: folder._id, category: folder.name } }
+      );
+    }
+
+    await client.save();
+    res.json({ client, created, assigned: projects.length });
+  } catch (err) {
+    console.error('Error converting categories to folders:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Delete client (admin) — only when it has no projects
+app.delete('/api/portal-clients/:id', authenticate, async (req, res) => {
+  try {
+    if (!isPortalAdmin(req.user)) return res.status(403).json({ error: 'Admin access required' });
+    const client = await Client.findById(req.params.id);
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+
+    const projectCount = await VideoProject.countDocuments({ clientId: client._id });
+    if (projectCount > 0) {
+      return res.status(400).json({ error: `This client has ${projectCount} project(s). Delete or move them first.` });
+    }
+    if (client.branding?.logoPublicId) {
+      try {
+        await cloudinary.uploader.destroy(client.branding.logoPublicId, { resource_type: 'image' });
+      } catch (_) { /* ignore */ }
+    }
+    await Client.deleteOne({ _id: client._id });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting portal client:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Add contact
+app.post('/api/portal-clients/:id/contacts', authenticate, async (req, res) => {
+  try {
+    const client = await Client.findById(req.params.id);
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+
+    const email = String(req.body.email || '').trim().toLowerCase();
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+    if (client.contacts.some(c => c.email === email && !c.revokedAt)) {
+      return res.status(400).json({ error: 'This email is already a contact' });
+    }
+
+    client.contacts.push({ name: String(req.body.name || '').trim(), email });
+    await client.save();
+    res.status(201).json(client);
+  } catch (err) {
+    console.error('Error adding portal contact:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Remove contact (revokes their portal link)
+app.delete('/api/portal-clients/:id/contacts/:contactId', authenticate, async (req, res) => {
+  try {
+    const client = await Client.findById(req.params.id);
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+
+    const contact = client.contacts.id(req.params.contactId);
+    if (!contact) return res.status(404).json({ error: 'Contact not found' });
+
+    contact.deleteOne();
+    await client.save();
+    res.json(client);
+  } catch (err) {
+    console.error('Error removing portal contact:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Send (or resend) a portal invite email to a contact
+app.post('/api/portal-clients/:id/contacts/:contactId/invite', authenticate, async (req, res) => {
+  try {
+    const client = await Client.findById(req.params.id);
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+
+    const contact = client.contacts.id(req.params.contactId);
+    if (!contact || contact.revokedAt) return res.status(404).json({ error: 'Contact not found' });
+
+    if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) {
+      return res.status(400).json({ error: 'Email is not configured on the server' });
+    }
+
+    const data = {
+      recipientName: (contact.name || '').split(' ')[0] || 'there',
+      clientName: portalBrandingPayload(client).displayName || client.name,
+      senderName: req.user.fullName || '',
+      portalUrl: buildPortalUrl(client.shareToken || contact.token)
+    };
+    await sgMail.send({
+      to: contact.email,
+      from: SENDGRID_FROM,
+      subject: buildPortalInviteSubject(data),
+      html: buildPortalInviteEmail(data),
+      text: buildPortalInviteText(data)
+    });
+
+    contact.invitedAt = new Date();
+    await client.save();
+    res.json({ success: true, invitedAt: contact.invitedAt });
+  } catch (err) {
+    console.error('Error sending portal invite:', err);
+    res.status(500).json({ error: 'Failed to send invite email' });
+  }
+});
+
+// ---------- Internal: video projects ----------
+
+// List projects (optionally by client)
+app.get('/api/video-projects', authenticate, async (req, res) => {
+  try {
+    const query = {};
+    if (req.query.clientId) query.clientId = req.query.clientId;
+    if (req.query.status && ['in_review', 'delivered', 'archived'].includes(req.query.status)) {
+      query.status = req.query.status;
+    }
+    const projects = await VideoProject.find(query).sort({ createdAt: -1 }).populate('clientId', 'name').lean();
+
+    // Unresolved client comment counts for the list badges
+    const ids = projects.map(p => p._id);
+    const openCounts = await VideoComment.aggregate([
+      { $match: { projectId: { $in: ids }, resolved: false } },
+      { $group: { _id: '$projectId', n: { $sum: 1 } } }
+    ]);
+    const openMap = Object.fromEntries(openCounts.map(c => [c._id.toString(), c.n]));
+
+    res.json(projects.map(p => {
+      const versions = p.versions || [];
+      const latest = versions[versions.length - 1] || null;
+      const latestReady = [...versions].reverse().find(v => v.videoStatus === 'ready' && v.bunnyVideoId) || null;
+      const latestPayload = latest ? portalVersionPayload(latest) : null;
+      if (latestPayload) {
+        latestPayload.thumbnailUrl = projectThumbnailUrl(p, latestReady) || latestPayload.thumbnailUrl;
+      }
+      return {
+        ...p,
+        clientName: p.clientId?.name || '',
+        clientId: p.clientId?._id || p.clientId,
+        openCommentCount: openMap[p._id.toString()] || 0,
+        thumbnailUrl: projectThumbnailUrl(p, latestReady),
+        latestVersion: latestPayload
+      };
+    }));
+  } catch (err) {
+    console.error('Error listing video projects:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Create project
+app.post('/api/video-projects', authenticate, async (req, res) => {
+  try {
+    const title = String(req.body.title || '').trim();
+    if (!title) return res.status(400).json({ error: 'Title is required' });
+
+    const client = await Client.findById(req.body.clientId);
+    if (!client) return res.status(400).json({ error: 'Client not found' });
+
+    const project = new VideoProject({
+      clientId: client._id,
+      eventId: req.body.eventId || null,
+      title,
+      category: String(req.body.category || '').trim(),
+      createdBy: req.user.id,
+      createdByName: req.user.fullName || req.user.email || ''
+    });
+    if (req.body.folderId !== undefined) {
+      try {
+        await applyProjectFolder(project, client, req.body.folderId);
+      } catch (folderErr) {
+        return res.status(folderErr.status || 400).json({ error: folderErr.message });
+      }
+    }
+    await project.save();
+    res.status(201).json(project);
+  } catch (err) {
+    console.error('Error creating video project:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Project detail (versions with signed playback + comments)
+app.get('/api/video-projects/:id', authenticate, async (req, res) => {
+  try {
+    const project = await VideoProject.findById(req.params.id).populate('clientId', 'name contacts folders branding').lean();
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const comments = await VideoComment.find({ projectId: project._id }).sort({ createdAt: 1 }).lean();
+    const latestReady = [...(project.versions || [])].reverse().find(v => v.videoStatus === 'ready' && v.bunnyVideoId) || null;
+
+    let postProductionItem = null;
+    if (project.postProductionItemId) {
+      postProductionItem = await PostProductionItem.findById(project.postProductionItemId)
+        .select('item project editStatus qcStatus deliveryStatus')
+        .lean();
+    }
+
+    const activity = await VideoPortalActivity.find({ projectId: project._id })
+      .sort({ createdAt: -1 })
+      .limit(40)
+      .lean();
+
+    const clientDoc = project.clientId;
+    res.json({
+      ...project,
+      clientName: clientDoc?.name || '',
+      clientContacts: (clientDoc?.contacts || []).filter(c => !c.revokedAt).map(c => ({
+        _id: c._id, name: c.name, email: c.email, invitedAt: c.invitedAt, lastAccessAt: c.lastAccessAt, token: c.token
+      })),
+      clientFolders: portalFoldersPayload(clientDoc),
+      clientId: clientDoc?._id || project.clientId,
+      folderId: project.folderId || null,
+      thumbnailUrl: projectThumbnailUrl(project, latestReady),
+      postProductionItem,
+      activity,
+      versions: (project.versions || []).map(portalVersionPayload),
+      comments: comments.map(portalCommentPayload)
+    });
+  } catch (err) {
+    console.error('Error loading video project:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Edit project (title/category/status/masterFileUrl/due date/PP link); delivering stamps who/when
+app.put('/api/video-projects/:id', authenticate, async (req, res) => {
+  try {
+    const project = await VideoProject.findById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    if (req.body.title !== undefined) {
+      const title = String(req.body.title).trim();
+      if (!title) return res.status(400).json({ error: 'Title is required' });
+      project.title = title;
+    }
+    if (req.body.folderId !== undefined) {
+      const client = await Client.findById(project.clientId);
+      if (!client) return res.status(400).json({ error: 'Client not found' });
+      try {
+        await applyProjectFolder(project, client, req.body.folderId);
+      } catch (folderErr) {
+        return res.status(folderErr.status || 400).json({ error: folderErr.message });
+      }
+    } else if (req.body.category !== undefined) {
+      project.category = String(req.body.category).trim();
+    }
+    if (req.body.masterFileUrl !== undefined) project.masterFileUrl = String(req.body.masterFileUrl).trim();
+    if (req.body.allowClientDownload !== undefined) {
+      project.allowClientDownload = !!req.body.allowClientDownload;
+    }
+
+    if (req.body.feedbackDueAt !== undefined) {
+      const raw = req.body.feedbackDueAt;
+      if (raw === null || raw === '') {
+        project.feedbackDueAt = null;
+        project.feedbackReminderSentAt = null;
+      } else {
+        const d = new Date(raw);
+        if (Number.isNaN(d.getTime())) return res.status(400).json({ error: 'Invalid feedback due date' });
+        project.feedbackDueAt = d;
+        project.feedbackReminderSentAt = null;
+        await logPortalActivity({
+          projectId: project._id,
+          clientId: project.clientId,
+          type: 'due_set',
+          actorType: 'team',
+          actorId: req.user.id,
+          actorName: req.user.fullName || req.user.email || '',
+          message: `Feedback due set to ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`
+        });
+      }
+    }
+
+    if (req.body.postProductionItemId !== undefined) {
+      const ppId = req.body.postProductionItemId;
+      if (ppId === null || ppId === '') {
+        project.postProductionItemId = null;
+      } else {
+        const item = await PostProductionItem.findById(ppId).select('_id item project');
+        if (!item) return res.status(400).json({ error: 'Post-production item not found' });
+        project.postProductionItemId = item._id;
+        await logPortalActivity({
+          projectId: project._id,
+          clientId: project.clientId,
+          type: 'pp_linked',
+          actorType: 'team',
+          actorId: req.user.id,
+          actorName: req.user.fullName || req.user.email || '',
+          message: `Linked to post-production: ${item.item || item.project || item._id}`,
+          metadata: { postProductionItemId: item._id.toString() }
+        });
+      }
+    }
+
+    if (req.body.status !== undefined && ['in_review', 'delivered', 'archived'].includes(req.body.status)) {
+      if (req.body.status === 'delivered' && project.status !== 'delivered') {
+        project.deliveredAt = new Date();
+        project.deliveredBy = req.user.id;
+        project.deliveredByName = req.user.fullName || req.user.email || '';
+        await logPortalActivity({
+          projectId: project._id,
+          clientId: project.clientId,
+          type: 'delivered',
+          actorType: 'team',
+          actorId: req.user.id,
+          actorName: req.user.fullName || req.user.email || '',
+          message: 'Marked delivered'
+        });
+      }
+      project.status = req.body.status;
+    }
+
+    await project.save();
+    res.json(project);
+  } catch (err) {
+    console.error('Error updating video project:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Delete project (admin) — removes Bunny videos and comments too
+app.delete('/api/video-projects/:id', authenticate, async (req, res) => {
+  try {
+    if (!isPortalAdmin(req.user)) return res.status(403).json({ error: 'Admin access required' });
+    const project = await VideoProject.findById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    for (const v of project.versions || []) {
+      if (v.bunnyVideoId && bunnyStream.isConfigured()) {
+        try { await bunnyStream.deleteVideo(v.bunnyVideoId); }
+        catch (bunnyErr) { console.error('Failed to delete Bunny video:', bunnyErr.message); }
+      }
+    }
+    if (project.customThumbnailPublicId) {
+      try {
+        await cloudinary.uploader.destroy(project.customThumbnailPublicId, { resource_type: 'image' });
+      } catch (cloudErr) {
+        console.error('Failed to delete portal thumbnail:', cloudErr);
+      }
+    }
+    await VideoComment.deleteMany({ projectId: project._id });
+    await VideoProject.deleteOne({ _id: project._id });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting video project:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Upload a new version.
+// Respond as soon as the file is on our server + a Bunny video object exists,
+// then push the bytes to Bunny in the background so the browser can show real upload %.
+app.post('/api/video-projects/:id/versions', authenticate, portalVideoUpload.single('video'), async (req, res) => {
+  const tempPath = req.file?.path;
+  let handedOff = false;
+  try {
+    if (!bunnyStream.isConfigured()) {
+      return res.status(400).json({ error: 'Video hosting is not configured on the server' });
+    }
+    if (!req.file) return res.status(400).json({ error: 'No video file provided' });
+
+    const project = await VideoProject.findById(req.params.id).populate('clientId', 'name contacts shareToken');
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const versionNumber = (project.versions || []).reduce((max, v) => Math.max(max, v.versionNumber), 0) + 1;
+    const notes = String(req.body.notes || '').trim();
+    const notifyClient = req.body.notifyClient === '1';
+    const created = await bunnyStream.createVideo(`${project.title} — v${versionNumber}`);
+
+    project.versions.push({
+      versionNumber,
+      bunnyVideoId: created.guid,
+      videoStatus: 'uploading',
+      notes,
+      uploadedBy: req.user.id,
+      uploadedByName: req.user.fullName || req.user.email || ''
+    });
+    // New cut starts a fresh review round
+    project.reviewDecision = {
+      status: 'none',
+      note: '',
+      versionId: null,
+      versionNumber: null,
+      decidedByName: '',
+      decidedByEmail: '',
+      decidedAt: null
+    };
+    if (project.status === 'archived' || project.status === 'delivered') project.status = 'in_review';
+    await project.save();
+
+    await logPortalActivity({
+      projectId: project._id,
+      clientId: project.clientId?._id || project.clientId,
+      type: 'version_uploaded',
+      actorType: 'team',
+      actorId: req.user.id,
+      actorName: req.user.fullName || req.user.email || '',
+      message: `Uploaded version ${versionNumber}${notes ? ` — ${notes}` : ''}`,
+      metadata: { versionNumber, notifyClient }
+    });
+
+    const versionId = project.versions[project.versions.length - 1]._id.toString();
+    const projectId = project._id.toString();
+    const projectTitle = project.title;
+    const shareToken = project.clientId?.shareToken;
+    const contacts = (project.clientId?.contacts || [])
+      .filter(c => !c.revokedAt && c.email)
+      .map(c => ({ name: c.name, email: c.email, token: c.token }));
+
+    // Client upload is done — return now so the progress bar can finish
+    res.status(201).json({
+      success: true,
+      versionNumber,
+      bunnyVideoId: created.guid,
+      versionId
+    });
+    handedOff = true;
+
+    // Background: stream file to Bunny, then mark processing + email clients
+    setImmediate(async () => {
+      try {
+        await bunnyStream.uploadVideoFile(created.guid, tempPath);
+
+        const fresh = await VideoProject.findById(projectId);
+        if (fresh) {
+          const v = fresh.versions.id(versionId);
+          if (v && v.videoStatus === 'uploading') {
+            v.videoStatus = 'processing';
+            await fresh.save();
+          }
+        }
+
+        if (notifyClient && process.env.SENDGRID_API_KEY && process.env.SENDGRID_FROM_EMAIL) {
+          for (const contact of contacts) {
+            try {
+              const data = {
+                recipientName: (contact.name || '').split(' ')[0] || 'there',
+                projectTitle,
+                versionNumber,
+                notes,
+                reviewUrl: buildPortalUrl(shareToken || contact.token, projectId)
+              };
+              await sgMail.send({
+                to: contact.email,
+                from: SENDGRID_FROM,
+                subject: buildPortalNewVersionSubject(data),
+                html: buildPortalNewVersionEmail(data),
+                text: buildPortalNewVersionText(data)
+              });
+            } catch (emailErr) {
+              console.error(`Portal new-version email failed for ${contact.email}:`, emailErr);
+            }
+          }
+        }
+      } catch (bgErr) {
+        console.error('Background Bunny upload failed:', bgErr);
+        try {
+          const fresh = await VideoProject.findById(projectId);
+          const v = fresh?.versions.id(versionId);
+          if (v) {
+            v.videoStatus = 'error';
+            await fresh.save();
+          }
+        } catch (saveErr) {
+          console.error('Failed to mark version as error:', saveErr);
+        }
+      } finally {
+        if (tempPath) {
+          require('fs').promises.unlink(tempPath).catch(() => {});
+        }
+      }
+    });
+  } catch (err) {
+    console.error('Error uploading video version:', err);
+    if (tempPath && !handedOff) {
+      require('fs').promises.unlink(tempPath).catch(() => {});
+    }
+    if (!handedOff) {
+      res.status(500).json({ error: err.message || 'Upload failed' });
+    }
+  }
+});
+
+// Poll transcoding status for a version (updates duration when ready)
+app.get('/api/video-projects/:id/versions/:versionId/status', authenticate, async (req, res) => {
+  try {
+    const project = await VideoProject.findById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const version = project.versions.id(req.params.versionId);
+    if (!version) return res.status(404).json({ error: 'Version not found' });
+
+    if (version.bunnyVideoId && version.videoStatus !== 'ready' && bunnyStream.isConfigured()) {
+      try {
+        const info = await bunnyStream.getVideo(version.bunnyVideoId);
+        // Bunny status: 4 = finished, 5/6 = failed
+        if (info.status === 4) {
+          version.videoStatus = 'ready';
+          version.durationSeconds = info.length || 0;
+          await project.save();
+        } else if (info.status === 5 || info.status === 6) {
+          version.videoStatus = 'error';
+          await project.save();
+        }
+      } catch (bunnyErr) {
+        console.error('Bunny status check failed:', bunnyErr.message);
+      }
+    }
+    res.json(portalVersionPayload(version));
+  } catch (err) {
+    console.error('Error checking version status:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Team comment on a version
+app.post('/api/video-projects/:id/comments', authenticate, async (req, res) => {
+  try {
+    const project = await VideoProject.findById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const version = project.versions.id(req.body.versionId);
+    if (!version) return res.status(400).json({ error: 'Version not found' });
+
+    const text = String(req.body.text || '').trim();
+    if (!text) return res.status(400).json({ error: 'Comment text is required' });
+
+    const { timecodeSeconds, timecodeEndSeconds } = parseTimecodeFields(req.body);
+    const mentions = await resolvePortalMentions(req.body.mentionUserIds || req.body.mentions);
+    const annotation = sanitizeAnnotation(req.body.annotation);
+    const comment = await VideoComment.create({
+      projectId: project._id,
+      versionId: version._id,
+      timecodeSeconds,
+      timecodeEndSeconds,
+      text,
+      mustFix: !!req.body.mustFix,
+      annotation,
+      mentions,
+      authorType: 'team',
+      authorId: req.user.id,
+      authorName: req.user.fullName || req.user.email || ''
+    });
+
+    notifyPortalMentions({
+      project,
+      mentions,
+      actorName: comment.authorName,
+      text
+    }).catch(err => console.error('Portal mention notify failed:', err));
+
+    res.status(201).json(portalCommentPayload(comment));
+  } catch (err) {
+    console.error('Error creating team comment:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Team reply to a comment
+app.post('/api/video-comments/:commentId/replies', authenticate, async (req, res) => {
+  try {
+    const comment = await VideoComment.findById(req.params.commentId);
+    if (!comment) return res.status(404).json({ error: 'Comment not found' });
+
+    const text = String(req.body.text || '').trim();
+    if (!text) return res.status(400).json({ error: 'Reply text is required' });
+
+    comment.replies.push({
+      text,
+      authorType: 'team',
+      authorId: req.user.id,
+      authorName: req.user.fullName || req.user.email || ''
+    });
+    await comment.save();
+
+    const mentionIds = req.body.mentionUserIds || req.body.mentions;
+    if (mentionIds?.length) {
+      const project = await VideoProject.findById(comment.projectId);
+      const mentions = await resolvePortalMentions(mentionIds);
+      if (project && mentions.length) {
+        notifyPortalMentions({
+          project,
+          mentions,
+          actorName: req.user.fullName || req.user.email || 'Team',
+          text
+        }).catch(err => console.error('Portal mention notify failed:', err));
+      }
+    }
+
+    res.json(portalCommentPayload(comment));
+  } catch (err) {
+    console.error('Error replying to comment:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Resolve / unresolve a comment
+app.put('/api/video-comments/:commentId/resolve', authenticate, async (req, res) => {
+  try {
+    const comment = await VideoComment.findById(req.params.commentId);
+    if (!comment) return res.status(404).json({ error: 'Comment not found' });
+
+    comment.resolved = !!req.body.resolved;
+    if (comment.resolved) {
+      comment.resolvedBy = req.user.id;
+      comment.resolvedByName = req.user.fullName || req.user.email || '';
+      comment.resolvedAt = new Date();
+    } else {
+      comment.resolvedBy = null;
+      comment.resolvedByName = '';
+      comment.resolvedAt = null;
+    }
+    await comment.save();
+    res.json(portalCommentPayload(comment));
+  } catch (err) {
+    console.error('Error resolving comment:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Toggle must-fix priority on a comment
+app.put('/api/video-comments/:commentId/priority', authenticate, async (req, res) => {
+  try {
+    const comment = await VideoComment.findById(req.params.commentId);
+    if (!comment) return res.status(404).json({ error: 'Comment not found' });
+    comment.mustFix = !!req.body.mustFix;
+    await comment.save();
+    res.json(portalCommentPayload(comment));
+  } catch (err) {
+    console.error('Error updating comment priority:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// ---------- Public: client portal (magic link, no auth) ----------
+
+// Portal home: client info + their projects
+app.get('/api/portal/:token', async (req, res) => {
+  try {
+    const resolved = await resolvePortalToken(req.params.token);
+    if (!resolved) return res.status(404).json({ error: 'This portal link is no longer valid. Please contact us for a new one.' });
+    const { client, contact, shared } = resolved;
+
+    if (contact) {
+      contact.lastAccessAt = new Date();
+      client.save().catch(() => {});
+    }
+
+    logPortalActivity({
+      clientId: client._id,
+      type: 'portal_opened',
+      actorType: 'client',
+      actorName: contact?.name || (shared ? 'Shared link visitor' : ''),
+      actorEmail: contact?.email || '',
+      message: 'Opened the client portal'
+    });
+
+    const projects = await VideoProject.find({
+      clientId: client._id,
+      status: { $in: ['in_review', 'delivered'] }
+    }).sort({ createdAt: -1 }).lean();
+
+    res.json({
+      clientName: client.name,
+      contactName: contact?.name || '',
+      shared: !!shared,
+      branding: portalBrandingPayload(client),
+      folders: portalFoldersPayload(client),
+      projects: projects.map(p => {
+        const versions = p.versions || [];
+        const latest = versions[versions.length - 1] || null;
+        const latestReady = [...versions].reverse().find(v => v.videoStatus === 'ready' && v.bunnyVideoId) || null;
+        return {
+          _id: p._id,
+          title: p.title,
+          category: p.category || '',
+          folderId: p.folderId || null,
+          status: p.status,
+          reviewDecision: p.reviewDecision || { status: 'none' },
+          feedbackDueAt: p.feedbackDueAt || null,
+          deliveredAt: p.deliveredAt,
+          masterFileUrl: portalMasterDownloadUrl(p),
+          allowClientDownload: p.allowClientDownload !== false,
+          versionCount: versions.length,
+          latestVersionNumber: latest ? latest.versionNumber : 0,
+          latestVersionStatus: latest ? latest.videoStatus : null,
+          thumbnailUrl: projectThumbnailUrl(p, latestReady),
+          updatedAt: p.updatedAt
+        };
+      })
+    });
+  } catch (err) {
+    console.error('Error loading portal:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Portal project detail: playable versions + comment threads
+app.get('/api/portal/:token/projects/:projectId', async (req, res) => {
+  try {
+    const resolved = await resolvePortalToken(req.params.token);
+    if (!resolved) return res.status(404).json({ error: 'This portal link is no longer valid. Please contact us for a new one.' });
+    const { client, contact, shared } = resolved;
+
+    const project = await VideoProject.findOne({ _id: req.params.projectId, clientId: client._id }).lean();
+    if (!project || project.status === 'archived') return res.status(404).json({ error: 'Project not found' });
+
+    logPortalActivity({
+      projectId: project._id,
+      clientId: client._id,
+      type: 'project_viewed',
+      actorType: 'client',
+      actorName: contact?.name || (shared ? 'Shared link visitor' : ''),
+      actorEmail: contact?.email || '',
+      message: `Viewed "${project.title}"`
+    });
+
+    const comments = await VideoComment.find({ projectId: project._id }).sort({ createdAt: 1 }).lean();
+    res.json({
+      _id: project._id,
+      title: project.title,
+      category: project.category || '',
+      folderId: project.folderId || null,
+      status: project.status,
+      reviewDecision: project.reviewDecision || { status: 'none' },
+      feedbackDueAt: project.feedbackDueAt || null,
+      deliveredAt: project.deliveredAt,
+      masterFileUrl: portalMasterDownloadUrl(project),
+      allowClientDownload: project.allowClientDownload !== false,
+      branding: portalBrandingPayload(client),
+      versions: (project.versions || []).map(portalVersionPayload),
+      comments: comments.map(portalCommentPayload)
+    });
+  } catch (err) {
+    console.error('Error loading portal project:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Client approve on the current cut
+app.post('/api/portal/:token/projects/:projectId/decision', async (req, res) => {
+  try {
+    const resolved = await resolvePortalToken(req.params.token);
+    if (!resolved) return res.status(404).json({ error: 'This portal link is no longer valid. Please contact us for a new one.' });
+    const { client, contact } = resolved;
+
+    const decision = String(req.body.decision || '').toLowerCase();
+    if (decision !== 'approved') {
+      return res.status(400).json({ error: 'decision must be "approved"' });
+    }
+
+    const project = await VideoProject.findOne({ _id: req.params.projectId, clientId: client._id });
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    if (project.status !== 'in_review') {
+      return res.status(400).json({ error: 'This project is no longer open for review' });
+    }
+
+    const versions = project.versions || [];
+    const latest = versions[versions.length - 1];
+    if (!latest) return res.status(400).json({ error: 'No version to review yet' });
+
+    const authorName = contact
+      ? (contact.name || contact.email)
+      : String(req.body.authorName || '').trim().slice(0, 80);
+    if (!authorName) return res.status(400).json({ error: 'Please enter your name' });
+
+    project.reviewDecision = {
+      status: 'approved',
+      note: '',
+      versionId: latest._id,
+      versionNumber: latest.versionNumber,
+      decidedByName: authorName,
+      decidedByEmail: contact?.email || '',
+      decidedAt: new Date()
+    };
+    await project.save();
+
+    await logPortalActivity({
+      projectId: project._id,
+      clientId: client._id,
+      type: 'approved',
+      actorType: 'client',
+      actorName: authorName,
+      actorEmail: contact?.email || '',
+      message: `Approved v${latest.versionNumber}`,
+      metadata: { versionNumber: latest.versionNumber }
+    });
+
+    notifyTeamPortalEvent({
+      project,
+      type: 'portal_decision',
+      title: `${authorName} approved "${project.title}"`,
+      message: `${authorName} approved version ${latest.versionNumber}.`,
+      emailSubject: `Approved — ${project.title}`
+    }).catch(err => console.error('Portal decision notification failed:', err));
+
+    res.json({ success: true, reviewDecision: project.reviewDecision });
+  } catch (err) {
+    console.error('Error saving portal decision:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Client adds a comment (timestamped or general)
+app.post('/api/portal/:token/projects/:projectId/comments', async (req, res) => {
+  try {
+    const resolved = await resolvePortalToken(req.params.token);
+    if (!resolved) return res.status(404).json({ error: 'This portal link is no longer valid. Please contact us for a new one.' });
+    const { client, contact } = resolved;
+
+    const project = await VideoProject.findOne({ _id: req.params.projectId, clientId: client._id });
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const version = project.versions.id(req.body.versionId);
+    if (!version) return res.status(400).json({ error: 'Version not found' });
+
+    const text = String(req.body.text || '').trim();
+    if (!text) return res.status(400).json({ error: 'Comment text is required' });
+    if (text.length > 5000) return res.status(400).json({ error: 'Comment is too long' });
+
+    // Shared-link reviewers identify themselves by name
+    const authorName = contact
+      ? (contact.name || contact.email)
+      : String(req.body.authorName || '').trim().slice(0, 80);
+    if (!authorName) return res.status(400).json({ error: 'Please enter your name so we know who this feedback is from' });
+
+    const { timecodeSeconds, timecodeEndSeconds } = parseTimecodeFields(req.body);
+    const annotation = sanitizeAnnotation(req.body.annotation);
+    const comment = await VideoComment.create({
+      projectId: project._id,
+      versionId: version._id,
+      timecodeSeconds,
+      timecodeEndSeconds,
+      text,
+      mustFix: !!req.body.mustFix,
+      annotation,
+      authorType: 'client',
+      authorName,
+      authorEmail: contact?.email || ''
+    });
+
+    notifyTeamOfPortalComment(project, client, authorName, text, comment.timecodeSeconds, false, comment.timecodeEndSeconds)
+      .catch(err => console.error('Portal comment notification failed:', err));
+
+    logPortalActivity({
+      projectId: project._id,
+      clientId: client._id,
+      type: 'commented',
+      actorType: 'client',
+      actorName: authorName,
+      actorEmail: contact?.email || '',
+      message: text.length > 120 ? `${text.slice(0, 120)}…` : text,
+      metadata: {
+        versionId: version._id.toString(),
+        timecodeSeconds: comment.timecodeSeconds,
+        timecodeEndSeconds: comment.timecodeEndSeconds
+      }
+    });
+
+    res.status(201).json(portalCommentPayload(comment));
+  } catch (err) {
+    console.error('Error creating portal comment:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Client replies to a comment thread
+app.post('/api/portal/:token/comments/:commentId/replies', async (req, res) => {
+  try {
+    const resolved = await resolvePortalToken(req.params.token);
+    if (!resolved) return res.status(404).json({ error: 'This portal link is no longer valid. Please contact us for a new one.' });
+    const { client, contact } = resolved;
+
+    const comment = await VideoComment.findById(req.params.commentId);
+    if (!comment) return res.status(404).json({ error: 'Comment not found' });
+
+    const project = await VideoProject.findOne({ _id: comment.projectId, clientId: client._id });
+    if (!project) return res.status(404).json({ error: 'Comment not found' });
+
+    const text = String(req.body.text || '').trim();
+    if (!text) return res.status(400).json({ error: 'Reply text is required' });
+    if (text.length > 5000) return res.status(400).json({ error: 'Reply is too long' });
+
+    const authorName = contact
+      ? (contact.name || contact.email)
+      : String(req.body.authorName || '').trim().slice(0, 80);
+    if (!authorName) return res.status(400).json({ error: 'Please enter your name so we know who this feedback is from' });
+
+    comment.replies.push({
+      text,
+      authorType: 'client',
+      authorName
+    });
+    await comment.save();
+
+    notifyTeamOfPortalComment(project, client, authorName, text, null, true)
+      .catch(err => console.error('Portal reply notification failed:', err));
+
+    logPortalActivity({
+      projectId: project._id,
+      clientId: client._id,
+      type: 'replied',
+      actorType: 'client',
+      actorName: authorName,
+      actorEmail: contact?.email || '',
+      message: text.length > 120 ? `${text.slice(0, 120)}…` : text
+    });
+
+    res.json(portalCommentPayload(comment));
+  } catch (err) {
+    console.error('Error creating portal reply:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Bulk email all client contacts that a version is ready for review
+app.post('/api/video-projects/:id/notify-clients', authenticate, async (req, res) => {
+  try {
+    const project = await VideoProject.findById(req.params.id).populate('clientId', 'name contacts shareToken');
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const versions = project.versions || [];
+    const latest = versions[versions.length - 1];
+    if (!latest) return res.status(400).json({ error: 'Upload a version before notifying clients' });
+
+    const notes = String(req.body.notes || latest.notes || '').trim();
+    const result = await sendPortalNewVersionEmails(project, latest.versionNumber, notes);
+
+    await logPortalActivity({
+      projectId: project._id,
+      clientId: project.clientId?._id || project.clientId,
+      type: 'clients_notified',
+      actorType: 'team',
+      actorId: req.user.id,
+      actorName: req.user.fullName || req.user.email || '',
+      message: `Notified ${result.sent} contact${result.sent !== 1 ? 's' : ''} about v${latest.versionNumber}`,
+      metadata: result
+    });
+
+    if (result.error && result.sent === 0) {
+      return res.status(400).json({ error: result.error });
+    }
+    res.json({ success: true, ...result, versionNumber: latest.versionNumber });
+  } catch (err) {
+    console.error('Error notifying portal clients:', err);
+    res.status(500).json({ error: 'Failed to notify clients' });
+  }
+});
+
+// Lightweight PP item picker for linking
+app.get('/api/portal-post-production-options', authenticate, async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    const filter = { archived: { $ne: true } };
+    if (q) {
+      const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      filter.$or = [{ item: rx }, { project: rx }];
+    }
+    const items = await PostProductionItem.find(filter)
+      .select('item project editStatus qcStatus deliveryStatus')
+      .sort({ updatedAt: -1 })
+      .limit(40)
+      .lean();
+    res.json(items);
+  } catch (err) {
+    console.error('Error listing PP options for portal:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Upload / replace a custom project thumbnail (gallery cover + Bunny player cover when possible)
+app.post('/api/video-projects/:id/thumbnail', authenticate, portalThumbnailUpload.single('thumbnail'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No image file provided' });
+
+    const project = await VideoProject.findById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const uploadResult = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          resource_type: 'image',
+          folder: 'lumdash/portal-thumbnails',
+          public_id: `portal_${project._id}_${Date.now()}`,
+          transformation: [
+            { width: 1280, height: 720, crop: 'fill', gravity: 'auto' },
+            { quality: 'auto', fetch_format: 'auto' }
+          ]
+        },
+        (error, result) => error ? reject(error) : resolve(result)
+      );
+      uploadStream.end(req.file.buffer);
+    });
+
+    // Remove previous Cloudinary asset if any
+    if (project.customThumbnailPublicId) {
+      try {
+        await cloudinary.uploader.destroy(project.customThumbnailPublicId, { resource_type: 'image' });
+      } catch (cloudErr) {
+        console.error('Failed to delete old portal thumbnail:', cloudErr);
+      }
+    }
+
+    project.customThumbnailUrl = uploadResult.secure_url;
+    project.customThumbnailPublicId = uploadResult.public_id;
+    await project.save();
+
+    // Best-effort: also push onto Bunny for ready versions so the player cover matches
+    if (bunnyStream.isConfigured()) {
+      const readyIds = (project.versions || [])
+        .filter(v => v.videoStatus === 'ready' && v.bunnyVideoId)
+        .map(v => v.bunnyVideoId);
+      for (const videoId of readyIds) {
+        try {
+          await bunnyStream.setThumbnail(videoId, req.file.buffer, req.file.mimetype);
+        } catch (bunnyErr) {
+          console.error(`Bunny thumbnail sync failed for ${videoId}:`, bunnyErr.message);
+        }
+      }
+    }
+
+    const latestReady = [...(project.versions || [])].reverse().find(v => v.videoStatus === 'ready' && v.bunnyVideoId) || null;
+    res.json({
+      success: true,
+      customThumbnailUrl: project.customThumbnailUrl,
+      thumbnailUrl: projectThumbnailUrl(project, latestReady)
+    });
+  } catch (err) {
+    console.error('Error uploading portal thumbnail:', err);
+    res.status(500).json({ error: err.message || 'Thumbnail upload failed' });
+  }
+});
+
+// Capture approximate frame at playhead (Bunny seek sprite) → custom project thumbnail
+app.post('/api/video-projects/:id/thumbnail-from-frame', authenticate, async (req, res) => {
+  try {
+    if (!bunnyStream.isConfigured()) {
+      return res.status(503).json({ error: 'Video hosting is not configured' });
+    }
+
+    const timeSeconds = Number(req.body?.timeSeconds);
+    if (!Number.isFinite(timeSeconds) || timeSeconds < 0) {
+      return res.status(400).json({ error: 'timeSeconds is required' });
+    }
+
+    const project = await VideoProject.findById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const versionId = req.body?.versionId || null;
+    let version = versionId
+      ? (project.versions || []).id(versionId) || (project.versions || []).find(v => String(v._id) === String(versionId))
+      : null;
+    if (!version) {
+      version = [...(project.versions || [])].reverse().find(v => v.videoStatus === 'ready' && v.bunnyVideoId) || null;
+    }
+    if (!version?.bunnyVideoId || version.videoStatus !== 'ready') {
+      return res.status(400).json({ error: 'No ready video version to capture a frame from' });
+    }
+
+    const frame = await bunnyStream.extractFrameAtTime(version.bunnyVideoId, timeSeconds);
+
+    const transformation = frame.crop
+      ? [
+          { crop: 'crop', x: frame.crop.x, y: frame.crop.y, width: frame.crop.width, height: frame.crop.height },
+          { width: 1280, height: 720, crop: 'fill', gravity: 'center' },
+          { quality: 'auto', fetch_format: 'auto' }
+        ]
+      : [
+          { width: 1280, height: 720, crop: 'fill', gravity: 'center' },
+          { quality: 'auto', fetch_format: 'auto' }
+        ];
+
+    const uploadResult = await new Promise((resolve, reject) => {
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          resource_type: 'image',
+          folder: 'lumdash/portal-thumbnails',
+          public_id: `portal_${project._id}_${Date.now()}`,
+          transformation
+        },
+        (error, result) => error ? reject(error) : resolve(result)
+      );
+      uploadStream.end(frame.buffer);
+    });
+
+    if (project.customThumbnailPublicId) {
+      try {
+        await cloudinary.uploader.destroy(project.customThumbnailPublicId, { resource_type: 'image' });
+      } catch (cloudErr) {
+        console.error('Failed to delete old portal thumbnail:', cloudErr);
+      }
+    }
+
+    project.customThumbnailUrl = uploadResult.secure_url;
+    project.customThumbnailPublicId = uploadResult.public_id;
+    await project.save();
+
+    // Best-effort: sync player cover on Bunny for ready versions
+    const readyIds = (project.versions || [])
+      .filter(v => v.videoStatus === 'ready' && v.bunnyVideoId)
+      .map(v => v.bunnyVideoId);
+    for (const videoId of readyIds) {
+      try {
+        await bunnyStream.setThumbnailFromUrl(videoId, project.customThumbnailUrl);
+      } catch (bunnyErr) {
+        console.error(`Bunny thumbnail sync failed for ${videoId}:`, bunnyErr.message);
+      }
+    }
+
+    const latestReady = [...(project.versions || [])].reverse().find(v => v.videoStatus === 'ready' && v.bunnyVideoId) || null;
+    res.json({
+      success: true,
+      customThumbnailUrl: project.customThumbnailUrl,
+      thumbnailUrl: projectThumbnailUrl(project, latestReady),
+      capturedAtSeconds: frame.timeSeconds,
+      captureSource: frame.source
+    });
+  } catch (err) {
+    console.error('Error capturing portal thumbnail from frame:', err);
+    res.status(500).json({ error: err.message || 'Could not capture frame thumbnail' });
+  }
+});
+
+// Clear custom thumbnail (falls back to Bunny auto-generated)
+app.delete('/api/video-projects/:id/thumbnail', authenticate, async (req, res) => {
+  try {
+    const project = await VideoProject.findById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    if (project.customThumbnailPublicId) {
+      try {
+        await cloudinary.uploader.destroy(project.customThumbnailPublicId, { resource_type: 'image' });
+      } catch (cloudErr) {
+        console.error('Failed to delete portal thumbnail from Cloudinary:', cloudErr);
+      }
+    }
+    project.customThumbnailUrl = '';
+    project.customThumbnailPublicId = '';
+    await project.save();
+
+    const latestReady = [...(project.versions || [])].reverse().find(v => v.videoStatus === 'ready' && v.bunnyVideoId) || null;
+    res.json({
+      success: true,
+      thumbnailUrl: projectThumbnailUrl(project, latestReady)
+    });
+  } catch (err) {
+    console.error('Error deleting portal thumbnail:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

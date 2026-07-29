@@ -41,14 +41,17 @@
           <input type="text" id="vpSearch" placeholder="Search projects or clients...">
         </div>
         <div class="vp-status-tabs" id="vpStatusTabs">
-          <button class="vp-status-tab active" data-status="all">All</button>
-          <button class="vp-status-tab" data-status="in_review">In Review</button>
+          <button class="vp-status-tab" data-status="all">All</button>
+          <button class="vp-status-tab active" data-status="in_review">In Review</button>
           <button class="vp-status-tab" data-status="delivered">Delivered</button>
           <button class="vp-status-tab" data-status="archived">Archived</button>
         </div>
-        <select id="vpClientFilter">
-          <option value="">All clients</option>
-        </select>
+        <div class="vp-client-suggest" id="vpClientSuggest">
+          <span class="material-symbols-outlined">group</span>
+          <input type="text" id="vpClientFilterInput" placeholder="Filter by client…" autocomplete="off" aria-autocomplete="list" aria-controls="vpClientSuggestList" aria-expanded="false">
+          <button type="button" class="vp-client-suggest-clear" id="vpClientFilterClear" title="Clear client filter" aria-label="Clear client filter" hidden>&times;</button>
+          <div class="vp-client-suggest-list" id="vpClientSuggestList" role="listbox" hidden></div>
+        </div>
       </div>
 
       <div class="vp-content" id="vpContainer">
@@ -73,6 +76,13 @@
             </div>
           </div>
           <div class="vp-detail-header-actions">
+            <button type="button" class="vp-btn secondary small" id="copyProjectShareBtn" title="Copy client portal link that opens this video">
+              <span class="material-symbols-outlined">link</span>
+              <span>Copy share link</span>
+            </button>
+            <button type="button" class="vp-icon-btn" id="openProjectShareBtn" title="Open client portal link for this video" style="display:none;">
+              <span class="material-symbols-outlined">open_in_new</span>
+            </button>
             <button class="vp-icon-btn danger" id="deleteProjectBtn" title="Delete project" style="display:none;">
               <span class="material-symbols-outlined">delete</span>
             </button>

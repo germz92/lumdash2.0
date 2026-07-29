@@ -9,8 +9,9 @@
 
   let clients = [];
   let projects = [];
-  let statusFilter = 'all';
+  let statusFilter = 'in_review';
   let clientFilter = '';
+  let clientSuggestIndex = -1;
   let searchQuery = '';
   let isAdmin = false;
 
@@ -159,18 +160,176 @@
   // ---- Data ----
   async function loadClients() {
     clients = await api('/api/portal-clients');
-    const filterSel = document.getElementById('vpClientFilter');
     const projSel = document.getElementById('projClient');
     const options = clients.filter(c => !c.archived)
       .map(c => `<option value="${c._id}">${escapeHtml(c.name)}</option>`).join('');
-    filterSel.innerHTML = `<option value="">All clients</option>${options}`;
-    filterSel.value = clientFilter;
+    syncClientFilterInput();
     if (projSel) {
       const prev = projSel.value;
       projSel.innerHTML = `<option value="" disabled selected>Select a client…</option>${options}`;
       if (prev && clients.some(c => c._id === prev && !c.archived)) projSel.value = prev;
       fillProjectFolderSelect(projSel.value);
     }
+  }
+
+  function activeClients() {
+    return (clients || []).filter(c => !c.archived);
+  }
+
+  function syncClientFilterInput() {
+    const input = document.getElementById('vpClientFilterInput');
+    const clearBtn = document.getElementById('vpClientFilterClear');
+    if (!input) return;
+    if (clientFilter) {
+      const c = clients.find(x => String(x._id) === String(clientFilter));
+      input.value = c ? (c.name || '') : '';
+    }
+    if (clearBtn) clearBtn.hidden = !clientFilter;
+  }
+
+  function matchClients(query) {
+    const q = (query || '').trim().toLowerCase();
+    const list = activeClients();
+    if (!q) return list.slice(0, 12);
+    return list.filter(c => (c.name || '').toLowerCase().includes(q)).slice(0, 12);
+  }
+
+  function hideClientSuggest() {
+    const list = document.getElementById('vpClientSuggestList');
+    const input = document.getElementById('vpClientFilterInput');
+    if (list) {
+      list.hidden = true;
+      list.innerHTML = '';
+    }
+    if (input) input.setAttribute('aria-expanded', 'false');
+    clientSuggestIndex = -1;
+  }
+
+  function showClientSuggest(matches) {
+    const list = document.getElementById('vpClientSuggestList');
+    const input = document.getElementById('vpClientFilterInput');
+    if (!list || !input) return;
+    if (!matches.length) {
+      list.innerHTML = '<div class="vp-client-suggest-empty">No matching clients</div>';
+      list.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+      clientSuggestIndex = -1;
+      return;
+    }
+    list.innerHTML = matches.map((c, i) =>
+      `<button type="button" class="vp-client-suggest-item" role="option" data-id="${c._id}" data-index="${i}">${escapeHtml(c.name || 'Untitled')}</button>`
+    ).join('');
+    list.hidden = false;
+    input.setAttribute('aria-expanded', 'true');
+    clientSuggestIndex = -1;
+    list.querySelectorAll('.vp-client-suggest-item').forEach(btn => {
+      btn.addEventListener('mousedown', (e) => e.preventDefault());
+      btn.addEventListener('click', () => {
+        selectClientFilter(btn.dataset.id, btn.textContent);
+      });
+    });
+  }
+
+  function highlightClientSuggest(index) {
+    const list = document.getElementById('vpClientSuggestList');
+    if (!list || list.hidden) return;
+    const items = [...list.querySelectorAll('.vp-client-suggest-item')];
+    if (!items.length) return;
+    clientSuggestIndex = ((index % items.length) + items.length) % items.length;
+    items.forEach((el, i) => el.classList.toggle('is-active', i === clientSuggestIndex));
+    items[clientSuggestIndex]?.scrollIntoView({ block: 'nearest' });
+  }
+
+  function selectClientFilter(id, name) {
+    clientFilter = id ? String(id) : '';
+    const input = document.getElementById('vpClientFilterInput');
+    const clearBtn = document.getElementById('vpClientFilterClear');
+    if (input) input.value = name || '';
+    if (clearBtn) clearBtn.hidden = !clientFilter;
+    hideClientSuggest();
+    renderGrid();
+  }
+
+  function clearClientFilter() {
+    clientFilter = '';
+    const input = document.getElementById('vpClientFilterInput');
+    const clearBtn = document.getElementById('vpClientFilterClear');
+    if (input) {
+      input.value = '';
+      input.focus();
+    }
+    if (clearBtn) clearBtn.hidden = true;
+    hideClientSuggest();
+    renderGrid();
+  }
+
+  function setupClientSuggest() {
+    const wrap = document.getElementById('vpClientSuggest');
+    const input = document.getElementById('vpClientFilterInput');
+    const clearBtn = document.getElementById('vpClientFilterClear');
+    if (!wrap || !input) return;
+
+    input.addEventListener('focus', () => {
+      showClientSuggest(matchClients(input.value));
+    });
+
+    input.addEventListener('input', () => {
+      // Typing after a selection unlocks until a new pick (empty = all)
+      if (clientFilter) {
+        const selected = clients.find(c => String(c._id) === String(clientFilter));
+        if (!selected || input.value !== (selected.name || '')) {
+          clientFilter = '';
+          if (clearBtn) clearBtn.hidden = true;
+          renderGrid();
+        }
+      }
+      if (!input.value.trim() && !clientFilter) {
+        showClientSuggest(matchClients(''));
+        return;
+      }
+      showClientSuggest(matchClients(input.value));
+    });
+
+    input.addEventListener('keydown', (e) => {
+      const list = document.getElementById('vpClientSuggestList');
+      const open = list && !list.hidden;
+      const items = open ? [...list.querySelectorAll('.vp-client-suggest-item')] : [];
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (!open) showClientSuggest(matchClients(input.value));
+        else highlightClientSuggest(clientSuggestIndex + 1);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (open) highlightClientSuggest(clientSuggestIndex - 1);
+      } else if (e.key === 'Enter') {
+        if (open && items.length) {
+          e.preventDefault();
+          const idx = clientSuggestIndex >= 0 ? clientSuggestIndex : 0;
+          const item = items[idx];
+          if (item) selectClientFilter(item.dataset.id, item.textContent);
+        }
+      } else if (e.key === 'Escape') {
+        hideClientSuggest();
+        if (clientFilter) syncClientFilterInput();
+      }
+    });
+
+    input.addEventListener('blur', () => {
+      setTimeout(() => {
+        hideClientSuggest();
+        if (clientFilter) syncClientFilterInput();
+        else if (input.value.trim()) {
+          // No locked selection — clear partial text so filter stays "all"
+          input.value = '';
+        }
+      }, 120);
+    });
+
+    clearBtn?.addEventListener('click', () => clearClientFilter());
+
+    document.addEventListener('click', (e) => {
+      if (!wrap.contains(e.target)) hideClientSuggest();
+    });
   }
 
   function fillProjectFolderSelect(clientId, selectedFolderId = '') {
@@ -811,6 +970,7 @@
       `${detail.clientName}${detail.category ? ` · ${detail.category}` : ''} · ${STATUS_LABELS[detail.status] || detail.status}`;
     fillDetailFolderSelect();
     document.getElementById('deleteProjectBtn').style.display = isAdmin ? 'inline-flex' : 'none';
+    updateProjectShareButtons();
     document.getElementById('masterUrlInput').value = detail.masterFileUrl || '';
     updateOpenMasterBtn();
     const allowDl = document.getElementById('allowDownloadCheck');
@@ -877,6 +1037,49 @@
     document.getElementById('vpClientsView').style.display = 'none';
     document.getElementById('vpDetailView').style.display = 'flex';
     document.querySelector('.vp-main').scrollTop = 0;
+  }
+
+  function projectClientShareToken(project) {
+    if (!project) return '';
+    const client = clients.find(c => String(c._id) === String(project.clientId));
+    return client?.shareToken || '';
+  }
+
+  function projectPortalShareUrl(project) {
+    const token = projectClientShareToken(project);
+    if (!token || !project?._id) return '';
+    return `${location.origin}/portal.html?token=${encodeURIComponent(token)}&project=${encodeURIComponent(project._id)}`;
+  }
+
+  function updateProjectShareButtons() {
+    const copyBtn = document.getElementById('copyProjectShareBtn');
+    const openBtn = document.getElementById('openProjectShareBtn');
+    const hasUrl = !!projectPortalShareUrl(detail);
+    if (copyBtn) copyBtn.style.display = hasUrl ? 'inline-flex' : 'none';
+    if (openBtn) openBtn.style.display = hasUrl ? 'inline-flex' : 'none';
+  }
+
+  async function copyProjectShareLink() {
+    const url = projectPortalShareUrl(detail);
+    if (!url) {
+      toast('This client has no portal link yet — open Clients and check the team link', 'error');
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      toast('Share link copied — opens this video in the client portal');
+    } catch {
+      toast('Could not copy link', 'error');
+    }
+  }
+
+  function openProjectShareLink() {
+    const url = projectPortalShareUrl(detail);
+    if (!url) {
+      toast('This client has no portal link yet — open Clients and check the team link', 'error');
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
   }
 
   function closeDetailView() {
@@ -1942,10 +2145,7 @@
         renderGrid();
       }));
 
-    document.getElementById('vpClientFilter').addEventListener('change', (e) => {
-      clientFilter = e.target.value;
-      renderGrid();
-    });
+    setupClientSuggest();
 
     document.getElementById('manageClientsBtn').addEventListener('click', showClientsView);
 
@@ -2182,6 +2382,9 @@
       } catch (err) { toast(err.message, 'error'); }
       finally { btn.disabled = false; }
     });
+
+    document.getElementById('copyProjectShareBtn')?.addEventListener('click', copyProjectShareLink);
+    document.getElementById('openProjectShareBtn')?.addEventListener('click', openProjectShareLink);
 
     document.getElementById('deleteProjectBtn').addEventListener('click', async () => {
       if (!detail) return;

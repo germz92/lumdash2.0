@@ -14,6 +14,9 @@
   let clientSuggestIndex = -1;
   let searchQuery = '';
   let isAdmin = false;
+  // Plain PINs known this session after set/random (needed to include in share emails)
+  const knownPortalPins = Object.create(null);
+  let sharingClientId = null;
 
   // Detail modal state
   let detail = null;            // current project detail payload
@@ -529,6 +532,107 @@
     if (body) body.innerHTML = '';
   }
 
+  function openSharePortalModal(clientId) {
+    const client = clients.find(c => c._id === clientId);
+    if (!client) return;
+    const contacts = (client.contacts || []).filter(c => !c.revokedAt && c.email);
+    if (!contacts.length) {
+      toast('Add at least one contact before sharing', 'error');
+      return;
+    }
+
+    sharingClientId = clientId;
+    const sub = document.getElementById('vpSharePortalSub');
+    if (sub) {
+      sub.textContent = `Email the team portal link for ${client.branding?.displayName || client.name}`;
+    }
+
+    const list = document.getElementById('vpShareContactList');
+    list.innerHTML = contacts.map(ct => `
+      <label class="vp-share-contact-row">
+        <input type="checkbox" class="vp-share-contact-check" value="${escapeHtml(ct._id)}" checked>
+        <span class="vp-share-contact-meta">
+          <span class="vp-share-contact-name">${escapeHtml(ct.name || ct.email)}</span>
+          <span class="vp-share-contact-email">${escapeHtml(ct.email)}</span>
+        </span>
+      </label>`).join('');
+
+    const selectAll = document.getElementById('vpShareSelectAll');
+    if (selectAll) {
+      selectAll.checked = true;
+      selectAll.onchange = () => {
+        list.querySelectorAll('.vp-share-contact-check').forEach(cb => {
+          cb.checked = selectAll.checked;
+        });
+      };
+    }
+    list.querySelectorAll('.vp-share-contact-check').forEach(cb => {
+      cb.addEventListener('change', () => {
+        const boxes = [...list.querySelectorAll('.vp-share-contact-check')];
+        if (selectAll) selectAll.checked = boxes.length > 0 && boxes.every(b => b.checked);
+      });
+    });
+
+    const pinWrap = document.getElementById('vpSharePinWrap');
+    const pinInput = document.getElementById('vpSharePinInput');
+    if (client.portalPinEnabled) {
+      pinWrap.style.display = 'block';
+      pinInput.value = knownPortalPins[clientId] || '';
+      pinInput.required = true;
+    } else {
+      pinWrap.style.display = 'none';
+      pinInput.value = '';
+    }
+
+    const selfCb = document.getElementById('vpShareIncludeSelf');
+    if (selfCb) selfCb.checked = false;
+
+    showModal('vpSharePortalModal');
+  }
+
+  async function sendSharePortalEmails() {
+    if (!sharingClientId) return;
+    const client = clients.find(c => c._id === sharingClientId);
+    if (!client) return;
+
+    const contactIds = [...document.querySelectorAll('#vpShareContactList .vp-share-contact-check:checked')]
+      .map(cb => cb.value);
+    const includeSelf = !!document.getElementById('vpShareIncludeSelf')?.checked;
+    if (!contactIds.length && !includeSelf) {
+      toast('Select at least one contact, or send a copy to yourself', 'error');
+      return;
+    }
+
+    let portalPin = '';
+    if (client.portalPinEnabled) {
+      portalPin = document.getElementById('vpSharePinInput')?.value?.trim() || '';
+      if (!/^\d{4,8}$/.test(portalPin)) {
+        toast('Enter the portal PIN to include in the email', 'error');
+        return;
+      }
+    }
+
+    const btn = document.getElementById('vpSharePortalSendBtn');
+    if (btn) btn.disabled = true;
+    try {
+      const result = await api(`/api/portal-clients/${sharingClientId}/share`, {
+        method: 'POST',
+        body: JSON.stringify({ contactIds, includeSelf, portalPin: portalPin || undefined })
+      });
+      if (portalPin) knownPortalPins[sharingClientId] = portalPin;
+      hideModal('vpSharePortalModal');
+      const parts = [`Sent ${result.sent} email${result.sent !== 1 ? 's' : ''}`];
+      if (result.selfSent) parts.push('including your copy');
+      if (result.failed?.length) parts.push(`${result.failed.length} failed`);
+      toast(parts.join(' — '));
+      await refreshClientsUi();
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
   function renderClientEditModal(c) {
     const branding = c.branding || {};
     const accent = branding.accentColor || '#CC0007';
@@ -634,14 +738,40 @@
               <div class="vp-share-hint">Same link clients use — open it to preview their portal, or copy to share.</div>
             </div>
             <div class="vp-share-actions">
-              <button type="button" class="vp-btn primary small" data-action="open-portal" data-token="${escapeHtml(c.shareToken)}">
+              <button type="button" class="vp-btn primary small" data-action="share-portal" data-client="${c._id}">
+                <span class="material-symbols-outlined">forward_to_inbox</span>
+                <span>Share portal</span>
+              </button>
+              <button type="button" class="vp-btn secondary small" data-action="open-portal" data-token="${escapeHtml(c.shareToken)}">
                 <span class="material-symbols-outlined">open_in_new</span>
-                <span>Open Portal</span>
+                <span>Open</span>
               </button>
               <button type="button" class="vp-btn secondary small" data-action="copy-share-link" data-token="${escapeHtml(c.shareToken)}">
                 <span class="material-symbols-outlined">content_copy</span>
-                <span>Copy Link</span>
+                <span>Copy link</span>
               </button>
+            </div>
+          </div>
+          <div class="vp-pin-box">
+            <div class="vp-pin-head">
+              <div class="vp-share-title"><span class="material-symbols-outlined">lock</span> PIN protect portal</div>
+              <div class="vp-share-hint">${c.portalPinEnabled
+                ? 'PIN is on — visitors must enter it before seeing projects.'
+                : 'Optional. Require a 4–8 digit PIN before anyone can open this portal.'}</div>
+            </div>
+            <div class="vp-pin-row">
+              <input type="text" class="vp-portal-pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="${c.portalPinEnabled ? 'New PIN (optional)' : '4–8 digit PIN'}" autocomplete="off">
+              <button type="button" class="vp-btn secondary small" data-action="random-portal-pin" data-client="${c._id}" title="Generate a random 6-digit PIN">
+                <span class="material-symbols-outlined">casino</span>
+                <span>Random</span>
+              </button>
+              <button type="button" class="vp-btn primary small" data-action="save-portal-pin" data-client="${c._id}">
+                ${c.portalPinEnabled ? 'Update PIN' : 'Set PIN'}
+              </button>
+              ${c.portalPinEnabled ? `
+              <button type="button" class="vp-btn secondary small" data-action="clear-portal-pin" data-client="${c._id}">
+                Remove PIN
+              </button>` : ''}
             </div>
           </div>
         </div>` : ''}
@@ -830,6 +960,54 @@
         });
         await refreshClientsUi();
         toast('Branding saved');
+        return;
+      }
+      if (action === 'save-portal-pin') {
+        const block = document.querySelector(`#clientEditBody .vp-client-block[data-client="${clientId}"]`);
+        const pin = block?.querySelector('.vp-portal-pin-input')?.value?.trim() || '';
+        if (!/^\d{4,8}$/.test(pin)) {
+          toast('PIN must be 4–8 digits', 'error');
+          return;
+        }
+        await api(`/api/portal-clients/${clientId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ portalPin: pin })
+        });
+        knownPortalPins[clientId] = pin;
+        await refreshClientsUi();
+        toast(`Portal PIN saved: ${pin}`);
+        return;
+      }
+      if (action === 'random-portal-pin') {
+        const pin = String(Math.floor(100000 + Math.random() * 900000)); // 6 digits
+        const block = document.querySelector(`#clientEditBody .vp-client-block[data-client="${clientId}"]`);
+        const input = block?.querySelector('.vp-portal-pin-input');
+        if (input) input.value = pin;
+        await api(`/api/portal-clients/${clientId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ portalPin: pin })
+        });
+        knownPortalPins[clientId] = pin;
+        await refreshClientsUi();
+        // Re-fill after refresh so admin can copy it
+        const refreshed = document.querySelector(`#clientEditBody .vp-client-block[data-client="${clientId}"] .vp-portal-pin-input`);
+        if (refreshed) refreshed.value = pin;
+        toast(`Random PIN set: ${pin}`);
+        return;
+      }
+      if (action === 'clear-portal-pin') {
+        if (!confirm('Remove PIN protection from this client portal?')) return;
+        await api(`/api/portal-clients/${clientId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ clearPortalPin: true })
+        });
+        delete knownPortalPins[clientId];
+        await refreshClientsUi();
+        toast('Portal PIN removed');
+        return;
+      }
+      if (action === 'share-portal') {
+        openSharePortalModal(clientId);
         return;
       }
       if (action === 'save-folders') {
@@ -2364,6 +2542,8 @@
 
     document.querySelectorAll('[data-close]').forEach(btn =>
       btn.addEventListener('click', () => hideModal(btn.dataset.close)));
+
+    document.getElementById('vpSharePortalSendBtn')?.addEventListener('click', sendSharePortalEmails);
 
     document.querySelectorAll('.vp-modal-overlay').forEach(overlay =>
       overlay.addEventListener('click', (e) => {

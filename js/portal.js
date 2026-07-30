@@ -5,7 +5,9 @@
  *
  * Two link types:
  * - Personal contact token: identity is known from the link
- * - Shared team token: one link for the whole client; reviewers enter their name once
+ * - Shared team token: one link for the whole client; reviewers enter their name when opening a project
+ *
+ * Optional client PIN: unlock once per tab (sessionStorage), then browse normally.
  */
 (function() {
   'use strict';
@@ -14,6 +16,7 @@
   const params = new URLSearchParams(location.search);
   const token = params.get('token') || '';
   const AUTHOR_KEY = `portalAuthor:${token}`;
+  const UNLOCK_KEY = `portalUnlock:${token}`;
 
   let portalData = null;   // { clientName, contactName, shared, projects }
   let project = null;      // current project detail
@@ -24,6 +27,7 @@
   let composeTimecodeAttached = true; // default: stamp comments with the playhead
   let composePickingEnd = false; // lock start; playhead sets the end
   let reviewerName = '';   // set for shared links (or from personal contact)
+  let pendingOpen = null;  // { projectId, pushState } while name gate is shown
   let annotate = null;
   let annotateTool = 'off';
   let compareMode = false;
@@ -106,20 +110,39 @@
   }
 
   async function api(path, options = {}) {
+    const unlock = getUnlockToken();
     const res = await fetch(`${API_BASE}${path}`, {
       ...options,
       headers: {
         ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...(unlock ? { 'X-Portal-Unlock': unlock } : {}),
         ...(options.headers || {})
       }
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
+    if (!res.ok) {
+      const err = new Error(data.error || `Request failed (${res.status})`);
+      err.status = res.status;
+      err.data = data;
+      throw err;
+    }
     return data;
   }
 
   function showError(message) {
     container.innerHTML = `<div class="pt-error">${escapeHtml(message)}</div>`;
+  }
+
+  function getUnlockToken() {
+    try { return (sessionStorage.getItem(UNLOCK_KEY) || '').trim(); }
+    catch { return ''; }
+  }
+
+  function saveUnlockToken(value) {
+    try {
+      if (value) sessionStorage.setItem(UNLOCK_KEY, value);
+      else sessionStorage.removeItem(UNLOCK_KEY);
+    } catch { /* private mode */ }
   }
 
   function loadSavedAuthor() {
@@ -171,22 +194,67 @@
   }
 
   function updateHeader() {
-    const who = reviewerName || portalData.contactName;
+    const who = reviewerName || portalData?.contactName;
     const clientLabel = displayClientName();
     document.getElementById('ptHeaderClient').innerHTML =
       `${who ? `Hi <strong>${escapeHtml(who.split(' ')[0])}</strong>` : escapeHtml(clientLabel)}`;
   }
 
-  // ---- Name gate (shared team link) ----
-  function renderNameGate(changing = false) {
+  // ---- PIN gate ----
+  function renderPinGate(hint = '') {
     container.classList.remove('pt-full');
     container.innerHTML = `
       <div class="pt-gate">
+        <h2>Enter PIN</h2>
+        <p>This portal is protected. Enter the PIN you were given to continue.</p>
+        <input type="password" id="ptGatePin" placeholder="PIN" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="one-time-code">
+        <div class="pt-gate-error" id="ptGatePinError"${hint ? '' : ' hidden'}>${escapeHtml(hint || '')}</div>
+        <button class="pt-gate-btn" id="ptGatePinBtn">Unlock</button>
+      </div>`;
+
+    const input = document.getElementById('ptGatePin');
+    const btn = document.getElementById('ptGatePinBtn');
+    const errEl = document.getElementById('ptGatePinError');
+    input.focus();
+
+    const submit = async () => {
+      const pin = input.value.trim();
+      if (!pin) { input.focus(); return; }
+      btn.disabled = true;
+      if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
+      try {
+        const result = await api(`/api/portal/${encodeURIComponent(token)}/unlock`, {
+          method: 'POST',
+          body: JSON.stringify({ pin })
+        });
+        saveUnlockToken(result.unlockToken || '');
+        await enterPortal();
+      } catch (err) {
+        if (errEl) {
+          errEl.hidden = false;
+          errEl.textContent = err.message || 'Incorrect PIN';
+        }
+        input.select();
+        btn.disabled = false;
+      }
+    };
+    btn.addEventListener('click', submit);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  }
+
+  // ---- Name gate (shared team link) — shown when opening a project ----
+  function renderNameGate(changing = false) {
+    container.classList.remove('pt-full');
+    const openingProject = !!(pendingOpen?.projectId);
+    container.innerHTML = `
+      <div class="pt-gate">
         <h2>${changing ? 'Change your name' : 'Who\'s reviewing?'}</h2>
-        <p>This is a shared portal link for <strong>${escapeHtml(displayClientName())}</strong>.
-           Enter your name so our editors know who each comment is from.</p>
+        <p>${openingProject
+          ? 'Enter your name so our editors know who each comment is from.'
+          : `This is a shared portal link for <strong>${escapeHtml(displayClientName())}</strong>.
+             Enter your name so our editors know who each comment is from.`}</p>
         <input type="text" id="ptGateName" placeholder="Your name" maxlength="80" value="${escapeHtml(reviewerName)}" autocomplete="name">
-        <button class="pt-gate-btn" id="ptGateBtn">${changing ? 'Continue' : 'Enter Portal'}</button>
+        <button class="pt-gate-btn" id="ptGateBtn">${changing ? 'Continue' : (openingProject ? 'Continue' : 'Enter Portal')}</button>
       </div>`;
 
     const input = document.getElementById('ptGateName');
@@ -199,9 +267,17 @@
       if (!name) { input.focus(); return; }
       saveAuthor(name);
       updateHeader();
-      const projectId = new URLSearchParams(location.search).get('project');
-      if (projectId) openProject(projectId, false);
-      else renderGallery();
+      const pending = pendingOpen;
+      pendingOpen = null;
+      if (pending?.projectId) {
+        openProject(pending.projectId, pending.pushState !== false);
+      } else if (project) {
+        renderProject();
+      } else {
+        const projectId = new URLSearchParams(location.search).get('project');
+        if (projectId) openProject(projectId, false);
+        else renderGallery();
+      }
     };
     btn.addEventListener('click', submit);
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
@@ -442,7 +518,6 @@
 
   // ---- Gallery ----
   function renderGallery() {
-    if (needsNameGate()) { renderNameGate(); return; }
     updateHeader();
 
     const filtered = filteredGalleryProjects();
@@ -540,11 +615,20 @@
 
   // ---- Project view ----
   async function openProject(projectId, pushState = true) {
-    if (needsNameGate()) { renderNameGate(); return; }
+    if (needsNameGate()) {
+      pendingOpen = { projectId, pushState };
+      renderNameGate(false);
+      return;
+    }
 
     try {
       project = await api(`/api/portal/${encodeURIComponent(token)}/projects/${projectId}`);
     } catch (err) {
+      if (err.status === 403 && err.data?.pinRequired) {
+        saveUnlockToken('');
+        renderPinGate(err.message || 'PIN required');
+        return;
+      }
       showError(err.message);
       return;
     }
@@ -1324,38 +1408,51 @@
     }
   });
 
-  (async function init() {
-    if (!token) {
-      showError('This link is missing its access token. Please use the link from your email.');
-      return;
-    }
+  async function enterPortal() {
     try {
       portalData = await api(`/api/portal/${encodeURIComponent(token)}`);
     } catch (err) {
+      if (err.status === 403 && err.data?.pinRequired) {
+        if (err.data.branding || err.data.clientName) {
+          portalData = {
+            clientName: err.data.clientName || '',
+            branding: err.data.branding || {},
+            shared: true,
+            projects: [],
+            folders: []
+          };
+          applyBranding(portalData.branding);
+        }
+        renderPinGate(err.message === 'PIN required' ? '' : (err.message || ''));
+        return;
+      }
       showError(err.message);
       return;
     }
 
     applyBranding(portalData.branding);
 
-    // Personal links already know who you are; shared links ask once
+    // Personal links already know who you are; shared links ask when opening a project
     if (portalData.shared) {
       reviewerName = loadSavedAuthor();
     } else {
       reviewerName = portalData.contactName || '';
     }
 
-    if (needsNameGate()) {
-      renderNameGate();
-      return;
-    }
-
     updateHeader();
-    const projectId = params.get('project');
+    const projectId = new URLSearchParams(location.search).get('project');
     if (projectId) {
       await openProject(projectId, false);
     } else {
       renderGallery();
     }
+  }
+
+  (async function init() {
+    if (!token) {
+      showError('This link is missing its access token. Please use the link from your email.');
+      return;
+    }
+    await enterPortal();
   })();
 })();

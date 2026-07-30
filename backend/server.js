@@ -14558,6 +14558,7 @@ app.delete('/api/feedback/:id', authenticate, async (req, res) => {
 
 const bunnyStream = require('./lib/bunnyStream');
 const { buildPortalInviteSubject, buildPortalInviteEmail, buildPortalInviteText } = require('./emails/portalInviteEmail');
+const { buildPortalShareSubject, buildPortalShareEmail, buildPortalShareText } = require('./emails/portalShareEmail');
 const { buildPortalNewVersionSubject, buildPortalNewVersionEmail, buildPortalNewVersionText } = require('./emails/portalNewVersionEmail');
 
 const portalVideoUpload = multer({
@@ -14834,6 +14835,41 @@ async function resolvePortalToken(token) {
   const contact = client.contacts.find(c => c.token === token && !c.revokedAt);
   if (!contact) return null;
   return { client, contact, shared: false };
+}
+
+/** Strip PIN hash from admin API responses; expose portalPinEnabled instead. */
+function sanitizePortalClient(client) {
+  const obj = client?.toObject ? client.toObject() : { ...(client || {}) };
+  const enabled = !!obj.portalPinHash;
+  delete obj.portalPinHash;
+  obj.portalPinEnabled = enabled;
+  return obj;
+}
+
+function clientHasPortalPin(client) {
+  return !!(client && String(client.portalPinHash || '').trim());
+}
+
+function verifyPortalUnlockHeader(req, client) {
+  if (!clientHasPortalPin(client)) return true;
+  const unlock = String(req.headers['x-portal-unlock'] || '').trim();
+  if (!unlock || !process.env.JWT_SECRET) return false;
+  try {
+    const payload = jwt.verify(unlock, process.env.JWT_SECRET);
+    return payload?.purpose === 'portal_unlock'
+      && String(payload.clientId) === String(client._id);
+  } catch {
+    return false;
+  }
+}
+
+function portalPinRequiredResponse(client) {
+  return {
+    pinRequired: true,
+    error: 'PIN required',
+    clientName: client.name,
+    branding: portalBrandingPayload(client)
+  };
 }
 
 /** Team members who should hear about client activity on a project */
@@ -15276,7 +15312,10 @@ app.get('/api/portal-clients', authenticate, async (req, res) => {
       countMap[id][c._id.status] = c.n;
       countMap[id].total += c.n;
     });
-    res.json(clients.map(c => ({ ...c, projectCounts: countMap[c._id.toString()] || { total: 0, in_review: 0, delivered: 0, archived: 0 } })));
+    res.json(clients.map(c => ({
+      ...sanitizePortalClient(c),
+      projectCounts: countMap[c._id.toString()] || { total: 0, in_review: 0, delivered: 0, archived: 0 }
+    })));
   } catch (err) {
     console.error('Error listing portal clients:', err);
     res.status(500).json({ error: 'Server error' });
@@ -15300,14 +15339,14 @@ app.post('/api/portal-clients', authenticate, async (req, res) => {
       createdBy: req.user.id,
       createdByName: req.user.fullName || req.user.email || ''
     });
-    res.status(201).json(client);
+    res.status(201).json(sanitizePortalClient(client));
   } catch (err) {
     console.error('Error creating portal client:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-// Edit client name/notes/archived/folders/branding
+// Edit client name/notes/archived/folders/branding/PIN
 app.put('/api/portal-clients/:id', authenticate, async (req, res) => {
   try {
     const client = await Client.findById(req.params.id);
@@ -15320,6 +15359,19 @@ app.put('/api/portal-clients/:id', authenticate, async (req, res) => {
     }
     if (req.body.notes !== undefined) client.notes = String(req.body.notes).trim();
     if (req.body.archived !== undefined) client.archived = !!req.body.archived;
+
+    if (req.body.clearPortalPin === true) {
+      client.portalPinHash = '';
+    } else if (req.body.portalPin !== undefined) {
+      const pin = String(req.body.portalPin || '').trim();
+      if (!pin) {
+        client.portalPinHash = '';
+      } else if (!/^\d{4,8}$/.test(pin)) {
+        return res.status(400).json({ error: 'PIN must be 4–8 digits' });
+      } else {
+        client.portalPinHash = await bcrypt.hash(pin, 10);
+      }
+    }
 
     if (req.body.branding && typeof req.body.branding === 'object') {
       if (!client.branding) client.branding = {};
@@ -15372,11 +15424,11 @@ app.put('/api/portal-clients/:id', authenticate, async (req, res) => {
           { $set: { category: folder.name } }
         );
       }
-      return res.json(client);
+      return res.json(sanitizePortalClient(client));
     }
 
     await client.save();
-    res.json(client);
+    res.json(sanitizePortalClient(client));
   } catch (err) {
     console.error('Error updating portal client:', err);
     res.status(500).json({ error: 'Server error' });
@@ -15489,7 +15541,7 @@ app.post('/api/portal-clients/:id/folders/from-categories', authenticate, async 
     }
 
     await client.save();
-    res.json({ client, created, assigned: projects.length });
+    res.json({ client: sanitizePortalClient(client), created, assigned: projects.length });
   } catch (err) {
     console.error('Error converting categories to folders:', err);
     res.status(500).json({ error: 'Server error' });
@@ -15534,7 +15586,7 @@ app.post('/api/portal-clients/:id/contacts', authenticate, async (req, res) => {
 
     client.contacts.push({ name: String(req.body.name || '').trim(), email });
     await client.save();
-    res.status(201).json(client);
+    res.status(201).json(sanitizePortalClient(client));
   } catch (err) {
     console.error('Error adding portal contact:', err);
     res.status(500).json({ error: 'Server error' });
@@ -15552,7 +15604,7 @@ app.delete('/api/portal-clients/:id/contacts/:contactId', authenticate, async (r
 
     contact.deleteOne();
     await client.save();
-    res.json(client);
+    res.json(sanitizePortalClient(client));
   } catch (err) {
     console.error('Error removing portal contact:', err);
     res.status(500).json({ error: 'Server error' });
@@ -15592,6 +15644,124 @@ app.post('/api/portal-clients/:id/contacts/:contactId/invite', authenticate, asy
   } catch (err) {
     console.error('Error sending portal invite:', err);
     res.status(500).json({ error: 'Failed to send invite email' });
+  }
+});
+
+// Share team portal link to selected contacts (optional PIN + copy to sender)
+app.post('/api/portal-clients/:id/share', authenticate, async (req, res) => {
+  try {
+    const client = await Client.findById(req.params.id);
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+    if (!client.shareToken) {
+      return res.status(400).json({ error: 'This client does not have a team portal link yet' });
+    }
+    if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) {
+      return res.status(400).json({ error: 'Email is not configured on the server' });
+    }
+
+    const contactIds = Array.isArray(req.body.contactIds)
+      ? req.body.contactIds.map(String)
+      : [];
+    const includeSelf = req.body.includeSelf === true || req.body.includeSelf === '1';
+    if (!contactIds.length && !includeSelf) {
+      return res.status(400).json({ error: 'Select at least one contact, or send a copy to yourself' });
+    }
+
+    const activeContacts = (client.contacts || []).filter(c => !c.revokedAt && c.email);
+    const selected = activeContacts.filter(c => contactIds.includes(String(c._id)));
+    if (contactIds.length && selected.length !== contactIds.length) {
+      return res.status(400).json({ error: 'One or more selected contacts were not found' });
+    }
+
+    let portalPin = '';
+    if (clientHasPortalPin(client)) {
+      const pin = String(req.body.portalPin || '').trim();
+      if (!pin) {
+        return res.status(400).json({ error: 'Enter the portal PIN so it can be included in the email' });
+      }
+      const ok = await bcrypt.compare(pin, client.portalPinHash);
+      if (!ok) return res.status(400).json({ error: 'PIN does not match this portal' });
+      portalPin = pin;
+    }
+
+    const portalUrl = buildPortalUrl(client.shareToken);
+    const clientName = portalBrandingPayload(client).displayName || client.name;
+    const senderName = req.user.fullName || req.user.email || '';
+    const now = new Date();
+    let sent = 0;
+    const failures = [];
+
+    for (const contact of selected) {
+      try {
+        const data = {
+          recipientName: (contact.name || '').split(' ')[0] || 'there',
+          clientName,
+          senderName,
+          portalUrl,
+          portalPin,
+          isCopy: false
+        };
+        await sgMail.send({
+          to: contact.email,
+          from: SENDGRID_FROM,
+          subject: buildPortalShareSubject(data),
+          html: buildPortalShareEmail(data),
+          text: buildPortalShareText(data)
+        });
+        contact.invitedAt = now;
+        sent += 1;
+      } catch (emailErr) {
+        console.error(`Portal share email failed for ${contact.email}:`, emailErr);
+        failures.push(contact.email);
+      }
+    }
+
+    let selfSent = false;
+    if (includeSelf) {
+      const user = await User.findById(req.user.id).select('email fullName').lean();
+      const selfEmail = String(user?.email || '').trim().toLowerCase();
+      if (!selfEmail) {
+        return res.status(400).json({ error: 'Your account has no email address for a copy' });
+      }
+      try {
+        const data = {
+          recipientName: (user.fullName || senderName || '').split(' ')[0] || 'there',
+          clientName,
+          senderName,
+          portalUrl,
+          portalPin,
+          isCopy: true
+        };
+        await sgMail.send({
+          to: selfEmail,
+          from: SENDGRID_FROM,
+          subject: buildPortalShareSubject(data),
+          html: buildPortalShareEmail(data),
+          text: buildPortalShareText(data)
+        });
+        selfSent = true;
+        sent += 1;
+      } catch (emailErr) {
+        console.error(`Portal share self-copy failed for ${selfEmail}:`, emailErr);
+        failures.push(selfEmail);
+      }
+    }
+
+    if (selected.length) await client.save();
+
+    if (!sent) {
+      return res.status(500).json({ error: 'Failed to send portal share emails' });
+    }
+
+    res.json({
+      success: true,
+      sent,
+      selfSent,
+      failed: failures
+    });
+  } catch (err) {
+    console.error('Error sharing portal:', err);
+    res.status(500).json({ error: err.message || 'Failed to share portal' });
   }
 });
 
@@ -16474,12 +16644,44 @@ app.put('/api/video-comments/:commentId/priority', authenticate, async (req, res
 
 // ---------- Public: client portal (magic link, no auth) ----------
 
+// Unlock a PIN-protected portal (returns short-lived unlock JWT for X-Portal-Unlock)
+app.post('/api/portal/:token/unlock', async (req, res) => {
+  try {
+    const resolved = await resolvePortalToken(req.params.token);
+    if (!resolved) return res.status(404).json({ error: 'This portal link is no longer valid. Please contact us for a new one.' });
+    const { client } = resolved;
+
+    if (!clientHasPortalPin(client)) {
+      return res.json({ success: true, unlockToken: null, pinRequired: false });
+    }
+
+    const pin = String(req.body.pin || '').trim();
+    if (!pin) return res.status(400).json({ error: 'PIN is required' });
+    const ok = await bcrypt.compare(pin, client.portalPinHash);
+    if (!ok) return res.status(401).json({ error: 'Incorrect PIN' });
+
+    const unlockToken = jwt.sign(
+      { purpose: 'portal_unlock', clientId: client._id.toString() },
+      process.env.JWT_SECRET,
+      { expiresIn: '12h' }
+    );
+    res.json({ success: true, unlockToken, pinRequired: true });
+  } catch (err) {
+    console.error('Error unlocking portal:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // Portal home: client info + their projects
 app.get('/api/portal/:token', async (req, res) => {
   try {
     const resolved = await resolvePortalToken(req.params.token);
     if (!resolved) return res.status(404).json({ error: 'This portal link is no longer valid. Please contact us for a new one.' });
     const { client, contact, shared } = resolved;
+
+    if (!verifyPortalUnlockHeader(req, client)) {
+      return res.status(403).json(portalPinRequiredResponse(client));
+    }
 
     if (contact) {
       contact.lastAccessAt = new Date();
@@ -16504,6 +16706,7 @@ app.get('/api/portal/:token', async (req, res) => {
       clientName: client.name,
       contactName: contact?.name || '',
       shared: !!shared,
+      pinRequired: clientHasPortalPin(client),
       branding: portalBrandingPayload(client),
       folders: portalFoldersPayload(client),
       projects: projects.map(p => {
@@ -16541,6 +16744,10 @@ app.get('/api/portal/:token/projects/:projectId', async (req, res) => {
     const resolved = await resolvePortalToken(req.params.token);
     if (!resolved) return res.status(404).json({ error: 'This portal link is no longer valid. Please contact us for a new one.' });
     const { client, contact, shared } = resolved;
+
+    if (!verifyPortalUnlockHeader(req, client)) {
+      return res.status(403).json(portalPinRequiredResponse(client));
+    }
 
     const project = await VideoProject.findOne({ _id: req.params.projectId, clientId: client._id }).lean();
     if (!project || project.status === 'archived') return res.status(404).json({ error: 'Project not found' });
@@ -16583,6 +16790,10 @@ app.post('/api/portal/:token/projects/:projectId/decision', async (req, res) => 
     const resolved = await resolvePortalToken(req.params.token);
     if (!resolved) return res.status(404).json({ error: 'This portal link is no longer valid. Please contact us for a new one.' });
     const { client, contact } = resolved;
+
+    if (!verifyPortalUnlockHeader(req, client)) {
+      return res.status(403).json(portalPinRequiredResponse(client));
+    }
 
     const decision = String(req.body.decision || '').toLowerCase();
     if (decision !== 'approved') {
@@ -16648,6 +16859,10 @@ app.post('/api/portal/:token/projects/:projectId/comments', async (req, res) => 
     if (!resolved) return res.status(404).json({ error: 'This portal link is no longer valid. Please contact us for a new one.' });
     const { client, contact } = resolved;
 
+    if (!verifyPortalUnlockHeader(req, client)) {
+      return res.status(403).json(portalPinRequiredResponse(client));
+    }
+
     const project = await VideoProject.findOne({ _id: req.params.projectId, clientId: client._id });
     if (!project) return res.status(404).json({ error: 'Project not found' });
     const version = project.versions.id(req.body.versionId);
@@ -16709,6 +16924,10 @@ app.post('/api/portal/:token/comments/:commentId/replies', async (req, res) => {
     const resolved = await resolvePortalToken(req.params.token);
     if (!resolved) return res.status(404).json({ error: 'This portal link is no longer valid. Please contact us for a new one.' });
     const { client, contact } = resolved;
+
+    if (!verifyPortalUnlockHeader(req, client)) {
+      return res.status(403).json(portalPinRequiredResponse(client));
+    }
 
     const comment = await VideoComment.findById(req.params.commentId);
     if (!comment) return res.status(404).json({ error: 'Comment not found' });

@@ -3,8 +3,8 @@ const crypto = require('crypto');
 
 /**
  * Client — a company/person we deliver videos to.
- * Each contact gets a personal magic-link token for the public video portal
- * (same pattern as CrewAvailabilityRequest — no client accounts/passwords).
+ * Each contact gets a personal magic-link token for the public video portal.
+ * Optional portalPinHash gates the whole portal behind a shared PIN.
  */
 const clientContactSchema = new mongoose.Schema({
   name: { type: String, default: '', trim: true },
@@ -44,6 +44,9 @@ const clientSchema = new mongoose.Schema({
     type: String,
     default: () => crypto.randomBytes(32).toString('hex')
   },
+
+  // Optional shared PIN (bcrypt). When set, portal APIs require X-Portal-Unlock.
+  portalPinHash: { type: String, default: '' },
 
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   createdByName: { type: String, default: '' },

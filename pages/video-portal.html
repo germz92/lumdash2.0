@@ -328,4 +328,43 @@
     </div>
   </div>
 
+  <!-- Share portal to contacts -->
+  <div class="vp-modal-overlay" id="vpSharePortalModal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="vpSharePortalTitle">
+    <div class="vp-modal vp-share-portal-modal">
+      <div class="vp-modal-header">
+        <div>
+          <h2 id="vpSharePortalTitle">Share portal</h2>
+          <div class="vp-detail-sub" id="vpSharePortalSub"></div>
+        </div>
+        <button type="button" class="vp-icon-btn" data-close="vpSharePortalModal" aria-label="Close">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="vp-modal-body">
+        <div class="vp-share-select-all">
+          <label class="vp-check">
+            <input type="checkbox" id="vpShareSelectAll">
+            Select all contacts
+          </label>
+        </div>
+        <div class="vp-share-contact-list" id="vpShareContactList"></div>
+        <div class="vp-share-pin-wrap" id="vpSharePinWrap" style="display:none;">
+          <label class="vp-label" for="vpSharePinInput">Portal PIN <span class="vp-label-hint">(included in the email)</span></label>
+          <input type="text" id="vpSharePinInput" class="vp-portal-pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Enter the portal PIN" autocomplete="off">
+        </div>
+        <label class="vp-check vp-share-self-copy">
+          <input type="checkbox" id="vpShareIncludeSelf">
+          Send a copy to me
+        </label>
+        <div class="vp-form-actions">
+          <button type="button" class="vp-btn secondary" data-close="vpSharePortalModal">Cancel</button>
+          <button type="button" class="vp-btn primary" id="vpSharePortalSendBtn">
+            <span class="material-symbols-outlined">send</span>
+            <span>Send emails</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>

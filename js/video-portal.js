@@ -2012,17 +2012,34 @@
   }
 
   // ---- Upload ----
+  // Bunny TUS: finite chunks so onProgress fires during upload (Infinity = one request → 0% then 100%).
+  const TUS_CHUNK_SIZE = 16 * 1024 * 1024;
+
   function setUploadProgress(pct, label) {
     const wrap = document.getElementById('uploadProgress');
     if (!wrap) return;
     wrap.style.display = 'block';
     const indeterminate = pct < 0;
     const clamped = indeterminate ? 0 : Math.max(0, Math.min(100, Math.round(pct)));
-    wrap.innerHTML = `
-      <div class="vp-progress-label">${label || (indeterminate ? 'Working…' : `Uploading… ${clamped}%`)}</div>
-      <div class="vp-progress-track${indeterminate ? ' indeterminate' : ''}">
-        <div class="vp-progress-fill" style="width:${indeterminate ? '40%' : clamped + '%'}"></div>
-      </div>`;
+    const text = label || (indeterminate ? 'Working…' : `Uploading… ${clamped}%`);
+
+    let labelEl = wrap.querySelector('.vp-progress-label');
+    let track = wrap.querySelector('.vp-progress-track');
+    let fill = wrap.querySelector('.vp-progress-fill');
+    if (!labelEl || !track || !fill) {
+      wrap.innerHTML = `
+        <div class="vp-progress-label"></div>
+        <div class="vp-progress-track">
+          <div class="vp-progress-fill" style="width:0%"></div>
+        </div>`;
+      labelEl = wrap.querySelector('.vp-progress-label');
+      track = wrap.querySelector('.vp-progress-track');
+      fill = wrap.querySelector('.vp-progress-fill');
+    }
+
+    labelEl.textContent = text;
+    track.classList.toggle('indeterminate', indeterminate);
+    fill.style.width = indeterminate ? '40%' : `${clamped}%`;
   }
 
   function ensureTusClient() {
@@ -2055,10 +2072,23 @@
       throw new Error('Upload credentials were incomplete');
     }
     const tusLib = await ensureTusClient();
+    const fileSize = file.size || 0;
     setUploadProgress(0, 'Uploading to video host… 0%');
+
+    const reportProgress = (bytesUploaded, bytesTotal) => {
+      const total = bytesTotal > 0 ? bytesTotal : fileSize;
+      if (!(total > 0)) {
+        setUploadProgress(-1, 'Uploading to video host…');
+        return;
+      }
+      const pct = Math.min(99, Math.round((bytesUploaded / total) * 100));
+      setUploadProgress(pct, `Uploading to video host… ${pct}%`);
+    };
+
     await new Promise((resolve, reject) => {
       const upload = new tusLib.Upload(file, {
         endpoint: tus.endpoint,
+        chunkSize: TUS_CHUNK_SIZE,
         retryDelays: [0, 3000, 5000, 10000, 20000, 60000],
         headers: {
           AuthorizationSignature: tus.AuthorizationSignature || tus.signature,
@@ -2072,11 +2102,9 @@
           title: file.name
         },
         onError: (err) => reject(err),
-        onProgress: (bytesUploaded, bytesTotal) => {
-          const total = bytesTotal || file.size || 0;
-          if (!(total > 0)) return;
-          const pct = Math.min(99, Math.round((bytesUploaded / total) * 100));
-          setUploadProgress(pct, `Uploading to video host… ${pct}%`);
+        onProgress: reportProgress,
+        onChunkComplete: (chunkSize, bytesAccepted, bytesTotal) => {
+          reportProgress(bytesAccepted, bytesTotal);
         },
         onSuccess: () => resolve()
       });
@@ -2100,7 +2128,7 @@
     const notes = document.getElementById('versionNotes').value.trim();
     const notifyClient = !!document.getElementById('notifyClientCheck')?.checked;
     btn.disabled = true;
-    setUploadProgress(0, 'Preparing upload…');
+    setUploadProgress(-1, 'Preparing upload…');
 
     let versionId = null;
     try {
@@ -2111,7 +2139,7 @@
       versionId = prepared.versionId;
       await tusUploadToBunny(file, prepared.tus || {});
 
-      setUploadProgress(99, 'Finishing upload…');
+      setUploadProgress(-1, 'Finishing upload…');
       await api(`/api/video-projects/${detail._id}/versions/${versionId}/complete`, {
         method: 'POST',
         body: JSON.stringify({ notifyClient })
@@ -2156,7 +2184,7 @@
 
     const uploadBtn = document.getElementById('uploadVersionBtn');
     if (uploadBtn) uploadBtn.disabled = true;
-    setUploadProgress(0, `Preparing replace for v${v.versionNumber}…`);
+    setUploadProgress(-1, `Preparing replace for v${v.versionNumber}…`);
 
     let started = false;
     try {
@@ -2167,7 +2195,7 @@
       started = true;
       await tusUploadToBunny(file, prepared.tus || {});
 
-      setUploadProgress(99, 'Finishing replace…');
+      setUploadProgress(-1, 'Finishing replace…');
       await api(
         `/api/video-projects/${detail._id}/versions/${currentVersionId}/replace/complete`,
         { method: 'POST', body: JSON.stringify({}) }

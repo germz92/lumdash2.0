@@ -15838,7 +15838,358 @@ app.delete('/api/video-projects/:id', authenticate, async (req, res) => {
   }
 });
 
-// Upload a new version.
+// Delete a single version (admin) — removes Bunny video + that version's comments
+app.delete('/api/video-projects/:id/versions/:versionId', authenticate, async (req, res) => {
+  try {
+    if (!isPortalAdmin(req.user)) return res.status(403).json({ error: 'Admin access required' });
+    const project = await VideoProject.findById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const version = project.versions.id(req.params.versionId);
+    if (!version) return res.status(404).json({ error: 'Version not found' });
+
+    const versionNumber = version.versionNumber;
+    const bunnyVideoId = version.bunnyVideoId;
+    const versionId = version._id.toString();
+
+    if (bunnyVideoId && bunnyStream.isConfigured()) {
+      try { await bunnyStream.deleteVideo(bunnyVideoId); }
+      catch (bunnyErr) { console.error('Failed to delete Bunny video:', bunnyErr.message); }
+    }
+
+    project.versions.pull({ _id: version._id });
+
+    // Clear approval if it pointed at the deleted cut
+    if (project.reviewDecision?.versionId && String(project.reviewDecision.versionId) === versionId) {
+      project.reviewDecision = {
+        status: 'none',
+        note: '',
+        versionId: null,
+        versionNumber: null,
+        decidedByName: '',
+        decidedByEmail: '',
+        decidedAt: null
+      };
+    }
+
+    await project.save();
+    await VideoComment.deleteMany({ projectId: project._id, versionId: version._id });
+
+    await logPortalActivity({
+      projectId: project._id,
+      clientId: project.clientId,
+      type: 'version_deleted',
+      actorType: 'team',
+      actorId: req.user.id,
+      actorName: req.user.fullName || req.user.email || '',
+      message: `Deleted version ${versionNumber}`,
+      metadata: { versionNumber, versionId }
+    });
+
+    res.json({
+      success: true,
+      versions: (project.versions || []).map(portalVersionPayload)
+    });
+  } catch (err) {
+    console.error('Error deleting video version:', err);
+    res.status(500).json({ error: err.message || 'Failed to delete version' });
+  }
+});
+
+function tusCredentialPayload(guid) {
+  const tus = bunnyStream.createTusUploadCredentials(guid, 86400);
+  return {
+    ...tus,
+    expirationTime: tus.expirationTime,
+    AuthorizationExpire: String(tus.expirationTime),
+    AuthorizationSignature: tus.signature,
+    VideoId: tus.videoId,
+    LibraryId: tus.libraryId
+  };
+}
+
+// Admin: prepare replace of an existing version's file (new Bunny video; swap on complete)
+app.post('/api/video-projects/:id/versions/:versionId/replace/prepare', authenticate, async (req, res) => {
+  try {
+    if (!isPortalAdmin(req.user)) return res.status(403).json({ error: 'Admin access required' });
+    if (!bunnyStream.isConfigured()) {
+      return res.status(400).json({ error: 'Video hosting is not configured on the server' });
+    }
+
+    const project = await VideoProject.findById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const version = project.versions.id(req.params.versionId);
+    if (!version) return res.status(404).json({ error: 'Version not found' });
+
+    // Drop a previous unfinished replace attempt
+    if (version.pendingReplaceBunnyVideoId) {
+      try { await bunnyStream.deleteVideo(version.pendingReplaceBunnyVideoId); }
+      catch (bunnyErr) { console.error('Failed to clean pending replace video:', bunnyErr.message); }
+      version.pendingReplaceBunnyVideoId = '';
+    }
+
+    const created = await bunnyStream.createVideo(`${project.title} — v${version.versionNumber} (replace)`);
+    version.pendingReplaceBunnyVideoId = created.guid;
+    await project.save();
+
+    res.json({
+      success: true,
+      versionId: version._id.toString(),
+      versionNumber: version.versionNumber,
+      bunnyVideoId: created.guid,
+      tus: tusCredentialPayload(created.guid)
+    });
+  } catch (err) {
+    console.error('Error preparing version replace:', err);
+    res.status(500).json({ error: err.message || 'Failed to prepare replace' });
+  }
+});
+
+// Admin: finish replace — swap Bunny ids, keep version + comments
+app.post('/api/video-projects/:id/versions/:versionId/replace/complete', authenticate, async (req, res) => {
+  try {
+    if (!isPortalAdmin(req.user)) return res.status(403).json({ error: 'Admin access required' });
+
+    const project = await VideoProject.findById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const version = project.versions.id(req.params.versionId);
+    if (!version) return res.status(404).json({ error: 'Version not found' });
+
+    const pendingId = String(version.pendingReplaceBunnyVideoId || '').trim();
+    if (!pendingId) {
+      return res.status(400).json({ error: 'No replace upload in progress for this version' });
+    }
+
+    const oldBunnyId = version.bunnyVideoId;
+    version.bunnyVideoId = pendingId;
+    version.pendingReplaceBunnyVideoId = '';
+    version.videoStatus = 'processing';
+    version.durationSeconds = 0;
+    version.uploadedBy = req.user.id;
+    version.uploadedByName = req.user.fullName || req.user.email || '';
+    version.uploadedAt = new Date();
+
+    // Replacing the cut invalidates approval on this version
+    if (project.reviewDecision?.versionId && String(project.reviewDecision.versionId) === String(version._id)) {
+      project.reviewDecision = {
+        status: 'none',
+        note: '',
+        versionId: null,
+        versionNumber: null,
+        decidedByName: '',
+        decidedByEmail: '',
+        decidedAt: null
+      };
+    }
+
+    await project.save();
+
+    if (oldBunnyId && oldBunnyId !== pendingId && bunnyStream.isConfigured()) {
+      try { await bunnyStream.deleteVideo(oldBunnyId); }
+      catch (bunnyErr) { console.error('Failed to delete replaced Bunny video:', bunnyErr.message); }
+    }
+
+    await logPortalActivity({
+      projectId: project._id,
+      clientId: project.clientId,
+      type: 'version_replaced',
+      actorType: 'team',
+      actorId: req.user.id,
+      actorName: req.user.fullName || req.user.email || '',
+      message: `Replaced file for version ${version.versionNumber}`,
+      metadata: { versionNumber: version.versionNumber, versionId: version._id.toString() }
+    });
+
+    res.json({ success: true, version: portalVersionPayload(version) });
+  } catch (err) {
+    console.error('Error completing version replace:', err);
+    res.status(500).json({ error: err.message || 'Failed to complete replace' });
+  }
+});
+
+// Admin: abort replace — delete pending Bunny video, keep current file
+app.post('/api/video-projects/:id/versions/:versionId/replace/fail', authenticate, async (req, res) => {
+  try {
+    if (!isPortalAdmin(req.user)) return res.status(403).json({ error: 'Admin access required' });
+
+    const project = await VideoProject.findById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const version = project.versions.id(req.params.versionId);
+    if (!version) return res.status(404).json({ error: 'Version not found' });
+
+    const pendingId = String(version.pendingReplaceBunnyVideoId || '').trim();
+    if (pendingId && bunnyStream.isConfigured()) {
+      try { await bunnyStream.deleteVideo(pendingId); }
+      catch (bunnyErr) { console.error('Failed to delete pending replace video:', bunnyErr.message); }
+    }
+    version.pendingReplaceBunnyVideoId = '';
+    await project.save();
+
+    res.json({ success: true, version: portalVersionPayload(version) });
+  } catch (err) {
+    console.error('Error failing version replace:', err);
+    res.status(500).json({ error: err.message || 'Failed to abort replace' });
+  }
+});
+
+async function notifyClientsNewVersion({ project, versionNumber, notes, notifyClient }) {
+  if (!notifyClient || !process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) return;
+  const client = project.clientId?.contacts
+    ? project.clientId
+    : await Client.findById(project.clientId).select('name contacts shareToken');
+  if (!client) return;
+  const shareToken = client.shareToken;
+  const contacts = (client.contacts || [])
+    .filter(c => !c.revokedAt && c.email)
+    .map(c => ({ name: c.name, email: c.email, token: c.token }));
+  const projectId = project._id.toString();
+  const projectTitle = project.title;
+  for (const contact of contacts) {
+    try {
+      const data = {
+        recipientName: (contact.name || '').split(' ')[0] || 'there',
+        projectTitle,
+        versionNumber,
+        notes,
+        reviewUrl: buildPortalUrl(shareToken || contact.token, projectId)
+      };
+      await sgMail.send({
+        to: contact.email,
+        from: SENDGRID_FROM,
+        subject: buildPortalNewVersionSubject(data),
+        html: buildPortalNewVersionEmail(data),
+        text: buildPortalNewVersionText(data)
+      });
+    } catch (emailErr) {
+      console.error(`Portal new-version email failed for ${contact.email}:`, emailErr);
+    }
+  }
+}
+
+// Prepare a version for direct browser → Bunny TUS upload (no file through Render).
+app.post('/api/video-projects/:id/versions/prepare', authenticate, async (req, res) => {
+  try {
+    if (!bunnyStream.isConfigured()) {
+      return res.status(400).json({ error: 'Video hosting is not configured on the server' });
+    }
+
+    const project = await VideoProject.findById(req.params.id).populate('clientId', 'name contacts shareToken');
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const versionNumber = (project.versions || []).reduce((max, v) => Math.max(max, v.versionNumber), 0) + 1;
+    const notes = String(req.body.notes || '').trim();
+    const notifyClient = req.body.notifyClient === true || req.body.notifyClient === '1';
+    const created = await bunnyStream.createVideo(`${project.title} — v${versionNumber}`);
+
+    project.versions.push({
+      versionNumber,
+      bunnyVideoId: created.guid,
+      videoStatus: 'uploading',
+      notes,
+      uploadedBy: req.user.id,
+      uploadedByName: req.user.fullName || req.user.email || ''
+    });
+    project.reviewDecision = {
+      status: 'none',
+      note: '',
+      versionId: null,
+      versionNumber: null,
+      decidedByName: '',
+      decidedByEmail: '',
+      decidedAt: null
+    };
+    if (project.status === 'archived' || project.status === 'delivered') project.status = 'in_review';
+    await project.save();
+
+    const versionId = project.versions[project.versions.length - 1]._id.toString();
+    await logPortalActivity({
+      projectId: project._id,
+      clientId: project.clientId?._id || project.clientId,
+      type: 'version_uploaded',
+      actorType: 'team',
+      actorId: req.user.id,
+      actorName: req.user.fullName || req.user.email || '',
+      message: `Uploading version ${versionNumber}${notes ? ` — ${notes}` : ''}`,
+      metadata: { versionNumber, notifyClient, directBunny: true }
+    });
+
+    // Stash notify preference on the version notes metadata via a lightweight field on activity;
+    // complete endpoint reads notifyClient from the request body again.
+    const tus = bunnyStream.createTusUploadCredentials(created.guid, 86400);
+    res.status(201).json({
+      success: true,
+      versionNumber,
+      versionId,
+      bunnyVideoId: created.guid,
+      notifyClient,
+      tus: {
+        ...tus,
+        // Headers must be strings for some browsers / tus clients
+        expirationTime: tus.expirationTime,
+        AuthorizationExpire: String(tus.expirationTime),
+        AuthorizationSignature: tus.signature,
+        VideoId: tus.videoId,
+        LibraryId: tus.libraryId
+      }
+    });
+  } catch (err) {
+    console.error('Error preparing video version upload:', err);
+    res.status(500).json({ error: err.message || 'Failed to prepare upload' });
+  }
+});
+
+// Mark direct Bunny upload finished → processing + optional client email
+app.post('/api/video-projects/:id/versions/:versionId/complete', authenticate, async (req, res) => {
+  try {
+    const project = await VideoProject.findById(req.params.id).populate('clientId', 'name contacts shareToken');
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const version = project.versions.id(req.params.versionId);
+    if (!version) return res.status(404).json({ error: 'Version not found' });
+
+    if (version.videoStatus === 'uploading' || version.videoStatus === 'error') {
+      version.videoStatus = 'processing';
+      await project.save();
+    }
+
+    const notifyClient = req.body.notifyClient === true || req.body.notifyClient === '1';
+    if (notifyClient) {
+      setImmediate(() => {
+        notifyClientsNewVersion({
+          project,
+          versionNumber: version.versionNumber,
+          notes: version.notes || '',
+          notifyClient: true
+        }).catch(err => console.error('Notify clients after direct upload failed:', err));
+      });
+    }
+
+    res.json({ success: true, version: portalVersionPayload(version) });
+  } catch (err) {
+    console.error('Error completing video version upload:', err);
+    res.status(500).json({ error: err.message || 'Failed to complete upload' });
+  }
+});
+
+// Mark direct Bunny upload failed
+app.post('/api/video-projects/:id/versions/:versionId/fail', authenticate, async (req, res) => {
+  try {
+    const project = await VideoProject.findById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const version = project.versions.id(req.params.versionId);
+    if (!version) return res.status(404).json({ error: 'Version not found' });
+
+    if (version.videoStatus === 'uploading') {
+      version.videoStatus = 'error';
+      await project.save();
+    }
+    res.json({ success: true, version: portalVersionPayload(version) });
+  } catch (err) {
+    console.error('Error failing video version upload:', err);
+    res.status(500).json({ error: err.message || 'Failed to mark upload error' });
+  }
+});
+
+// Legacy path: browser → Render → Bunny (kept for fallback; prefer /versions/prepare + TUS).
 // Respond as soon as the file is on our server + a Bunny video object exists,
 // then push the bytes to Bunny in the background so the browser can show real upload %.
 app.post('/api/video-projects/:id/versions', authenticate, portalVideoUpload.single('video'), async (req, res) => {

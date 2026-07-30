@@ -467,9 +467,15 @@
       const due = (p.status === 'in_review' && decision !== 'approved' && p.feedbackDueAt)
         ? `<div class="pt-due-pill">Feedback due ${fmtDate(p.feedbackDueAt)}</div>`
         : '';
+      const downloadUrl = (p.status === 'delivered' && p.masterFileUrl)
+        ? toDirectDownloadUrl(p.masterFileUrl)
+        : '';
+      const downloadBtn = downloadUrl
+        ? `<a class="pt-card-download" href="${escapeHtml(downloadUrl)}" target="_blank" rel="noopener" title="Download final video" aria-label="Download final video" data-download="1">&#11015;</a>`
+        : '';
       return `
         <div class="pt-card" data-id="${p._id}">
-          <div class="pt-card-thumb">${thumb}${tag}</div>
+          <div class="pt-card-thumb">${thumb}${tag}${downloadBtn}</div>
           <div class="pt-card-body">
             <div class="pt-card-title">${escapeHtml(p.title)}</div>
             <div class="pt-card-meta">${meta}</div>
@@ -527,6 +533,9 @@
     wireGalleryToolbar();
     container.querySelectorAll('.pt-card').forEach(el =>
       el.addEventListener('click', () => openProject(el.dataset.id)));
+    container.querySelectorAll('.pt-card-download').forEach(el => {
+      el.addEventListener('click', (e) => e.stopPropagation());
+    });
   }
 
   // ---- Project view ----

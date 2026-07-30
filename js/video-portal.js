@@ -1311,7 +1311,65 @@
     else if (v.videoStatus === 'error') statusEl.textContent = 'processing failed';
     else if (v.videoStatus === 'uploading') statusEl.textContent = 'uploading to video host…';
     else statusEl.textContent = 'processing — playback will appear shortly';
+
+    const menuWrap = document.getElementById('versionMenuWrap');
+    if (menuWrap) menuWrap.style.display = (isAdmin && v) ? 'block' : 'none';
+    closeVersionMenu();
+
     updateUploadUi();
+  }
+
+  function closeVersionMenu() {
+    const dropdown = document.getElementById('versionMenuDropdown');
+    const btn = document.getElementById('versionMenuBtn');
+    if (dropdown) dropdown.hidden = true;
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  }
+
+  function toggleVersionMenu() {
+    const dropdown = document.getElementById('versionMenuDropdown');
+    const btn = document.getElementById('versionMenuBtn');
+    if (!dropdown || !btn) return;
+    const open = dropdown.hidden;
+    dropdown.hidden = !open;
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  async function deleteCurrentVersion() {
+    if (!isAdmin || !detail || !currentVersionId) return;
+    const v = currentVersion();
+    if (!v) return;
+    closeVersionMenu();
+    const ok = await showVpConfirm({
+      title: `Delete version ${v.versionNumber}?`,
+      message: 'This cannot be undone. It will remove this cut from Bunny and delete every comment on this version.',
+      confirmText: 'Delete version',
+      danger: true,
+      icon: 'delete'
+    });
+    if (!ok) return;
+    try {
+      const result = await api(`/api/video-projects/${detail._id}/versions/${currentVersionId}`, {
+        method: 'DELETE'
+      });
+      detail.versions = result.versions || [];
+      detail.comments = (detail.comments || []).filter(c => String(c.versionId) !== String(currentVersionId));
+      if (compareVersionId && String(compareVersionId) === String(currentVersionId)) {
+        compareMode = false;
+        compareVersionId = null;
+        updateCompareUi();
+      }
+      const remaining = detail.versions || [];
+      currentVersionId = remaining.length ? remaining[remaining.length - 1]._id : null;
+      toast(`Version ${v.versionNumber} deleted`);
+      renderVersionBar();
+      renderPlayer();
+      renderComments();
+      renderActivity();
+      await loadProjects();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
   }
 
   function updateUploadUi() {
@@ -1967,78 +2025,175 @@
       </div>`;
   }
 
-  function uploadVersion() {
+  function ensureTusClient() {
+    return new Promise((resolve, reject) => {
+      if (window.tus?.Upload) return resolve(window.tus);
+      const existing = document.querySelector('script[data-tus-client]');
+      if (existing) {
+        existing.addEventListener('load', () => {
+          if (window.tus?.Upload) resolve(window.tus);
+          else reject(new Error('Upload library failed to initialize'));
+        });
+        existing.addEventListener('error', () => reject(new Error('Failed to load upload library')));
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/tus-js-client@4.3.1/dist/tus.min.js';
+      script.async = true;
+      script.dataset.tusClient = '1';
+      script.onload = () => {
+        if (window.tus?.Upload) resolve(window.tus);
+        else reject(new Error('Upload library failed to initialize'));
+      };
+      script.onerror = () => reject(new Error('Failed to load upload library'));
+      document.head.appendChild(script);
+    });
+  }
+
+  async function tusUploadToBunny(file, tus) {
+    if (!tus?.endpoint || !tus.signature || !tus.videoId || !tus.libraryId) {
+      throw new Error('Upload credentials were incomplete');
+    }
+    const tusLib = await ensureTusClient();
+    setUploadProgress(0, 'Uploading to video host… 0%');
+    await new Promise((resolve, reject) => {
+      const upload = new tusLib.Upload(file, {
+        endpoint: tus.endpoint,
+        retryDelays: [0, 3000, 5000, 10000, 20000, 60000],
+        headers: {
+          AuthorizationSignature: tus.AuthorizationSignature || tus.signature,
+          AuthorizationExpire: String(tus.AuthorizationExpire || tus.expirationTime),
+          VideoId: tus.VideoId || tus.videoId,
+          LibraryId: String(tus.LibraryId || tus.libraryId)
+        },
+        metadata: {
+          filename: file.name,
+          filetype: file.type || 'video/mp4',
+          title: file.name
+        },
+        onError: (err) => reject(err),
+        onProgress: (bytesUploaded, bytesTotal) => {
+          const total = bytesTotal || file.size || 0;
+          if (!(total > 0)) return;
+          const pct = Math.min(99, Math.round((bytesUploaded / total) * 100));
+          setUploadProgress(pct, `Uploading to video host… ${pct}%`);
+        },
+        onSuccess: () => resolve()
+      });
+
+      upload.findPreviousUploads()
+        .then((previous) => {
+          if (previous?.length) upload.resumeFromPreviousUpload(previous[0]);
+          upload.start();
+        })
+        .catch(() => upload.start());
+    });
+  }
+
+  async function uploadVersion() {
     const fileInput = document.getElementById('versionFile');
     const file = fileInput.files[0];
     if (!file) { toast('Choose a video file first', 'error'); return; }
     if (!detail) return;
 
     const btn = document.getElementById('uploadVersionBtn');
+    const notes = document.getElementById('versionNotes').value.trim();
+    const notifyClient = !!document.getElementById('notifyClientCheck')?.checked;
     btn.disabled = true;
-    setUploadProgress(0, 'Uploading… 0%');
+    setUploadProgress(0, 'Preparing upload…');
 
-    const form = new FormData();
-    form.append('video', file);
-    form.append('notes', document.getElementById('versionNotes').value.trim());
-    form.append('notifyClient', document.getElementById('notifyClientCheck').checked ? '1' : '0');
+    let versionId = null;
+    try {
+      const prepared = await api(`/api/video-projects/${detail._id}/versions/prepare`, {
+        method: 'POST',
+        body: JSON.stringify({ notes, notifyClient })
+      });
+      versionId = prepared.versionId;
+      await tusUploadToBunny(file, prepared.tus || {});
 
-    const xhr = new XMLHttpRequest();
-    // Must be true for upload progress events
-    xhr.open('POST', `${API_BASE}/api/video-projects/${detail._id}/versions`, true);
-    xhr.setRequestHeader('Authorization', getToken());
-
-    let lastPct = 0;
-    const applyPct = (loaded, total) => {
-      if (!(total > 0)) return;
-      // Cap at 99 until the request fully completes
-      const pct = Math.min(99, Math.max(lastPct, Math.round((loaded / total) * 100)));
-      if (pct === lastPct && pct > 0) return;
-      lastPct = pct;
-      setUploadProgress(pct, `Uploading… ${pct}%`);
-    };
-
-    xhr.upload.addEventListener('progress', (e) => {
-      const total = (e.lengthComputable && e.total) ? e.total : file.size;
-      applyPct(e.loaded, total);
-    });
-
-    xhr.upload.addEventListener('load', () => {
-      // All bytes left the browser — waiting for the server to acknowledge
-      lastPct = Math.max(lastPct, 99);
       setUploadProgress(99, 'Finishing upload…');
-    });
+      await api(`/api/video-projects/${detail._id}/versions/${versionId}/complete`, {
+        method: 'POST',
+        body: JSON.stringify({ notifyClient })
+      });
 
-    // Fallback: if the browser never fires progress (some local setups),
-    // show an animated bar so it doesn't look frozen at 0%.
-    const softTimer = setInterval(() => {
-      if (lastPct > 0) { clearInterval(softTimer); return; }
-      setUploadProgress(-1, 'Uploading…');
-    }, 400);
-
-    xhr.onload = async () => {
-      clearInterval(softTimer);
-      btn.disabled = false;
-      if (xhr.status >= 200 && xhr.status < 300) {
-        setUploadProgress(100, 'Upload complete — transferring to video host…');
-        fileInput.value = '';
-        document.getElementById('versionNotes').value = '';
-        toast('Version uploaded');
-        await openDetail(detail._id);
-        await loadProjects();
-      } else {
-        let msg = 'Upload failed';
-        try { msg = JSON.parse(xhr.responseText).error || msg; } catch { /* keep default */ }
-        setUploadProgress(0, msg);
-        toast(msg, 'error');
+      setUploadProgress(100, 'Upload complete — processing…');
+      fileInput.value = '';
+      document.getElementById('versionNotes').value = '';
+      toast('Version uploaded');
+      await openDetail(detail._id);
+      await loadProjects();
+    } catch (err) {
+      const msg = err?.message || 'Upload failed';
+      if (versionId) {
+        try {
+          await api(`/api/video-projects/${detail._id}/versions/${versionId}/fail`, {
+            method: 'POST',
+            body: JSON.stringify({})
+          });
+        } catch { /* best effort */ }
       }
-    };
-    xhr.onerror = () => {
-      clearInterval(softTimer);
+      setUploadProgress(0, msg);
+      toast(msg, 'error');
+    } finally {
       btn.disabled = false;
-      setUploadProgress(0, 'Upload failed — network error');
-      toast('Upload failed — network error', 'error');
-    };
-    xhr.send(form);
+    }
+  }
+
+  function pickReplaceVersionFile() {
+    if (!isAdmin || !detail || !currentVersionId) return;
+    closeVersionMenu();
+    const input = document.getElementById('replaceVersionFile');
+    if (!input) return;
+    input.value = '';
+    input.click();
+  }
+
+  async function replaceCurrentVersionFile(file) {
+    if (!isAdmin || !detail || !currentVersionId || !file) return;
+    const v = currentVersion();
+    if (!v) return;
+
+    const uploadBtn = document.getElementById('uploadVersionBtn');
+    if (uploadBtn) uploadBtn.disabled = true;
+    setUploadProgress(0, `Preparing replace for v${v.versionNumber}…`);
+
+    let started = false;
+    try {
+      const prepared = await api(
+        `/api/video-projects/${detail._id}/versions/${currentVersionId}/replace/prepare`,
+        { method: 'POST', body: JSON.stringify({}) }
+      );
+      started = true;
+      await tusUploadToBunny(file, prepared.tus || {});
+
+      setUploadProgress(99, 'Finishing replace…');
+      await api(
+        `/api/video-projects/${detail._id}/versions/${currentVersionId}/replace/complete`,
+        { method: 'POST', body: JSON.stringify({}) }
+      );
+
+      setUploadProgress(100, 'Replace complete — processing…');
+      toast(`Version ${v.versionNumber} file replaced`);
+      await openDetail(detail._id);
+      await loadProjects();
+    } catch (err) {
+      const msg = err?.message || 'Replace failed';
+      if (started) {
+        try {
+          await api(
+            `/api/video-projects/${detail._id}/versions/${currentVersionId}/replace/fail`,
+            { method: 'POST', body: JSON.stringify({}) }
+          );
+        } catch { /* best effort */ }
+      }
+      setUploadProgress(0, msg);
+      toast(msg, 'error');
+    } finally {
+      if (uploadBtn) uploadBtn.disabled = false;
+      const input = document.getElementById('replaceVersionFile');
+      if (input) input.value = '';
+    }
   }
 
   // ---- Modals ----
@@ -2050,6 +2205,61 @@
       const body = document.getElementById('clientEditBody');
       if (body) body.innerHTML = '';
     }
+  }
+
+  function showVpConfirm({
+    title = 'Confirm',
+    message = '',
+    confirmText = 'Confirm',
+    cancelText = 'Cancel',
+    danger = true,
+    icon = 'warning'
+  } = {}) {
+    return new Promise((resolve) => {
+      const overlay = document.getElementById('vpConfirmModal');
+      const titleEl = document.getElementById('vpConfirmTitle');
+      const msgEl = document.getElementById('vpConfirmMessage');
+      const okBtn = document.getElementById('vpConfirmOk');
+      const cancelBtn = document.getElementById('vpConfirmCancel');
+      const iconEl = document.getElementById('vpConfirmIcon');
+      if (!overlay || !okBtn || !cancelBtn) {
+        resolve(window.confirm([title, message].filter(Boolean).join('\n\n')));
+        return;
+      }
+
+      titleEl.textContent = title;
+      msgEl.textContent = message;
+      okBtn.textContent = confirmText;
+      cancelBtn.textContent = cancelText;
+      okBtn.className = danger ? 'vp-btn danger' : 'vp-btn primary';
+      if (iconEl) {
+        iconEl.innerHTML = `<span class="material-symbols-outlined">${icon}</span>`;
+        iconEl.style.display = icon ? 'flex' : 'none';
+      }
+
+      const finish = (value) => {
+        overlay.style.display = 'none';
+        okBtn.removeEventListener('click', onOk);
+        cancelBtn.removeEventListener('click', onCancel);
+        overlay.removeEventListener('click', onOverlay);
+        document.removeEventListener('keydown', onKey);
+        resolve(value);
+      };
+      const onOk = () => finish(true);
+      const onCancel = () => finish(false);
+      const onOverlay = (e) => { if (e.target === overlay) finish(false); };
+      const onKey = (e) => {
+        if (e.key === 'Escape') finish(false);
+        if (e.key === 'Enter') finish(true);
+      };
+
+      okBtn.addEventListener('click', onOk);
+      cancelBtn.addEventListener('click', onCancel);
+      overlay.addEventListener('click', onOverlay);
+      document.addEventListener('keydown', onKey);
+      overlay.style.display = 'flex';
+      okBtn.focus();
+    });
   }
 
   // ---- Listeners ----
@@ -2385,6 +2595,24 @@
 
     document.getElementById('copyProjectShareBtn')?.addEventListener('click', copyProjectShareLink);
     document.getElementById('openProjectShareBtn')?.addEventListener('click', openProjectShareLink);
+
+    document.getElementById('versionMenuBtn')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleVersionMenu();
+    });
+    document.getElementById('replaceVersionBtn')?.addEventListener('click', pickReplaceVersionFile);
+    document.getElementById('replaceVersionFile')?.addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (file) replaceCurrentVersionFile(file);
+    });
+    document.getElementById('deleteVersionBtn')?.addEventListener('click', deleteCurrentVersion);
+    document.addEventListener('click', (e) => {
+      const wrap = document.getElementById('versionMenuWrap');
+      if (wrap && !wrap.contains(e.target)) closeVersionMenu();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') closeVersionMenu();
+    });
 
     document.getElementById('deleteProjectBtn').addEventListener('click', async () => {
       if (!detail) return;

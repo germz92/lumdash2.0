@@ -19,6 +19,8 @@ const videoPortalActivitySchema = new mongoose.Schema({
       'approved',
       'changes_requested',
       'version_uploaded',
+      'version_replaced',
+      'version_deleted',
       'delivered',
       'clients_notified',
       'due_set',

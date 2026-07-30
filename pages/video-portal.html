@@ -98,7 +98,23 @@
                 <span class="material-symbols-outlined">compare</span>
                 <span>Compare</span>
               </button>
+              <div class="vp-version-menu" id="versionMenuWrap" style="display:none;">
+                <button type="button" class="vp-icon-btn" id="versionMenuBtn" title="Version options" aria-haspopup="true" aria-expanded="false">
+                  <span class="material-symbols-outlined">more_vert</span>
+                </button>
+                <div class="vp-version-dropdown" id="versionMenuDropdown" hidden>
+                  <button type="button" class="vp-version-dropdown-item" id="replaceVersionBtn">
+                    <span class="material-symbols-outlined">upload</span>
+                    Replace file
+                  </button>
+                  <button type="button" class="vp-version-dropdown-item danger" id="deleteVersionBtn">
+                    <span class="material-symbols-outlined">delete</span>
+                    Delete version
+                  </button>
+                </div>
+              </div>
             </div>
+            <input type="file" id="replaceVersionFile" accept="video/*" hidden>
             <div class="vp-player-stack" id="playerStack">
               <div class="vp-player-wrap" id="playerWrap">
                 <div class="vp-player-placeholder" id="playerPlaceholder">No video uploaded yet</div>
@@ -293,6 +309,21 @@
             <button type="submit" class="vp-btn primary">Create Project</button>
           </div>
         </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm / danger alert -->
+  <div class="vp-modal-overlay" id="vpConfirmModal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="vpConfirmTitle">
+    <div class="vp-modal vp-confirm-modal">
+      <div class="vp-confirm-icon" id="vpConfirmIcon" aria-hidden="true">
+        <span class="material-symbols-outlined">warning</span>
+      </div>
+      <h2 id="vpConfirmTitle">Confirm</h2>
+      <p id="vpConfirmMessage"></p>
+      <div class="vp-confirm-actions">
+        <button type="button" class="vp-btn secondary" id="vpConfirmCancel">Cancel</button>
+        <button type="button" class="vp-btn danger" id="vpConfirmOk">Delete</button>
       </div>
     </div>
   </div>

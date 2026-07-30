@@ -180,6 +180,29 @@
       color: #fff;
     }
     .pt-card-tag.review { background: var(--pt-accent); }
+    .pt-card-download {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 2;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      background: rgba(31, 122, 61, 0.92);
+      color: #fff;
+      text-decoration: none;
+      font-size: 1rem;
+      line-height: 1;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+      transition: background 0.15s ease, transform 0.15s ease;
+    }
+    .pt-card-download:hover {
+      background: #25964b;
+      transform: scale(1.06);
+    }
     .pt-section-title::before {
       content: '';
       width: 3px;

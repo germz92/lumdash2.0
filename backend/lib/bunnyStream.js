@@ -76,6 +76,30 @@ async function createVideo(title, collectionId = null) {
 }
 
 /**
+ * Presigned credentials for browser → Bunny TUS direct upload.
+ * Signature: SHA256(libraryId + apiKey + expirationTime + videoId)
+ * Docs: https://docs.bunny.net/stream/tus-resumable-uploads
+ */
+function createTusUploadCredentials(videoId, expiresInSeconds = 86400) {
+  assertConfigured();
+  const { libraryId, apiKey } = config();
+  const guid = String(videoId || '').trim();
+  if (!guid) throw new Error('videoId is required for TUS credentials');
+  const expirationTime = Math.floor(Date.now() / 1000) + Math.max(3600, Number(expiresInSeconds) || 86400);
+  const signature = crypto
+    .createHash('sha256')
+    .update(`${libraryId}${apiKey}${expirationTime}${guid}`)
+    .digest('hex');
+  return {
+    endpoint: 'https://video.bunnycdn.com/tusupload',
+    libraryId: String(libraryId),
+    videoId: guid,
+    expirationTime,
+    signature
+  };
+}
+
+/**
  * Upload a video file (Buffer) to a previously created video object.
  * Fine for review proxies; files over ~2GB should use Bunny's TUS endpoint instead.
  */
@@ -353,6 +377,7 @@ async function setThumbnailFromUrl(videoId, thumbnailUrl) {
 module.exports = {
   isConfigured,
   createVideo,
+  createTusUploadCredentials,
   uploadVideoBuffer,
   uploadVideoFile,
   fetchVideoFromUrl,

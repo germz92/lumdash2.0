@@ -97,8 +97,48 @@
   border: 1px solid var(--border-default);
 }
 .vp-btn.success { background: #1f7a3d; color: #fff; }
+.vp-btn.danger { background: #c0392b; color: #fff; }
+.vp-btn.danger:hover { filter: brightness(1.1); }
 .vp-btn.small { padding: 7px 12px; font-size: 0.8rem; }
 .vp-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.vp-confirm-modal {
+  max-width: 420px;
+  padding: 28px 28px 24px;
+  text-align: center;
+  align-items: center;
+}
+.vp-confirm-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 14px;
+  background: rgba(192, 57, 43, 0.15);
+  color: #e74c3c;
+}
+.vp-confirm-icon .material-symbols-outlined { font-size: 28px; }
+.vp-confirm-modal h2 {
+  margin: 0 0 8px;
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+.vp-confirm-modal p {
+  margin: 0 0 22px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  white-space: pre-line;
+}
+.vp-confirm-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  width: 100%;
+}
+.vp-confirm-actions .vp-btn { min-width: 110px; }
 
 .vp-icon-btn {
   display: inline-flex;
@@ -892,6 +932,42 @@
 }
 .vp-version-bar select { min-width: 160px; }
 .vp-version-status { font-size: 0.76rem; color: var(--text-muted); }
+.vp-version-menu {
+  position: relative;
+  margin-left: auto;
+}
+.vp-version-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 180px;
+  padding: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  z-index: 40;
+}
+.vp-version-dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+.vp-version-dropdown-item:hover { background: var(--bg-tertiary); }
+.vp-version-dropdown-item.danger { color: #e74c3c; }
+.vp-version-dropdown-item.danger:hover { background: rgba(192, 57, 43, 0.12); }
+.vp-version-dropdown-item .material-symbols-outlined { font-size: 18px; }
 
 .vp-player-wrap {
   position: relative;

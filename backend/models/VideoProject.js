@@ -11,6 +11,8 @@ const mongoose = require('mongoose');
 const videoVersionSchema = new mongoose.Schema({
   versionNumber: { type: Number, required: true },
   bunnyVideoId: { type: String, default: '' },
+  // Temp Bunny id while replacing the file; swapped onto bunnyVideoId on complete
+  pendingReplaceBunnyVideoId: { type: String, default: '' },
   // Mirrors Bunny transcoding: uploading → processing → ready / error
   videoStatus: {
     type: String,

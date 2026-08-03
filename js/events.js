@@ -47,7 +47,7 @@ function getBadgeClass(badgeType, conditionMet, badgesNotRequired) {
 }
 
 // Build title/tooltip for badges
-function getBadgeTitle(badgeType, conditionMet, badgesNotRequired, count) {
+function getBadgeTitle(badgeType, conditionMet, badgesNotRequired, count, pendingCount = 0, badgesRequested = null) {
   const notRequired = badgesNotRequired && badgesNotRequired[badgeType];
   const labels = {
     flight: { active: `${count || 0} passenger${count !== 1 ? 's' : ''} with flights`, inactive: 'No flights', notRequired: 'Flights — Not required' },
@@ -58,11 +58,31 @@ function getBadgeTitle(badgeType, conditionMet, badgesNotRequired, count) {
   };
   const l = labels[badgeType] || {};
   if (notRequired) return l.notRequired || 'Not required';
-  return conditionMet ? (l.active || '') : (l.inactive || '');
+  let title = conditionMet ? (l.active || '') : (l.inactive || '');
+  if (badgeType === 'flight' && pendingCount > 0) {
+    const pendingLabel = `${pendingCount} pending request${pendingCount !== 1 ? 's' : ''}`;
+    title = title ? `${title} · ${pendingLabel}` : pendingLabel;
+  }
+  if (badgeType === 'hotel' && !conditionMet && badgesRequested?.hotel) {
+    title = 'Hotels requested';
+  }
+  return title;
+}
+
+function flightPendingDotHtml(pendingCount, badgesNotRequired) {
+  if (!(pendingCount > 0) || badgesNotRequired?.flight) return '';
+  return `<span class="flight-pending-dot" aria-hidden="true"></span>`;
+}
+
+function hotelRequestedDotHtml(table) {
+  if (table.badgesNotRequired?.hotel) return '';
+  if ((table.hotelCount || 0) > 0) return '';
+  if (!table.badgesRequested?.hotel) return '';
+  return `<span class="hotel-requested-dot" aria-hidden="true"></span>`;
 }
 
 // Show right-click context menu on a badge
-function showBadgeContextMenu(e, eventId, badgeType, isCurrentlyNotRequired) {
+function showBadgeContextMenu(e, eventId, badgeType, isCurrentlyNotRequired, isCurrentlyRequested = false) {
   // Remove any existing context menu
   const existing = document.querySelector('.badge-context-menu');
   if (existing) existing.remove();
@@ -78,22 +98,41 @@ function showBadgeContextMenu(e, eventId, badgeType, isCurrentlyNotRequired) {
 
   const menu = document.createElement('div');
   menu.className = 'badge-context-menu';
-  
+
+  const items = [];
   if (isCurrentlyNotRequired) {
-    menu.innerHTML = `
+    items.push(`
       <div class="menu-item mark-required" onclick="toggleBadgeRequired('${eventId}', '${badgeType}'); this.closest('.badge-context-menu').remove();">
         <span class="material-symbols-outlined">check_circle</span>
         Mark ${label} as required
       </div>
-    `;
+    `);
   } else {
-    menu.innerHTML = `
+    items.push(`
       <div class="menu-item" onclick="toggleBadgeRequired('${eventId}', '${badgeType}'); this.closest('.badge-context-menu').remove();">
         <span class="material-symbols-outlined">block</span>
         Mark ${label} as not required
       </div>
-    `;
+    `);
+    if (badgeType === 'hotel') {
+      if (isCurrentlyRequested) {
+        items.push(`
+          <div class="menu-item" onclick="toggleBadgeRequested('${eventId}', 'hotel', false); this.closest('.badge-context-menu').remove();">
+            <span class="material-symbols-outlined">close</span>
+            Clear hotels requested
+          </div>
+        `);
+      } else {
+        items.push(`
+          <div class="menu-item mark-requested" onclick="toggleBadgeRequested('${eventId}', 'hotel', true); this.closest('.badge-context-menu').remove();">
+            <span class="material-symbols-outlined">mark_email_unread</span>
+            Mark hotels as requested
+          </div>
+        `);
+      }
+    }
   }
+  menu.innerHTML = items.join('');
 
   document.body.appendChild(menu);
 
@@ -151,6 +190,11 @@ async function toggleBadgeRequired(eventId, badgeType) {
           cachedTables[tableIdx].badgesNotRequired = {};
         }
         cachedTables[tableIdx].badgesNotRequired[badgeType] = data.notRequired;
+        if (data.badgesRequested) {
+          cachedTables[tableIdx].badgesRequested = data.badgesRequested;
+        } else if (data.notRequired && cachedTables[tableIdx].badgesRequested) {
+          cachedTables[tableIdx].badgesRequested[badgeType] = false;
+        }
       }
     }
     
@@ -161,6 +205,48 @@ async function toggleBadgeRequired(eventId, badgeType) {
     showToast('Failed to update badge requirement', 'error');
   }
 }
+
+async function toggleBadgeRequested(eventId, badgeType, requested) {
+  try {
+    const res = await fetch(`${API_BASE}/api/tables/${eventId}/badge-requested`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ badge: badgeType, requested })
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      showToast(err.error || 'Failed to update badge', 'error');
+      return;
+    }
+
+    const data = await res.json();
+    showToast(
+      data.requested ? 'Hotels marked as requested' : 'Hotels requested mark cleared',
+      'success'
+    );
+
+    if (cachedTables) {
+      const tableIdx = cachedTables.findIndex(t => t._id === eventId);
+      if (tableIdx !== -1) {
+        if (!cachedTables[tableIdx].badgesRequested) cachedTables[tableIdx].badgesRequested = {};
+        cachedTables[tableIdx].badgesRequested[badgeType] = data.requested;
+        if (data.badgesNotRequired) {
+          cachedTables[tableIdx].badgesNotRequired = data.badgesNotRequired;
+        }
+      }
+    }
+
+    loadTables(false);
+  } catch (error) {
+    console.error('Error toggling badge requested:', error);
+    showToast('Failed to update hotels requested mark', 'error');
+  }
+}
+window.toggleBadgeRequested = toggleBadgeRequested;
 
 // Long-press handler for badge context menu on touch devices
 (function setupBadgeLongPress() {
@@ -180,8 +266,9 @@ async function toggleBadgeRequired(eventId, badgeType) {
       const eventId = badge.dataset.eventId;
       const badgeType = badge.dataset.badgeType;
       const isNotRequired = badge.dataset.notRequired === 'true';
+      const isRequested = badge.dataset.requested === 'true';
       const fakeEvent = { clientX: touch.clientX, clientY: touch.clientY, preventDefault: function(){}, stopPropagation: function(){} };
-      showBadgeContextMenu(fakeEvent, eventId, badgeType, isNotRequired);
+      showBadgeContextMenu(fakeEvent, eventId, badgeType, isNotRequired, isRequested);
     }, 500);
   }, { passive: false });
 
@@ -881,6 +968,64 @@ async function fetchFlightCounts() {
 }
 
 /**
+ * Pending / change-requested flight counts per event (by eventId, title fallback).
+ * Planner/admin only — returns {} for others.
+ */
+async function fetchPendingFlightCounts() {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_BASE}/api/flights/pending`, {
+      headers: {
+        'Authorization': token,
+        'Content-Type': 'application/json'
+      }
+    });
+
+    if (!response.ok) return { byId: {}, byName: {}, firstIdByEvent: {} };
+
+    const flights = await response.json();
+    const byId = {};
+    const byName = {};
+    const firstIdByEvent = {};
+    (Array.isArray(flights) ? flights : []).forEach(flight => {
+      const id = flight.eventId?._id || flight.eventId;
+      if (id) {
+        const key = String(id);
+        byId[key] = (byId[key] || 0) + 1;
+        if (!firstIdByEvent[key] && flight._id) firstIdByEvent[key] = String(flight._id);
+      }
+      const name = (flight.eventId?.title || flight.eventName || '').trim();
+      if (name) {
+        byName[name] = (byName[name] || 0) + 1;
+        if (!firstIdByEvent[`name:${name}`] && flight._id) {
+          firstIdByEvent[`name:${name}`] = String(flight._id);
+        }
+      }
+    });
+    return { byId, byName, firstIdByEvent };
+  } catch (error) {
+    console.error('Error fetching pending flight counts:', error);
+    return { byId: {}, byName: {}, firstIdByEvent: {} };
+  }
+}
+
+function handleFlightBadgeClick(eventId, flightCount, pendingCount, pendingFlightId) {
+  // Pending-only: jump to Flight Management and open that request
+  if (!(Number(flightCount) > 0) && Number(pendingCount) > 0) {
+    const url = pendingFlightId
+      ? `/pages/flights.html?flightId=${encodeURIComponent(pendingFlightId)}`
+      : `/pages/flights.html?eventId=${encodeURIComponent(eventId)}`;
+    window.location.href = url;
+    return false;
+  }
+  if (typeof window.navigate === 'function') {
+    window.navigate('travel-accommodation', eventId);
+  }
+  return false;
+}
+window.handleFlightBadgeClick = handleFlightBadgeClick;
+
+/**
  * Check which events have schedule content
  * Returns object with eventId as key and boolean as value
  */
@@ -989,13 +1134,15 @@ function renderEventRowDark(table, index, userId) {
           </div>
           ` : ''}
         <div class="event-badges event-badges-inline">
-          <span class="flight-badge badge-longpress ${getBadgeClass('flight', table.flightCount > 0, table.badgesNotRequired)}" data-event-id="${table._id}" data-badge-type="flight" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.flight)}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" title="${getBadgeTitle('flight', table.flightCount > 0, table.badgesNotRequired, table.flightCount)}">
+          <span class="flight-badge badge-longpress ${getBadgeClass('flight', table.flightCount > 0, table.badgesNotRequired)}${table.pendingFlightCount > 0 && !table.badgesNotRequired?.flight ? ' has-pending' : ''}" data-event-id="${table._id}" data-badge-type="flight" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.flight)}" onclick="event.stopPropagation(); handleFlightBadgeClick('${table._id}', ${table.flightCount || 0}, ${table.pendingFlightCount || 0}, '${table.pendingFlightId || ''}'); return false;" title="${getBadgeTitle('flight', table.flightCount > 0, table.badgesNotRequired, table.flightCount, table.pendingFlightCount)}">
               <span class="material-symbols-outlined">flight</span>
               ${table.flightCount > 0 && !table.badgesNotRequired?.flight ? `<span class="flight-count">${table.flightCount}</span>` : ''}
+              ${flightPendingDotHtml(table.pendingFlightCount, table.badgesNotRequired)}
             </span>
-          <span class="hotel-badge badge-longpress ${getBadgeClass('hotel', table.hotelCount > 0, table.badgesNotRequired)}" data-event-id="${table._id}" data-badge-type="hotel" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.hotel)}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" title="${getBadgeTitle('hotel', table.hotelCount > 0, table.badgesNotRequired, table.hotelCount)}">
+          <span class="hotel-badge badge-longpress ${getBadgeClass('hotel', table.hotelCount > 0, table.badgesNotRequired)}${table.badgesRequested?.hotel && !(table.hotelCount > 0) && !table.badgesNotRequired?.hotel ? ' has-requested' : ''}" data-event-id="${table._id}" data-badge-type="hotel" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.hotel)}" data-requested="${!!(table.badgesRequested && table.badgesRequested.hotel)}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" title="${getBadgeTitle('hotel', table.hotelCount > 0, table.badgesNotRequired, table.hotelCount, 0, table.badgesRequested)}">
               <span class="material-symbols-outlined">hotel</span>
               ${table.hotelCount > 0 && !table.badgesNotRequired?.hotel ? `<span class="hotel-count">${table.hotelCount}</span>` : ''}
+              ${hotelRequestedDotHtml(table)}
             </span>
           <span class="share-badge badge-longpress ${getBadgeClass('share', table.shareCount > 0, table.badgesNotRequired)}" data-event-id="${table._id}" data-badge-type="share" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.share)}" onclick="event.stopPropagation(); openShareModal('${table._id}');" title="${getBadgeTitle('share', table.shareCount > 0, table.badgesNotRequired, table.shareCount)}">
               <span class="material-symbols-outlined">send</span>
@@ -1012,13 +1159,15 @@ function renderEventRowDark(table, index, userId) {
     </td>
     <td class="badges-cell">
       <div class="event-badges">
-          <span class="flight-badge badge-longpress ${getBadgeClass('flight', table.flightCount > 0, table.badgesNotRequired)}" data-event-id="${table._id}" data-badge-type="flight" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.flight)}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'flight', ${!!(table.badgesNotRequired && table.badgesNotRequired.flight)});" title="${getBadgeTitle('flight', table.flightCount > 0, table.badgesNotRequired, table.flightCount)}">
+          <span class="flight-badge badge-longpress ${getBadgeClass('flight', table.flightCount > 0, table.badgesNotRequired)}${table.pendingFlightCount > 0 && !table.badgesNotRequired?.flight ? ' has-pending' : ''}" data-event-id="${table._id}" data-badge-type="flight" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.flight)}" onclick="event.stopPropagation(); handleFlightBadgeClick('${table._id}', ${table.flightCount || 0}, ${table.pendingFlightCount || 0}, '${table.pendingFlightId || ''}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'flight', ${!!(table.badgesNotRequired && table.badgesNotRequired.flight)});" title="${getBadgeTitle('flight', table.flightCount > 0, table.badgesNotRequired, table.flightCount, table.pendingFlightCount)}">
               <span class="material-symbols-outlined">flight</span>
               ${table.flightCount > 0 && !table.badgesNotRequired?.flight ? `<span class="flight-count">${table.flightCount}</span>` : ''}
+              ${flightPendingDotHtml(table.pendingFlightCount, table.badgesNotRequired)}
             </span>
-          <span class="hotel-badge badge-longpress ${getBadgeClass('hotel', table.hotelCount > 0, table.badgesNotRequired)}" data-event-id="${table._id}" data-badge-type="hotel" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.hotel)}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'hotel', ${!!(table.badgesNotRequired && table.badgesNotRequired.hotel)});" title="${getBadgeTitle('hotel', table.hotelCount > 0, table.badgesNotRequired, table.hotelCount)}">
+          <span class="hotel-badge badge-longpress ${getBadgeClass('hotel', table.hotelCount > 0, table.badgesNotRequired)}${table.badgesRequested?.hotel && !(table.hotelCount > 0) && !table.badgesNotRequired?.hotel ? ' has-requested' : ''}" data-event-id="${table._id}" data-badge-type="hotel" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.hotel)}" data-requested="${!!(table.badgesRequested && table.badgesRequested.hotel)}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'hotel', ${!!(table.badgesNotRequired && table.badgesNotRequired.hotel)}, ${!!(table.badgesRequested && table.badgesRequested.hotel)});" title="${getBadgeTitle('hotel', table.hotelCount > 0, table.badgesNotRequired, table.hotelCount, 0, table.badgesRequested)}">
               <span class="material-symbols-outlined">hotel</span>
               ${table.hotelCount > 0 && !table.badgesNotRequired?.hotel ? `<span class="hotel-count">${table.hotelCount}</span>` : ''}
+              ${hotelRequestedDotHtml(table)}
             </span>
           <span class="share-badge badge-longpress ${getBadgeClass('share', table.shareCount > 0, table.badgesNotRequired)}" data-event-id="${table._id}" data-badge-type="share" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.share)}" onclick="event.stopPropagation(); openShareModal('${table._id}');" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'share', ${!!(table.badgesNotRequired && table.badgesNotRequired.share)});" title="${getBadgeTitle('share', table.shareCount > 0, table.badgesNotRequired, table.shareCount)}">
               <span class="material-symbols-outlined">send</span>
@@ -1459,10 +1608,20 @@ async function loadTables(forceRefresh = false) {
   }
 
   // Always fetch passenger counts to ensure they're up to date
-  const passengerCounts = await fetchFlightCounts();
+  const [passengerCounts, pendingFlightCounts] = await Promise.all([
+    fetchFlightCounts(),
+    fetchPendingFlightCounts()
+  ]);
   tables.forEach(table => {
     const eventTitle = table.title || 'Untitled Event';
+    const tableId = table._id?.toString?.() || String(table._id);
     table.flightCount = passengerCounts[eventTitle] || 0; // flightCount stores unique passenger count
+    table.pendingFlightCount = pendingFlightCounts.byId[tableId]
+      || pendingFlightCounts.byName[eventTitle]
+      || 0;
+    table.pendingFlightId = pendingFlightCounts.firstIdByEvent[tableId]
+      || pendingFlightCounts.firstIdByEvent[`name:${eventTitle}`]
+      || '';
   });
   
   // Check which events have schedule content

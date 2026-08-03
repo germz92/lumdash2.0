@@ -315,6 +315,7 @@
       // Deep-link: auto-open a specific flight modal if ?flightId= is in the URL
       const urlParams = new URLSearchParams(window.location.search);
       const deepLinkFlightId = urlParams.get('flightId');
+      const deepLinkEventId = urlParams.get('eventId');
       if (deepLinkFlightId) {
         const pendingMatch = flightRequests.find(r => r._id === deepLinkFlightId);
         const bookedMatch = bookedFlights.find(f => f._id === deepLinkFlightId);
@@ -326,6 +327,22 @@
           console.warn('⚠️ Deep-link flight not found:', deepLinkFlightId);
         }
         // Clean up the URL so refreshing doesn't re-open the modal
+        window.history.replaceState({}, '', window.location.pathname);
+      } else if (deepLinkEventId) {
+        const eventPending = flightRequests.filter(r =>
+          String(r.eventId?._id || r.eventId || '') === String(deepLinkEventId)
+        );
+        if (eventPending.length === 1) {
+          openViewModal(eventPending[0]);
+        } else if (eventPending.length > 1) {
+          const searchEl = document.getElementById('pendingSearch') || elements.pendingSearch;
+          const eventLabel = getEventDisplayName(eventPending[0], '');
+          if (searchEl && eventLabel) {
+            searchEl.value = eventLabel;
+            renderPendingRequests();
+          }
+          elements.pendingRequestsGrid?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
         window.history.replaceState({}, '', window.location.pathname);
       }
 

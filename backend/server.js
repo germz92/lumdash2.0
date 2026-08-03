@@ -3568,6 +3568,11 @@ app.patch('/api/tables/:id/badge-required', authenticate, async (req, res) => {
     
     // Toggle the badge's not-required status
     table.badgesNotRequired[badge] = !table.badgesNotRequired[badge];
+    // Clear "requested" mark when marking not required
+    if (table.badgesNotRequired[badge] && table.badgesRequested?.[badge]) {
+      table.badgesRequested[badge] = false;
+      table.markModified('badgesRequested');
+    }
     await table.save();
     
     notifyDataChange('badgeRequirementChanged', { 
@@ -3578,11 +3583,65 @@ app.patch('/api/tables/:id/badge-required', authenticate, async (req, res) => {
     res.json({ 
       badge, 
       notRequired: table.badgesNotRequired[badge],
-      badgesNotRequired: table.badgesNotRequired 
+      badgesNotRequired: table.badgesNotRequired,
+      badgesRequested: table.badgesRequested || {}
     });
   } catch (error) {
     console.error('Error toggling badge requirement:', error);
     res.status(500).json({ error: 'Failed to update badge requirement' });
+  }
+});
+
+// --- TOGGLE BADGE REQUESTED MARK (manual flag, e.g. hotels awaiting info) ---
+app.patch('/api/tables/:id/badge-requested', authenticate, async (req, res) => {
+  try {
+    const { badge, requested } = req.body;
+    const validBadges = ['hotel'];
+
+    if (!badge || !validBadges.includes(badge)) {
+      return res.status(400).json({ error: 'Invalid badge type. Must be one of: ' + validBadges.join(', ') });
+    }
+
+    const table = await Table.findById(req.params.id);
+    if (!table) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+
+    const isOwner = Array.isArray(table.owners) && table.owners.map(o => o.toString()).includes(req.user.id);
+    const isAdmin = req.user.role === 'admin';
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ error: 'Only owners and admins can change badge requested status' });
+    }
+
+    if (!table.badgesRequested) table.badgesRequested = {};
+    const next = requested === undefined
+      ? !table.badgesRequested[badge]
+      : !!requested;
+    table.badgesRequested[badge] = next;
+
+    // Requested implies required — clear not-required if set
+    if (next && table.badgesNotRequired?.[badge]) {
+      table.badgesNotRequired[badge] = false;
+      table.markModified('badgesNotRequired');
+    }
+
+    table.markModified('badgesRequested');
+    await table.save();
+
+    notifyDataChange('badgeRequestedChanged', {
+      badge,
+      requested: table.badgesRequested[badge]
+    }, req.params.id);
+
+    res.json({
+      badge,
+      requested: table.badgesRequested[badge],
+      badgesRequested: table.badgesRequested,
+      badgesNotRequired: table.badgesNotRequired || {}
+    });
+  } catch (error) {
+    console.error('Error toggling badge requested:', error);
+    res.status(500).json({ error: 'Failed to update badge requested status' });
   }
 });
 
@@ -5550,6 +5609,14 @@ app.put('/api/tables/:id/travel', authenticate, async (req, res) => {
   }
   table.travel = req.body.travel || [];
   table.accommodation = req.body.accommodation || [];
+
+  // Hotel info entered → clear manual "hotels requested" mark
+  const hasHotelInfo = (table.accommodation || []).some(a => a?.hotel && String(a.hotel).trim());
+  if (hasHotelInfo && table.badgesRequested?.hotel) {
+    table.badgesRequested.hotel = false;
+    table.markModified('badgesRequested');
+  }
+
   await table.save();
   
   notifyDataChange('travelChanged', null, req.params.id); // Notify about travel/accommodation changes with tableId

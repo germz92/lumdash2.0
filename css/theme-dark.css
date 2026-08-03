@@ -1498,6 +1498,7 @@ img.owner-avatar {
   cursor: pointer;
   transition: all var(--transition-fast);
   text-decoration: none;
+  position: relative;
 }
 
 .event-badges .flight-badge:hover {
@@ -1511,6 +1512,18 @@ img.owner-avatar {
 
 .event-badges .flight-badge .flight-count {
   line-height: 1;
+}
+
+.event-badges .flight-badge .flight-pending-dot {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #f59e0b;
+  box-shadow: 0 0 0 2px var(--bg-primary, #111214);
+  pointer-events: none;
 }
 
 .event-badges .hotel-badge {
@@ -1527,6 +1540,7 @@ img.owner-avatar {
   cursor: pointer;
   transition: all var(--transition-fast);
   text-decoration: none;
+  position: relative;
 }
 
 .event-badges .hotel-badge:hover {
@@ -1540,6 +1554,18 @@ img.owner-avatar {
 
 .event-badges .hotel-badge .hotel-count {
   line-height: 1;
+}
+
+.event-badges .hotel-badge .hotel-requested-dot {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px var(--bg-primary, #111214);
+  pointer-events: none;
 }
 
 .event-badges .schedule-badge {

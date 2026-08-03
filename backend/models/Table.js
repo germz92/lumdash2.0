@@ -267,6 +267,10 @@ const tableSchema = new mongoose.Schema({
     schedule: { type: Boolean, default: false },
     gear: { type: Boolean, default: false }
   },
+  // Manual "requested" marks (no request system yet) — e.g. hotels awaiting booking info
+  badgesRequested: {
+    hotel: { type: Boolean, default: false }
+  },
   archived: { type: Boolean, default: false },
   // Admin-only notes for this event/table (Google Keep style)
   adminNotes: [

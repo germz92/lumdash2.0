@@ -14718,7 +14718,8 @@ function projectThumbnailUrl(project, latestReadyVersion = null) {
 }
 
 function isPortalAdmin(user) {
-  return /^admin$/i.test(user?.role || '');
+  const role = String(user?.role || '').toLowerCase();
+  return role === 'admin' || role === 'production_manager';
 }
 
 function normalizePortalAccent(color) {
@@ -14999,7 +15000,9 @@ async function portalTeamRecipients(project) {
   if (project.createdBy) ids.add(project.createdBy.toString());
   (project.versions || []).forEach(v => { if (v.uploadedBy) ids.add(v.uploadedBy.toString()); });
   try {
-    const admins = await User.find({ role: { $regex: /^admin$/i } }).select('_id').lean();
+    const admins = await User.find({
+      role: { $regex: /^(admin|production_manager)$/i }
+    }).select('_id').lean();
     admins.forEach(a => ids.add(a._id.toString()));
   } catch (err) {
     console.error('Failed to load portal admin recipients:', err.message);

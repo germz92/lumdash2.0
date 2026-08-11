@@ -2856,7 +2856,8 @@
   // ---- Init ----
   window.initPage = async function() {
     const payload = readTokenPayload();
-    isAdmin = /^admin$/i.test(payload.role || '');
+    const role = String(payload.role || '').toLowerCase();
+    isAdmin = role === 'admin' || role === 'production_manager';
 
     const layoutContainer = document.getElementById('vpPageLayout');
     if (layoutContainer && typeof window.injectDashboardSidebar === 'function') {

@@ -190,7 +190,7 @@ const NOTIFICATION_SECTION = {
         {
           key: 'portal_comment',
           label: 'Client video comments',
-          description: 'Batched alerts when a client leaves comments on a portal project. Admins, project creators, and version uploaders are notified. Rapid comments in one session are grouped into a single notification/email.',
+          description: 'Batched alerts when a client leaves comments on a portal project. Admins, production managers, project creators, and version uploaders are notified. Rapid comments in one session are grouped into a single notification/email.',
           roles: ALL_ROLES,
           defaults: { toast: true, email: true },
           channels: { toast: true, email: true }

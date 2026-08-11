@@ -190,7 +190,7 @@ const NOTIFICATION_SECTION = {
         {
           key: 'portal_comment',
           label: 'Client video comments',
-          description: 'Batched alerts when a client leaves comments on a video you uploaded or a project you created. Rapid comments in one session are grouped into a single notification/email.',
+          description: 'Batched alerts when a client leaves comments on a portal project. Admins, project creators, and version uploaders are notified. Rapid comments in one session are grouped into a single notification/email.',
           roles: ALL_ROLES,
           defaults: { toast: true, email: true },
           channels: { toast: true, email: true }
@@ -218,14 +218,6 @@ const NOTIFICATION_SECTION = {
           roles: ALL_ROLES,
           defaults: { toast: true, email: true },
           channels: { toast: true, email: true }
-        },
-        {
-          key: 'portal_comment_digest',
-          label: 'Daily open-comment digest',
-          description: 'A once-daily email summarizing unresolved client comments on your portal projects.',
-          roles: ALL_ROLES,
-          defaults: { toast: false, email: true },
-          channels: { toast: false, email: true }
         }
       ]
     },

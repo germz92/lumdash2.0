@@ -2489,13 +2489,15 @@
                 select.appendChild(option);
             });
             
-            // Add "Add New List" option
-            const addNewOption = document.createElement('option');
-            addNewOption.value = '__ADD_NEW__';
-            addNewOption.textContent = '+ Add New List';
-            addNewOption.style.fontStyle = 'italic';
-            addNewOption.style.color = '#666';
-            select.appendChild(addNewOption);
+            // Add "Add New List" option for users who can manage lists
+            if (userPermissions.canManageLists) {
+                const addNewOption = document.createElement('option');
+                addNewOption.value = '__ADD_NEW__';
+                addNewOption.textContent = '+ Add New List';
+                addNewOption.style.fontStyle = 'italic';
+                addNewOption.style.color = '#666';
+                select.appendChild(addNewOption);
+            }
         }
 
         function handleListSelection() {

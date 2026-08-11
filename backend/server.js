@@ -1556,8 +1556,23 @@ function hasEventAccess(table, user, requireOwner = false) {
   
   const isLead = table.leads && table.leads.map(String).includes(userId);
   const isShared = table.sharedWith && table.sharedWith.map(String).includes(userId);
+  const isCrew = isAssignedCrewMember(table, user);
   
-  return isOwner || isLead || isShared;
+  return isOwner || isLead || isShared || isCrew;
+}
+
+/** True if the user appears on the event crew schedule (rows.userId). */
+function isAssignedCrewMember(table, user) {
+  if (!table || !user) return false;
+  const userId = String(user.id);
+  return (table.rows || []).some(r => r.userId && String(r.userId) === userId);
+}
+
+/** Can create/rename/delete gear lists and add manual gear items for an event. */
+function canManageEventGearLists(table, user) {
+  if (!table || !user) return false;
+  if (user.role === 'admin') return true;
+  return hasEventAccess(table, user);
 }
 
 // Read-only access check: planners can view all events, but cannot edit unless they are owners/leads/sharedWith
@@ -3489,12 +3504,13 @@ app.get('/api/tables', authenticate, async (req, res) => {
     if (req.user.role === 'admin' || req.user.role === 'planner') {
       tables = await Table.find({}).populate('owners', 'fullName');
     } else {
-      // Regular users only see events they own, are shared with, or are leads on
+      // Regular users: own / shared / lead / assigned on crew schedule
       tables = await Table.find({
       $or: [
         { owners: req.user.id },
         { sharedWith: req.user.id },
-        { leads: req.user.id }
+        { leads: req.user.id },
+        { 'rows.userId': req.user.id }
       ]
       }).populate('owners', 'fullName');
     }
@@ -7692,8 +7708,8 @@ app.get('/api/gear-packages/event/:eventId', authenticate, async (req, res) => {
         reservedItems: [],
         manualItems: manualItems,
         userPermissions: {
-          canReserve: table.owners.includes(userId) || req.user.role === 'admin',
-          canManageLists: table.owners.includes(userId) || req.user.role === 'admin',
+          canReserve: canManageEventGearLists(table, req.user),
+          canManageLists: canManageEventGearLists(table, req.user),
           canPack: true
         }
       });
@@ -7719,8 +7735,8 @@ app.get('/api/gear-packages/event/:eventId', authenticate, async (req, res) => {
       reservedItems: validItems,
       manualItems: manualItems,
       userPermissions: {
-        canReserve: table.owners.includes(userId) || req.user.role === 'admin',
-        canManageLists: table.owners.includes(userId) || req.user.role === 'admin', 
+        canReserve: canManageEventGearLists(table, req.user),
+        canManageLists: canManageEventGearLists(table, req.user),
         canPack: true
       }
     });
@@ -7826,7 +7842,7 @@ app.patch('/api/gear-packages/:itemId/toggle-packed', authenticate, async (req, 
 
     // Verify user has access to this event
     const table = await Table.findById(reservedItem.eventId);
-    if (!table || (!table.owners.includes(userId) && !table.sharedWith.includes(userId))) {
+    if (!table || !hasEventAccess(table, req.user)) {
       return res.status(403).json({ error: 'Not authorized to access this event' });
     }
 
@@ -8005,9 +8021,9 @@ app.post('/api/tables/:eventId/gear-lists', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Event not found' });
     }
     
-    // Check access - only owners and admins can create lists
-    if (!table.owners.includes(req.user.id) && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Only event owners and admins can create gear lists' });
+    // Owners, leads, shared collaborators, assigned crew, and admins can create lists
+    if (!canManageEventGearLists(table, req.user)) {
+      return res.status(403).json({ error: 'Not authorized to create gear lists for this event' });
     }
     
     // Check if list name already exists
@@ -8056,8 +8072,8 @@ app.put('/api/tables/:eventId/gear-lists/:listName', authenticate, async (req, r
     }
     
     // Check access - only owners and admins can update lists
-    if (!table.owners.includes(req.user.id) && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Only event owners and admins can update gear lists' });
+    if (!canManageEventGearLists(table, req.user)) {
+      return res.status(403).json({ error: 'Not authorized to update gear lists for this event' });
     }
     
     // Find the list
@@ -8136,8 +8152,8 @@ app.delete('/api/tables/:eventId/gear-lists/:listName', authenticate, async (req
     }
     
     // Check access - only owners and admins can delete lists
-    if (!table.owners.includes(req.user.id) && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Only event owners and admins can delete gear lists' });
+    if (!canManageEventGearLists(table, req.user)) {
+      return res.status(403).json({ error: 'Not authorized to delete gear lists for this event' });
     }
     
     // Check if trying to delete Main List
@@ -8232,8 +8248,8 @@ app.post('/api/tables/:eventId/gear-lists/:listName/manual-items', authenticate,
     }
     
     // Check permissions - only owners and admins can add manual items
-    if (!table.owners.includes(req.user.id) && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Only event owners and admins can add manual items' });
+    if (!canManageEventGearLists(table, req.user)) {
+      return res.status(403).json({ error: 'Not authorized to add manual items for this event' });
     }
     
     // Find the gear list
@@ -8278,7 +8294,7 @@ app.patch('/api/tables/:eventId/gear-lists/:listName/manual-items/:itemId/toggle
     }
     
     // Check access to the event
-    if (!table.owners.includes(req.user.id) && !table.sharedWith.includes(req.user.id) && req.user.role !== 'admin') {
+    if (!hasEventAccess(table, req.user)) {
       return res.status(403).json({ error: 'Not authorized to access this event' });
     }
     
@@ -8319,8 +8335,8 @@ app.delete('/api/tables/:eventId/gear-lists/:listName/manual-items/:itemId', aut
     }
     
     // Check permissions - only owners and admins can delete manual items
-    if (!table.owners.includes(req.user.id) && req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Only event owners and admins can delete manual items' });
+    if (!canManageEventGearLists(table, req.user)) {
+      return res.status(403).json({ error: 'Not authorized to delete manual items for this event' });
     }
     
     // Find the gear list
@@ -14939,11 +14955,17 @@ function portalPinRequiredResponse(client) {
   };
 }
 
-/** Team members who should hear about client activity on a project */
-function portalTeamRecipients(project) {
+/** Team members who should hear about client activity on a project (creators, uploaders, admins). */
+async function portalTeamRecipients(project) {
   const ids = new Set();
   if (project.createdBy) ids.add(project.createdBy.toString());
   (project.versions || []).forEach(v => { if (v.uploadedBy) ids.add(v.uploadedBy.toString()); });
+  try {
+    const admins = await User.find({ role: { $regex: /^admin$/i } }).select('_id').lean();
+    admins.forEach(a => ids.add(a._id.toString()));
+  } catch (err) {
+    console.error('Failed to load portal admin recipients:', err.message);
+  }
   return [...ids];
 }
 
@@ -14983,7 +15005,7 @@ async function notifyTeamPortalEvent({
   emailSubject = null,
   emailHtmlExtra = null
 }) {
-  const recipients = portalTeamRecipients(project);
+  const recipients = await portalTeamRecipients(project);
   if (recipients.length === 0) return;
 
   await createNotificationBulk(recipients, {
@@ -15248,112 +15270,6 @@ setTimeout(() => {
   checkPortalFeedbackDueReminders();
   setInterval(checkPortalFeedbackDueReminders, 60 * 60 * 1000);
 }, 15000);
-
-async function sendPortalCommentDigest() {
-  try {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const already = await VideoPortalActivity.findOne({
-      type: 'digest_sent',
-      createdAt: { $gte: startOfDay }
-    }).select('_id').lean();
-    if (already) return;
-
-    // Prefer mid-morning local server time so digests aren't noisy overnight
-    const hour = new Date().getHours();
-    if (hour < 8 || hour > 18) return;
-
-    const openComments = await VideoComment.find({
-      authorType: 'client',
-      resolved: false
-    }).sort({ createdAt: -1 }).limit(400).lean();
-    if (!openComments.length) return;
-
-    const projectIds = [...new Set(openComments.map(c => c.projectId.toString()))];
-    const projects = await VideoProject.find({
-      _id: { $in: projectIds },
-      status: 'in_review'
-    }).select('title createdBy versions clientId').lean();
-    if (!projects.length) return;
-
-    const projectMap = Object.fromEntries(projects.map(p => [p._id.toString(), p]));
-    const byRecipient = new Map(); // userId -> { projects: Map }
-
-    for (const comment of openComments) {
-      const project = projectMap[comment.projectId.toString()];
-      if (!project) continue;
-      const recipients = portalTeamRecipients(project);
-      for (const rid of recipients) {
-        if (!byRecipient.has(rid)) byRecipient.set(rid, new Map());
-        const pm = byRecipient.get(rid);
-        const pid = project._id.toString();
-        if (!pm.has(pid)) pm.set(pid, { title: project.title, items: [] });
-        const bucket = pm.get(pid);
-        if (bucket.items.length < 8) {
-          const tc = formatTimecodeRange(comment.timecodeSeconds, comment.timecodeEndSeconds);
-          const flag = comment.mustFix ? ' [MUST FIX]' : '';
-          bucket.items.push(`${flag}${tc ? ` @ ${tc}` : ''} ${comment.authorName || 'Client'}: ${comment.text}`.trim());
-        }
-      }
-    }
-
-    if (!byRecipient.size) return;
-
-    const { isNotificationChannelEnabled } = require('./lib/userSettings');
-    const appUrl = (process.env.APP_URL || 'https://beta.lumdash.app').replace(/\/$/, '');
-    const pageUrl = `${appUrl}/dashboard.html#video-portal`;
-    let emailed = 0;
-
-    for (const [userId, projectBuckets] of byRecipient.entries()) {
-      const lines = [];
-      for (const [, bucket] of projectBuckets.entries()) {
-        lines.push(`<p><strong>${String(bucket.title).replace(/</g, '&lt;')}</strong></p><ul>${
-          bucket.items.map(i => `<li>${String(i).replace(/</g, '&lt;').slice(0, 220)}</li>`).join('')
-        }</ul>`);
-      }
-      const title = `Open client comments (${projectBuckets.size} project${projectBuckets.size === 1 ? '' : 's'})`;
-      await createNotificationBulk([userId], {
-        type: 'portal_comment_digest',
-        title,
-        message: 'Daily digest of unresolved client feedback on your portal projects.',
-        link: { page: 'video-portal', params: {} },
-        metadata: {}
-      });
-
-      if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) continue;
-      const user = await User.findById(userId).select('email fullName settings role').lean();
-      if (!user?.email || !isNotificationChannelEnabled(user, 'portal_comment_digest', 'email')) continue;
-      try {
-        await sgMail.send({
-          to: user.email.trim().toLowerCase(),
-          from: SENDGRID_FROM,
-          subject: `Video portal digest — ${projectBuckets.size} open project${projectBuckets.size === 1 ? '' : 's'}`,
-          html: `<p>Hi ${(user.fullName || '').split(' ')[0] || 'there'},</p>
-                 <p>Here’s a quick digest of unresolved client comments:</p>
-                 ${lines.join('')}
-                 <p><a href="${pageUrl}" style="color:#CC0007;font-weight:600;">Open the Video Portal</a></p>`
-        });
-        emailed += 1;
-      } catch (emailErr) {
-        console.error('Portal comment digest email failed:', emailErr);
-      }
-    }
-
-    await logPortalActivity({
-      type: 'digest_sent',
-      actorType: 'system',
-      actorName: 'LumDash',
-      message: `Daily comment digest sent (${emailed} emails)`
-    });
-  } catch (err) {
-    console.error('Portal comment digest failed:', err);
-  }
-}
-
-setTimeout(() => {
-  sendPortalCommentDigest();
-  setInterval(sendPortalCommentDigest, 60 * 60 * 1000);
-}, 45000);
 
 // ---------- Internal: clients ----------
 

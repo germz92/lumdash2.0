@@ -36,7 +36,7 @@
     portal_decision:        { icon: 'verified',         color: '#22c55e' },
     portal_feedback_due:    { icon: 'event',            color: '#f59e0b' },
     portal_mention:         { icon: 'alternate_email',  color: '#38bdf8' },
-    portal_comment_digest:  { icon: 'inbox',            color: '#a78bfa' },
+    portal_comment_digest:  { icon: 'inbox',            color: '#a78bfa' }, // legacy; digest disabled
     general:                { icon: 'notifications',    color: '#6b7280' }
   };
 

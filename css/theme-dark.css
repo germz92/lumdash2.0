@@ -1490,7 +1490,7 @@ img.owner-avatar {
   justify-content: center;
   gap: 3px;
   background: transparent;
-  color: #22c55e;
+  color: #30d158;
   padding: 4px 0;
   border-radius: 12px;
   font-size: 12px;
@@ -1502,7 +1502,7 @@ img.owner-avatar {
 }
 
 .event-badges .flight-badge:hover {
-  color: #4ade80;
+  color: #5eeb81;
   transform: scale(1.05);
 }
 
@@ -1520,7 +1520,7 @@ img.owner-avatar {
   justify-content: center;
   gap: 3px;
   background: transparent;
-  color: #22c55e;
+  color: #30d158;
   padding: 4px 0;
   border-radius: 12px;
   font-size: 12px;
@@ -1532,7 +1532,7 @@ img.owner-avatar {
 }
 
 .event-badges .hotel-badge:hover {
-  color: #4ade80;
+  color: #5eeb81;
   transform: scale(1.05);
 }
 
@@ -1549,7 +1549,7 @@ img.owner-avatar {
   align-items: center;
   justify-content: center;
   background: transparent;
-  color: #22c55e;
+  color: #30d158;
   padding: 4px 0;
   border-radius: 50%;
   font-size: 12px;
@@ -1560,8 +1560,8 @@ img.owner-avatar {
 }
 
 .event-badges .schedule-badge:hover {
-  background: rgba(34, 197, 94, 0.12);
-  color: #4ade80;
+  background: rgba(48, 209, 88, 0.14);
+  color: #5eeb81;
   transform: scale(1.1);
 }
 
@@ -1575,7 +1575,7 @@ img.owner-avatar {
   justify-content: center;
   gap: 3px;
   background: transparent;
-  color: #22c55e;
+  color: #30d158;
   padding: 4px 0;
   border-radius: 12px;
   font-size: 12px;
@@ -1586,8 +1586,8 @@ img.owner-avatar {
 }
 
 .event-badges .share-badge:hover {
-  background: rgba(34, 197, 94, 0.12);
-  color: #4ade80;
+  background: rgba(48, 209, 88, 0.14);
+  color: #5eeb81;
 }
 
 .event-badges .share-badge .material-symbols-outlined {
@@ -1603,7 +1603,7 @@ img.owner-avatar {
   align-items: center;
   justify-content: center;
   background: transparent;
-  color: #22c55e;
+  color: #30d158;
   padding: 4px 0;
   border-radius: 50%;
   font-size: 12px;
@@ -1613,8 +1613,8 @@ img.owner-avatar {
 }
 
 .event-badges .gear-badge:hover {
-  background: rgba(34, 197, 94, 0.12);
-  color: #4ade80;
+  background: rgba(48, 209, 88, 0.14);
+  color: #5eeb81;
   transform: scale(1.1);
 }
 
@@ -1622,40 +1622,40 @@ img.owner-avatar {
   font-size: 18px;
 }
 
-/* Inactive badge state - red color for badges that haven't met conditions */
+/* Inactive — vivid red (empty / missing) */
 .event-badges .badge-inactive {
-  color: #ef4444 !important;
-  opacity: 0.5;
+  color: #ff453a !important;
+  opacity: 0.85;
 }
 
 .event-badges .badge-inactive:hover {
-  opacity: 0.8;
-  color: #ef4444 !important;
+  opacity: 1;
+  color: #ff6961 !important;
 }
 
 /* Override the flight badge active background when inactive */
 .event-badges .flight-badge.badge-inactive {
   background: transparent;
-  color: #ef4444 !important;
+  color: #ff453a !important;
 }
 
 .event-badges .flight-badge.badge-inactive:hover {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444 !important;
+  background: rgba(255, 69, 58, 0.12);
+  color: #ff6961 !important;
 }
 
-/* Requested / pending — yellow icon (overrides inactive red) */
+/* Requested / pending — pure yellow (far from green and red) */
 .event-badges .flight-badge.has-pending,
 .event-badges .hotel-badge.has-requested {
-  color: #f59e0b !important;
+  color: #ffd60a !important;
   opacity: 1;
 }
 
 .event-badges .flight-badge.has-pending:hover,
 .event-badges .hotel-badge.has-requested:hover {
-  color: #fbbf24 !important;
+  color: #ffe566 !important;
   opacity: 1;
-  background: rgba(245, 158, 11, 0.1);
+  background: rgba(255, 214, 10, 0.12);
 }
 
 /* Not-required badge state - blue color for badges that don't apply to the event */

@@ -70,15 +70,13 @@ function getBadgeTitle(badgeType, conditionMet, badgesNotRequired, count, pendin
 }
 
 function flightPendingDotHtml(pendingCount, badgesNotRequired) {
-  if (!(pendingCount > 0) || badgesNotRequired?.flight) return '';
-  return `<span class="flight-pending-dot" aria-hidden="true"></span>`;
+  // Visual is handled by .has-pending (yellow icon) — no corner dot
+  return '';
 }
 
 function hotelRequestedDotHtml(table) {
-  if (table.badgesNotRequired?.hotel) return '';
-  if ((table.hotelCount || 0) > 0) return '';
-  if (!table.badgesRequested?.hotel) return '';
-  return `<span class="hotel-requested-dot" aria-hidden="true"></span>`;
+  // Visual is handled by .has-requested (yellow icon) — no corner dot
+  return '';
 }
 
 // Show right-click context menu on a badge

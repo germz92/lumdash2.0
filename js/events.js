@@ -3035,7 +3035,10 @@ window.initPage = function(id) {
         }
       };
       
-      if (payload.role === 'admin') {
+      const isAdmin = payload.role === 'admin';
+      const canManageInventory = isAdmin || payload.role === 'production_manager';
+
+      if (isAdmin || canManageInventory) {
         // Restructure top bar into two rows
         const topBar = document.querySelector('.top-bar');
         const usernameDisplay = document.getElementById('usernameDisplay');
@@ -3076,81 +3079,85 @@ window.initPage = function(id) {
             adminButtonsContainer.style.flexWrap = 'wrap';
             adminButtonsContainer.style.justifyContent = 'center';
             adminRow.appendChild(adminButtonsContainer);
-        }
+          }
 
-        // Add user management button (Settings → User management)
-        let adminBtn = document.getElementById('adminConsoleBtn');
-          if (!adminBtn && adminButtonsContainer) {
-          adminBtn = document.createElement('button');
-          adminBtn.id = 'adminConsoleBtn';
-          adminBtn.className = 'btn-admin btn-outlined';
-          adminBtn.textContent = 'User Management';
-          adminBtn.onclick = () => {
-            sessionStorage.setItem('settingsSection', 'users');
-            if (typeof window.navigate === 'function') {
-              window.navigate('settings');
-            } else {
-              window.location.href = '/dashboard.html#settings';
+          if (isAdmin) {
+            // Add user management button (Settings → User management)
+            let adminBtn = document.getElementById('adminConsoleBtn');
+            if (!adminBtn && adminButtonsContainer) {
+              adminBtn = document.createElement('button');
+              adminBtn.id = 'adminConsoleBtn';
+              adminBtn.className = 'btn-admin btn-outlined';
+              adminBtn.textContent = 'User Management';
+              adminBtn.onclick = () => {
+                sessionStorage.setItem('settingsSection', 'users');
+                if (typeof window.navigate === 'function') {
+                  window.navigate('settings');
+                } else {
+                  window.location.href = '/dashboard.html#settings';
+                }
+              };
+              adminButtonsContainer.appendChild(adminBtn);
             }
-          };
-          adminButtonsContainer.appendChild(adminBtn);
-        }
+          }
 
-        // Add inventory management button
-        let inventoryBtn = document.getElementById('inventoryManagementBtn');
-          if (!inventoryBtn && adminButtonsContainer) {
-          inventoryBtn = document.createElement('button');
-          inventoryBtn.id = 'inventoryManagementBtn';
-          inventoryBtn.className = 'btn-inventory btn-outlined';
-          inventoryBtn.style.display = 'flex';
-          inventoryBtn.style.alignItems = 'center';
-          inventoryBtn.style.gap = '8px';
-          inventoryBtn.innerHTML = `
-            <span class="material-symbols-outlined">inventory</span>
-            Inventory
-          `;
-          inventoryBtn.onclick = () => {
-            window.location.href = '/pages/inventory-management.html';
-          };
-          adminButtonsContainer.appendChild(inventoryBtn);
-        }
+          // Add inventory management button (admins + production managers)
+          let inventoryBtn = document.getElementById('inventoryManagementBtn');
+          if (!inventoryBtn && adminButtonsContainer && canManageInventory) {
+            inventoryBtn = document.createElement('button');
+            inventoryBtn.id = 'inventoryManagementBtn';
+            inventoryBtn.className = 'btn-inventory btn-outlined';
+            inventoryBtn.style.display = 'flex';
+            inventoryBtn.style.alignItems = 'center';
+            inventoryBtn.style.gap = '8px';
+            inventoryBtn.innerHTML = `
+              <span class="material-symbols-outlined">inventory</span>
+              Inventory
+            `;
+            inventoryBtn.onclick = () => {
+              window.location.href = '/pages/inventory-management.html';
+            };
+            adminButtonsContainer.appendChild(inventoryBtn);
+          }
 
-        // Add crew planner button
-        let crewPlannerBtn = document.getElementById('crewPlannerBtn');
-          if (!crewPlannerBtn && adminButtonsContainer) {
-          crewPlannerBtn = document.createElement('button');
-          crewPlannerBtn.id = 'crewPlannerBtn';
-          crewPlannerBtn.className = 'btn-crew-planner btn-outlined';
-          crewPlannerBtn.style.display = 'flex';
-          crewPlannerBtn.style.alignItems = 'center';
-          crewPlannerBtn.style.gap = '8px';
-          crewPlannerBtn.innerHTML = `
-            <span class="material-symbols-outlined">groups</span>
-            Crew Planner
-          `;
-          crewPlannerBtn.onclick = () => {
-            window.location.href = '/pages/crew-planner.html';
-          };
-          adminButtonsContainer.appendChild(crewPlannerBtn);
-        }
+          if (isAdmin) {
+            // Add crew planner button
+            let crewPlannerBtn = document.getElementById('crewPlannerBtn');
+            if (!crewPlannerBtn && adminButtonsContainer) {
+              crewPlannerBtn = document.createElement('button');
+              crewPlannerBtn.id = 'crewPlannerBtn';
+              crewPlannerBtn.className = 'btn-crew-planner btn-outlined';
+              crewPlannerBtn.style.display = 'flex';
+              crewPlannerBtn.style.alignItems = 'center';
+              crewPlannerBtn.style.gap = '8px';
+              crewPlannerBtn.innerHTML = `
+                <span class="material-symbols-outlined">groups</span>
+                Crew Planner
+              `;
+              crewPlannerBtn.onclick = () => {
+                window.location.href = '/pages/crew-planner.html';
+              };
+              adminButtonsContainer.appendChild(crewPlannerBtn);
+            }
 
-        // Add crew calendar button
-        let crewCalendarBtn = document.getElementById('crewCalendarBtn');
-          if (!crewCalendarBtn && adminButtonsContainer) {
-          crewCalendarBtn = document.createElement('button');
-          crewCalendarBtn.id = 'crewCalendarBtn';
-          crewCalendarBtn.className = 'btn-crew-calendar btn-outlined';
-          crewCalendarBtn.style.display = 'flex';
-          crewCalendarBtn.style.alignItems = 'center';
-          crewCalendarBtn.style.gap = '8px';
-          crewCalendarBtn.innerHTML = `
-            <span class="material-symbols-outlined">calendar_month</span>
-            Crew Calendar
-          `;
-          crewCalendarBtn.onclick = () => {
-            window.location.href = '/pages/crew-calendar.html';
-          };
-          adminButtonsContainer.appendChild(crewCalendarBtn);
+            // Add crew calendar button
+            let crewCalendarBtn = document.getElementById('crewCalendarBtn');
+            if (!crewCalendarBtn && adminButtonsContainer) {
+              crewCalendarBtn = document.createElement('button');
+              crewCalendarBtn.id = 'crewCalendarBtn';
+              crewCalendarBtn.className = 'btn-crew-calendar btn-outlined';
+              crewCalendarBtn.style.display = 'flex';
+              crewCalendarBtn.style.alignItems = 'center';
+              crewCalendarBtn.style.gap = '8px';
+              crewCalendarBtn.innerHTML = `
+                <span class="material-symbols-outlined">calendar_month</span>
+                Crew Calendar
+              `;
+              crewCalendarBtn.onclick = () => {
+                window.location.href = '/pages/crew-calendar.html';
+              };
+              adminButtonsContainer.appendChild(crewCalendarBtn);
+            }
           }
         }
       }

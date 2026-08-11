@@ -3345,13 +3345,13 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  // Check if the current user has admin role
+  // Check if the current user can manage gear inventory
   function checkAdminRole() {
     try {
       const token = localStorage.getItem('token');
       if (!token) return false;
       const payload = JSON.parse(atob(token.split('.')[1]));
-      return payload.role === 'admin';
+      return payload.role === 'admin' || payload.role === 'production_manager';
     } catch {
       return false;
     }

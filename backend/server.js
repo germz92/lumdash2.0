@@ -1575,6 +1575,11 @@ function canManageEventGearLists(table, user) {
   return hasEventAccess(table, user);
 }
 
+/** Can edit global gear inventory (catalog, notes, repairs, manual reservations). */
+function canManageGearInventory(user) {
+  return !!user && (user.role === 'admin' || user.role === 'production_manager');
+}
+
 // Read-only access check: planners can view all events, but cannot edit unless they are owners/leads/sharedWith
 function hasEventReadAccess(table, user) {
   if (!table || !user) return false;
@@ -1740,7 +1745,7 @@ app.post('/api/invites', authenticate, async (req, res) => {
     }
 
     const email = String(req.body.email || '').trim().toLowerCase();
-    const role = ['user', 'planner', 'admin'].includes(req.body.role) ? req.body.role : 'user';
+    const role = ['user', 'planner', 'admin', 'production_manager'].includes(req.body.role) ? req.body.role : 'user';
     const sendEmail = req.body.sendEmail !== false;
     const expiresInDays = Math.min(Math.max(parseInt(req.body.expiresInDays, 10) || 7, 1), 30);
 
@@ -6017,7 +6022,12 @@ app.put('/api/users/:id', authenticate, async (req, res) => {
   if (!user) return res.status(404).json({ error: 'User not found' });
   user.fullName = name;
   user.email = email;
-  if (role) user.role = role;
+  if (role) {
+    if (!['user', 'planner', 'admin', 'production_manager'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+    user.role = role;
+  }
   await user.save();
   io.emit('usersChanged'); // Notify all clients
   res.json({ message: 'User updated' });
@@ -6885,6 +6895,9 @@ async function removeGearFromEventLists(eventId, gearId, gearLabel, quantityToRe
 
 // Add new gear to inventory
 app.post('/api/gear-inventory', authenticate, async (req, res) => {
+  if (!canManageGearInventory(req.user)) {
+    return res.status(403).json({ error: 'Not authorized to edit gear inventory' });
+  }
   const { label, category, serial, quantity = 1 } = req.body;
   if (!label || !category) {
     return res.status(400).json({ error: 'Label and category are required' });
@@ -6929,6 +6942,9 @@ app.post('/api/gear-inventory', authenticate, async (req, res) => {
 // Delete gear from inventory
 app.delete('/api/gear-inventory/:id', authenticate, async (req, res) => {
   try {
+    if (!canManageGearInventory(req.user)) {
+      return res.status(403).json({ error: 'Not authorized to edit gear inventory' });
+    }
     const gearId = req.params.id;
     if (!gearId) return res.status(400).json({ error: 'Missing gear ID' });
     
@@ -6951,6 +6967,9 @@ app.delete('/api/gear-inventory/:id', authenticate, async (req, res) => {
 // Edit gear in inventory 
 app.put('/api/gear-inventory/:id', authenticate, async (req, res) => {
   try {
+    if (!canManageGearInventory(req.user)) {
+      return res.status(403).json({ error: 'Not authorized to edit gear inventory' });
+    }
     const gearId = req.params.id;
     const { label, category, serial, quantity = 1 } = req.body;
     
@@ -7006,6 +7025,9 @@ app.put('/api/gear-inventory/:id', authenticate, async (req, res) => {
 // Add a note to an inventory item (scoped to a specific serial number)
 app.post('/api/gear-inventory/:id/notes', authenticate, async (req, res) => {
   try {
+    if (!canManageGearInventory(req.user)) {
+      return res.status(403).json({ error: 'Not authorized to edit gear inventory' });
+    }
     const gearId = req.params.id;
     const { text, serial } = req.body;
 
@@ -7064,6 +7086,9 @@ app.post('/api/gear-inventory/:id/notes', authenticate, async (req, res) => {
 // Repair gear inventory data
 app.post('/api/gear-inventory/repair', authenticate, async (req, res) => {
   try {
+    if (!canManageGearInventory(req.user)) {
+      return res.status(403).json({ error: 'Not authorized to edit gear inventory' });
+    }
     console.log("Starting gear inventory repair...");
     
     // Get all gear
@@ -7157,6 +7182,9 @@ app.post('/api/gear-inventory/repair', authenticate, async (req, res) => {
 // Release all reservations for a gear item
 app.post('/api/gear-inventory/:id/release-all', authenticate, async (req, res) => {
   try {
+    if (!canManageGearInventory(req.user)) {
+      return res.status(403).json({ error: 'Not authorized to edit gear inventory' });
+    }
     const gearId = req.params.id;
     if (!gearId) return res.status(400).json({ error: 'Missing gear ID' });
     
@@ -7470,14 +7498,13 @@ app.get('/api/gear-packages-all', authenticate, async (req, res) => {
 
 // ========= RESERVATION MANAGEMENT API =========
 
-// Get all reservations for a specific inventory item (Admin only)
+// Get all reservations for a specific inventory item (Admin / production manager)
 app.get('/api/inventory/:inventoryId/reservations', authenticate, async (req, res) => {
   try {
     const { inventoryId } = req.params;
     
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Admin access required' });
+    if (!canManageGearInventory(req.user)) {
+      return res.status(403).json({ error: 'Inventory manager access required' });
     }
     
     console.log(`[RESERVATIONS] Getting reservations for inventory item: ${inventoryId}`);
@@ -7519,14 +7546,13 @@ app.get('/api/inventory/:inventoryId/reservations', authenticate, async (req, re
   }
 });
 
-// Release specific reservation (Admin only) - Atomically releases from both models
+// Release specific reservation (Admin / production manager) - Atomically releases from both models
 app.delete('/api/reservations/:reservationId', authenticate, async (req, res) => {
   try {
     const { reservationId } = req.params;
     
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Admin access required' });
+    if (!canManageGearInventory(req.user)) {
+      return res.status(403).json({ error: 'Inventory manager access required' });
     }
     
     console.log(`[RELEASE] Releasing reservation: ${reservationId}`);
@@ -7574,14 +7600,13 @@ app.delete('/api/reservations/:reservationId', authenticate, async (req, res) =>
   }
 });
 
-// Release all reservations for an inventory item (Admin only) - Atomically releases from both models
+// Release all reservations for an inventory item (Admin / production manager)
 app.delete('/api/inventory/:inventoryId/reservations/all', authenticate, async (req, res) => {
   try {
     const { inventoryId } = req.params;
     
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Admin access required' });
+    if (!canManageGearInventory(req.user)) {
+      return res.status(403).json({ error: 'Inventory manager access required' });
     }
     
     console.log(`[RELEASE ALL] Releasing all reservations for inventory: ${inventoryId}`);
@@ -9946,9 +9971,8 @@ function formatReservationEmail(reservations, personName) {
 // Get all manual reservations (admin only)
 app.get('/api/manual-reservations', authenticate, async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    if (!canManageGearInventory(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Inventory manager privileges required.' });
     }
 
     const reservations = await ManualReservation.find({})
@@ -9966,9 +9990,8 @@ app.get('/api/manual-reservations', authenticate, async (req, res) => {
 // Create multiple manual reservations in bulk (admin only)
 app.post('/api/manual-reservations/bulk', authenticate, async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    if (!canManageGearInventory(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Inventory manager privileges required.' });
     }
 
     const { personName, personEmail, startDate, endDate, items, notes } = req.body;
@@ -10088,9 +10111,8 @@ app.post('/api/manual-reservations/bulk', authenticate, async (req, res) => {
 // Create a new manual reservation (admin only)
 app.post('/api/manual-reservations', authenticate, async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    if (!canManageGearInventory(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Inventory manager privileges required.' });
     }
 
     const { personName, personEmail, startDate, endDate, inventoryId, quantity, serial, specificSerialRequested, notes } = req.body;
@@ -10190,9 +10212,8 @@ app.post('/api/manual-reservations', authenticate, async (req, res) => {
 // Delete a manual reservation (admin only)
 app.delete('/api/manual-reservations/:id', authenticate, async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    if (!canManageGearInventory(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Inventory manager privileges required.' });
     }
 
     const { id } = req.params;
@@ -10215,9 +10236,8 @@ app.delete('/api/manual-reservations/:id', authenticate, async (req, res) => {
 // Send email summary for manual reservations (admin only)
 app.post('/api/manual-reservations/send-email', authenticate, async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    if (!canManageGearInventory(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Inventory manager privileges required.' });
     }
 
     const { personName, personEmail, startDate, endDate } = req.body;
@@ -10265,9 +10285,8 @@ app.post('/api/manual-reservations/send-email', authenticate, async (req, res) =
 // Get manual reservations for a specific inventory item (admin only)
 app.get('/api/manual-reservations/inventory/:inventoryId', authenticate, async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ error: 'Access denied. Admin privileges required.' });
+    if (!canManageGearInventory(req.user)) {
+      return res.status(403).json({ error: 'Access denied. Inventory manager privileges required.' });
     }
 
     const { inventoryId } = req.params;

@@ -6,7 +6,7 @@
  * standalone keys for email-only alerts (e.g. reimbursement_approved).
  */
 
-const ALL_ROLES = ['user', 'planner', 'admin'];
+const ALL_ROLES = ['user', 'planner', 'admin', 'production_manager'];
 
 const NOTIFICATION_SECTION = {
   id: 'notifications',

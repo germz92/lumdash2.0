@@ -334,7 +334,15 @@ function renderUsers() {
     
     if (isDarkTheme) {
       userTableBody.innerHTML = users.map(user => {
-        const roleClass = user.role === 'admin' ? 'admin' : user.role === 'owner' ? 'owner' : 'user';
+        const roleClass = user.role === 'admin' ? 'admin'
+          : user.role === 'owner' ? 'owner'
+          : user.role === 'production_manager' ? 'production-manager'
+          : user.role === 'planner' ? 'planner'
+          : 'user';
+        const roleLabel = String(user.role || 'user')
+          .split('_')
+          .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+          .join(' ');
         const initials = getInitials(user.name || user.email);
         const hasPhoto = !!user.profilePhoto;
         const avatarSrc = hasPhoto
@@ -354,7 +362,7 @@ function renderUsers() {
               </div>
             </td>
             <td>${escapeHtml(user.email)}</td>
-            <td><span class="role-badge ${roleClass}">${escapeHtml(user.role)}</span></td>
+            <td><span class="role-badge ${roleClass}">${escapeHtml(roleLabel)}</span></td>
             <td>
               <div class="user-actions">
                 <button class="user-action-btn edit" onclick="window._usersEditUser('${user._id}')">

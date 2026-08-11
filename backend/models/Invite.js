@@ -16,7 +16,7 @@ const inviteSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['user', 'planner', 'admin'],
+    enum: ['user', 'planner', 'admin', 'production_manager'],
     default: 'user'
   },
   createdBy: {

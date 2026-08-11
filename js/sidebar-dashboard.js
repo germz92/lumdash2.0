@@ -432,8 +432,11 @@
     
     const firstName = userName.split(' ')[0];
     
-    // Format role for display (capitalize first letter)
-    const displayRole = userRole.charAt(0).toUpperCase() + userRole.slice(1);
+    // Format role for display (title-case; underscore → space)
+    const displayRole = String(userRole || 'user')
+      .split('_')
+      .map(part => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
     
     // Update welcome title (if exists)
     const welcomeTitle = document.getElementById('welcomeTitle');
@@ -457,8 +460,9 @@
   }
   
   /**
-   * Check admin/planner access and show/hide role-specific nav items
-   * Admin-only: Admin Console, Inventory, Crew Planner, Crew Calendar
+   * Check admin/planner/production-manager access and show/hide role-specific nav items
+   * Admin-only: Crew Planner, Crew Calendar, Timesheets, Reimbursements
+   * Inventory: admin + production manager
    * Planner (and admin): Flight Tracker
    */
   function checkAdminAccess() {
@@ -481,15 +485,22 @@
     const isAdmin = user.role === 'admin';
     const isOwner = user.role === 'owner'; // Event owner, not system admin
     const isPlanner = user.role === 'planner';
+    const isProductionManager = user.role === 'production_manager';
     const canAccessAdminPages = isAdmin || isOwner; // Admin-only nav items
+    const canAccessInventory = isAdmin || isOwner || isProductionManager;
     const canAccessPlannerPages = isAdmin || isPlanner; // Planner nav items (NOT owners)
     
-    console.log('Access check:', { role: user.role, isAdmin, isOwner, isPlanner, canAccessAdminPages, canAccessPlannerPages });
+    console.log('Access check:', { role: user.role, isAdmin, isOwner, isPlanner, isProductionManager, canAccessAdminPages, canAccessInventory, canAccessPlannerPages });
     
     // Show/hide all admin-only nav items (admins and owners)
     const adminOnlyNavItems = document.querySelectorAll('.admin-only-nav');
     adminOnlyNavItems.forEach(item => {
       item.style.display = canAccessAdminPages ? 'flex' : 'none';
+    });
+    
+    // Inventory nav (admins + production managers)
+    document.querySelectorAll('.inventory-nav').forEach(item => {
+      item.style.display = canAccessInventory ? 'flex' : 'none';
     });
     
     // Show/hide admin section label

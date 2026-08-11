@@ -1517,7 +1517,7 @@
             if (token) {
               try {
                 const payload = JSON.parse(atob(token.split('.')[1]));
-                if (payload.role === 'admin' || payload.role === 'owner') {
+                if (payload.role === 'admin' || payload.role === 'owner' || payload.role === 'production_manager') {
                   const adminNav = document.getElementById('adminNavItem');
                   if (adminNav) adminNav.style.display = '';
                 }
@@ -1532,7 +1532,7 @@
             restoreCollapsedStates();
         });
 
-        // Check if user is admin
+        // Check if user can manage gear inventory
         async function checkAdminAccess() {
             try {
                 const token = localStorage.getItem('token');
@@ -1545,8 +1545,11 @@
                 const payload = JSON.parse(atob(token.split('.')[1]));
                 console.log('User role from token:', payload.role);
                 
-                if (payload.role !== 'admin' && payload.role !== 'owner') {
-                    showMessage('Access denied. Admin privileges required.', 'error');
+                const canManageInventory = payload.role === 'admin'
+                  || payload.role === 'owner'
+                  || payload.role === 'production_manager';
+                if (!canManageInventory) {
+                    showMessage('Access denied. Inventory privileges required.', 'error');
                     setTimeout(() => {
                         window.history.back();
                     }, 2000);

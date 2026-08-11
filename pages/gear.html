@@ -1712,6 +1712,10 @@
                     const result = await response.json();
                     gearLists = result.gearLists || [];
                     currentListName = result.currentList || 'Main List';
+                    if (result.userPermissions) {
+                        userPermissions = result.userPermissions;
+                        updateUIBasedOnPermissions();
+                    }
                     updateListSelect();
                 } else {
                     console.error('Failed to load gear lists');
@@ -1807,7 +1811,7 @@
             if (currentGear.length === 0) {
                 const emptyMessage = userPermissions.canReserve 
                     ? 'Click "Add Items" below to start building your gear list.' 
-                    : 'Event owners can add items to this list.';
+                    : 'Someone with access to this event can add items to this list.';
                 
                 const manualItemsHTML = renderManualItems();
                 container.innerHTML = `

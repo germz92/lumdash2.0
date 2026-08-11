@@ -1568,10 +1568,15 @@ function isAssignedCrewMember(table, user) {
   return (table.rows || []).some(r => r.userId && String(r.userId) === userId);
 }
 
-/** Can create/rename/delete gear lists and add manual gear items for an event. */
+/**
+ * Can create/rename/delete gear lists, edit dates, reserve items, and manage
+ * manual items for an event.
+ * Admins: any event. Production managers / owners / leads / shared / crew: events they belong to.
+ */
 function canManageEventGearLists(table, user) {
   if (!table || !user) return false;
   if (user.role === 'admin') return true;
+  // Production managers (and other members) manage gear on events they're on
   return hasEventAccess(table, user);
 }
 
@@ -4945,23 +4950,17 @@ app.put('/api/tables/:id/gear', authenticate, async (req, res) => {
   try {
     // Get the old gear lists for diffing
     const oldTable = await Table.findById(req.params.id);
-    const oldLists = oldTable && oldTable.gear && oldTable.gear.lists ? Object.fromEntries(oldTable.gear.lists) : {};
-
-    // Build query - admins can access any event
-    const isAdmin = req.user.role === 'admin';
-    const query = isAdmin 
-      ? { _id: req.params.id }
-      : {
-        _id: req.params.id,
-        $or: [
-          { owners: req.user.id },
-          { sharedWith: req.user.id }
-        ]
-        };
+    if (!oldTable) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    if (!canManageEventGearLists(oldTable, req.user)) {
+      return res.status(403).json({ error: 'Not authorized to edit gear for this event' });
+    }
+    const oldLists = oldTable.gear && oldTable.gear.lists ? Object.fromEntries(oldTable.gear.lists) : {};
 
     // Find and update in one atomic operation (fixes versioning issues)
     const result = await Table.findOneAndUpdate(
-      query,
+      { _id: req.params.id },
       {
         $set: {
           'gear.lists': req.body.lists ? new Map(Object.entries(req.body.lists)) : new Map(),
@@ -4973,7 +4972,7 @@ app.put('/api/tables/:id/gear', authenticate, async (req, res) => {
     );
 
     if (!result) {
-      return res.status(403).json({ error: 'Not authorized or not found' });
+      return res.status(404).json({ error: 'Event not found' });
     }
 
     // --- Granular event emission ---
@@ -8024,8 +8023,17 @@ app.get('/api/tables/:eventId/gear-lists', authenticate, async (req, res) => {
     }
     
     const currentList = table.gear?.currentList || 'Main List';
+    const canManage = canManageEventGearLists(table, req.user);
     
-    res.json({ gearLists, currentList });
+    res.json({
+      gearLists,
+      currentList,
+      userPermissions: {
+        canReserve: canManage,
+        canManageLists: canManage,
+        canPack: true
+      }
+    });
   } catch (error) {
     console.error('Error fetching gear lists:', error);
     res.status(500).json({ error: 'Failed to fetch gear lists' });
@@ -9008,16 +9016,19 @@ app.post('/api/carts/:eventId/items', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Inventory ID is required' });
     }
 
+    const eventForAccess = await Table.findById(eventId);
+    if (!eventForAccess) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    if (!canManageEventGearLists(eventForAccess, req.user)) {
+      return res.status(403).json({ error: 'Not authorized to edit gear for this event' });
+    }
+
     // Get or create cart
     let cart = await Cart.findOne({ userId, eventId });
     if (!cart) {
-      const event = await Table.findById(eventId);
-      if (!event) {
-        return res.status(404).json({ error: 'Event not found' });
-      }
-
       // Validate that event has proper gear dates set
-      if (!event.gear?.checkOutDate || !event.gear?.checkInDate) {
+      if (!eventForAccess.gear?.checkOutDate || !eventForAccess.gear?.checkInDate) {
         return res.status(400).json({ 
           error: 'Event must have checkout and checkin dates set before items can be added to cart. Please set dates in the gear section of this event.' 
         });
@@ -9026,8 +9037,8 @@ app.post('/api/carts/:eventId/items', authenticate, async (req, res) => {
       cart = new Cart({
         userId,
         eventId,
-        checkOutDate: event.gear.checkOutDate,
-        checkInDate: event.gear.checkInDate,
+        checkOutDate: eventForAccess.gear.checkOutDate,
+        checkInDate: eventForAccess.gear.checkInDate,
         items: []
       });
     }
@@ -9131,13 +9142,18 @@ app.post('/api/carts/:eventId/items/batch', authenticate, async (req, res) => {
       return res.status(400).json({ error: 'Items array is required' });
     }
 
+    const eventForAccess = await Table.findById(eventId);
+    if (!eventForAccess) {
+      return res.status(404).json({ error: 'Event not found' });
+    }
+    if (!canManageEventGearLists(eventForAccess, req.user)) {
+      return res.status(403).json({ error: 'Not authorized to edit gear for this event' });
+    }
+
     // 1. Get or create cart (ONE query)
     let cart = await Cart.findOne({ userId, eventId });
     if (!cart) {
-      const event = await Table.findById(eventId);
-      if (!event) {
-        return res.status(404).json({ error: 'Event not found' });
-      }
+      const event = eventForAccess;
       if (!event.gear?.checkOutDate || !event.gear?.checkInDate) {
         return res.status(400).json({ 
           error: 'Event must have checkout and checkin dates set before items can be added to cart.' 
@@ -9497,6 +9513,9 @@ app.post('/api/carts/:eventId/reserve', authenticate, async (req, res) => {
 
     // Get current list from event (needed for all reservations)
     const eventTable = await Table.findById(eventId);
+    if (!eventTable || !canManageEventGearLists(eventTable, req.user)) {
+      return res.status(403).json({ error: 'Not authorized to edit gear for this event' });
+    }
     const currentListName = eventTable?.gear?.currentList || 'Main List';
 
     // BULLETPROOF ATOMIC BULK RESERVATION

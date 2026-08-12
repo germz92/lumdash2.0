@@ -2,13 +2,14 @@ const mongoose = require('mongoose');
 const crypto = require('crypto');
 
 /**
- * Client — a company/person we deliver videos to.
- * Each contact gets a personal magic-link token for the public video portal.
+ * Client — a company we deliver videos to.
+ * People (contacts) each get a unique share-style portal link, scoped to
+ * projects they are assigned on. The company shareToken is a full preview.
  * Optional portalPinHash gates the whole portal behind a shared PIN.
  */
 const clientContactSchema = new mongoose.Schema({
   name: { type: String, default: '', trim: true },
-  email: { type: String, required: true, lowercase: true, trim: true },
+  email: { type: String, default: '', lowercase: true, trim: true },
   token: {
     type: String,
     required: true,
@@ -38,8 +39,8 @@ const clientSchema = new mongoose.Schema({
   folders: { type: [clientFolderSchema], default: [] },
   branding: { type: clientBrandingSchema, default: () => ({}) },
 
-  // One link for the whole client team — reviewers identify themselves by name.
-  // Personal contact tokens above remain for tracked/revocable access.
+  // Company preview link — sees every project. Reviewers identify themselves by name.
+  // People (contacts) have their own tokens, scoped to assigned videos.
   shareToken: {
     type: String,
     default: () => crypto.randomBytes(32).toString('hex')

@@ -16,7 +16,6 @@
   let isAdmin = false;
   // Plain PINs known this session after set/random (needed to include in share emails)
   const knownPortalPins = Object.create(null);
-  let sharingClientId = null;
 
   // Detail modal state
   let detail = null;            // current project detail payload
@@ -172,6 +171,7 @@
       projSel.innerHTML = `<option value="" disabled selected>Select a client…</option>${options}`;
       if (prev && clients.some(c => c._id === prev && !c.archived)) projSel.value = prev;
       fillProjectFolderSelect(projSel.value);
+      fillProjectAccessPicker(projSel.value);
     }
   }
 
@@ -241,6 +241,21 @@
     clientSuggestIndex = ((index % items.length) + items.length) % items.length;
     items.forEach((el, i) => el.classList.toggle('is-active', i === clientSuggestIndex));
     items[clientSuggestIndex]?.scrollIntoView({ block: 'nearest' });
+  }
+
+  function setStatusFilter(status) {
+    statusFilter = status || 'all';
+    document.querySelectorAll('.vp-status-tab').forEach(tab => {
+      tab.classList.toggle('active', tab.dataset.status === statusFilter);
+    });
+  }
+
+  function showClientProjects(clientId) {
+    const client = clients.find(c => String(c._id) === String(clientId));
+    if (!client) return;
+    closeClientsView();
+    setStatusFilter('all');
+    selectClientFilter(client._id, client.name);
   }
 
   function selectClientFilter(id, name) {
@@ -398,8 +413,9 @@
         ? `<span class="vp-card-comments-tag"><span class="material-symbols-outlined">chat</span>${p.openCommentCount}</span>`
         : '';
       const decision = p.reviewDecision?.status || 'none';
-      const statusBadge = decision === 'approved'
-        ? `<span class="vp-status-badge ${decision}">${DECISION_LABELS[decision]}</span>`
+      const showApproved = decision === 'approved' && p.status === 'in_review';
+      const statusBadge = showApproved
+        ? `<span class="vp-status-badge approved">${DECISION_LABELS.approved}</span>`
         : `<span class="vp-status-badge ${p.status}">${STATUS_LABELS[p.status] || p.status}</span>`;
       const dueHint = p.feedbackDueAt && p.status === 'in_review' && decision !== 'approved'
         ? ` · Due ${fmtDate(p.feedbackDueAt)}`
@@ -413,6 +429,9 @@
               <span>${escapeHtml(p.clientName || '')}${p.category ? ` · ${escapeHtml(p.category)}` : ''}${dueHint}</span>
               ${statusBadge}
             </div>
+            ${p.viewerNames?.length
+              ? `<div class="vp-card-access">${escapeHtml(p.viewerNames.join(', '))}</div>`
+              : `<div class="vp-card-access">Company preview only</div>`}
           </div>
         </div>`;
     }).join('')}</div>`;
@@ -424,6 +443,8 @@
 
   // ---- Clients page ----
   let editingClientId = null;
+  let assigningClientId = null;
+  let assigningPersonId = null;
 
   function clientIdOf(p) {
     return (p.clientId?._id || p.clientId || '').toString();
@@ -445,6 +466,208 @@
     return [...(c.folders || [])].sort(
       (a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || String(a.name).localeCompare(String(b.name))
     );
+  }
+
+  function activePeople(client) {
+    return (client?.contacts || []).filter(c => !c.revokedAt);
+  }
+
+  function personLabel(p) {
+    return p.name || p.email || 'Person';
+  }
+
+  function renderAccessChips(container, people, selectedIds, { emptyText = 'No people on this client yet.' } = {}) {
+    if (!container) return;
+    const selected = new Set((selectedIds || []).map(String));
+    if (!people.length) {
+      container.innerHTML = `<span class="vp-access-empty">${escapeHtml(emptyText)}</span>`;
+      return;
+    }
+    container.innerHTML = people.map(p => {
+      const on = selected.has(String(p._id));
+      return `<label class="vp-access-chip${on ? ' is-on' : ''}">
+        <input type="checkbox" value="${p._id}" ${on ? 'checked' : ''}>
+        <span>${escapeHtml(personLabel(p))}</span>
+      </label>`;
+    }).join('');
+    container.querySelectorAll('input[type="checkbox"]').forEach(input => {
+      input.addEventListener('change', () => {
+        input.closest('.vp-access-chip')?.classList.toggle('is-on', input.checked);
+      });
+    });
+  }
+
+  function selectedAccessIds(container) {
+    if (!container) return [];
+    return [...container.querySelectorAll('input[type="checkbox"]:checked')].map(el => el.value);
+  }
+
+  function assignableClientProjects(clientId) {
+    return (projects || []).filter(p =>
+      String(p.clientId) === String(clientId) && p.status !== 'archived'
+    );
+  }
+
+  function personHasProject(project, personId) {
+    return (project.viewerIds || []).some(id => String(id) === String(personId));
+  }
+
+  function personAssignCountLabel(clientId, personId) {
+    const total = assignableClientProjects(clientId).length;
+    const n = personProjectIds(clientId, personId).length;
+    if (!total) return 'Assign videos';
+    if (!n) return 'Assign videos';
+    if (n === total) return 'All videos';
+    return `${n} video${n === 1 ? '' : 's'}`;
+  }
+
+  function syncPersonAssignButton(clientId, personId) {
+    const label = document.querySelector(`[data-action="assign-person-videos"][data-person="${personId}"] .vp-assign-btn-label`);
+    if (label) label.textContent = personAssignCountLabel(clientId, personId);
+  }
+
+  function applyPersonProjectsLocally(clientId, personId, projectIds) {
+    const wanted = new Set((projectIds || []).map(String));
+    const pid = String(personId);
+    assignableClientProjects(clientId).forEach(p => {
+      const set = new Set((p.viewerIds || []).map(String));
+      if (wanted.has(String(p._id))) set.add(pid);
+      else set.delete(pid);
+      p.viewerIds = [...set];
+      if (detail && String(detail._id) === String(p._id)) {
+        detail.viewerIds = p.viewerIds;
+      }
+    });
+    syncPersonAssignButton(clientId, personId);
+  }
+
+  async function setPersonProjects(clientId, personId, projectIds) {
+    await api(`/api/portal-clients/${clientId}/contacts/${personId}/projects`, {
+      method: 'PUT',
+      body: JSON.stringify({ projectIds })
+    });
+    applyPersonProjectsLocally(clientId, personId, projectIds);
+  }
+
+  function personProjectIds(clientId, personId) {
+    return assignableClientProjects(clientId)
+      .filter(p => personHasProject(p, personId))
+      .map(p => String(p._id));
+  }
+
+  function selectedAssignProjectIds() {
+    return [...document.querySelectorAll('#vpAssignList input[type="checkbox"]:checked')].map(el => el.value);
+  }
+
+  function setAssignModalChecks(on) {
+    document.querySelectorAll('#vpAssignList input[type="checkbox"]').forEach(cb => {
+      cb.checked = !!on;
+    });
+  }
+
+  function openAssignVideosModal(clientId, personId) {
+    const client = clients.find(c => String(c._id) === String(clientId));
+    const person = client ? activePeople(client).find(p => String(p._id) === String(personId)) : null;
+    if (!client || !person) return;
+    assigningClientId = String(clientId);
+    assigningPersonId = String(personId);
+
+    const titleEl = document.getElementById('vpAssignTitle');
+    const subEl = document.getElementById('vpAssignSub');
+    const list = document.getElementById('vpAssignList');
+    if (titleEl) titleEl.textContent = 'Assign videos';
+    if (subEl) subEl.textContent = `Choose what ${personLabel(person)} sees on their portal link`;
+
+    const items = assignableClientProjects(clientId);
+    if (!list) return;
+    if (!items.length) {
+      list.innerHTML = '<div class="vp-muted-line">No projects yet — create one, then assign it here.</div>';
+    } else {
+      list.innerHTML = items.map(p => {
+        const on = personHasProject(p, personId);
+        const status = STATUS_LABELS[p.status] || p.status || '';
+        return `<label class="vp-assign-row">
+          <input type="checkbox" value="${p._id}" ${on ? 'checked' : ''}>
+          <span class="vp-assign-row-meta">
+            <span class="vp-assign-row-title">${escapeHtml(p.title)}</span>
+            <span class="vp-assign-row-status">${escapeHtml(status)}</span>
+          </span>
+        </label>`;
+      }).join('');
+    }
+    showModal('vpAssignModal');
+  }
+
+  async function saveAssignVideosModal() {
+    if (!assigningClientId || !assigningPersonId) return;
+    const btn = document.getElementById('vpAssignSaveBtn');
+    if (btn) btn.disabled = true;
+    try {
+      await setPersonProjects(assigningClientId, assigningPersonId, selectedAssignProjectIds());
+      hideModal('vpAssignModal');
+      toast('Video access saved');
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function fillProjectAccessPicker(clientId) {
+    const wrap = document.getElementById('projAccessWrap');
+    const list = document.getElementById('projAccessList');
+    const previewOnly = document.getElementById('projPreviewOnly');
+    const client = clients.find(c => String(c._id) === String(clientId));
+    const people = client ? activePeople(client) : [];
+    if (!wrap) return;
+    if (!clientId || !people.length) {
+      wrap.hidden = true;
+      if (previewOnly) previewOnly.checked = false;
+      if (list) list.innerHTML = '';
+      return;
+    }
+    wrap.hidden = false;
+    if (previewOnly) previewOnly.checked = false;
+    renderAccessChips(list, people, []);
+  }
+
+  function fillDetailAccessList() {
+    const list = document.getElementById('detailAccessList');
+    if (!list || !detail) return;
+    const people = (detail.clientContacts || activePeople(clients.find(c => String(c._id) === String(detail.clientId)) || {})).filter(c => !c.revokedAt);
+    renderAccessChips(list, people, detail.viewerIds || [], {
+      emptyText: 'Add people on the client to share this video on their links.'
+    });
+    list.querySelectorAll('input[type="checkbox"]').forEach(input => {
+      input.addEventListener('change', saveDetailAccess);
+    });
+  }
+
+  async function saveDetailAccess() {
+    if (!detail) return;
+    const list = document.getElementById('detailAccessList');
+    const viewerIds = selectedAccessIds(list);
+    try {
+      await api(`/api/video-projects/${detail._id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ viewerIds })
+      });
+      detail.viewerIds = viewerIds;
+      const people = detail.clientContacts || [];
+      detail.viewerNames = viewerIds.map(id => {
+        const p = people.find(c => String(c._id) === String(id));
+        return p ? personLabel(p) : null;
+      }).filter(Boolean);
+      const card = projects.find(p => String(p._id) === String(detail._id));
+      if (card) {
+        card.viewerIds = viewerIds;
+        card.viewerNames = detail.viewerNames;
+      }
+      renderGrid();
+    } catch (err) {
+      toast(err.message, 'error');
+      fillDetailAccessList();
+    }
   }
 
   async function refreshClientsUi({ keepModal = true } = {}) {
@@ -517,120 +740,167 @@
     });
   }
 
-  function openClientEdit(clientId) {
-    const client = clients.find(c => c._id === clientId);
-    if (!client) return;
-    editingClientId = clientId;
+  function openClientEdit(clientId, { push = true } = {}) {
+    const client = clients.find(c => String(c._id) === String(clientId));
+    if (!client) {
+      showClientsView();
+      return;
+    }
+    if (detail) teardownDetail();
+    editingClientId = String(client._id);
     renderClientEditModal(client);
-    showModal('clientEditModal');
+    document.getElementById('vpHeader').style.display = 'none';
+    document.getElementById('vpToolbar').style.display = 'none';
+    document.getElementById('vpContainer').style.display = 'none';
+    document.getElementById('vpDetailView').style.display = 'none';
+    document.getElementById('vpClientsView').style.display = 'none';
+    document.getElementById('vpClientEditView').style.display = 'flex';
+    document.querySelector('.vp-main').scrollTop = 0;
+    const already = getHashClientId() === String(clientId);
+    if (push) syncPortalUrl({ clients: true, clientId, push: !already });
+    else syncPortalUrl({ clients: true, clientId, push: false });
   }
 
-  function closeClientEdit() {
+  function hideClientEditView() {
     editingClientId = null;
-    hideModal('clientEditModal');
+    const view = document.getElementById('vpClientEditView');
+    if (view) view.style.display = 'none';
     const body = document.getElementById('clientEditBody');
     if (body) body.innerHTML = '';
   }
 
-  function openSharePortalModal(clientId) {
-    const client = clients.find(c => c._id === clientId);
-    if (!client) return;
-    const contacts = (client.contacts || []).filter(c => !c.revokedAt && c.email);
-    if (!contacts.length) {
-      toast('Add at least one contact before sharing', 'error');
-      return;
-    }
-
-    sharingClientId = clientId;
-    const sub = document.getElementById('vpSharePortalSub');
-    if (sub) {
-      sub.textContent = `Email the team portal link for ${client.branding?.displayName || client.name}`;
-    }
-
-    const list = document.getElementById('vpShareContactList');
-    list.innerHTML = contacts.map(ct => `
-      <label class="vp-share-contact-row">
-        <input type="checkbox" class="vp-share-contact-check" value="${escapeHtml(ct._id)}" checked>
-        <span class="vp-share-contact-meta">
-          <span class="vp-share-contact-name">${escapeHtml(ct.name || ct.email)}</span>
-          <span class="vp-share-contact-email">${escapeHtml(ct.email)}</span>
-        </span>
-      </label>`).join('');
-
-    const selectAll = document.getElementById('vpShareSelectAll');
-    if (selectAll) {
-      selectAll.checked = true;
-      selectAll.onchange = () => {
-        list.querySelectorAll('.vp-share-contact-check').forEach(cb => {
-          cb.checked = selectAll.checked;
-        });
-      };
-    }
-    list.querySelectorAll('.vp-share-contact-check').forEach(cb => {
-      cb.addEventListener('change', () => {
-        const boxes = [...list.querySelectorAll('.vp-share-contact-check')];
-        if (selectAll) selectAll.checked = boxes.length > 0 && boxes.every(b => b.checked);
-      });
-    });
-
-    const pinWrap = document.getElementById('vpSharePinWrap');
-    const pinInput = document.getElementById('vpSharePinInput');
-    if (client.portalPinEnabled) {
-      pinWrap.style.display = 'block';
-      pinInput.value = knownPortalPins[clientId] || '';
-      pinInput.required = true;
-    } else {
-      pinWrap.style.display = 'none';
-      pinInput.value = '';
-    }
-
-    const selfCb = document.getElementById('vpShareIncludeSelf');
-    if (selfCb) selfCb.checked = false;
-
-    showModal('vpSharePortalModal');
+  function closeClientEdit() {
+    hideClientEditView();
+    showClientsView();
   }
 
-  async function sendSharePortalEmails() {
-    if (!sharingClientId) return;
-    const client = clients.find(c => c._id === sharingClientId);
-    if (!client) return;
+  function portalShareUrl(token, projectId) {
+    if (!token) return '';
+    let url = `${location.origin}/portal.html?token=${encodeURIComponent(token)}`;
+    if (projectId) url += `&project=${encodeURIComponent(projectId)}`;
+    return url;
+  }
 
-    const contactIds = [...document.querySelectorAll('#vpShareContactList .vp-share-contact-check:checked')]
-      .map(cb => cb.value);
-    const includeSelf = !!document.getElementById('vpShareIncludeSelf')?.checked;
-    if (!contactIds.length && !includeSelf) {
-      toast('Select at least one contact, or send a copy to yourself', 'error');
+  async function copyPortalShareUrl(url, successMsg) {
+    if (!url) {
+      toast('No link available', 'error');
       return;
     }
-
-    let portalPin = '';
-    if (client.portalPinEnabled) {
-      portalPin = document.getElementById('vpSharePinInput')?.value?.trim() || '';
-      if (!/^\d{4,8}$/.test(portalPin)) {
-        toast('Enter the portal PIN to include in the email', 'error');
-        return;
-      }
-    }
-
-    const btn = document.getElementById('vpSharePortalSendBtn');
-    if (btn) btn.disabled = true;
     try {
-      const result = await api(`/api/portal-clients/${sharingClientId}/share`, {
-        method: 'POST',
-        body: JSON.stringify({ contactIds, includeSelf, portalPin: portalPin || undefined })
-      });
-      if (portalPin) knownPortalPins[sharingClientId] = portalPin;
-      hideModal('vpSharePortalModal');
-      const parts = [`Sent ${result.sent} email${result.sent !== 1 ? 's' : ''}`];
-      if (result.selfSent) parts.push('including your copy');
-      if (result.failed?.length) parts.push(`${result.failed.length} failed`);
-      toast(parts.join(' — '));
-      await refreshClientsUi();
-    } catch (err) {
-      toast(err.message, 'error');
-    } finally {
-      if (btn) btn.disabled = false;
+      await navigator.clipboard.writeText(url);
+      toast(successMsg || 'Link copied');
+    } catch {
+      toast('Could not copy link', 'error');
     }
+  }
+
+  function openPortalShareUrl(url) {
+    if (!url) {
+      toast('No link available', 'error');
+      return;
+    }
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  function shareLinkRowHtml({ title, hint, url, copyToast, extraClass = '', warning = '' }) {
+    const disabled = !url;
+    return `
+      <div class="vp-link-row${extraClass ? ` ${extraClass}` : ''}">
+        <div class="vp-link-row-info">
+          <div class="vp-link-row-title">${title}</div>
+          ${warning ? `<div class="vp-link-warning">${warning}</div>` : ''}
+          ${hint ? `<div class="vp-link-row-hint">${hint}</div>` : ''}
+        </div>
+        <div class="vp-link-row-actions">
+          <button type="button" class="vp-btn secondary small" data-links-action="copy" data-url="${escapeHtml(url)}" data-toast="${escapeHtml(copyToast || 'Link copied')}" ${disabled ? 'disabled' : ''}>
+            <span class="material-symbols-outlined">content_copy</span>
+            <span>Copy</span>
+          </button>
+          <button type="button" class="vp-btn secondary small" data-links-action="open" data-url="${escapeHtml(url)}" ${disabled ? 'disabled' : ''}>
+            <span class="material-symbols-outlined">open_in_new</span>
+            <span>Open</span>
+          </button>
+        </div>
+      </div>`;
+  }
+
+  function openPortalLinksModal({ clientId, projectId } = {}) {
+    const client = clients.find(c => String(c._id) === String(clientId || detail?.clientId));
+    const project = projectId && detail && String(detail._id) === String(projectId) ? detail : null;
+    const people = client
+      ? activePeople(client)
+      : (project?.clientContacts || []).filter(c => !c.revokedAt);
+    const viewerSet = new Set((project?.viewerIds || []).map(String));
+    const companyToken = client?.shareToken || '';
+    const masterUrl = portalShareUrl(companyToken, project?._id);
+
+    const titleEl = document.getElementById('vpLinksModalTitle');
+    const subEl = document.getElementById('vpLinksModalSub');
+    const body = document.getElementById('vpLinksModalBody');
+    if (!body) return;
+
+    const clientName = client?.branding?.displayName || client?.name || project?.clientName || 'this client';
+    if (titleEl) titleEl.textContent = project ? 'Share this video' : 'Share links';
+    if (subEl) {
+      subEl.textContent = project
+        ? `${project.title} · ${clientName}`
+        : `Portal links for ${clientName}`;
+    }
+
+    const masterWarning = project
+      ? 'Do not send this to a client. Anyone with this link can see every video for this company — not just this one.'
+      : 'Do not send this to a client. Anyone with this link can see every video for this company.';
+
+    const peopleIntro = project
+      ? 'Each person has a unique link that only shows videos assigned to them under Access. They enter their name when commenting, so they can forward their own link.'
+      : 'Each person has a unique link that only shows videos assigned to them. They enter their name when commenting, so they can forward their own link.';
+
+    const personRows = people.length
+      ? people.map(p => {
+          const assigned = !project || viewerSet.has(String(p._id));
+          const url = portalShareUrl(p.token, assigned ? project?._id : undefined);
+          const hint = !p.token
+            ? 'No link yet — save this person again to generate one.'
+            : project
+              ? (assigned
+                ? 'Can see this video. Their portal only includes videos assigned to them.'
+                : 'Not assigned — they will not see this video. Add them under Access first.')
+              : 'Only videos assigned to this person. Safe to send to them.';
+          return shareLinkRowHtml({
+            title: escapeHtml(personLabel(p)),
+            hint,
+            url,
+            copyToast: assigned
+              ? 'Person link copied'
+              : 'Person link copied — they cannot see this video yet',
+            extraClass: assigned ? '' : 'is-unassigned'
+          });
+        }).join('')
+      : '<div class="vp-muted-line">No people yet — add them on the client to create per-person links.</div>';
+
+    body.innerHTML = `
+      <div class="vp-link-section">
+        <div class="vp-link-section-label">Master — full company</div>
+        ${shareLinkRowHtml({
+          title: '<span class="material-symbols-outlined">warning</span> Master copy — full company gallery',
+          warning: `Warning: ${masterWarning}`,
+          hint: masterUrl
+            ? (project
+              ? 'Opens this video inside the full company gallery. Internal preview only.'
+              : 'Opens the full company gallery. Internal preview only.')
+            : 'This client does not have a company preview link yet.',
+          url: masterUrl,
+          copyToast: 'Master company link copied — this shows every video',
+          extraClass: 'is-master'
+        })}
+      </div>
+      <div class="vp-link-section">
+        <div class="vp-link-section-label">Per person</div>
+        <p class="vp-link-section-desc">${peopleIntro}</p>
+        ${personRows}
+      </div>`;
+
+    showModal('vpLinksModal');
   }
 
   function renderClientEditModal(c) {
@@ -643,6 +913,7 @@
     const body = document.getElementById('clientEditBody');
     const archiveBtn = document.getElementById('clientEditArchiveBtn');
     const deleteBtn = document.getElementById('clientEditDeleteBtn');
+    const viewProjectsBtn = document.getElementById('clientEditViewProjectsBtn');
 
     if (titleEl) titleEl.textContent = branding.displayName || c.name;
     if (subEl) {
@@ -660,19 +931,33 @@
       deleteBtn.dataset.action = 'delete-client';
       deleteBtn.dataset.client = c._id;
     }
+    if (viewProjectsBtn) {
+      viewProjectsBtn.dataset.client = c._id;
+    }
 
-    const contacts = (c.contacts || []).map(ct => `
-      <div class="vp-contact-row">
+    const people = activePeople(c).map(ct => `
+      <div class="vp-contact-row" data-person="${ct._id}">
         <div class="vp-contact-info">
-          <div class="vp-contact-name">${escapeHtml(ct.name || ct.email)}</div>
-          <div class="vp-contact-email">${escapeHtml(ct.email)}</div>
+          <div class="vp-contact-name">${escapeHtml(ct.name || ct.email || 'Person')}</div>
         </div>
-        <span class="vp-contact-meta">${ct.invitedAt ? `Invited ${fmtDate(ct.invitedAt)}` : 'Not invited'}${ct.lastAccessAt ? ` · Last visit ${fmtDate(ct.lastAccessAt)}` : ''}</span>
+        <div class="vp-contact-email">${ct.email ? escapeHtml(ct.email) : 'No email'}</div>
+        <span class="vp-contact-meta">${ct.invitedAt ? `Sent ${fmtDate(ct.invitedAt)}` : 'Not sent'}${ct.lastAccessAt ? ` · Last visit ${fmtDate(ct.lastAccessAt)}` : ''}</span>
         <div class="vp-contact-actions">
-          <button class="vp-icon-btn" title="Send invite email (uses the team link)" data-action="invite" data-client="${c._id}" data-contact="${ct._id}">
-            <span class="material-symbols-outlined">forward_to_inbox</span>
+          <button type="button" class="vp-btn secondary small" data-action="assign-person-videos" data-person="${ct._id}" data-client="${c._id}" title="Choose which videos this person can see">
+            <span class="material-symbols-outlined">movie</span>
+            <span class="vp-assign-btn-label">${personAssignCountLabel(c._id, ct._id)}</span>
           </button>
-          <button class="vp-icon-btn danger" title="Remove contact" data-action="remove-contact" data-client="${c._id}" data-contact="${ct._id}">
+          <button class="vp-icon-btn" title="Copy this person's portal link" data-action="copy-person-link" data-token="${escapeHtml(ct.token || '')}">
+            <span class="material-symbols-outlined">content_copy</span>
+          </button>
+          <button class="vp-icon-btn" title="Open this person's portal" data-action="open-portal" data-token="${escapeHtml(ct.token || '')}">
+            <span class="material-symbols-outlined">open_in_new</span>
+          </button>
+          ${ct.email ? `
+          <button class="vp-icon-btn" title="Email this person their unique link" data-action="invite" data-client="${c._id}" data-contact="${ct._id}">
+            <span class="material-symbols-outlined">forward_to_inbox</span>
+          </button>` : ''}
+          <button class="vp-icon-btn danger" title="Remove person" data-action="remove-contact" data-client="${c._id}" data-contact="${ct._id}">
             <span class="material-symbols-outlined">close</span>
           </button>
         </div>
@@ -695,110 +980,122 @@
       </div>`).join('');
 
     body.innerHTML = `
-      <div class="vp-client-block" data-client="${c._id}">
-        <div class="vp-client-section">
-          <div class="vp-client-section-title">Portal branding</div>
-          <div class="vp-branding-row">
-            <div class="vp-brand-logo${branding.logoUrl ? ' has-image' : ''}" data-action="pick-logo" data-client="${c._id}" title="${branding.logoUrl ? 'Change logo' : 'Upload logo'}">
-              ${branding.logoUrl
-                ? `<img src="${escapeHtml(branding.logoUrl)}" alt="">
-                   <span class="material-symbols-outlined vp-brand-logo-edit">photo_camera</span>`
-                : `<span class="material-symbols-outlined">add_photo_alternate</span>
-                   <span class="vp-brand-logo-cta">Add logo</span>`}
-            </div>
-            <div class="vp-branding-fields">
-              <label class="vp-field-label">Client name
-                <input type="text" class="vp-client-name-input" value="${escapeHtml(c.name)}" required>
-              </label>
-              <label class="vp-field-label">Display name
-                <input type="text" class="vp-brand-display" value="${escapeHtml(branding.displayName || '')}" placeholder="${escapeHtml(c.name)}">
-              </label>
-              <label class="vp-field-label">Accent
-                <input type="color" class="vp-brand-accent" value="${escapeHtml(accent)}">
-              </label>
-              <div class="vp-branding-actions">
-                <input type="file" class="vp-brand-logo-file" data-client="${c._id}" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
-                <button type="button" class="vp-btn secondary small" data-action="pick-logo" data-client="${c._id}">
-                  <span class="material-symbols-outlined">upload</span>
-                  <span>${branding.logoUrl ? 'Replace logo' : 'Upload logo'}</span>
-                </button>
-                ${branding.logoUrl ? `<button type="button" class="vp-btn secondary small" data-action="remove-logo" data-client="${c._id}">Remove logo</button>` : ''}
-                <button type="button" class="vp-btn primary small" data-action="save-branding" data-client="${c._id}">Save branding</button>
+      <div class="vp-client-block vp-client-edit-layout" data-client="${c._id}">
+        <div class="vp-client-edit-top">
+          <section class="vp-client-panel vp-client-panel-branding">
+            <div class="vp-client-section-title">Portal branding</div>
+            <div class="vp-branding-row">
+              <div class="vp-brand-logo${branding.logoUrl ? ' has-image' : ''}" data-action="pick-logo" data-client="${c._id}" title="${branding.logoUrl ? 'Change logo' : 'Upload logo'}">
+                ${branding.logoUrl
+                  ? `<img src="${escapeHtml(branding.logoUrl)}" alt="">
+                     <span class="material-symbols-outlined vp-brand-logo-edit">photo_camera</span>`
+                  : `<span class="material-symbols-outlined">add_photo_alternate</span>
+                     <span class="vp-brand-logo-cta">Add logo</span>`}
+              </div>
+              <div class="vp-branding-fields">
+                <label class="vp-field-label">Client name
+                  <input type="text" class="vp-client-name-input" value="${escapeHtml(c.name)}" required>
+                </label>
+                <label class="vp-field-label">Display name
+                  <input type="text" class="vp-brand-display" value="${escapeHtml(branding.displayName || '')}" placeholder="${escapeHtml(c.name)}">
+                </label>
+                <label class="vp-field-label">Accent
+                  <input type="color" class="vp-brand-accent" value="${escapeHtml(accent)}">
+                </label>
+                <div class="vp-branding-actions">
+                  <input type="file" class="vp-brand-logo-file" data-client="${c._id}" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+                  <button type="button" class="vp-btn secondary small" data-action="pick-logo" data-client="${c._id}">
+                    <span class="material-symbols-outlined">upload</span>
+                    <span>${branding.logoUrl ? 'Replace logo' : 'Upload logo'}</span>
+                  </button>
+                  ${branding.logoUrl ? `<button type="button" class="vp-btn secondary small" data-action="remove-logo" data-client="${c._id}">Remove logo</button>` : ''}
+                  <button type="button" class="vp-btn primary small" data-action="save-branding" data-client="${c._id}">Save branding</button>
+                </div>
               </div>
             </div>
-          </div>
+          </section>
+
+          ${c.shareToken ? `
+          <section class="vp-client-panel vp-client-panel-preview">
+            <div class="vp-client-section-title">Company preview</div>
+            <div class="vp-share-row">
+              <div class="vp-share-info">
+                <div class="vp-share-title"><span class="material-symbols-outlined">visibility</span> Internal / full gallery</div>
+                <div class="vp-share-hint">Sees every video for this company. Use Share links to copy or open the master preview and each person’s unique link. Do not send the master link to clients.</div>
+              </div>
+              <div class="vp-share-actions">
+                <button type="button" class="vp-btn primary small" data-action="open-share-links" data-client="${c._id}">
+                  <span class="material-symbols-outlined">ios_share</span>
+                  <span>Share links</span>
+                </button>
+                <button type="button" class="vp-btn secondary small" data-action="reroll-share-link" data-client="${c._id}" title="Invalidate the current company link and create a new one">
+                  <span class="material-symbols-outlined">autorenew</span>
+                  <span>Reroll link</span>
+                </button>
+              </div>
+            </div>
+            <div class="vp-pin-box">
+              <div class="vp-pin-head">
+                <div class="vp-share-title"><span class="material-symbols-outlined">lock</span> PIN protect portal</div>
+                <div class="vp-share-hint">${c.portalPinEnabled
+                  ? 'PIN is on — visitors must enter it before seeing projects.'
+                  : 'Optional. Require a 4–8 digit PIN before anyone can open this portal.'}</div>
+              </div>
+              <div class="vp-pin-row">
+                <input type="text" class="vp-portal-pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="${c.portalPinEnabled ? 'New PIN (optional)' : '4–8 digit PIN'}" autocomplete="off">
+                <button type="button" class="vp-btn secondary small" data-action="random-portal-pin" data-client="${c._id}" title="Generate a random 6-digit PIN">
+                  <span class="material-symbols-outlined">casino</span>
+                  <span>Random</span>
+                </button>
+                <button type="button" class="vp-btn primary small" data-action="save-portal-pin" data-client="${c._id}">
+                  ${c.portalPinEnabled ? 'Update PIN' : 'Set PIN'}
+                </button>
+                ${c.portalPinEnabled ? `
+                <button type="button" class="vp-btn secondary small" data-action="clear-portal-pin" data-client="${c._id}">
+                  Remove PIN
+                </button>` : ''}
+              </div>
+            </div>
+          </section>` : ''}
         </div>
 
-        ${c.shareToken ? `
-        <div class="vp-client-section">
-          <div class="vp-client-section-title">Team portal link</div>
-          <div class="vp-share-row">
-            <div class="vp-share-info">
-              <div class="vp-share-title"><span class="material-symbols-outlined">group</span> Shared link</div>
-              <div class="vp-share-hint">Same link clients use — open it to preview their portal, or copy to share.</div>
-            </div>
-            <div class="vp-share-actions">
-              <button type="button" class="vp-btn primary small" data-action="share-portal" data-client="${c._id}">
-                <span class="material-symbols-outlined">forward_to_inbox</span>
-                <span>Share portal</span>
-              </button>
-              <button type="button" class="vp-btn secondary small" data-action="open-portal" data-token="${escapeHtml(c.shareToken)}">
-                <span class="material-symbols-outlined">open_in_new</span>
-                <span>Open</span>
-              </button>
-              <button type="button" class="vp-btn secondary small" data-action="copy-share-link" data-token="${escapeHtml(c.shareToken)}">
-                <span class="material-symbols-outlined">content_copy</span>
-                <span>Copy link</span>
-              </button>
-            </div>
-          </div>
-          <div class="vp-pin-box">
-            <div class="vp-pin-head">
-              <div class="vp-share-title"><span class="material-symbols-outlined">lock</span> PIN protect portal</div>
-              <div class="vp-share-hint">${c.portalPinEnabled
-                ? 'PIN is on — visitors must enter it before seeing projects.'
-                : 'Optional. Require a 4–8 digit PIN before anyone can open this portal.'}</div>
-            </div>
-            <div class="vp-pin-row">
-              <input type="text" class="vp-portal-pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="${c.portalPinEnabled ? 'New PIN (optional)' : '4–8 digit PIN'}" autocomplete="off">
-              <button type="button" class="vp-btn secondary small" data-action="random-portal-pin" data-client="${c._id}" title="Generate a random 6-digit PIN">
-                <span class="material-symbols-outlined">casino</span>
-                <span>Random</span>
-              </button>
-              <button type="button" class="vp-btn primary small" data-action="save-portal-pin" data-client="${c._id}">
-                ${c.portalPinEnabled ? 'Update PIN' : 'Set PIN'}
-              </button>
-              ${c.portalPinEnabled ? `
-              <button type="button" class="vp-btn secondary small" data-action="clear-portal-pin" data-client="${c._id}">
-                Remove PIN
-              </button>` : ''}
-            </div>
-          </div>
-        </div>` : ''}
+        <div class="vp-client-edit-cols">
+          <section class="vp-client-panel vp-client-panel-people">
+            <div class="vp-client-section-title">People</div>
+            <p class="vp-share-hint vp-client-panel-intro">Each person gets a unique link. Use Assign videos to choose what they see.</p>
+            ${people ? `
+            <div class="vp-people-table">
+              <div class="vp-people-head">
+                <span>Name</span>
+                <span>Email</span>
+                <span>Status</span>
+                <span></span>
+              </div>
+              ${people}
+            </div>` : '<div class="vp-muted-line">No people yet — add Tanya, Jerry, etc.</div>'}
+            <form class="vp-add-contact-form" data-client="${c._id}">
+              <input type="text" name="name" placeholder="Name (e.g. Tanya)" required>
+              <input type="email" name="email" placeholder="Email (optional)">
+              <button type="submit" class="vp-btn secondary small">Add</button>
+            </form>
+          </section>
 
-        <div class="vp-client-section">
-          <div class="vp-client-section-title">
-            <span>Folders</span>
-            ${orphans.length ? `<button type="button" class="vp-btn secondary small" data-action="convert-categories" data-client="${c._id}" title="Create folders from: ${escapeHtml(orphans.join(', '))}">Convert categories</button>` : ''}
+          <div class="vp-client-edit-side">
+            <section class="vp-client-panel">
+              <div class="vp-client-section-title">
+                <span>Folders</span>
+                ${orphans.length ? `<button type="button" class="vp-btn secondary small" data-action="convert-categories" data-client="${c._id}" title="Create folders from: ${escapeHtml(orphans.join(', '))}">Convert categories</button>` : ''}
+              </div>
+              <div class="vp-folder-list" data-client="${c._id}">
+                ${folderRows || '<div class="vp-muted-line">No folders yet — add one to group the client gallery.</div>'}
+              </div>
+              <form class="vp-add-folder-form" data-client="${c._id}">
+                <input type="text" name="name" placeholder="New folder name" required>
+                <button type="submit" class="vp-btn secondary small">Add folder</button>
+                <button type="button" class="vp-btn primary small" data-action="save-folders" data-client="${c._id}">Save folders</button>
+              </form>
+            </section>
           </div>
-          <div class="vp-folder-list" data-client="${c._id}">
-            ${folderRows || '<div class="vp-muted-line">No folders yet — add one to group the client gallery.</div>'}
-          </div>
-          <form class="vp-add-folder-form" data-client="${c._id}">
-            <input type="text" name="name" placeholder="New folder name" required>
-            <button type="submit" class="vp-btn secondary small">Add folder</button>
-            <button type="button" class="vp-btn primary small" data-action="save-folders" data-client="${c._id}">Save folders</button>
-          </form>
-        </div>
-
-        <div class="vp-client-section">
-          <div class="vp-client-section-title">Contacts</div>
-          ${contacts || '<div class="vp-muted-line">No contacts yet.</div>'}
-          <form class="vp-add-contact-form" data-client="${c._id}">
-            <input type="text" name="name" placeholder="Contact name">
-            <input type="email" name="email" placeholder="Email" required>
-            <button type="submit" class="vp-btn secondary small">Add</button>
-          </form>
         </div>
       </div>`;
 
@@ -816,12 +1113,15 @@
     body.querySelectorAll('.vp-add-contact-form').forEach(form => {
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const email = form.elements.email.value.trim();
-        if (!email) return;
+        const name = form.elements.name.value.trim();
+        if (!name) {
+          toast('Name is required', 'error');
+          return;
+        }
         try {
           await api(`/api/portal-clients/${form.dataset.client}/contacts`, {
             method: 'POST',
-            body: JSON.stringify({ name: form.elements.name.value.trim(), email })
+            body: JSON.stringify({ name, email: form.elements.email.value.trim() })
           });
           await refreshClientsUi();
         } catch (err) { toast(err.message, 'error'); }
@@ -896,7 +1196,33 @@
       if (action === 'copy-share-link') {
         const url = `${location.origin}/portal.html?token=${btn.dataset.token}`;
         await navigator.clipboard.writeText(url);
-        toast('Shared team link copied — anyone with it can review');
+        toast('Company preview link copied');
+        return;
+      }
+      if (action === 'reroll-share-link') {
+        if (!confirm('Generate a new company preview link? The current full-gallery URL will stop working. Person links (Tanya, Jerry, etc.) stay the same.')) return;
+        btn.disabled = true;
+        try {
+          await api(`/api/portal-clients/${clientId}/share-token/reroll`, { method: 'POST' });
+          await refreshClientsUi();
+          toast('Company preview link replaced — copy the new one');
+        } finally {
+          btn.disabled = false;
+        }
+        return;
+      }
+      if (action === 'assign-person-videos') {
+        openAssignVideosModal(clientId, btn.dataset.person);
+        return;
+      }
+      if (action === 'copy-person-link') {
+        if (!btn.dataset.token) {
+          toast('This person does not have a portal link yet', 'error');
+          return;
+        }
+        const url = `${location.origin}/portal.html?token=${btn.dataset.token}`;
+        await navigator.clipboard.writeText(url);
+        toast('Person link copied — they can share it; reviewers enter their name');
         return;
       }
       if (action === 'open-portal') {
@@ -912,7 +1238,7 @@
         return;
       }
       if (action === 'remove-contact') {
-        if (!confirm('Remove this contact? They will stop getting new-version emails.')) return;
+        if (!confirm('Remove this person? Their unique link will stop working, and they will be removed from video access.')) return;
         await api(`/api/portal-clients/${clientId}/contacts/${btn.dataset.contact}`, { method: 'DELETE' });
         await refreshClientsUi();
         return;
@@ -1006,8 +1332,8 @@
         toast('Portal PIN removed');
         return;
       }
-      if (action === 'share-portal') {
-        openSharePortalModal(clientId);
+      if (action === 'open-share-links') {
+        openPortalLinksModal({ clientId });
         return;
       }
       if (action === 'save-folders') {
@@ -1071,16 +1397,21 @@
     return getHashParams().get('projectId');
   }
 
+  function getHashClientId() {
+    return getHashParams().get('clientId');
+  }
+
   function isClientsViewInUrl() {
     return getHashParams().get('view') === 'clients';
   }
 
-  function syncPortalUrl({ projectId = null, clients = false, push = false } = {}) {
+  function syncPortalUrl({ projectId = null, clients = false, clientId = null, push = false } = {}) {
     let next = '#video-portal';
     if (projectId) next = `#video-portal?projectId=${encodeURIComponent(projectId)}`;
+    else if (clientId) next = `#video-portal?view=clients&clientId=${encodeURIComponent(clientId)}`;
     else if (clients) next = `#video-portal?view=clients`;
     if (location.hash === next) return;
-    const state = { page: 'video-portal', projectId: projectId || null, clients: !!clients };
+    const state = { page: 'video-portal', projectId: projectId || null, clients: !!clients, clientId: clientId || null };
     // Prefer replaceState so we don't stack duplicate list entries; use push when
     // opening a project/clients view so browser Back returns to the portal list
     // instead of the previous sidebar page.
@@ -1095,23 +1426,25 @@
   function closeClientsViewQuiet() {
     const el = document.getElementById('vpClientsView');
     if (el) el.style.display = 'none';
+    hideClientEditView();
   }
 
   function showClientsView() {
     if (detail) closeDetailView();
+    hideClientEditView();
     document.getElementById('vpHeader').style.display = 'none';
     document.getElementById('vpToolbar').style.display = 'none';
     document.getElementById('vpContainer').style.display = 'none';
     document.getElementById('vpDetailView').style.display = 'none';
     document.getElementById('vpClientsView').style.display = 'flex';
     document.querySelector('.vp-main').scrollTop = 0;
-    syncPortalUrl({ clients: true, push: !isClientsViewInUrl() });
+    const alreadyOnClientsList = isClientsViewInUrl() && !getHashClientId();
+    syncPortalUrl({ clients: true, push: !alreadyOnClientsList });
     renderClients();
   }
 
   function closeClientsView() {
     closeClientsViewQuiet();
-    closeClientEdit();
     document.getElementById('vpHeader').style.display = '';
     document.getElementById('vpToolbar').style.display = '';
     document.getElementById('vpContainer').style.display = '';
@@ -1147,10 +1480,10 @@
     document.getElementById('detailSub').textContent =
       `${detail.clientName}${detail.category ? ` · ${detail.category}` : ''} · ${STATUS_LABELS[detail.status] || detail.status}`;
     fillDetailFolderSelect();
+    fillDetailAccessList();
     const renameBtn = document.getElementById('renameProjectBtn');
     if (renameBtn) renameBtn.style.display = isAdmin ? 'inline-flex' : 'none';
     document.getElementById('deleteProjectBtn').style.display = isAdmin ? 'inline-flex' : 'none';
-    updateProjectShareButtons();
     document.getElementById('masterUrlInput').value = detail.masterFileUrl || '';
     updateOpenMasterBtn();
     const allowDl = document.getElementById('allowDownloadCheck');
@@ -1215,59 +1548,13 @@
     document.getElementById('vpToolbar').style.display = 'none';
     document.getElementById('vpContainer').style.display = 'none';
     document.getElementById('vpClientsView').style.display = 'none';
+    const clientEditView = document.getElementById('vpClientEditView');
+    if (clientEditView) clientEditView.style.display = 'none';
     document.getElementById('vpDetailView').style.display = 'flex';
     document.querySelector('.vp-main').scrollTop = 0;
   }
 
-  function projectClientShareToken(project) {
-    if (!project) return '';
-    const client = clients.find(c => String(c._id) === String(project.clientId));
-    return client?.shareToken || '';
-  }
-
-  function projectPortalShareUrl(project) {
-    const token = projectClientShareToken(project);
-    if (!token || !project?._id) return '';
-    return `${location.origin}/portal.html?token=${encodeURIComponent(token)}&project=${encodeURIComponent(project._id)}`;
-  }
-
-  function updateProjectShareButtons() {
-    const copyBtn = document.getElementById('copyProjectShareBtn');
-    const openBtn = document.getElementById('openProjectShareBtn');
-    const hasUrl = !!projectPortalShareUrl(detail);
-    if (copyBtn) copyBtn.style.display = hasUrl ? 'inline-flex' : 'none';
-    if (openBtn) openBtn.style.display = hasUrl ? 'inline-flex' : 'none';
-  }
-
-  async function copyProjectShareLink() {
-    const url = projectPortalShareUrl(detail);
-    if (!url) {
-      toast('This client has no portal link yet — open Clients and check the team link', 'error');
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(url);
-      toast('Share link copied — opens this video in the client portal');
-    } catch {
-      toast('Could not copy link', 'error');
-    }
-  }
-
-  function openProjectShareLink() {
-    const url = projectPortalShareUrl(detail);
-    if (!url) {
-      toast('This client has no portal link yet — open Clients and check the team link', 'error');
-      return;
-    }
-    window.open(url, '_blank', 'noopener,noreferrer');
-  }
-
-  function closeDetailView() {
-    document.getElementById('vpDetailView').style.display = 'none';
-    document.getElementById('vpHeader').style.display = '';
-    document.getElementById('vpToolbar').style.display = '';
-    document.getElementById('vpContainer').style.display = '';
-    closeClientsViewQuiet();
+  function teardownDetail() {
     clearInterval(statusPollTimer);
     if (annotate) { annotate.destroy(); annotate = null; }
     stopAnnotationWatch();
@@ -1280,6 +1567,16 @@
     detail = null;
     compareMode = false;
     viewingCommentId = null;
+    const detailView = document.getElementById('vpDetailView');
+    if (detailView) detailView.style.display = 'none';
+  }
+
+  function closeDetailView() {
+    teardownDetail();
+    document.getElementById('vpHeader').style.display = '';
+    document.getElementById('vpToolbar').style.display = '';
+    document.getElementById('vpContainer').style.display = '';
+    closeClientsViewQuiet();
     // Stay on Video Portal list — never history.back() (that leaves to the previous sidebar page)
     syncProjectInUrl(null);
     renderGrid();
@@ -2408,11 +2705,6 @@
   function showModal(id) { document.getElementById(id).style.display = 'flex'; }
   function hideModal(id) {
     document.getElementById(id).style.display = 'none';
-    if (id === 'clientEditModal') {
-      editingClientId = null;
-      const body = document.getElementById('clientEditBody');
-      if (body) body.innerHTML = '';
-    }
   }
 
   function showVpConfirm({
@@ -2482,6 +2774,11 @@
       e.stopPropagation();
       closeClientsView();
     });
+    document.getElementById('vpClientEditBackBtn')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeClientEdit();
+    });
 
     document.querySelectorAll('.vp-side-tab').forEach(btn => {
       btn.addEventListener('click', () => setSideTab(btn.dataset.sideTab));
@@ -2501,7 +2798,13 @@
         if (!detail || String(detail._id) !== String(projectId)) openDetail(projectId);
         return;
       }
+      const clientId = getHashClientId();
+      if (clientId) {
+        if (editingClientId !== String(clientId)) openClientEdit(clientId, { push: false });
+        return;
+      }
       if (isClientsViewInUrl()) {
+        hideClientEditView();
         if (document.getElementById('vpClientsView')?.style.display === 'none') {
           // URL already has view=clients — show without pushing another history entry
           document.getElementById('vpHeader').style.display = 'none';
@@ -2514,9 +2817,11 @@
         return;
       }
       if (detail || document.getElementById('vpDetailView')?.style.display !== 'none'
-          || document.getElementById('vpClientsView')?.style.display !== 'none') {
+          || document.getElementById('vpClientsView')?.style.display !== 'none'
+          || document.getElementById('vpClientEditView')?.style.display !== 'none') {
         document.getElementById('vpDetailView').style.display = 'none';
         document.getElementById('vpClientsView').style.display = 'none';
+        hideClientEditView();
         document.getElementById('vpHeader').style.display = '';
         document.getElementById('vpToolbar').style.display = '';
         document.getElementById('vpContainer').style.display = '';
@@ -2533,6 +2838,10 @@
     };
     window.addEventListener('popstate', window._vpPortalPopstate);
 
+    document.getElementById('clientEditViewProjectsBtn')?.addEventListener('click', (e) => {
+      const clientId = e.currentTarget.dataset.client;
+      if (clientId) showClientProjects(clientId);
+    });
     document.getElementById('clientEditArchiveBtn')?.addEventListener('click', (e) => {
       const btn = e.currentTarget;
       if (btn.dataset.client) handleClientAction(btn);
@@ -2545,7 +2854,17 @@
     document.querySelectorAll('[data-close]').forEach(btn =>
       btn.addEventListener('click', () => hideModal(btn.dataset.close)));
 
-    document.getElementById('vpSharePortalSendBtn')?.addEventListener('click', sendSharePortalEmails);
+    document.getElementById('vpAssignAllBtn')?.addEventListener('click', () => setAssignModalChecks(true));
+    document.getElementById('vpAssignNoneBtn')?.addEventListener('click', () => setAssignModalChecks(false));
+    document.getElementById('vpAssignSaveBtn')?.addEventListener('click', saveAssignVideosModal);
+
+    document.getElementById('vpLinksModalBody')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-links-action]');
+      if (!btn) return;
+      const url = btn.dataset.url || '';
+      if (btn.dataset.linksAction === 'copy') copyPortalShareUrl(url, btn.dataset.toast);
+      if (btn.dataset.linksAction === 'open') openPortalShareUrl(url);
+    });
 
     document.querySelectorAll('.vp-modal-overlay').forEach(overlay =>
       overlay.addEventListener('click', (e) => {
@@ -2559,9 +2878,7 @@
 
     document.querySelectorAll('.vp-status-tab').forEach(tab =>
       tab.addEventListener('click', () => {
-        document.querySelectorAll('.vp-status-tab').forEach(t => t.classList.remove('active'));
-        tab.classList.add('active');
-        statusFilter = tab.dataset.status;
+        setStatusFilter(tab.dataset.status);
         renderGrid();
       }));
 
@@ -2587,23 +2904,37 @@
         toast('Add a client first (Clients button)', 'error');
         return;
       }
+      const clientId = document.getElementById('projClient')?.value;
+      fillProjectAccessPicker(clientId);
       showModal('projectModal');
     });
 
     document.getElementById('newProjectForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       try {
+        const clientId = document.getElementById('projClient').value;
         const folderId = document.getElementById('projFolder').value || null;
+        const client = clients.find(c => String(c._id) === String(clientId));
+        const people = client ? activePeople(client) : [];
+        const previewOnly = document.getElementById('projPreviewOnly')?.checked;
+        let viewerIds = selectedAccessIds(document.getElementById('projAccessList'));
+        if (people.length && !previewOnly && !viewerIds.length) {
+          toast('Pick who can see this video, or check Preview only', 'error');
+          return;
+        }
+        if (previewOnly) viewerIds = [];
         const project = await api('/api/video-projects', {
           method: 'POST',
           body: JSON.stringify({
-            clientId: document.getElementById('projClient').value,
+            clientId,
             title: document.getElementById('projTitle').value.trim(),
-            folderId
+            folderId,
+            viewerIds
           })
         });
         document.getElementById('newProjectForm').reset();
         fillProjectFolderSelect('');
+        fillProjectAccessPicker('');
         hideModal('projectModal');
         await loadProjects();
         openDetail(project._id);
@@ -2612,6 +2943,7 @@
 
     document.getElementById('projClient').addEventListener('change', (e) => {
       fillProjectFolderSelect(e.target.value);
+      fillProjectAccessPicker(e.target.value);
     });
 
     document.getElementById('detailFolderSelect').addEventListener('change', async (e) => {
@@ -2786,7 +3118,7 @@
 
     document.getElementById('notifyClientsBtn').addEventListener('click', async () => {
       if (!detail) return;
-      if (!confirm('Email all client contacts that the latest version is ready for review?')) return;
+      if (!confirm('Email assigned people that the latest version is ready for review?')) return;
       const btn = document.getElementById('notifyClientsBtn');
       btn.disabled = true;
       try {
@@ -2802,9 +3134,6 @@
       } catch (err) { toast(err.message, 'error'); }
       finally { btn.disabled = false; }
     });
-
-    document.getElementById('copyProjectShareBtn')?.addEventListener('click', copyProjectShareLink);
-    document.getElementById('openProjectShareBtn')?.addEventListener('click', openProjectShareLink);
 
     document.getElementById('versionMenuBtn')?.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -2822,6 +3151,16 @@
     });
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') closeVersionMenu();
+    });
+
+    document.getElementById('openProjectClientBtn')?.addEventListener('click', () => {
+      if (!detail?.clientId) return;
+      openClientEdit(detail.clientId);
+    });
+
+    document.getElementById('projectShareBtn')?.addEventListener('click', () => {
+      if (!detail) return;
+      openPortalLinksModal({ clientId: detail.clientId, projectId: detail._id });
     });
 
     document.getElementById('deleteProjectBtn').addEventListener('click', async () => {
@@ -2948,9 +3287,12 @@
     }
 
     const openId = getHashProjectId() || sessionStorage.getItem('openVideoProjectId');
+    const openClientId = getHashClientId();
     if (openId) {
       sessionStorage.removeItem('openVideoProjectId');
       openDetail(openId);
+    } else if (openClientId) {
+      openClientEdit(openClientId, { push: false });
     } else if (isClientsViewInUrl()) {
       showClientsView();
     }

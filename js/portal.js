@@ -4,8 +4,8 @@
  * Frame.io-style timestamped comments via Player.js.
  *
  * Two link types:
- * - Personal contact token: identity is known from the link
- * - Shared team token: one link for the whole client; reviewers enter their name when opening a project
+ * - Company share token: full gallery; reviewers enter their name when opening a project
+ * - Person token: same name-gate UX, but only videos assigned to that person
  *
  * Optional client PIN: unlock once per tab (sessionStorage), then browse normally.
  */
@@ -1432,7 +1432,7 @@
 
     applyBranding(portalData.branding);
 
-    // Personal links already know who you are; shared links ask when opening a project
+    // Share-style links (company preview and person links) ask for a name
     if (portalData.shared) {
       reviewerName = loadSavedAuthor();
     } else {

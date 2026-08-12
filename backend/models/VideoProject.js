@@ -56,6 +56,13 @@ const videoProjectSchema = new mongoose.Schema({
   category: { type: String, default: '', trim: true },
   folderId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
 
+  // People (Client.contacts _ids) who can see this project on their unique link.
+  // Empty = company preview link only.
+  viewerIds: {
+    type: [{ type: mongoose.Schema.Types.ObjectId }],
+    default: []
+  },
+
   status: {
     type: String,
     enum: ['in_review', 'delivered', 'archived'],

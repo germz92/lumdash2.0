@@ -14778,6 +14778,21 @@ function buildPortalUrl(token, projectId = null) {
   return `${base}/portal.html?token=${encodeURIComponent(token)}${projectId ? `&project=${projectId}` : ''}`;
 }
 
+/** Person links must never reuse the company preview token (that URL sees every video). */
+function ensurePersonShareToken(contact, client) {
+  if (!contact) return false;
+  const current = String(contact.token || '').trim();
+  const company = String(client?.shareToken || '').trim();
+  if (current && current !== company) return false;
+  contact.token = require('crypto').randomBytes(32).toString('hex');
+  return true;
+}
+
+function personPortalUrl(contact, client, projectId = null) {
+  ensurePersonShareToken(contact, client);
+  return buildPortalUrl(contact.token, projectId);
+}
+
 function formatTimecode(seconds) {
   if (seconds == null || Number.isNaN(Number(seconds))) return null;
   const s = Math.max(0, Math.floor(Number(seconds)));
@@ -14939,9 +14954,9 @@ async function notifyPortalMentions({ project, mentions, actorName, text }) {
 }
 
 /**
- * Resolve a portal magic-link token to { client, contact, shared }; null if invalid.
- * Personal contact tokens identify one person; the client-level shareToken is a
- * single link for the whole client team (shared: true, contact: null).
+ * Resolve a portal magic-link token to { client, contact, shared, person }.
+ * Company shareToken: full preview (shared, no contact).
+ * Person (contact) tokens: scoped share links — still ask for a reviewer name.
  */
 async function resolvePortalToken(token) {
   if (!token) return null;
@@ -14951,12 +14966,37 @@ async function resolvePortalToken(token) {
   });
   if (!client) return null;
 
-  if (client.shareToken === token) {
-    return { client, contact: null, shared: true };
+  const contact = (client.contacts || []).find(c => c.token === token && !c.revokedAt);
+  if (contact) {
+    return { client, contact, shared: true, person: true };
   }
-  const contact = client.contacts.find(c => c.token === token && !c.revokedAt);
-  if (!contact) return null;
-  return { client, contact, shared: false };
+  if (client.shareToken === token) {
+    return { client, contact: null, shared: true, person: false };
+  }
+  return null;
+}
+
+/** Company preview sees every project; a person link only sees assigned videos. */
+function projectVisibleToPortal(project, resolved) {
+  if (!project || !resolved) return false;
+  if (!resolved.person || !resolved.contact) return true;
+  return (project.viewerIds || []).some(id => String(id) === String(resolved.contact._id));
+}
+
+function sanitizeViewerIds(client, raw) {
+  const allowed = new Set(
+    (client?.contacts || []).filter(c => !c.revokedAt).map(c => String(c._id))
+  );
+  const ids = Array.isArray(raw) ? raw.map(String).filter(id => allowed.has(id)) : [];
+  return [...new Set(ids)];
+}
+
+function viewerNamesForProject(project, client) {
+  const contacts = client?.contacts || [];
+  return (project.viewerIds || []).map(id => {
+    const ct = contacts.find(c => String(c._id) === String(id));
+    return ct ? (ct.name || ct.email || 'Person') : null;
+  }).filter(Boolean);
 }
 
 /** Strip PIN hash from admin API responses; expose portalPinEnabled instead. */
@@ -15225,13 +15265,21 @@ async function sendPortalNewVersionEmails(project, versionNumber, notes) {
   if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) {
     return { sent: 0, error: 'Email is not configured on the server' };
   }
-  const client = project.clientId?.contacts
-    ? project.clientId
-    : await Client.findById(project.clientId).select('name contacts shareToken');
+  const client = await Client.findById(project.clientId?._id || project.clientId);
   if (!client) return { sent: 0, error: 'Client not found' };
 
-  const shareToken = client.shareToken;
-  const contacts = (client.contacts || []).filter(c => !c.revokedAt && c.email);
+  const assignedIds = (project.viewerIds || []).map(String);
+  const contacts = (client.contacts || []).filter(c => {
+    if (c.revokedAt || !c.email) return false;
+    if (!assignedIds.length) return false;
+    return assignedIds.includes(String(c._id));
+  });
+  let tokenDirty = false;
+  for (const contact of contacts) {
+    if (ensurePersonShareToken(contact, client)) tokenDirty = true;
+  }
+  if (tokenDirty) await client.save();
+
   let sent = 0;
   for (const contact of contacts) {
     try {
@@ -15240,7 +15288,7 @@ async function sendPortalNewVersionEmails(project, versionNumber, notes) {
         projectTitle: project.title,
         versionNumber,
         notes: notes || '',
-        reviewUrl: buildPortalUrl(shareToken || contact.token, project._id.toString())
+        reviewUrl: buildPortalUrl(contact.token, project._id.toString())
       };
       await sgMail.send({
         to: contact.email,
@@ -15325,7 +15373,14 @@ app.get('/api/portal-clients', authenticate, async (req, res) => {
     }
 
     const includeArchived = req.query.archived === '1';
-    const clients = await Client.find(includeArchived ? {} : { archived: false }).sort({ name: 1 }).lean();
+    const clients = await Client.find(includeArchived ? {} : { archived: false }).sort({ name: 1 });
+    for (const c of clients) {
+      let dirty = false;
+      for (const ct of c.contacts || []) {
+        if (!ct.revokedAt && ensurePersonShareToken(ct, c)) dirty = true;
+      }
+      if (dirty) await c.save();
+    }
     const counts = await VideoProject.aggregate([
       { $group: { _id: { clientId: '$clientId', status: '$status' }, n: { $sum: 1 } } }
     ]);
@@ -15602,13 +15657,18 @@ app.post('/api/portal-clients/:id/contacts', authenticate, async (req, res) => {
     const client = await Client.findById(req.params.id);
     if (!client) return res.status(404).json({ error: 'Client not found' });
 
+    const name = String(req.body.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Name is required' });
     const email = String(req.body.email || '').trim().toLowerCase();
-    if (!email) return res.status(400).json({ error: 'Email is required' });
-    if (client.contacts.some(c => c.email === email && !c.revokedAt)) {
-      return res.status(400).json({ error: 'This email is already a contact' });
+    if (email && client.contacts.some(c => c.email && c.email === email && !c.revokedAt)) {
+      return res.status(400).json({ error: 'This email is already a person on this client' });
     }
 
-    client.contacts.push({ name: String(req.body.name || '').trim(), email });
+    client.contacts.push({
+      name,
+      email,
+      token: require('crypto').randomBytes(32).toString('hex')
+    });
     await client.save();
     res.status(201).json(sanitizePortalClient(client));
   } catch (err) {
@@ -15626,12 +15686,51 @@ app.delete('/api/portal-clients/:id/contacts/:contactId', authenticate, async (r
     const contact = client.contacts.id(req.params.contactId);
     if (!contact) return res.status(404).json({ error: 'Contact not found' });
 
+    const contactId = contact._id;
     contact.deleteOne();
     await client.save();
+    await VideoProject.updateMany(
+      { clientId: client._id },
+      { $pull: { viewerIds: contactId } }
+    );
     res.json(sanitizePortalClient(client));
   } catch (err) {
     console.error('Error removing portal contact:', err);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Replace which of this client's projects a person can see
+app.put('/api/portal-clients/:id/contacts/:contactId/projects', authenticate, async (req, res) => {
+  try {
+    const client = await Client.findById(req.params.id);
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+
+    const contact = client.contacts.id(req.params.contactId);
+    if (!contact || contact.revokedAt) return res.status(404).json({ error: 'Contact not found' });
+
+    const wanted = new Set(
+      (Array.isArray(req.body.projectIds) ? req.body.projectIds : []).map(String)
+    );
+    const personId = String(contact._id);
+    const clientProjects = await VideoProject.find({
+      clientId: client._id,
+      status: { $ne: 'archived' }
+    });
+
+    for (const project of clientProjects) {
+      const others = (project.viewerIds || [])
+        .map(id => id.toString())
+        .filter(id => id !== personId);
+      if (wanted.has(project._id.toString())) others.push(personId);
+      project.viewerIds = sanitizeViewerIds(client, others);
+      await project.save();
+    }
+
+    res.json({ success: true, projectIds: [...wanted] });
+  } catch (err) {
+    console.error('Error updating person project access:', err);
+    res.status(500).json({ error: 'Failed to update video access' });
   }
 });
 
@@ -15643,16 +15742,18 @@ app.post('/api/portal-clients/:id/contacts/:contactId/invite', authenticate, asy
 
     const contact = client.contacts.id(req.params.contactId);
     if (!contact || contact.revokedAt) return res.status(404).json({ error: 'Contact not found' });
+    if (!contact.email) return res.status(400).json({ error: 'Add an email for this person before sending their link' });
 
     if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) {
       return res.status(400).json({ error: 'Email is not configured on the server' });
     }
 
+    ensurePersonShareToken(contact, client);
     const data = {
       recipientName: (contact.name || '').split(' ')[0] || 'there',
       clientName: portalBrandingPayload(client).displayName || client.name,
       senderName: req.user.fullName || '',
-      portalUrl: buildPortalUrl(client.shareToken || contact.token)
+      portalUrl: buildPortalUrl(contact.token)
     };
     await sgMail.send({
       to: contact.email,
@@ -15668,6 +15769,22 @@ app.post('/api/portal-clients/:id/contacts/:contactId/invite', authenticate, asy
   } catch (err) {
     console.error('Error sending portal invite:', err);
     res.status(500).json({ error: 'Failed to send invite email' });
+  }
+});
+
+// Rotate the company preview shareToken — old full-gallery URL stops working.
+// Person links are unchanged.
+app.post('/api/portal-clients/:id/share-token/reroll', authenticate, async (req, res) => {
+  try {
+    const client = await Client.findById(req.params.id);
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+
+    client.shareToken = require('crypto').randomBytes(32).toString('hex');
+    await client.save();
+    res.json(sanitizePortalClient(client));
+  } catch (err) {
+    console.error('Error rerolling company preview link:', err);
+    res.status(500).json({ error: 'Failed to regenerate company preview link' });
   }
 });
 
@@ -15799,7 +15916,7 @@ app.get('/api/video-projects', authenticate, async (req, res) => {
     if (req.query.status && ['in_review', 'delivered', 'archived'].includes(req.query.status)) {
       query.status = req.query.status;
     }
-    const projects = await VideoProject.find(query).sort({ createdAt: -1 }).populate('clientId', 'name').lean();
+    const projects = await VideoProject.find(query).sort({ createdAt: -1 }).populate('clientId', 'name contacts').lean();
 
     // Unresolved client comment counts for the list badges
     const ids = projects.map(p => p._id);
@@ -15821,6 +15938,8 @@ app.get('/api/video-projects', authenticate, async (req, res) => {
         ...p,
         clientName: p.clientId?.name || '',
         clientId: p.clientId?._id || p.clientId,
+        viewerIds: (p.viewerIds || []).map(id => id.toString()),
+        viewerNames: viewerNamesForProject(p, p.clientId),
         openCommentCount: openMap[p._id.toString()] || 0,
         thumbnailUrl: projectThumbnailUrl(p, latestReady),
         latestVersion: latestPayload
@@ -15855,6 +15974,9 @@ app.post('/api/video-projects', authenticate, async (req, res) => {
       } catch (folderErr) {
         return res.status(folderErr.status || 400).json({ error: folderErr.message });
       }
+    }
+    if (req.body.viewerIds !== undefined) {
+      project.viewerIds = sanitizeViewerIds(client, req.body.viewerIds);
     }
     await project.save();
     res.status(201).json(project);
@@ -15895,6 +16017,8 @@ app.get('/api/video-projects/:id', authenticate, async (req, res) => {
       clientFolders: portalFoldersPayload(clientDoc),
       clientId: clientDoc?._id || project.clientId,
       folderId: project.folderId || null,
+      viewerIds: (project.viewerIds || []).map(id => id.toString()),
+      viewerNames: viewerNamesForProject(project, clientDoc),
       thumbnailUrl: projectThumbnailUrl(project, latestReady),
       postProductionItem,
       activity,
@@ -15931,6 +16055,11 @@ app.put('/api/video-projects/:id', authenticate, async (req, res) => {
       }
     } else if (req.body.category !== undefined) {
       project.category = String(req.body.category).trim();
+    }
+    if (req.body.viewerIds !== undefined) {
+      const client = await Client.findById(project.clientId);
+      if (!client) return res.status(400).json({ error: 'Client not found' });
+      project.viewerIds = sanitizeViewerIds(client, req.body.viewerIds);
     }
     if (req.body.masterFileUrl !== undefined) project.masterFileUrl = String(req.body.masterFileUrl).trim();
     if (req.body.allowClientDownload !== undefined) {
@@ -16235,9 +16364,9 @@ async function notifyClientsNewVersion({ project, versionNumber, notes, notifyCl
     ? project.clientId
     : await Client.findById(project.clientId).select('name contacts shareToken');
   if (!client) return;
-  const shareToken = client.shareToken;
+  const assignedIds = (project.viewerIds || []).map(String);
   const contacts = (client.contacts || [])
-    .filter(c => !c.revokedAt && c.email)
+    .filter(c => !c.revokedAt && c.email && assignedIds.includes(String(c._id)))
     .map(c => ({ name: c.name, email: c.email, token: c.token }));
   const projectId = project._id.toString();
   const projectTitle = project.title;
@@ -16248,7 +16377,7 @@ async function notifyClientsNewVersion({ project, versionNumber, notes, notifyCl
         projectTitle,
         versionNumber,
         notes,
-        reviewUrl: buildPortalUrl(shareToken || contact.token, projectId)
+        reviewUrl: buildPortalUrl(contact.token, projectId)
       };
       await sgMail.send({
         to: contact.email,
@@ -16441,9 +16570,9 @@ app.post('/api/video-projects/:id/versions', authenticate, portalVideoUpload.sin
     const versionId = project.versions[project.versions.length - 1]._id.toString();
     const projectId = project._id.toString();
     const projectTitle = project.title;
-    const shareToken = project.clientId?.shareToken;
+    const assignedIds = (project.viewerIds || []).map(String);
     const contacts = (project.clientId?.contacts || [])
-      .filter(c => !c.revokedAt && c.email)
+      .filter(c => !c.revokedAt && c.email && assignedIds.includes(String(c._id)))
       .map(c => ({ name: c.name, email: c.email, token: c.token }));
 
     // Client upload is done — return now so the progress bar can finish
@@ -16477,7 +16606,7 @@ app.post('/api/video-projects/:id/versions', authenticate, portalVideoUpload.sin
                 projectTitle,
                 versionNumber,
                 notes,
-                reviewUrl: buildPortalUrl(shareToken || contact.token, projectId)
+                reviewUrl: buildPortalUrl(contact.token, projectId)
               };
               await sgMail.send({
                 to: contact.email,
@@ -16729,14 +16858,17 @@ app.get('/api/portal/:token', async (req, res) => {
       status: { $in: ['in_review', 'delivered'] }
     }).sort({ createdAt: -1 }).lean();
 
+    const visible = projects.filter(p => projectVisibleToPortal(p, resolved));
+
     res.json({
       clientName: client.name,
       contactName: contact?.name || '',
-      shared: !!shared,
+      shared: true,
+      person: !!resolved.person,
       pinRequired: clientHasPortalPin(client),
       branding: portalBrandingPayload(client),
       folders: portalFoldersPayload(client),
-      projects: projects.map(p => {
+      projects: visible.map(p => {
         const versions = p.versions || [];
         const latest = versions[versions.length - 1] || null;
         const latestReady = [...versions].reverse().find(v => v.videoStatus === 'ready' && v.bunnyVideoId) || null;
@@ -16778,6 +16910,9 @@ app.get('/api/portal/:token/projects/:projectId', async (req, res) => {
 
     const project = await VideoProject.findOne({ _id: req.params.projectId, clientId: client._id }).lean();
     if (!project || project.status === 'archived') return res.status(404).json({ error: 'Project not found' });
+    if (!projectVisibleToPortal(project, resolved)) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
 
     logPortalActivity({
       projectId: project._id,
@@ -16829,6 +16964,9 @@ app.post('/api/portal/:token/projects/:projectId/decision', async (req, res) => 
 
     const project = await VideoProject.findOne({ _id: req.params.projectId, clientId: client._id });
     if (!project) return res.status(404).json({ error: 'Project not found' });
+    if (!projectVisibleToPortal(project, resolved)) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
     if (project.status !== 'in_review') {
       return res.status(400).json({ error: 'This project is no longer open for review' });
     }
@@ -16837,9 +16975,7 @@ app.post('/api/portal/:token/projects/:projectId/decision', async (req, res) => 
     const latest = versions[versions.length - 1];
     if (!latest) return res.status(400).json({ error: 'No version to review yet' });
 
-    const authorName = contact
-      ? (contact.name || contact.email)
-      : String(req.body.authorName || '').trim().slice(0, 80);
+    const authorName = String(req.body.authorName || '').trim().slice(0, 80);
     if (!authorName) return res.status(400).json({ error: 'Please enter your name' });
 
     project.reviewDecision = {
@@ -16892,6 +17028,9 @@ app.post('/api/portal/:token/projects/:projectId/comments', async (req, res) => 
 
     const project = await VideoProject.findOne({ _id: req.params.projectId, clientId: client._id });
     if (!project) return res.status(404).json({ error: 'Project not found' });
+    if (!projectVisibleToPortal(project, resolved)) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
     const version = project.versions.id(req.body.versionId);
     if (!version) return res.status(400).json({ error: 'Version not found' });
 
@@ -16899,10 +17038,7 @@ app.post('/api/portal/:token/projects/:projectId/comments', async (req, res) => 
     if (!text) return res.status(400).json({ error: 'Comment text is required' });
     if (text.length > 5000) return res.status(400).json({ error: 'Comment is too long' });
 
-    // Shared-link reviewers identify themselves by name
-    const authorName = contact
-      ? (contact.name || contact.email)
-      : String(req.body.authorName || '').trim().slice(0, 80);
+    const authorName = String(req.body.authorName || '').trim().slice(0, 80);
     if (!authorName) return res.status(400).json({ error: 'Please enter your name so we know who this feedback is from' });
 
     const { timecodeSeconds, timecodeEndSeconds } = parseTimecodeFields(req.body);
@@ -16961,14 +17097,15 @@ app.post('/api/portal/:token/comments/:commentId/replies', async (req, res) => {
 
     const project = await VideoProject.findOne({ _id: comment.projectId, clientId: client._id });
     if (!project) return res.status(404).json({ error: 'Comment not found' });
+    if (!projectVisibleToPortal(project, resolved)) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
 
     const text = String(req.body.text || '').trim();
     if (!text) return res.status(400).json({ error: 'Reply text is required' });
     if (text.length > 5000) return res.status(400).json({ error: 'Reply is too long' });
 
-    const authorName = contact
-      ? (contact.name || contact.email)
-      : String(req.body.authorName || '').trim().slice(0, 80);
+    const authorName = String(req.body.authorName || '').trim().slice(0, 80);
     if (!authorName) return res.status(400).json({ error: 'Please enter your name so we know who this feedback is from' });
 
     comment.replies.push({

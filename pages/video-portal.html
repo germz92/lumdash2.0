@@ -79,14 +79,19 @@
                 <option value="">No folder</option>
               </select>
             </div>
+            <div class="vp-detail-access" id="detailAccessWrap">
+              <span class="vp-detail-access-label">Access</span>
+              <div class="vp-access-chips" id="detailAccessList"></div>
+            </div>
           </div>
           <div class="vp-detail-header-actions">
-            <button type="button" class="vp-btn secondary small" id="copyProjectShareBtn" title="Copy client portal link that opens this video">
-              <span class="material-symbols-outlined">link</span>
-              <span>Copy share link</span>
+            <button type="button" class="vp-btn secondary small" id="openProjectClientBtn" title="Open this client’s page">
+              <span class="material-symbols-outlined">group</span>
+              <span>Go to client</span>
             </button>
-            <button type="button" class="vp-icon-btn" id="openProjectShareBtn" title="Open client portal link for this video" style="display:none;">
-              <span class="material-symbols-outlined">open_in_new</span>
+            <button type="button" class="vp-btn secondary small" id="projectShareBtn" title="Share this video">
+              <span class="material-symbols-outlined">ios_share</span>
+              <span>Share</span>
             </button>
             <button class="vp-icon-btn danger" id="deleteProjectBtn" title="Delete project" style="display:none;">
               <span class="material-symbols-outlined">delete</span>
@@ -253,7 +258,7 @@
           </button>
           <div class="vp-detail-titles">
             <h2>Clients</h2>
-            <div class="vp-detail-sub">Open a client to manage branding, folders, and contacts</div>
+            <div class="vp-detail-sub">Open a client to manage branding, folders, and people</div>
           </div>
         </div>
         <div class="vp-clients-body">
@@ -267,29 +272,34 @@
           <div class="vp-clients-grid" id="clientsList"></div>
         </div>
       </div>
-    </main>
-  </div>
 
-  <!-- Edit client modal -->
-  <div class="vp-modal-overlay" id="clientEditModal" style="display:none;">
-    <div class="vp-modal vp-modal-wide vp-client-edit-modal">
-      <div class="vp-modal-header" id="clientEditHeader">
-        <div>
-          <h2 id="clientEditTitle">Client</h2>
-          <div class="vp-detail-sub" id="clientEditSub"></div>
-        </div>
-        <div class="vp-detail-header-actions">
-          <button type="button" class="vp-icon-btn" id="clientEditArchiveBtn" title="Archive client">
-            <span class="material-symbols-outlined">archive</span>
+      <!-- Full-page client editor -->
+      <div class="vp-clients-view vp-client-edit-view" id="vpClientEditView" style="display:none;">
+        <div class="vp-detail-topbar">
+          <button type="button" class="vp-back-btn" id="vpClientEditBackBtn">
+            <span class="material-symbols-outlined">arrow_back</span>
+            <span>Clients</span>
           </button>
-          <button type="button" class="vp-icon-btn danger" id="clientEditDeleteBtn" title="Delete client" style="display:none;">
-            <span class="material-symbols-outlined">delete</span>
-          </button>
-          <button class="vp-icon-btn" data-close="clientEditModal"><span class="material-symbols-outlined">close</span></button>
+          <div class="vp-detail-titles">
+            <h2 id="clientEditTitle">Client</h2>
+            <div class="vp-detail-sub" id="clientEditSub"></div>
+          </div>
+          <div class="vp-detail-header-actions">
+            <button type="button" class="vp-btn secondary small" id="clientEditViewProjectsBtn" title="View all projects for this client">
+              <span class="material-symbols-outlined">movie</span>
+              <span>View projects</span>
+            </button>
+            <button type="button" class="vp-icon-btn" id="clientEditArchiveBtn" title="Archive client">
+              <span class="material-symbols-outlined">archive</span>
+            </button>
+            <button type="button" class="vp-icon-btn danger" id="clientEditDeleteBtn" title="Delete client" style="display:none;">
+              <span class="material-symbols-outlined">delete</span>
+            </button>
+          </div>
         </div>
+        <div class="vp-client-edit-body" id="clientEditBody"></div>
       </div>
-      <div class="vp-modal-body" id="clientEditBody"></div>
-    </div>
+    </main>
   </div>
 
   <!-- New project modal -->
@@ -309,6 +319,14 @@
           <select id="projFolder">
             <option value="">No folder</option>
           </select>
+          <div id="projAccessWrap" class="vp-access-picker" hidden>
+            <label class="vp-label">Who can see this</label>
+            <div class="vp-access-chips" id="projAccessList"></div>
+            <label class="vp-access-preview-only">
+              <input type="checkbox" id="projPreviewOnly">
+              Preview only (company link only — no people yet)
+            </label>
+          </div>
           <div class="vp-form-actions">
             <button type="button" class="vp-btn secondary" data-close="projectModal">Cancel</button>
             <button type="submit" class="vp-btn primary">Create Project</button>
@@ -333,40 +351,43 @@
     </div>
   </div>
 
-  <!-- Share portal to contacts -->
-  <div class="vp-modal-overlay" id="vpSharePortalModal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="vpSharePortalTitle">
-    <div class="vp-modal vp-share-portal-modal">
+  <!-- Copy / open portal links (company master + per person) -->
+  <div class="vp-modal-overlay vp-links-modal-overlay" id="vpLinksModal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="vpLinksModalTitle">
+    <div class="vp-modal vp-links-modal">
       <div class="vp-modal-header">
         <div>
-          <h2 id="vpSharePortalTitle">Share portal</h2>
-          <div class="vp-detail-sub" id="vpSharePortalSub"></div>
+          <h2 id="vpLinksModalTitle">Share</h2>
+          <div class="vp-detail-sub" id="vpLinksModalSub"></div>
         </div>
-        <button type="button" class="vp-icon-btn" data-close="vpSharePortalModal" aria-label="Close">
+        <button type="button" class="vp-icon-btn" data-close="vpLinksModal" aria-label="Close">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="vp-modal-body" id="vpLinksModalBody"></div>
+    </div>
+  </div>
+
+  <!-- Assign videos to a person -->
+  <div class="vp-modal-overlay vp-assign-modal-overlay" id="vpAssignModal" style="display:none;" role="dialog" aria-modal="true" aria-labelledby="vpAssignTitle">
+    <div class="vp-modal vp-assign-modal">
+      <div class="vp-modal-header">
+        <div>
+          <h2 id="vpAssignTitle">Assign videos</h2>
+          <div class="vp-detail-sub" id="vpAssignSub"></div>
+        </div>
+        <button type="button" class="vp-icon-btn" data-close="vpAssignModal" aria-label="Close">
           <span class="material-symbols-outlined">close</span>
         </button>
       </div>
       <div class="vp-modal-body">
-        <div class="vp-share-select-all">
-          <label class="vp-check">
-            <input type="checkbox" id="vpShareSelectAll">
-            Select all contacts
-          </label>
+        <div class="vp-assign-toolbar">
+          <button type="button" class="vp-btn secondary small" id="vpAssignAllBtn">All</button>
+          <button type="button" class="vp-btn secondary small" id="vpAssignNoneBtn">None</button>
         </div>
-        <div class="vp-share-contact-list" id="vpShareContactList"></div>
-        <div class="vp-share-pin-wrap" id="vpSharePinWrap" style="display:none;">
-          <label class="vp-label" for="vpSharePinInput">Portal PIN <span class="vp-label-hint">(included in the email)</span></label>
-          <input type="text" id="vpSharePinInput" class="vp-portal-pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="8" placeholder="Enter the portal PIN" autocomplete="off">
-        </div>
-        <label class="vp-check vp-share-self-copy">
-          <input type="checkbox" id="vpShareIncludeSelf">
-          Send a copy to me
-        </label>
+        <div class="vp-assign-list" id="vpAssignList"></div>
         <div class="vp-form-actions">
-          <button type="button" class="vp-btn secondary" data-close="vpSharePortalModal">Cancel</button>
-          <button type="button" class="vp-btn primary" id="vpSharePortalSendBtn">
-            <span class="material-symbols-outlined">send</span>
-            <span>Send emails</span>
-          </button>
+          <button type="button" class="vp-btn secondary" data-close="vpAssignModal">Cancel</button>
+          <button type="button" class="vp-btn primary" id="vpAssignSaveBtn">Save</button>
         </div>
       </div>
     </div>

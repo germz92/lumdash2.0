@@ -68,9 +68,6 @@ function buildPortalInviteEmail(data) {
                 </tr>
               </table>
 
-              <p style="margin:0 0 8px;font-size:13px;color:#888;">
-                This link is personal to you — no account or password needed. Please don't forward it.
-              </p>
               <p style="margin:0;font-size:13px;color:#888;">
                 Or copy this link into your browser:<br>
                 <a href="${portalUrl}" style="color:#CC0007;word-break:break-all;">${portalUrl}</a>
@@ -103,8 +100,6 @@ function buildPortalInviteText(data) {
     'you can watch each cut and leave timestamped comments right on the video.',
     '',
     `Open your portal: ${data.portalUrl || ''}`,
-    '',
-    "This link is personal to you — no account or password needed. Please don't forward it.",
     '',
     '— Lumetry Media / LumDash'
   ].join('\n');

@@ -1147,6 +1147,8 @@
     document.getElementById('detailSub').textContent =
       `${detail.clientName}${detail.category ? ` · ${detail.category}` : ''} · ${STATUS_LABELS[detail.status] || detail.status}`;
     fillDetailFolderSelect();
+    const renameBtn = document.getElementById('renameProjectBtn');
+    if (renameBtn) renameBtn.style.display = isAdmin ? 'inline-flex' : 'none';
     document.getElementById('deleteProjectBtn').style.display = isAdmin ? 'inline-flex' : 'none';
     updateProjectShareButtons();
     document.getElementById('masterUrlInput').value = detail.masterFileUrl || '';
@@ -2832,6 +2834,71 @@
         await loadProjects();
       } catch (err) { toast(err.message, 'error'); }
     });
+
+    document.getElementById('renameProjectBtn')?.addEventListener('click', startRenameProject);
+  }
+
+  function startRenameProject() {
+    if (!isAdmin || !detail) return;
+    const titleEl = document.getElementById('detailTitle');
+    const renameBtn = document.getElementById('renameProjectBtn');
+    const row = titleEl?.parentElement;
+    if (!titleEl || !row || row.querySelector('.vp-detail-title-input')) return;
+
+    const current = detail.title || '';
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'vp-detail-title-input';
+    input.value = current;
+    input.maxLength = 200;
+    input.setAttribute('aria-label', 'Project name');
+
+    titleEl.style.display = 'none';
+    if (renameBtn) renameBtn.style.display = 'none';
+    row.insertBefore(input, titleEl);
+    input.focus();
+    input.select();
+
+    let finished = false;
+    const finish = async (save) => {
+      if (finished) return;
+      finished = true;
+      const next = input.value.trim();
+      input.remove();
+      titleEl.style.display = '';
+      if (renameBtn) renameBtn.style.display = isAdmin ? 'inline-flex' : 'none';
+
+      if (!save || !next || next === current) {
+        titleEl.textContent = current;
+        return;
+      }
+      try {
+        const updated = await api(`/api/video-projects/${detail._id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ title: next })
+        });
+        detail.title = updated.title || next;
+        titleEl.textContent = detail.title;
+        const card = projects.find(p => String(p._id) === String(detail._id));
+        if (card) card.title = detail.title;
+        renderGrid();
+        toast('Project renamed');
+      } catch (err) {
+        titleEl.textContent = current;
+        toast(err.message, 'error');
+      }
+    };
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        finish(true);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        finish(false);
+      }
+    });
+    input.addEventListener('blur', () => finish(true));
   }
 
   function setupMobileMenu() {

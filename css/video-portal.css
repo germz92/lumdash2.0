@@ -978,12 +978,37 @@
 .vp-back-btn .material-symbols-outlined { font-size: 18px; }
 
 .vp-detail-titles { flex: 1; min-width: 0; }
+.vp-detail-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
 .vp-detail-titles h2 {
   margin: 0;
   font-size: 1.15rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+}
+.vp-detail-title-row .vp-icon-btn {
+  flex-shrink: 0;
+}
+.vp-detail-title-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border-color, rgba(255,255,255,0.15));
+  background: var(--bg-tertiary, rgba(255,255,255,0.06));
+  color: inherit;
+  outline: none;
+}
+.vp-detail-title-input:focus {
+  border-color: var(--accent-red, #CC0007);
 }
 
 .vp-detail-body {

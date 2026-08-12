@@ -15914,6 +15914,9 @@ app.put('/api/video-projects/:id', authenticate, async (req, res) => {
     if (!project) return res.status(404).json({ error: 'Project not found' });
 
     if (req.body.title !== undefined) {
+      if (!isPortalAdmin(req.user)) {
+        return res.status(403).json({ error: 'Admin access required to rename projects' });
+      }
       const title = String(req.body.title).trim();
       if (!title) return res.status(400).json({ error: 'Title is required' });
       project.title = title;

@@ -466,8 +466,14 @@
 .vp-label:first-child { margin-top: 0; }
 .vp-label-hint { font-weight: 400; opacity: 0.7; }
 
-.vp-modal-body form input,
+.vp-modal-body form input:not([type="checkbox"]):not([type="radio"]),
 .vp-modal-body form select { width: 100%; box-sizing: border-box; }
+.vp-modal-body form input[type="checkbox"],
+.vp-modal-body form input[type="radio"] {
+  width: auto;
+  flex-shrink: 0;
+  margin: 0;
+}
 
 .vp-form-actions {
   display: flex;
@@ -1183,12 +1189,59 @@
 .vp-access-picker {
   margin-top: 12px;
 }
+.vp-access-picker .vp-access-chips {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  gap: 6px;
+}
+.vp-access-picker .vp-access-chip {
+  display: flex;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: var(--radius-md, 8px);
+  padding: 10px 12px;
+  font-size: 0.88rem;
+}
+.vp-access-picker .vp-access-chip.is-on {
+  border-color: var(--accent-red, #CC0007);
+  background: rgba(204, 0, 7, 0.12);
+}
 .vp-access-preview-only {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
   margin-top: 8px;
-  font-size: 0.8rem;
+  padding: 10px 12px;
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-md, 8px);
+  background: var(--bg-tertiary, rgba(255,255,255,0.03));
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.vp-access-preview-only.is-on {
+  border-style: solid;
+  border-color: var(--accent-red, #CC0007);
+  background: rgba(204, 0, 7, 0.08);
+}
+.vp-access-preview-only input {
+  margin-top: 3px;
+}
+.vp-access-preview-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.vp-access-preview-copy strong {
+  font-weight: 600;
+}
+.vp-access-preview-hint {
+  font-size: 0.74rem;
+  font-weight: 400;
   color: var(--text-muted);
 }
 .vp-card-access {

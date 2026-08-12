@@ -613,6 +613,37 @@
     }
   }
 
+  function syncPreviewOnlyState() {
+    const previewOnly = document.getElementById('projPreviewOnly');
+    const label = document.getElementById('projPreviewOnlyLabel');
+    label?.classList.toggle('is-on', !!previewOnly?.checked);
+  }
+
+  function wireProjectAccessPicker() {
+    const list = document.getElementById('projAccessList');
+    const previewOnly = document.getElementById('projPreviewOnly');
+    list?.querySelectorAll('input[type="checkbox"]').forEach(input => {
+      input.addEventListener('change', () => {
+        if (!input.checked || !previewOnly) return;
+        previewOnly.checked = false;
+        syncPreviewOnlyState();
+      });
+    });
+    if (previewOnly && !previewOnly.dataset.wired) {
+      previewOnly.dataset.wired = '1';
+      previewOnly.addEventListener('change', () => {
+        if (previewOnly.checked) {
+          list?.querySelectorAll('input[type="checkbox"]').forEach(input => {
+            input.checked = false;
+            input.closest('.vp-access-chip')?.classList.remove('is-on');
+          });
+        }
+        syncPreviewOnlyState();
+      });
+    }
+    syncPreviewOnlyState();
+  }
+
   function fillProjectAccessPicker(clientId) {
     const wrap = document.getElementById('projAccessWrap');
     const list = document.getElementById('projAccessList');
@@ -623,12 +654,14 @@
     if (!clientId || !people.length) {
       wrap.hidden = true;
       if (previewOnly) previewOnly.checked = false;
+      syncPreviewOnlyState();
       if (list) list.innerHTML = '';
       return;
     }
     wrap.hidden = false;
     if (previewOnly) previewOnly.checked = false;
     renderAccessChips(list, people, []);
+    wireProjectAccessPicker();
   }
 
   function fillDetailAccessList() {
@@ -2919,7 +2952,7 @@
         const previewOnly = document.getElementById('projPreviewOnly')?.checked;
         let viewerIds = selectedAccessIds(document.getElementById('projAccessList'));
         if (people.length && !previewOnly && !viewerIds.length) {
-          toast('Pick who can see this video, or check Preview only', 'error');
+          toast('Pick who can see this video, or choose Company preview only', 'error');
           return;
         }
         if (previewOnly) viewerIds = [];

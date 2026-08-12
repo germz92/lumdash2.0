@@ -322,9 +322,12 @@
           <div id="projAccessWrap" class="vp-access-picker" hidden>
             <label class="vp-label">Who can see this</label>
             <div class="vp-access-chips" id="projAccessList"></div>
-            <label class="vp-access-preview-only">
+            <label class="vp-access-preview-only" id="projPreviewOnlyLabel">
               <input type="checkbox" id="projPreviewOnly">
-              Preview only (company link only — no people yet)
+              <span class="vp-access-preview-copy">
+                <strong>Company preview only</strong>
+                <span class="vp-access-preview-hint">Stays on the company link — not on anyone’s personal link</span>
+              </span>
             </label>
           </div>
           <div class="vp-form-actions">

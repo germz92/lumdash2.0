@@ -117,6 +117,7 @@ const io = socketIo(server, {
         'https://germainedavid.github.io',
         'https://lumquote.com',           // LumQuote Invoice App
         'https://www.lumquote.com',
+        'https://quote-generator-kixj.onrender.com', // LumQuote production (Render)
         'http://localhost:8000',          // LumQuote local development
         'http://127.0.0.1:8000',
         'http://localhost:3000',
@@ -1861,6 +1862,7 @@ app.get('/auth/redirect', (req, res) => {
   const allowedCallbackDomains = [
     'lumquote.com',
     'www.lumquote.com',
+    'quote-generator-kixj.onrender.com', // LumQuote production
     'localhost',
     '127.0.0.1'
   ];

@@ -100,9 +100,23 @@ function renderDarkThemeHeader(table) {
   const titleEl = document.getElementById('eventTitle');
   if (titleEl) titleEl.textContent = table.title || 'Untitled Event';
   
-  // Client (stored in general.client)
+  // Company and client (stored in general.company / general.client)
+  const companyEl = document.getElementById('eventCompany');
+  const companySep = document.getElementById('eventCompanySep');
+  const companyName = (general.company || '').trim();
+  const clientName = (general.client || '').trim();
+  if (companyEl) {
+    companyEl.textContent = companyName;
+    companyEl.style.display = companyName ? '' : 'none';
+  }
+  if (companySep) {
+    companySep.style.display = companyName && clientName ? '' : 'none';
+  }
   const clientEl = document.getElementById('eventClient');
-  if (clientEl) clientEl.textContent = general.client || 'No client';
+  if (clientEl) {
+    clientEl.textContent = clientName || (companyName ? '' : 'No client');
+    clientEl.style.display = clientName || !companyName ? '' : 'none';
+  }
   
   // Dates
   const datesEl = document.getElementById('eventDates');
@@ -147,7 +161,10 @@ function renderDarkThemeSummary(table) {
     }
   }
   
-  // Event Info Card - Client and Location
+  // Event Info Card - Company, Client, and Location
+  const companyEl = document.getElementById('summaryCompany');
+  if (companyEl) companyEl.textContent = general.company || 'No company';
+  
   const clientEl = document.getElementById('summaryClient');
   if (clientEl) clientEl.textContent = general.client || 'No client';
   
@@ -1765,6 +1782,7 @@ function populateEditModal(table) {
   const general = table.general || {};
   
   document.getElementById('editEventName').value = table.title || '';
+  document.getElementById('editCompanyName').value = general.company || '';
   document.getElementById('editClientName').value = general.client || '';
   document.getElementById('editStartDate').value = general.start?.split('T')[0] || '';
   document.getElementById('editEndDate').value = general.end?.split('T')[0] || '';
@@ -1993,6 +2011,18 @@ function switchToInfoEditMode(tableId) {
     editBtn.title = 'Cancel';
   }
   
+  // Convert Company to input
+  const companyEl = document.getElementById('summaryCompany');
+  if (companyEl) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.id = 'editInfoCompany';
+    input.className = 'inline-edit-input';
+    input.value = general.company || '';
+    input.placeholder = 'Company name';
+    companyEl.replaceWith(input);
+  }
+  
   // Convert Client to input
   const clientEl = document.getElementById('summaryClient');
   if (clientEl) {
@@ -2108,6 +2138,14 @@ function restoreInfoCardStructure() {
   if (saveContainer) saveContainer.remove();
   
   // Restore fields
+  const companyInput = document.getElementById('editInfoCompany');
+  if (companyInput) {
+    const span = document.createElement('span');
+    span.className = 'info-value';
+    span.id = 'summaryCompany';
+    companyInput.replaceWith(span);
+  }
+  
   const clientInput = document.getElementById('editInfoClient');
   if (clientInput) {
     const span = document.createElement('span');
@@ -2178,6 +2216,7 @@ async function saveInfoEdit(tableId) {
     saveBtn.textContent = 'Saving...';
   }
   
+  const companyValue = document.getElementById('editInfoCompany')?.value || '';
   const clientValue = document.getElementById('editInfoClient')?.value || '';
   const cityValue = document.getElementById('editInfoCity')?.value || '';
   const stateValue = document.getElementById('editInfoState')?.value || '';
@@ -2191,6 +2230,7 @@ async function saveInfoEdit(tableId) {
       title: currentTableData?.title,
       general: {
         ...currentTableData?.general,
+        company: companyValue,
         client: clientValue,
         city: cityValue,
         state: stateValue,
@@ -2430,6 +2470,7 @@ async function saveDarkThemeEvent(tableId) {
       title: document.getElementById('editEventName').value,
       general: {
         ...currentTableData?.general,
+        company: document.getElementById('editCompanyName').value,
         client: document.getElementById('editClientName').value,
         start: document.getElementById('editStartDate').value,
         end: document.getElementById('editEndDate').value,

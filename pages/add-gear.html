@@ -1370,6 +1370,7 @@
                 <strong>Event:</strong> ${escapeHtml(matchingEvent.title)}
                 ${matchingEvent.hasLimitedAccess ? `<br><span class="limited-access">🔒 Limited Access - You don't have permission to view this event</span>` : ''}
                 ${matchingEvent.location ? `<br><span class="event-location">📍 ${escapeHtml(matchingEvent.location)}</span>` : ''}
+                ${matchingEvent.company ? `<br><span class="event-client">🏢 ${escapeHtml(matchingEvent.company)}</span>` : ''}
                 ${matchingEvent.client ? `<br><span class="event-client">👤 ${escapeHtml(matchingEvent.client)}</span>` : ''}
                 ${matchingEvent.associationType ? `<br><span class="association-type">🔗 ${getAssociationTypeLabel(matchingEvent.associationType)}</span>` : ''}
                 ${matchingEvent.reservationDetails?.reservedBy ? `<br><span class="reserved-by">👤 Reserved by: ${escapeHtml(matchingEvent.reservationDetails.reservedBy.name)}</span>` : ''}
@@ -1427,7 +1428,8 @@
                   <strong>Event:</strong> ${escapeHtml(matchingEvent.title)}
                   ${matchingEvent.hasLimitedAccess ? `<br><span class="limited-access">🔒 Limited Access - You don't have permission to view this event</span>` : ''}
                   ${matchingEvent.location ? `<br><span class="event-location">📍 ${escapeHtml(matchingEvent.location)}</span>` : ''}
-                  ${matchingEvent.client ? `<br><span class="event-client">👤 ${escapeHtml(matchingEvent.client)}</span>` : ''}
+                  ${matchingEvent.company ? `<br><span class="event-client">🏢 ${escapeHtml(matchingEvent.company)}</span>` : ''}
+                ${matchingEvent.client ? `<br><span class="event-client">👤 ${escapeHtml(matchingEvent.client)}</span>` : ''}
                   ${matchingEvent.associationType ? `<br><span class="association-type">🔗 ${getAssociationTypeLabel(matchingEvent.associationType)}</span>` : ''}
                   ${matchingEvent.historyDetails?.reservedBy ? `<br><span class="reserved-by">👤 Reserved by: ${escapeHtml(matchingEvent.historyDetails.reservedBy.name)}</span>` : ''}
                 </div>` : 
@@ -1477,6 +1479,7 @@
               <strong>Event:</strong> ${escapeHtml(matchingEvent.title)}
               ${matchingEvent.hasLimitedAccess ? `<br><span class="limited-access">🔒 Limited Access - You don't have permission to view this event</span>` : ''}
               ${matchingEvent.location ? `<br><span class="event-location">📍 ${escapeHtml(matchingEvent.location)}</span>` : ''}
+              ${matchingEvent.company ? `<br><span class="event-client">🏢 ${escapeHtml(matchingEvent.company)}</span>` : ''}
               ${matchingEvent.client ? `<br><span class="event-client">👤 ${escapeHtml(matchingEvent.client)}</span>` : ''}
               ${matchingEvent.checkoutDetails?.checkedOutBy ? `<br><span class="checked-out-by">👤 Checked out by: ${escapeHtml(matchingEvent.checkoutDetails.checkedOutBy.name)}</span>` : ''}
             </div>` : 

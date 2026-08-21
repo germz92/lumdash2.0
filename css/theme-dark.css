@@ -1793,10 +1793,28 @@ img.owner-avatar {
 }
 
 /* Client Cell */
+.event-company-client {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.event-company {
+  font-size: var(--font-size-base);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
 .event-client {
   font-size: var(--font-size-base);
   color: var(--text-primary);
   font-weight: 500;
+}
+
+.event-company-client .event-client {
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  font-weight: 400;
 }
 
 /* Date Cell */
@@ -5273,6 +5291,10 @@ img.owner-avatar {
 }
 
 .event-client {
+  font-weight: var(--font-weight-medium);
+}
+
+.event-company {
   font-weight: var(--font-weight-medium);
 }
 

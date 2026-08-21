@@ -2357,6 +2357,7 @@ app.post('/api/chat/global', authenticate, async (req, res) => {
         return {
           name: e.title,
           client: e.general?.client || null,
+          company: e.general?.company || null,
           dates: {
             start: e.general?.start,
             end: e.general?.end
@@ -2604,7 +2605,8 @@ You have access to comprehensive event data. Here's how to find answers:
 **Finding Information About Events:**
 - Search by event name in the 'name' field
 - Search by client name in the 'client' field
-- Client names may appear in event titles too
+- Search by company name in the 'company' field
+- Client and company names may appear in event titles too
 
 **Finding Crew/Staff Info:**
 - Check the 'crew' array within each event
@@ -2934,7 +2936,7 @@ app.post('/api/chat/:tableId', authenticate, async (req, res) => {
           : { $or: [{ owners: req.user.id }, { sharedWith: req.user.id }, { leads: req.user.id }] };
         
         const allEvents = await Table.find(accessQuery)
-          .select('title general.start general.end general.location general.city general.client rows')
+          .select('title general.start general.end general.location general.city general.client general.company rows')
           .lean();
         
         // If searching for a specific event by name
@@ -2948,7 +2950,8 @@ app.post('/api/chat/:tableId', authenticate, async (req, res) => {
             startDate: e.general?.start,
             endDate: e.general?.end,
             location: e.general?.location || e.general?.city,
-            client: e.general?.client
+            client: e.general?.client,
+            company: e.general?.company
           }));
           console.log(`🔍 Found ${relevantData.matchedEvents.length} events matching "${searchedName}"`);
         }
@@ -3115,7 +3118,8 @@ app.post('/api/chat/:tableId', authenticate, async (req, res) => {
           location: table.general?.location,
           start: table.general?.start,
           end: table.general?.end,
-          client: table.general?.client
+          client: table.general?.client,
+          company: table.general?.company
         },
         dataStatus: `Full data available but truncated due to size (${dataSize} chars). Ask more specific questions.`
       };
@@ -3352,6 +3356,9 @@ app.post('/api/tables', authenticate, async (req, res) => {
     rows: [],
     general: {
       client: general?.client || '',
+      company: general?.company || '',
+      city: general?.city || '',
+      state: general?.state || '',
       start: general?.start || '',
       end: general?.end || ''
     },
@@ -3405,6 +3412,8 @@ app.post('/api/events/external-create', authenticate, async (req, res) => {
       city,           // Optional: City
       state,          // Optional: State
       client,         // Optional: Client name
+      company,        // Optional: Company name
+      companyName,    // Optional alias used by LumQuote
       location,       // Optional: Location/venue name
       externalSource, // Required: Source app identifier (e.g., 'invoice-app')
       externalId      // Optional: ID from source app for linking/dedup
@@ -3459,7 +3468,11 @@ app.post('/api/events/external-create', authenticate, async (req, res) => {
         city: city || '',
         state: state || '',
         client: client || '',
+        company: company || companyName || '',
         location: location || ''
+      },
+      executiveSummary: {
+        company: company || companyName || ''
       },
       gear: {
         lists: {
@@ -8508,6 +8521,7 @@ app.get('/api/events/by-gear/:gearId', authenticate, async (req, res) => {
                 endDate: table.gear?.checkInDate || table.general?.end,
                 location: table.general?.location,
                 client: table.general?.client,
+                company: table.general?.company,
                 isOwner: table.owners.includes(req.user.id),
                 isShared: table.sharedWith.includes(req.user.id),
                 isAdmin: req.user.role === 'admin',
@@ -8544,6 +8558,7 @@ app.get('/api/events/by-gear/:gearId', authenticate, async (req, res) => {
               endDate: reservation.checkInDate || table.gear?.checkInDate || table.general?.end,
               location: table.general?.location,
               client: table.general?.client,
+              company: table.general?.company,
               isOwner: table.owners.includes(req.user.id),
               isShared: table.sharedWith.includes(req.user.id),
               isAdmin: req.user.role === 'admin',
@@ -8613,6 +8628,7 @@ app.get('/api/events/by-gear/:gearId', authenticate, async (req, res) => {
               endDate: historyEntry.checkInDate || table.gear?.checkInDate || table.general?.end,
               location: table.general?.location,
               client: table.general?.client,
+              company: table.general?.company,
               isOwner: table.owners.includes(req.user.id),
               isShared: table.sharedWith.includes(req.user.id),
               isAdmin: req.user.role === 'admin',
@@ -8656,6 +8672,7 @@ app.get('/api/events/by-gear/:gearId', authenticate, async (req, res) => {
                   endDate: historyEntry.checkInDate || matchingTableInAll.gear?.checkInDate || matchingTableInAll.general?.end,
                   location: matchingTableInAll.general?.location,
                   client: matchingTableInAll.general?.client,
+                  company: matchingTableInAll.general?.company,
                   isOwner: false,
                   isShared: false,
                   isAdmin: false,
@@ -8703,6 +8720,7 @@ app.get('/api/events/by-gear/:gearId', authenticate, async (req, res) => {
           endDate: gearItem.checkInDate || table.gear?.checkInDate || table.general?.end,
           location: table.general?.location,
           client: table.general?.client,
+          company: table.general?.company,
           isOwner: table.owners.includes(req.user.id),
           isShared: table.sharedWith.includes(req.user.id),
           isAdmin: req.user.role === 'admin',

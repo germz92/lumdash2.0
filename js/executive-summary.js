@@ -279,6 +279,7 @@
     const general = currentData.general || {};
     if (!exec.contractLink && general.contractUrl) exec.contractLink = general.contractUrl;
     if (!exec.invoiceLink && general.invoiceUrl) exec.invoiceLink = general.invoiceUrl;
+    if (!exec.company && general.company) exec.company = general.company;
     return exec;
   }
 
@@ -302,9 +303,15 @@
     { key: 'phone', label: 'Phone Number', type: 'text' }
   ];
 
+  function getClientInfoWithFallback() {
+    const exec = { ...(currentData.executiveSummary || {}) };
+    if (!exec.company && currentData.general?.company) exec.company = currentData.general.company;
+    return exec;
+  }
+
   function renderClientInfo() {
     const grid = document.getElementById('clientInfoGrid');
-    if (grid) renderFieldsGrid(grid, clientFields, currentData.executiveSummary || {});
+    if (grid) renderFieldsGrid(grid, clientFields, getClientInfoWithFallback());
   }
 
   // ---- Overview ----
@@ -825,7 +832,7 @@
     editBtn.addEventListener('click', () => {
       editBtn.style.display = 'none';
       saveBtn.style.display = 'inline-flex';
-      enterFieldsEdit(grid, clientEditFields, currentData.executiveSummary || {});
+      enterFieldsEdit(grid, clientEditFields, getClientInfoWithFallback());
     });
 
     saveBtn.addEventListener('click', async () => {

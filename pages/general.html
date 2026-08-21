@@ -103,6 +103,8 @@
         <div class="event-header-left">
           <h1 class="event-title" id="eventTitle">Loading...</h1>
           <div class="event-meta">
+            <span class="event-company" id="eventCompany"></span>
+            <span class="meta-separator" id="eventCompanySep" style="display: none;">•</span>
             <span class="event-client" id="eventClient">Client Name</span>
             <span class="meta-separator">•</span>
             <span class="event-dates" id="eventDates">Date Range</span>
@@ -226,7 +228,14 @@
             </div>
             <div class="card-content">
               <div class="info-row">
-                <span class="material-symbols-outlined">business</span>
+                <span class="material-symbols-outlined">apartment</span>
+                <div class="info-text">
+                  <span class="info-label">Company</span>
+                  <span class="info-value" id="summaryCompany">Company Name</span>
+                </div>
+              </div>
+              <div class="info-row">
+                <span class="material-symbols-outlined">person</span>
                 <div class="info-text">
                   <span class="info-label">Client</span>
                   <span class="info-value" id="summaryClient">Client Name</span>
@@ -327,9 +336,15 @@
         <label for="editEventName">Event Name</label>
         <input type="text" id="editEventName" placeholder="Enter event name" autocomplete="off">
       </div>
-      <div class="form-group-dark">
-        <label for="editClientName">Client</label>
-        <input type="text" id="editClientName" placeholder="Enter client name" autocomplete="off">
+      <div class="form-row">
+        <div class="form-group-dark">
+          <label for="editCompanyName">Company</label>
+          <input type="text" id="editCompanyName" placeholder="Enter company name" autocomplete="off">
+        </div>
+        <div class="form-group-dark">
+          <label for="editClientName">Client</label>
+          <input type="text" id="editClientName" placeholder="Enter client name" autocomplete="off">
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group-dark">

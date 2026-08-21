@@ -17,6 +17,7 @@ let sortField = localStorage.getItem('eventsSortField') || 'date'; // 'name' or 
 let sortOrder = localStorage.getItem('eventsSortOrder') || 'asc'; // 'asc' or 'desc'
 let allOwners = []; // Store unique owners for the dropdown
 let allClients = []; // Store unique client names for the dropdown
+let allCompanies = []; // Store unique company names for the dropdown
 let allUsers = [];
 let selectedUsers = [];
 let userPhotoMap = {}; // Maps lowercase user name → profilePhoto URL
@@ -423,12 +424,28 @@ window.showConfirm = showConfirm;
 function showCreateModal() {
   const modal = document.getElementById('createModal');
   if (modal) {
-    // Populate client datalist with existing clients
+    // Populate company/client datalists with existing values
+    populateCompanyDatalist();
     populateClientDatalist();
     
     modal.classList.add('show');
     document.body.style.overflow = 'hidden';
   }
+}
+
+function populateCompanyDatalist() {
+  const datalist = document.getElementById('companyDatalist');
+  if (!datalist) return;
+  
+  datalist.innerHTML = '';
+  
+  allCompanies.forEach(company => {
+    if (company && company.trim()) {
+      const option = document.createElement('option');
+      option.value = company;
+      datalist.appendChild(option);
+    }
+  });
 }
 
 function populateClientDatalist() {
@@ -457,6 +474,7 @@ function hideCreateModal() {
     // Reset form fields
     const editEventId = document.getElementById('editEventId');
     const newTitle = document.getElementById('newTitle');
+    const newCompany = document.getElementById('newCompany');
     const newClient = document.getElementById('newClient');
     const newCity = document.getElementById('newCity');
     const newState = document.getElementById('newState');
@@ -465,6 +483,7 @@ function hideCreateModal() {
     
     if (editEventId) editEventId.value = '';
     if (newTitle) newTitle.value = '';
+    if (newCompany) newCompany.value = '';
     if (newClient) newClient.value = '';
     if (newCity) newCity.value = '';
     if (newState) newState.value = '';
@@ -482,6 +501,7 @@ function hideCreateModal() {
 async function submitCreate() {
   const editEventId = document.getElementById('editEventId')?.value;
   const title = document.getElementById('newTitle')?.value;
+  const company = document.getElementById('newCompany')?.value;
   const client = document.getElementById('newClient')?.value;
   const city = document.getElementById('newCity')?.value;
   const state = document.getElementById('newState')?.value;
@@ -515,7 +535,7 @@ async function submitCreate() {
       },
       body: JSON.stringify({
         title,
-        general: { client, city, state, start, end }
+        general: { company, client, city, state, start, end }
       })
     });
     await res.json();
@@ -529,7 +549,7 @@ async function submitCreate() {
     },
     body: JSON.stringify({
       title,
-        general: { client, city, state, start, end }
+        general: { company, client, city, state, start, end }
     })
   });
   await res.json();
@@ -565,6 +585,7 @@ async function openEditEventModal(eventId, clickedElement) {
     // Clear form fields while loading
     document.getElementById('newTitle').value = '';
     document.getElementById('newTitle').placeholder = 'Loading...';
+    document.getElementById('newCompany').value = '';
     document.getElementById('newClient').value = '';
     document.getElementById('newCity').value = '';
     document.getElementById('newState').value = '';
@@ -583,6 +604,7 @@ async function openEditEventModal(eventId, clickedElement) {
     // Populate form fields
     document.getElementById('newTitle').value = event.title || '';
     document.getElementById('newTitle').placeholder = 'Enter event name';
+    document.getElementById('newCompany').value = event.general?.company || '';
     document.getElementById('newClient').value = event.general?.client || '';
     document.getElementById('newCity').value = event.general?.city || '';
     document.getElementById('newState').value = event.general?.state || '';
@@ -1069,6 +1091,20 @@ async function fetchEventsWithGear() {
   }
 }
 
+function companyClientCellHtml(general) {
+  const company = (general?.company || '').trim();
+  const client = (general?.client || '').trim();
+  if (company && client) {
+    return `<div class="event-company-client">
+      <span class="event-company">${company}</span>
+      <span class="event-client">${client}</span>
+    </div>`;
+  }
+  if (company) return `<span class="event-client">${company}</span>`;
+  if (client) return `<span class="event-client">${client}</span>`;
+  return `<span class="event-client">—</span>`;
+}
+
 function renderEventRowDark(table, index, userId) {
   const general = table.general || {};
   const accentColor = rowAccentColors[index % rowAccentColors.length];
@@ -1180,7 +1216,7 @@ function renderEventRowDark(table, index, userId) {
       </div>
     </td>
     <td>
-      <span class="event-client">${general.client || '—'}</span>
+      ${companyClientCellHtml(general)}
     </td>
     <td>
       <span class="event-date">${dateStr}</span>
@@ -1667,14 +1703,20 @@ async function loadTables(forceRefresh = false) {
   }
   // 'all' shows everything
 
-  // Extract unique clients for the dropdown (before filtering)
+  // Extract unique companies and clients for the dropdowns (before filtering)
+  const companySet = new Set();
   const clientSet = new Set();
   tables.forEach(table => {
+    const company = table.general?.company;
+    if (company && company.trim()) {
+      companySet.add(company.trim());
+    }
     const client = table.general?.client;
     if (client && client.trim()) {
       clientSet.add(client.trim());
     }
   });
+  allCompanies = Array.from(companySet).sort();
   allClients = Array.from(clientSet).sort();
 
   // Filter by owner selection
@@ -1710,11 +1752,12 @@ async function loadTables(forceRefresh = false) {
     const q = searchEventsValue.toLowerCase();
     filteredTables = filteredTables.filter(table => {
       const title = (table.title || '').toLowerCase();
+      const company = (table.general?.company || '').toLowerCase();
       const client = (table.general?.client || '').toLowerCase();
       const city = (table.general?.city || '').toLowerCase();
       const state = (table.general?.state || '').toLowerCase();
       const location = (table.general?.location || '').toLowerCase();
-      return title.includes(q) || client.includes(q) || city.includes(q) || state.includes(q) || location.includes(q);
+      return title.includes(q) || company.includes(q) || client.includes(q) || city.includes(q) || state.includes(q) || location.includes(q);
     });
   }
 
@@ -2010,6 +2053,7 @@ async function loadTables(forceRefresh = false) {
 // Helper function to render a single event card
 function renderEventCard(table, container, userId) {
   const general = table.general || {};
+  const company = general.company || '';
   const client = general.client || 'N/A';
   
   // Format dates consistently with UTC to prevent timezone shifts
@@ -2043,7 +2087,7 @@ function renderEventCard(table, container, userId) {
 
   const details = document.createElement('div');
   details.className = 'event-details';
-  details.innerHTML = `Client: ${client} <br> ${start} - ${end}`;
+  details.innerHTML = `${company && client !== 'N/A' ? `${company} · ${client}` : (company || `Client: ${client}`)} <br> ${start} - ${end}`;
   
   titleContainer.appendChild(title);
   titleContainer.appendChild(details);
@@ -4311,13 +4355,17 @@ async function showAddToCalendarModal(table) {
   // Get user's role (first non-placeholder role found)
   const userRole = userRows.find(row => row.role && row.role !== '__placeholder__')?.role || '';
   
+  const companyLine = table.general?.company ? `Company: ${table.general.company}` : '';
+  const clientLine = table.general?.client ? `Client: ${table.general.client}` : '';
+  const companyClientDesc = [companyLine, clientLine].filter(Boolean).join('\n');
+  
   // Prepare event data for full event
   const fullEventData = [{
     title: table.title || 'Event',
     startDate: table.general?.start || new Date(),
     endDate: table.general?.end || new Date(),
     location: table.general?.location || '',
-    description: `Client: ${table.client || ''}`
+    description: companyClientDesc
   }];
   
   // Prepare event data for user's call days
@@ -4331,7 +4379,7 @@ async function showAddToCalendarModal(table) {
       startDate: startDate,
       endDate: endDate,
       location: table.general?.location || '',
-      description: `Role: ${userRole}\nClient: ${table.client || ''}`
+      description: [`Role: ${userRole}`, companyClientDesc].filter(Boolean).join('\n')
     };
   });
   

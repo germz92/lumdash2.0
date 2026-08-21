@@ -92,6 +92,7 @@ const tableSchema = new mongoose.Schema({
     start: String,
     end: String,
     client: String,
+    company: String,
     attendees: Number,
     budget: String,
     summary: { type: String, default: "" },

@@ -84,7 +84,7 @@
                     Event <span class="material-symbols-outlined sort-icon">expand_more</span>
                   </th>
                   <th class="badges-col-header"></th>
-                  <th>Client</th>
+                  <th>Company / Client</th>
                   <th class="sortable" data-sort="date">
                     Date <span class="material-symbols-outlined sort-icon">expand_more</span>
                   </th>
@@ -211,12 +211,21 @@
         <label for="newTitle">Event Name</label>
         <input id="newTitle" type="text" placeholder="Enter event name" autocomplete="off">
       </div>
-      <div class="form-group-dark">
-        <label for="newClient">Client Name</label>
-        <input id="newClient" type="text" list="clientDatalist" placeholder="Select or enter client name" autocomplete="off">
-        <datalist id="clientDatalist">
-          <!-- Populated dynamically with existing clients -->
-        </datalist>
+      <div class="form-row">
+        <div class="form-group-dark">
+          <label for="newCompany">Company Name</label>
+          <input id="newCompany" type="text" list="companyDatalist" placeholder="Select or enter company name" autocomplete="off">
+          <datalist id="companyDatalist">
+            <!-- Populated dynamically with existing companies -->
+          </datalist>
+        </div>
+        <div class="form-group-dark">
+          <label for="newClient">Client Name</label>
+          <input id="newClient" type="text" list="clientDatalist" placeholder="Select or enter client name" autocomplete="off">
+          <datalist id="clientDatalist">
+            <!-- Populated dynamically with existing clients -->
+          </datalist>
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group-dark">
@@ -480,7 +489,7 @@ function renderEventRow(event, index) {
         </div>
       </td>
       <td>
-        <span class="event-client ${event.client ? 'clickable' : ''}" onclick="${event.client ? `filterByClient('${event.client.replace(/'/g, "\\'")}'); event.stopPropagation();` : ''}">${event.client || '—'}</span>
+        <span class="event-client ${event.client || event.company ? 'clickable' : ''}" onclick="${event.client ? `filterByClient('${event.client.replace(/'/g, "\\'")}'); event.stopPropagation();` : ''}">${event.company && event.client ? `${event.company} · ${event.client}` : (event.company || event.client || '—')}</span>
         <div class="event-stats">
           <span><span class="material-symbols-outlined">person</span> ${crewCount}</span>
           <span><span class="material-symbols-outlined">folder</span> ${folderCount}</span>

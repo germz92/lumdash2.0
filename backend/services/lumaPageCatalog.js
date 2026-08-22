@@ -16,10 +16,19 @@ const WORKFLOWS = [
   'Crew availability: tentative → requested → accepted or declined → confirmed. Admins email requests; crew reply on a public link.',
   'Events have both client and company. Access: owners, leads, shared, assigned crew. Admins and planners can read all events.',
   'Roles: user, planner, admin, production_manager (inventory).',
-  'Event to-dos live on #todos as todos[] (todo / in-progress / done). Dashboard My Tasks also has private PersonalTask items.',
+  'Event to-dos live on #todos as todos[] (todo / in-progress / done). Use openTodos and todoSummary — name every open task. Dashboard My Tasks is only the current user\'s items plus private PersonalTask rows.',
+  'Shotlists are per-event checklists (shotlists[] plus legacy shotlist). What shots are left = shotlistSummary.remainingTitles. Name every remaining shot.',
   'Flights: official FlightRequest records (pending / booked) plus older travel rows on the event.',
-  'Gear: lists, reservations, packages, and packed status are separate from old checkbox lists.',
-  'Answer all times in 12-hour format with AM/PM (e.g. 2:00 PM, not 14:00).'
+  'Gear: event reservations, packages, packed status, and optional legacy checkbox lists. What is not packed = gearSummary.unpacked. Do not answer event gear from global inventory.',
+  'Card log tracks memory cards by date, camera, person, and category. Who has a card = cardLookup.',
+  'Admin notes are owner/admin only. If notes say hidden, say that — do not invent an empty list.',
+  'Event expenses (owner/admin) have expenseTotals like the Expenses page: crew + flights + hotels + misc + reimbursements = grand.',
+  'Answer all times in 12-hour format with AM/PM (e.g. 2:00 PM, not 14:00).',
+  'Day start/end on Schedule = earliest session startTime and latest session endTime that day, from scheduleByDay — not the first or last row in the list.',
+  'Day start/end on Crew = earliest callTime and latest endTime that day, from crewByDay.',
+  'Who is flying in = FlightRequest passengers plus travel-row names for that event. Match by event title or eventId; pending still counts. Do not say nobody if flyingInByEvent has names.',
+  'Hotels live on Travel & Accommodation as accommodation rows (hotel, guest, checkin, checkout, ref). Answer "do we have hotels" from hotelsByEvent: booked / requested / not_required / none. Who is missing a hotel or flight = travelGaps.',
+  'Events can have multiple owners. Who owns this event = every name in eventAccess.ownerNames. Who it is shared with = eventAccess.sharedWith (leads + shared users). Both lists are complete — name everyone.'
 ];
 
 const PAGES = {
@@ -94,7 +103,7 @@ const PAGES = {
     context: 'event',
     title: 'Event home / General',
     purpose: 'Overview: dates, venue, client, company, contacts, locations, summary, gallery.',
-    datasets: ['general', 'executiveSummary'],
+    datasets: ['general', 'executiveSummary', 'eventAccess'],
     related: ['scheduleIndex', 'crewIndex'],
     ask: ['Where is this event?', 'Who is the client?', 'When does it start?']
   },
@@ -204,7 +213,7 @@ function detectIntent(message) {
   const text = String(message || '').toLowerCase();
   const intent = new Set();
 
-  if (text.match(/schedule|session|keynote|agenda|rundown|breakout|presentation|after lunch|what(?:'s| is) happening/)) {
+  if (text.match(/schedule|session|keynote|agenda|rundown|breakout|presentation|after lunch|what(?:'s| is) happening|start and end|end times?|first session|last session|wrap|how late/)) {
     intent.add('schedule');
   }
   if (text.match(/\b(crew|call time|calltime|who's working|who is working|availability|accepted|declined|tentative|confirmed|photographer|videographer)\b/) ||
@@ -214,32 +223,37 @@ function detectIntent(message) {
   if (text.match(/\b(i|my|me|am i|do i|when do i)\b/) || text.includes('my call') || text.includes('my assignment')) {
     intent.add('personal');
   }
-  if (text.match(/gear|camera|lens|packed|reservation|inventory|checkout|check-out|r5|package/)) {
+  if (text.match(/gear|camera|lens|packed|unpacked|not packed|reservation|inventory|checkout|check-out|r5|package/)) {
     intent.add('gear');
   }
-  if (text.match(/\b(task|todo|to-do|deadline|due today|due tomorrow)\b/)) {
+  if (text.match(/\b(task|todo|to-do|to do list|deadline|due today|due tomorrow|still open|open tasks|open items)\b/) ||
+      text.match(/what(?:'s|s| is) (still )?(left|open)/)) {
     intent.add('todos');
   }
-  if (text.match(/travel|flight|hotel|accommodation|airline|fly|flying|confirmation/)) {
+  if (text.match(/travel|flight|hotel|hotels|accommodation|airline|fly|flying|flying in|who's coming|who is coming|confirmation|lodging|staying|check-?in|check-?out|missing (a )?hotel|missing (a )?flight/)) {
     intent.add('travel');
   }
-  if (text.match(/\b(card|sd card|cfexpress|memory card)\b/)) {
+  if (text.match(/\b(card log|sd card|cfexpress|memory card|who has card|card \d+)\b/) ||
+      text.match(/\bcard\b/)) {
     intent.add('cardLog');
   }
-  if (text.match(/shotlist|shot list|headshot|booth|checklist of shots/)) {
+  if (text.match(/shotlist|shot list|headshot|booth|checklist of shots|shot lists|remaining shots|shots? (are |is )?(left|remaining)/)) {
     intent.add('shotlists');
   }
-  if (text.match(/document|pdf|floor plan|floorplan|map|guide/)) {
+  if (text.match(/\b(documents?|pdfs?|floor ?plans?)\b/) || text.match(/\b(map|guide)\b/)) {
     intent.add('documents');
   }
-  if (text.match(/\b(note|pinned|reminder)\b/)) {
+  if (text.match(/admin notes?|\bpinned\b|\breminders?\b|what(?:'s| is) pinned/)) {
     intent.add('adminNotes');
   }
-  if (text.match(/expense|budget|cost|how much did|invoice|contract/)) {
+  if (text.match(/expense|crew cost|hotel cost|flight cost|grand total|how much (did we|have we) spend|how much (did|does) this (event )?cost|what did (this|the) event cost/)) {
     intent.add('expenses');
-    intent.add('executiveSummary');
   }
-  if (text.match(/account manager|project manager|deliverable|executive summary|signed|retainer/)) {
+  if (text.match(/\bbudget\b/)) {
+    intent.add('expenses');
+    intent.add('general');
+  }
+  if (text.match(/invoice|contract|account manager|project manager|deliverable|executive summary|signed|retainer/)) {
     intent.add('executiveSummary');
   }
   if (text.match(/location|venue|client|company|contact|where is|gallery/)) {
@@ -247,6 +261,9 @@ function detectIntent(message) {
   }
   if (text.match(/what day is|when is the |what events|all events|other events|which events/)) {
     intent.add('crossEvent');
+  }
+  if (text.match(/shar(e|ed)|who has access|who can see|who(?:'s| is) this (event )?shared|who (?:is|are) the owners?|who owns|event owners?/)) {
+    intent.add('share');
   }
 
   return [...intent];
@@ -265,8 +282,14 @@ function getDatasetsToLoad(page, intent, mode) {
     if (flag === 'crew' || flag === 'personal') {
       datasets.add(mode === 'event' ? 'crew' : 'mySchedule');
     }
-    if (flag === 'gear') datasets.add(mode === 'event' ? 'gear' : 'inventorySummary');
-    if (flag === 'todos') datasets.add(mode === 'event' ? 'todos' : 'myEventTasks');
+    if (flag === 'gear') {
+      datasets.add(mode === 'event' ? 'gear' : 'inventorySummary');
+      if (mode !== 'event') datasets.add('gear');
+    }
+    if (flag === 'todos') {
+      datasets.add(mode === 'event' ? 'todos' : 'myEventTasks');
+      if (mode !== 'event') datasets.add('todos');
+    }
     if (flag === 'travel') {
       datasets.add('travel');
       datasets.add('accommodation');
@@ -280,6 +303,7 @@ function getDatasetsToLoad(page, intent, mode) {
     if (flag === 'executiveSummary') datasets.add('executiveSummary');
     if (flag === 'general') datasets.add('general');
     if (flag === 'crossEvent') datasets.add('eventsOverview');
+    if (flag === 'share') datasets.add('eventAccess');
   }
 
   if (mode === 'dashboard' || mode === 'global') {

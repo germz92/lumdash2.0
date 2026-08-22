@@ -31,6 +31,8 @@ Times in answers default to **12-hour format** with AM/PM (e.g. 2:00 PM).
 
 Event access: **owners**, **leads**, **shared**, **assigned crew** (`rows.userId`). Admins and planners can read all events.
 
+"Who owns this event" = every `owners[]` user — events can have multiple owners; never pick one. "Who did I share this event with" = leads + `sharedWith` (the Share modal list). Crew is separate. Use `eventAccess` — those lists are complete.
+
 ---
 
 ## Workflows Luma must know
@@ -93,7 +95,7 @@ userId, availabilityStatus
 `Table.programSchedule`: date, name, startTime, endTime, location, photographer, notes, done, important.
 
 ### Shotlist (`#shotlist`)
-`Table.shotlists` and legacy `Table.shotlist`.
+`Table.shotlists` and legacy `Table.shotlist`. Remaining shots = `shotlistSummary.remainingTitles` (complete list).
 
 ### To-Dos (`#todos`)
 `Table.todos` — **not** `table.tasks`:
@@ -102,23 +104,25 @@ userId, availabilityStatus
 task, status (todo | in-progress | done), dueDate, owner, notes
 ```
 
+Open work = `openTodos` / `todoSummary`. Named-event questions on the dashboard load that event's full list, not only My Tasks.
+
 ### Travel & Accommodation (`#travel-accommodation`)
-`Table.travel`, `Table.accommodation`, plus `FlightRequest` for this event.
+`Table.travel`, `Table.accommodation`, plus `FlightRequest` for this event. Missing hotel/flight = `travelGaps`.
 
 ### Gear (`#gear`)
-`Table.gear` lists and dates, `ReservedGearItem` (packed, dates, reservedBy), `GearPackage`.
+`Table.gear` lists and dates, `ReservedGearItem` (packed, dates, reservedBy), `GearPackage`, optional legacy checkbox lists. Not packed = `gearSummary.unpacked` (complete). Event gear is not global inventory.
 
 ### Card Log (`#card-log`)
-`Table.cardLog` — date, camera, card1/card2, user.
+`Table.cardLog` — date, camera, card1/card2, user, category. `cardLookup` maps a card number to the person holding it.
 
 ### Documents (`#documents`)
 `Table.documents` — filename, type, uploadedAt.
 
 ### Expenses (`#expenses`) — owner/admin
-`Table.expenses`: crew, flights, accommodation, misc, reimbursements.
+`Table.expenses`: crew, flights, accommodation, misc, reimbursements. Totals match the Expenses page in `expenseTotals.grand`. Hidden users get an error, not an empty list. Invoice/contract live on Executive Summary.
 
 ### Admin Notes (`#admin-notes`) — owner/admin
-`Table.adminNotes`: title, content, pinned, createdByName.
+`Table.adminNotes`: title, content, pinned, createdByName. Hidden users get an error, not an empty list.
 
 ---
 
@@ -129,6 +133,18 @@ task, status (todo | in-progress | done), dueDate, owner, notes
 3. **Intent overlay:** extra datasets when the question needs them (e.g. "my call time" on Schedule still loads crew)
 
 Large lists are compressed by date: keep matches / today / important rows in full, summarize the rest as `"Feb 25: 18 sessions"`.
+
+Before compressing, Luma always gets rollups computed from the **full** list:
+
+- `scheduleByDay`: earliest session start and latest session end per date
+- `crewByDay`: earliest call time and latest end time per date
+- `todoSummary` / `openTodos`: counts and the complete open-task list
+- `shotlistSummary`: remaining titles per event
+- `gearSummary`: unpacked reservation names
+- `cardLookup` / `cardsByPerson`: who holds which card
+- `travelGaps`: travelers missing a hotel or flight
+- `expenseTotals`: crew + flights + hotels + misc + reimbursements = grand
+- `notesSummary`: pinned titles; full note bodies for owners/admins
 
 Page ids sent by `js/chat.js` must match the catalog (`todos`, `travel-accommodation`, not `tasks` / `travel`).
 

@@ -11,6 +11,7 @@ const sgMail = require('@sendgrid/mail');
 const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
 const OpenAI = require('openai');
+const { buildLumaContext } = require('./services/lumaContextBuilder');
 require('dotenv').config();
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 console.log('SENDGRID_API_KEY loaded:', !!process.env.SENDGRID_API_KEY);
@@ -2294,1054 +2295,147 @@ app.post('/api/tables/:id/owner-requests/:requestId/deny', authenticate, async (
 });
 
 // ========================================
-// GLOBAL AI CHAT ENDPOINT (Dashboard - no specific event)
-// IMPORTANT: This must be defined BEFORE /api/chat/:tableId
+// LUMA AI CHAT
+// IMPORTANT: /api/chat/global must be defined BEFORE /api/chat/:tableId
 // ========================================
+
+async function streamLumaResponse(res, messages) {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+  });
+
+  const stream = await openai.chat.completions.create({
+    model: 'gpt-4o-mini',
+    messages,
+    max_tokens: 800,
+    temperature: 0.4,
+    stream: true
+  });
+
+  let fullResponse = '';
+  for await (const chunk of stream) {
+    const content = chunk.choices[0]?.delta?.content || '';
+    if (content) {
+      fullResponse += content;
+      res.write(`data: ${JSON.stringify({ content, done: false })}\n\n`);
+    }
+  }
+  res.write(`data: ${JSON.stringify({ content: '', done: true, fullResponse })}\n\n`);
+  res.end();
+}
+
+function lumaChatErrorMessage(error) {
+  if (error.status === 429) {
+    return 'OpenAI quota exceeded. Please add billing to your OpenAI account at platform.openai.com/billing';
+  }
+  if (error.status === 401) {
+    return 'Invalid OpenAI API key. Please check your configuration.';
+  }
+  if (error.message?.includes('context_length_exceeded')) {
+    return 'Query too complex. Try asking a more specific question.';
+  }
+  return 'AI service temporarily unavailable. Please try again.';
+}
+
+async function handleLumaChatError(res, error, label) {
+  console.error(label, error);
+  const errorMessage = lumaChatErrorMessage(error);
+  try {
+    res.write(`data: ${JSON.stringify({ error: errorMessage, done: true })}\n\n`);
+    res.end();
+  } catch (writeError) {
+    if (!res.headersSent) {
+      res.status(500).json({ error: errorMessage });
+    }
+  }
+}
+
 app.post('/api/chat/global', authenticate, async (req, res) => {
   try {
     const { message, conversationHistory = [], pageContext = {} } = req.body;
-    
+
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
     }
-
     if (!openai) {
-      return res.status(503).json({ 
-        error: 'AI chat feature is not available. Please configure OpenAI API key.' 
+      return res.status(503).json({
+        error: 'AI chat feature is not available. Please configure OpenAI API key.'
       });
     }
 
-    // ========================================
-    // PHASE 1: LOAD COMPREHENSIVE DATA
-    // Load ALL relevant data upfront - let AI do the filtering/reasoning
-    // ========================================
-    
-    const now = new Date();
-    const currentDateTime = {
-      date: now.toISOString().split('T')[0],
-      dayOfWeek: now.toLocaleDateString('en-US', { weekday: 'long' }),
-      time: now.toTimeString().split(' ')[0]
-    };
+    const { systemPrompt, knowledgeBase, page } = await buildLumaContext({
+      message,
+      pageContext,
+      user: req.user,
+      mode: 'global'
+    });
 
-    // Determine access query based on user role (admins and planners see all events)
-    const accessQuery = (req.user.role === 'admin' || req.user.role === 'planner')
-      ? {} 
-      : { $or: [{ owners: req.user.id }, { sharedWith: req.user.id }, { leads: req.user.id }] };
-    
-    // Load COMPREHENSIVE event data - not just basics
-    const allEvents = await Table.find(accessQuery)
-      .select('title general rows adminNotes programSchedule owners sharedWith todos')
-      .populate('todos.owner', 'fullName email')
-      .populate('todos.createdBy', 'fullName email')
-      .sort({ 'general.start': -1 })
-      .limit(30) // Limit to most recent 30 events to stay within token limits
-      .lean();
-
-    // Build comprehensive knowledge base
-    const knowledgeBase = {
-      // Current context
-      today: currentDateTime.date,
-      dayOfWeek: currentDateTime.dayOfWeek,
-      currentTime: currentDateTime.time,
-      user: {
-        name: req.user.fullName,
-        firstName: req.user.fullName.split(' ')[0],
-        role: req.user.role,
-        email: req.user.email
-      },
-      
-      // Comprehensive event data
-      events: allEvents.map(e => {
-        const isOwnerOrAdmin = req.user.role === 'admin' || e.owners?.includes(req.user.id);
-        
-        return {
-          name: e.title,
-          client: e.general?.client || null,
-          company: e.general?.company || null,
-          dates: {
-            start: e.general?.start,
-            end: e.general?.end
-          },
-          location: {
-            venue: e.general?.location,
-            city: e.general?.city,
-            state: e.general?.state
-          },
-          // Contacts - valuable for "who is X" or "where does X live" questions
-          contacts: (e.general?.contacts || []).map(c => ({
-            name: c.name,
-            role: c.role,
-            email: c.email,
-            phone: c.number
-          })),
-          // Locations within the event
-          locations: e.general?.locations || [],
-          // Summary/notes that might contain important info
-          summary: e.general?.summary || null,
-          // Admin notes (only for owners/admins)
-          notes: isOwnerOrAdmin ? (e.adminNotes || []).map(n => ({
-            title: n.title,
-            content: n.content,
-            pinned: n.pinned,
-            createdBy: n.createdByName
-          })) : [],
-          // Crew members and their schedules
-          crew: (e.rows || []).slice(0, 20).map(r => ({ // Limit crew to 20 per event
-            name: r.name,
-            role: r.role,
-            date: r.date,
-            callTime: r.startTime,
-            endTime: r.endTime
-          })),
-          // Program schedule (sessions)
-          schedule: (e.programSchedule || []).slice(0, 15).map(s => ({ // Limit sessions
-            name: s.name,
-            date: s.date,
-            startTime: s.startTime,
-            endTime: s.endTime,
-            location: s.location,
-            photographer: s.photographer
-          })),
-          // To-do list / tasks for this event
-          todos: (e.todos || []).map(t => ({
-            task: t.task,
-            status: t.status,
-            dueDate: t.dueDate ? new Date(t.dueDate).toISOString().split('T')[0] : null,
-            assignedTo: t.owner?.fullName || t.owner?.email || 'Unassigned',
-            notes: t.notes
-          }))
-        };
-      }),
-      
-      // User's personal schedule across all events
-      mySchedule: [],
-      
-      // User's tasks across all events (assigned to them or created by them)
-      myTasks: [],
-      
-      // All tasks due today across all events
-      tasksDueToday: [],
-      
-      // Flight information
-      flights: [],
-      myFlights: []
-    };
-    
-    // Collect user's schedule across all events
-    const userFirstName = req.user.fullName.split(' ')[0].toLowerCase();
-    const todayStr = currentDateTime.date; // YYYY-MM-DD format
-    
-    for (const event of allEvents) {
-      // User's crew schedule
-      const userRows = (event.rows || []).filter(r => 
-        r.name?.toLowerCase().includes(userFirstName)
-      );
-      for (const row of userRows) {
-        knowledgeBase.mySchedule.push({
-          event: event.title,
-          date: row.date,
-          role: row.role,
-          callTime: row.startTime,
-          endTime: row.endTime
-        });
-      }
-      
-      // User's tasks (assigned to them or created by them)
-      // Handle both populated and non-populated owner references
-      const userId = req.user.id?.toString();
-      const userEmail = req.user.email?.toLowerCase();
-      const userTasks = (event.todos || []).filter(t => {
-        // Check if owner is populated (object) or just an ObjectId
-        const ownerId = t.owner?._id?.toString() || t.owner?.toString();
-        const ownerEmail = t.owner?.email?.toLowerCase();
-        const createdById = t.createdBy?._id?.toString() || t.createdBy?.toString();
-        const createdByEmail = t.createdBy?.email?.toLowerCase();
-        
-        return ownerId === userId || 
-               createdById === userId ||
-               ownerEmail === userEmail ||
-               createdByEmail === userEmail;
-      });
-      
-      for (const task of userTasks) {
-        const dueDate = task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : null;
-        const isOverdue = dueDate && dueDate < todayStr && task.status !== 'done';
-        knowledgeBase.myTasks.push({
-          event: event.title,
-          task: task.task,
-          status: task.status,
-          dueDate: dueDate,
-          notes: task.notes,
-          overdue: isOverdue
-        });
-        
-        // Check if due today or overdue (status not done)
-        if (task.status !== 'done') {
-          if (dueDate === todayStr) {
-            knowledgeBase.tasksDueToday.push({
-              event: event.title,
-              task: task.task,
-              status: task.status,
-              dueDate: dueDate,
-              notes: task.notes,
-              urgent: false
-            });
-          } else if (dueDate && dueDate < todayStr) {
-            // Overdue task
-            knowledgeBase.tasksDueToday.push({
-              event: event.title,
-              task: task.task,
-              status: task.status,
-              dueDate: dueDate,
-              notes: task.notes,
-              urgent: true,
-              overdue: true
-            });
-          }
-        }
-      }
-    }
-    
-    // For admins: also get ALL incomplete tasks across events (not just their own)
-    if (req.user.role === 'admin') {
-      for (const event of allEvents) {
-        const incompleteTasks = (event.todos || []).filter(t => t.status !== 'done');
-        for (const task of incompleteTasks) {
-          const dueDate = task.dueDate ? new Date(task.dueDate).toISOString().split('T')[0] : null;
-          
-          // Check if due today or overdue
-          if (dueDate && (dueDate === todayStr || dueDate < todayStr)) {
-            // Avoid duplicates (user's own tasks already added)
-            const alreadyAdded = knowledgeBase.tasksDueToday.some(
-              t => t.task === task.task && t.event === event.title
-            );
-            if (!alreadyAdded) {
-              knowledgeBase.tasksDueToday.push({
-                event: event.title,
-                task: task.task,
-                status: task.status,
-                dueDate: dueDate,
-                notes: task.notes,
-                urgent: dueDate < todayStr,
-                overdue: dueDate < todayStr
-              });
-            }
-          }
-        }
-      }
-    }
-    
-    // Log task counts for debugging
-    console.log(`[Luma] Tasks loaded - myTasks: ${knowledgeBase.myTasks.length}, dueToday: ${knowledgeBase.tasksDueToday.length}`);
-    
-    // Always load flights - they're often relevant context
-    const accessibleEventIds = allEvents.map(e => e._id);
-    let flightQuery;
-    if (req.user.role === 'admin' || req.user.role === 'planner') {
-      flightQuery = { status: { $in: ['pending', 'booked'] } };
-    } else {
-      flightQuery = {
-        $and: [
-          { status: { $in: ['pending', 'booked'] } },
-          {
-            $or: [
-              { createdBy: req.user.id },
-              { 'passengers.name': { $regex: userFirstName, $options: 'i' } },
-              { eventId: { $in: accessibleEventIds } }
-            ]
-          }
-        ]
-      };
-    }
-    
-    const flights = await FlightRequest.find(flightQuery)
-      .sort({ departDate: 1 })
-      .limit(20)
-      .lean();
-    
-    knowledgeBase.flights = flights.map(f => ({
-      event: f.eventName,
-      from: f.from?.city || f.from?.code,
-      to: f.to?.city || f.to?.code,
-      departDate: f.departDate,
-      returnDate: f.returnDate,
-      passengers: f.passengers?.map(p => p.name) || [],
-      airline: f.bookedDetails?.airline || 'TBD',
-      status: f.status,
-      notes: f.notes
-    }));
-    
-    knowledgeBase.myFlights = knowledgeBase.flights.filter(f => 
-      f.passengers.some(p => p.toLowerCase().includes(userFirstName))
-    );
-
-    // ========================================
-    // PHASE 2: INTELLIGENT SYSTEM PROMPT
-    // Teach the AI how to reason across data sources
-    // ========================================
-    
-    const systemPrompt = `You are Luma, an intelligent AI assistant for LumDash - a professional event management platform used by photographers and videographers.
-
-═══════════════════════════════════════════════════════════════
-📅 CURRENT CONTEXT
-═══════════════════════════════════════════════════════════════
-Today: ${currentDateTime.date} (${currentDateTime.dayOfWeek})
-Time: ${currentDateTime.time}
-User: ${req.user.fullName} (${req.user.role})
-
-═══════════════════════════════════════════════════════════════
-🧠 HOW TO REASON ABOUT QUESTIONS
-═══════════════════════════════════════════════════════════════
-
-You have access to comprehensive event data. Here's how to find answers:
-
-**Finding People:**
-- "Where does Monica from Genesys live?" → 
-  1. Find event where client = "Genesys" OR title contains "Genesys"
-  2. Check that event's contacts for "Monica"
-  3. Check that event's notes for mentions of "Monica"
-  4. Look for location/city information
-
-**Finding Information About Events:**
-- Search by event name in the 'name' field
-- Search by client name in the 'client' field
-- Search by company name in the 'company' field
-- Client and company names may appear in event titles too
-
-**Finding Crew/Staff Info:**
-- Check the 'crew' array within each event
-- For "who's working on X date" → filter crew by date
-- For "what's my call time" → check mySchedule
-
-**Finding Session/Program Info:**
-- Check the 'schedule' array within each event
-- Sessions have names, times, locations, assigned photographer
-
-**Finding Travel Info:**
-- Check 'flights' for all bookings
-- Check 'myFlights' for the current user's flights
-- Passengers array shows who's on each flight
-
-**Finding Tasks/To-Dos:**
-- Check 'myTasks' for all tasks assigned to the current user across all events
-- Check 'tasksDueToday' for tasks due today AND overdue tasks (marked with overdue: true)
-- Each event also has a 'todos' array with all tasks for that event
-- Task status: 'todo' (not started), 'in-progress', 'done'
-- Tasks with overdue: true are PAST their due date - highlight these!
-- Look at dueDate to find overdue or upcoming tasks
-- When asked "what's due today", include BOTH today's tasks AND overdue tasks
-
-**Cross-Referencing:**
-- A person might appear in: contacts, notes, crew, schedule, flight passengers
-- Search ALL relevant fields when looking for a person
-- Client names link events together
-
-═══════════════════════════════════════════════════════════════
-📊 KNOWLEDGE BASE
-═══════════════════════════════════════════════════════════════
-
-${JSON.stringify(knowledgeBase, null, 2)}
-
-═══════════════════════════════════════════════════════════════
-💡 RESPONSE GUIDELINES
-═══════════════════════════════════════════════════════════════
-
-1. **Be thorough**: Search ALL relevant data sources before saying you don't know
-2. **Be specific**: Use exact names, dates, and times from the data
-3. **Be helpful**: If info isn't found, suggest where it might be stored
-4. **Format nicely**: Use readable date formats (February 25, 2026)
-5. **Cite sources**: "According to the notes for the Genesys event..."
-6. **Reason out loud** (briefly): "Looking at the Genesys event contacts..."
-
-If you truly cannot find information after searching all relevant fields, say so clearly and suggest where the user might add that information.`;
-
-    // Build messages with conversation history
-    const messages = [{ role: "system", content: systemPrompt }];
-    
-    // Include recent conversation for context (last 6 messages for better continuity)
-    const recentHistory = conversationHistory.slice(-6);
-    messages.push(...recentHistory);
-    messages.push({ role: "user", content: message });
-
-    // Log knowledge base size for monitoring
     const kbSize = JSON.stringify(knowledgeBase).length;
-    console.log(`[Luma] Query: "${message.substring(0, 50)}..." | KB Size: ${(kbSize/1024).toFixed(1)}KB | Events: ${knowledgeBase.events.length}`);
+    console.log(`[Luma] global page=${page} | KB ${(kbSize / 1024).toFixed(1)}KB`);
 
-    // Set up streaming response
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*'
-    });
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...conversationHistory.slice(-6),
+      { role: 'user', content: message }
+    ];
 
-    const stream = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: messages,
-      max_tokens: 800, // Increased for more detailed responses
-      temperature: 0.4, // Slightly higher for more natural responses
-      stream: true
-    });
-
-    let fullResponse = '';
-
-    for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content || '';
-      if (content) {
-        fullResponse += content;
-        res.write(`data: ${JSON.stringify({ content, done: false })}\n\n`);
-      }
-    }
-
-    res.write(`data: ${JSON.stringify({ content: '', done: true, fullResponse })}\n\n`);
-    res.end();
-
+    await streamLumaResponse(res, messages);
   } catch (error) {
-    console.error('Global chat error:', error);
-    
-    let errorMessage = 'AI service temporarily unavailable. Please try again.';
-    if (error.status === 429) {
-      errorMessage = 'API quota exceeded. Please try again later.';
-    }
-
-    try {
-      res.write(`data: ${JSON.stringify({ error: errorMessage, done: true })}\n\n`);
-      res.end();
-    } catch (writeError) {
-      if (!res.headersSent) {
-        res.status(500).json({ error: errorMessage });
-      }
-    }
+    await handleLumaChatError(res, error, 'Global chat error:');
   }
 });
 
-// AI CHAT ENDPOINT (Event-specific)
 app.post('/api/chat/:tableId', authenticate, async (req, res) => {
   try {
     const { message, conversationHistory = [], pageContext = {} } = req.body;
     const tableId = req.params.tableId;
-    
+
     if (!message) {
       return res.status(400).json({ error: 'Message is required' });
     }
-
-    // Check if OpenAI is configured
     if (!openai) {
-      return res.status(503).json({ 
-        error: 'AI chat feature is not available. Please configure OpenAI API key.' 
+      return res.status(503).json({
+        error: 'AI chat feature is not available. Please configure OpenAI API key.'
       });
     }
 
-    // Get the table and verify access
     const table = await Table.findById(tableId);
     if (!table) {
       return res.status(404).json({ error: 'Table not found' });
     }
-    
-    // Check access: owners, sharedWith, leads, admin, or planner (read access)
     if (!hasEventReadAccess(table, req.user)) {
       return res.status(403).json({ error: 'Not authorized to access this event' });
     }
-    
-    // Determine if user can see admin-only data (owners and admins only)
+
+    const isAdmin = req.user.role === 'admin';
+    const isOwner = Array.isArray(table.owners) && table.owners.map(o => o.toString()).includes(req.user.id);
     const canSeeAdminData = isOwner || isAdmin;
 
-    // Improved data collection - include more context but keep it structured
-    const messageKeywords = message.toLowerCase();
-    
-    // Define broader keyword matching for better data inclusion
-    const isScheduleQuery = messageKeywords.match(/schedule|time|when|start|end|session|keynote|presentation|meeting|event|program|agenda/);
-    const isCrewQuery = messageKeywords.match(/crew|team|photographer|people|who|assignment|role|staff|person|name|call/);
-    const isGearQuery = messageKeywords.match(/gear|camera|equipment|lens|light|audio|pack|reserved|inventory|serial/);
-    const isTaskQuery = messageKeywords.match(/task|todo|deadline|complete|done|work|assign/);
-    const isTravelQuery = messageKeywords.match(/travel|flight|hotel|accommodation|transport|airline|check|fly|flying/);
-    const isCardQuery = messageKeywords.match(/card|memory|storage|sd|cf|media/);
-    const isShotQuery = messageKeywords.match(/shot|photo|picture|image|list|checklist|headshot|booth|activation/);
-    const isGeneralQuery = messageKeywords.match(/location|where|address|contact|client|budget|summary|general|info/);
-    
-    // NEW: Cross-event query detection
-    const isCrossEventQuery = messageKeywords.match(/what day is|when is|what events|all events|other events|which events|is .+ working on|working on .+ \d/);
-    const isEventNameQuery = message.match(/(?:what day is(?: the)?|when is(?: the)?)\s+([A-Za-z0-9\s]+?)(?:\s+event|\?|$)/i);
-    
-    // Detect personal queries (questions about the current user)
-    const isPersonalQuery = messageKeywords.match(/\b(i|my|me|am|do i|when do i|what time do i|where do i|should i)\b/) || 
-                            messageKeywords.includes('my call') || 
-                            messageKeywords.includes('my time') ||
-                            messageKeywords.includes('my assignment') ||
-                            messageKeywords.includes('my role');
+    const { systemPrompt, knowledgeBase, page } = await buildLumaContext({
+      message,
+      pageContext,
+      user: req.user,
+      mode: 'event',
+      table,
+      canSeeAdminData
+    });
 
-    const relevantData = {
-      eventTitle: table.title,
-      currentUser: req.user.fullName,
-      currentDate: new Date().toISOString()
-    };
+    const kbSize = JSON.stringify(knowledgeBase).length;
+    console.log(`[Luma] event=${table.title} page=${page} | KB ${(kbSize / 1024).toFixed(1)}KB`);
 
-    // Always include general info as it's often needed for context
-    // Filter sensitive data (budget) for non-admin/non-owner users
-    const generalInfo = { ...(table.general || {}) };
-    if (!canSeeAdminData) {
-      delete generalInfo.budget;
-      delete generalInfo.contractUrl;
-      delete generalInfo.invoiceUrl;
-    }
-    relevantData.general = generalInfo;
-    
-    // Add user-specific context
-    relevantData.currentUser = {
-      id: req.user.id,
-      fullName: req.user.fullName,
-      role: req.user.role,
-      email: req.user.email
-    };
-    
-    // Include data based on broader keyword matching with smart filtering
-    if (isScheduleQuery || messageKeywords.includes('today') || messageKeywords.includes('now') || messageKeywords.includes('next') || messageKeywords.includes('keynote')) {
-      const allSchedule = table.programSchedule || [];
-      
-      // Smart filtering: prioritize relevant items to avoid data truncation
-      const relevantScheduleItems = [];
-      const otherScheduleItems = [];
-      
-      // Extract search terms from the message for better matching
-      const searchTerms = message.toLowerCase()
-        .replace(/[^\w\s]/g, ' ') // Remove punctuation
-        .split(/\s+/)
-        .filter(term => term.length > 2); // Only words longer than 2 chars
-      
-      for (const item of allSchedule) {
-        const itemText = `${item.name || ''} ${item.location || ''} ${item.notes || ''}`.toLowerCase();
-        const isRelevant = searchTerms.some(term => itemText.includes(term));
-        
-        if (isRelevant) {
-          relevantScheduleItems.push(item);
-        } else {
-          otherScheduleItems.push(item);
-        }
-      }
-      
-      // Include relevant items first, then add others up to a reasonable limit
-      const maxItems = 25; // Reasonable limit to prevent data truncation
-      relevantData.programSchedule = [
-        ...relevantScheduleItems,
-        ...otherScheduleItems.slice(0, Math.max(0, maxItems - relevantScheduleItems.length))
-      ];
-      
-      console.log(`📅 Including schedule data: ${relevantData.programSchedule.length} items (${relevantScheduleItems.length} relevant, ${Math.min(otherScheduleItems.length, maxItems - relevantScheduleItems.length)} others)`);
-    }
-    
-    if (isCrewQuery || isPersonalQuery || messageKeywords.includes('today') || messageKeywords.includes('assigned')) {
-      const allCrew = table.rows || [];
-      const searchTerms = message.toLowerCase()
-        .replace(/[^\w\s]/g, ' ')
-        .split(/\s+/)
-        .filter(term => term.length > 2);
-      
-      // Filter crew by relevance (name, role, notes) and prioritize current user
-      const userCrew = []; // Current user's call times
-      const relevantCrew = [];
-      const otherCrew = [];
-      
-      for (const member of allCrew) {
-        const memberText = `${member.name || ''} ${member.role || ''} ${member.notes || ''}`.toLowerCase();
-        const isCurrentUser = member.name && member.name.toLowerCase().includes(req.user.fullName.toLowerCase().split(' ')[0]);
-        const isRelevant = searchTerms.some(term => memberText.includes(term));
-        
-        if (isCurrentUser) {
-          userCrew.push(member); // Always include current user's data
-        } else if (isRelevant) {
-          relevantCrew.push(member);
-        } else {
-          otherCrew.push(member);
-        }
-      }
-      
-      const maxCrewItems = 20;
-      relevantData.rows = [
-        ...userCrew, // Current user's call times first
-        ...relevantCrew,
-        ...otherCrew.slice(0, Math.max(0, maxCrewItems - userCrew.length - relevantCrew.length))
-      ];
-      
-      console.log(`👥 Including crew data: ${relevantData.rows.length} items (${userCrew.length} user, ${relevantCrew.length} relevant)`);
-      if (isPersonalQuery) {
-        console.log(`👤 Personal query detected for user: ${req.user.fullName}`);
-      }
-    }
-    
-    if (isGearQuery) {
-      relevantData.gear = table.gear || {};
-    }
-    
-    if (isTaskQuery) {
-      relevantData.tasks = table.tasks || [];
-    }
-    
-    if (isTravelQuery) {
-      relevantData.travel = table.travel || [];
-      relevantData.accommodation = table.accommodation || [];
-      
-      // NEW: Add FlightRequest data for this event
-      try {
-        const flightRequests = await FlightRequest.find({ 
-          eventId: table._id,
-          status: { $in: ['pending', 'booked'] }
-        }).limit(10).lean();
-        
-        relevantData.flightRequests = flightRequests.map(f => ({
-          from: `${f.from?.code || ''} (${f.from?.city || ''})`,
-          to: `${f.to?.code || ''} (${f.to?.city || ''})`,
-          departDate: f.departDate,
-          returnDate: f.returnDate,
-          passengers: f.passengers?.map(p => p.name) || [],
-          status: f.status,
-          airline: f.bookedDetails?.airline || 'TBD',
-          confirmationCode: f.bookedDetails?.confirmationCode || 'Pending',
-          tripType: f.tripType
-        }));
-        console.log(`✈️ Including ${relevantData.flightRequests.length} flight requests`);
-      } catch (flightErr) {
-        console.error('Error fetching flight requests:', flightErr);
-      }
-    }
-    
-    if (isCardQuery) {
-      relevantData.cardLog = table.cardLog || [];
-    }
-    
-    if (isShotQuery) {
-      relevantData.shotlists = table.shotlists || [];
-      relevantData.shotlist = table.shotlist || []; // Legacy single shotlist
-      // Also include schedule for booth/activation sessions
-      if (!relevantData.programSchedule) {
-        relevantData.programSchedule = table.programSchedule || [];
-      }
-    }
-
-    // Add documents and admin notes data
-    if (messageKeywords.match(/document|pdf|file|map|floor.*plan|guide|manual/)) {
-      relevantData.documents = table.documents || [];
-    }
-    
-    // Admin notes are only accessible to owners and admins
-    if (messageKeywords.match(/note|admin|important|reminder/) && canSeeAdminData) {
-      relevantData.adminNotes = table.adminNotes || [];
-    }
-
-    // NEW: Cross-event search capability
-    if (isCrossEventQuery || isEventNameQuery) {
-      try {
-        // Get all events the user has access to
-        const accessQuery = req.user.role === 'admin' 
-          ? {} 
-          : { $or: [{ owners: req.user.id }, { sharedWith: req.user.id }, { leads: req.user.id }] };
-        
-        const allEvents = await Table.find(accessQuery)
-          .select('title general.start general.end general.location general.city general.client general.company rows')
-          .lean();
-        
-        // If searching for a specific event by name
-        if (isEventNameQuery) {
-          const searchedName = isEventNameQuery[1].trim().toLowerCase();
-          const matchingEvents = allEvents.filter(e => 
-            e.title?.toLowerCase().includes(searchedName)
-          );
-          relevantData.matchedEvents = matchingEvents.map(e => ({
-            name: e.title,
-            startDate: e.general?.start,
-            endDate: e.general?.end,
-            location: e.general?.location || e.general?.city,
-            client: e.general?.client,
-            company: e.general?.company
-          }));
-          console.log(`🔍 Found ${relevantData.matchedEvents.length} events matching "${searchedName}"`);
-        }
-        
-        // Check if asking about someone's schedule across events
-        const personScheduleMatch = message.match(/is\s+([A-Za-z]+)\s+working\s+(?:on\s+)?(.+?)(?:\?|$)/i);
-        if (personScheduleMatch) {
-          const personName = personScheduleMatch[1].toLowerCase();
-          const dateQuery = personScheduleMatch[2].trim();
-          
-          // Find all crew assignments for this person
-          const personSchedule = [];
-          for (const event of allEvents) {
-            const crewRows = (event.rows || []).filter(r => 
-              r.name?.toLowerCase().includes(personName)
-            );
-            for (const row of crewRows) {
-              personSchedule.push({
-                event: event.title,
-                date: row.date,
-                role: row.role,
-                startTime: row.startTime,
-                endTime: row.endTime
-              });
-            }
-          }
-          relevantData.personScheduleAcrossEvents = {
-            person: personScheduleMatch[1],
-            searchDate: dateQuery,
-            schedule: personSchedule
-          };
-          console.log(`👤 Found ${personSchedule.length} schedule entries for "${personScheduleMatch[1]}"`);
-        }
-        
-        // Include summary of all events for context
-        relevantData.allEventsOverview = allEvents.slice(0, 15).map(e => ({
-          name: e.title,
-          startDate: e.general?.start,
-          endDate: e.general?.end,
-          location: e.general?.city || e.general?.location
-        }));
-        
-      } catch (crossEventErr) {
-        console.error('Error fetching cross-event data:', crossEventErr);
-      }
-    }
-
-    // For general questions or when no specific keywords match, include core data (limited)
-    if (!isScheduleQuery && !isCrewQuery && !isGearQuery && !isTaskQuery && !isTravelQuery && !isCardQuery && !isShotQuery) {
-      // Include minimal core data for general questions
-      relevantData.programSchedule = (table.programSchedule || []).slice(0, 3);
-      relevantData.rows = (table.rows || []).slice(0, 3);
-      relevantData.tasks = (table.tasks || []).slice(0, 3);
-      relevantData.documents = (table.documents || []).slice(0, 2);
-      console.log(`📊 General query: Including minimal core data`);
-    }
-
-    // Generate cache key for this request
-    const crypto = require('crypto');
-    const relevantDataHash = crypto.createHash('md5').update(JSON.stringify(relevantData)).digest('hex').substring(0, 8);
-    const cacheKey = generateCacheKey(message, tableId, relevantDataHash);
-    
-    // Check cache for common queries (don't cache personalized responses)
-    if (!message.toLowerCase().includes(req.user.fullName.split(' ')[0].toLowerCase())) {
-      const cachedResponse = getCachedResponse(cacheKey);
-      if (cachedResponse) {
-        // Send cached response
-        res.writeHead(200, {
-          'Content-Type': 'text/event-stream',
-          'Cache-Control': 'no-cache',
-          'Connection': 'keep-alive',
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-        });
-        
-        res.write(`data: ${JSON.stringify({ content: cachedResponse, done: true, fullResponse: cachedResponse })}\n\n`);
-        res.end();
-        return;
-      }
-    }
-
-    // Add gear inventory data if gear-related query
-    if (isGearQuery) {
-      try {
-        // Get reserved gear items for this event (limited for performance)
-        const reservedGearItems = await ReservedGearItem.find({ eventId: table._id })
-          .populate('inventoryId', 'label category')
-          .populate('userId', 'fullName')
-          .limit(15) // Limit to reduce response time
-          .sort({ createdAt: -1 });
-
-        // Simplified gear data
-        relevantData.gearInventorySystem = {
-          packingProgress: {
-            totalItems: reservedGearItems.length,
-            packedItems: reservedGearItems.filter(item => item.isPacked).length
-          },
-          recentReservations: reservedGearItems.slice(0, 8).map(item => ({
-            item: `${item.brand || 'Unknown'} ${item.model || 'Unknown'}`,
-            category: item.category,
-            reservedBy: item.userId?.fullName,
-            packed: item.isPacked,
-            serial: item.serial
-          })),
-        eventDates: {
-          checkOutDate: table.gear?.checkOutDate,
-          checkInDate: table.gear?.checkInDate
-        }
-      };
-
-    } catch (gearError) {
-        console.error('Error fetching gear inventory:', gearError);
-        relevantData.gearInventorySystem = { error: 'Gear data unavailable' };
-      }
-    }
-
-    // Get current date and time information
-    const now = new Date();
-    const currentDateTime = {
-      date: now.toISOString().split('T')[0], // YYYY-MM-DD format
-      time: now.toTimeString().split(' ')[0], // HH:MM:SS format
-      dayOfWeek: now.toLocaleDateString('en-US', { weekday: 'long' }),
-      timestamp: now.toISOString(),
-      localDateTime: now.toLocaleString()
-    };
-
-    // Get event dates if available
-    const eventDates = {
-      start: table.general?.start || null,
-      end: table.general?.end || null
-    };
-
-    // Calculate event status
-    let eventStatus = 'unknown';
-    if (eventDates.start && eventDates.end) {
-      const startDate = new Date(eventDates.start);
-      const endDate = new Date(eventDates.end);
-      const today = new Date(now.toISOString().split('T')[0]);
-      
-      if (today < startDate) {
-        eventStatus = 'upcoming';
-      } else if (today >= startDate && today <= endDate) {
-        eventStatus = 'ongoing';
-      } else {
-        eventStatus = 'completed';
-      }
-    }
-
-    // Check data size and truncate if too large to prevent token limit issues
-    const dataString = JSON.stringify(relevantData);
-    const dataSize = dataString.length;
-    
-    console.log(`📊 Data size for query: ${dataSize} characters`);
-    
-    // If data is too large, use minimal version to prevent errors
-    let finalData = relevantData;
-    if (dataSize > 6000) { // More conservative limit to prevent truncation
-      console.log('⚠️  Data too large, using minimal version');
-      finalData = {
-        eventTitle: table.title,
-        currentUser: req.user.fullName,
-        currentDate: new Date().toISOString(),
-        general: {
-          location: table.general?.location,
-          start: table.general?.start,
-          end: table.general?.end,
-          client: table.general?.client,
-          company: table.general?.company
-        },
-        dataStatus: `Full data available but truncated due to size (${dataSize} chars). Ask more specific questions.`
-      };
-      
-      // Add small samples of relevant data (preserving smart filtering)
-      if (relevantData.programSchedule?.length > 0) {
-        // Take the first items which should be the most relevant due to our smart filtering
-        finalData.programSchedule = relevantData.programSchedule.slice(0, 5);
-      }
-      if (relevantData.rows?.length > 0) {
-        finalData.rows = relevantData.rows.slice(0, 5);
-      }
-      if (relevantData.tasks?.length > 0) {
-        finalData.tasks = relevantData.tasks.slice(0, 3);
-      }
-    }
-
-    // Comprehensive system prompt with full event management context
-    const systemPrompt = `You are Luma, the AI assistant for "${table.title}" event management.
-
-📅 Today: ${currentDateTime.date} (${eventStatus})
-👤 User: ${req.user.fullName} (${req.user.role})
-📄 Current Page: ${pageContext.currentPage || 'dashboard'}
-🔐 Access Level: ${canSeeAdminData ? 'Full (Owner/Admin)' : 'Standard (Team Member)'}
-
-⚠️ SECURITY NOTE: Only share data that is included in the AVAILABLE DATA section below.
-${!canSeeAdminData ? 'Budget, contract, invoice, and admin notes are restricted for this user.' : ''}
-
-🎯 EVENT MANAGEMENT EXPERTISE:
-I understand all aspects of your event:
-
-📅 SCHEDULE PAGE (programSchedule) - EVENT RUNDOWN:
-- The actual conference/event sessions and their rundown
-- Contains: session names (keynotes, breakouts, panels, etc.), times, locations, speakers
-- This is the EVENT PROGRAM - what's happening at the event and when
-- Fields: date, name (session title), startTime, endTime, location, photographer, notes, done
-- Search by: session name, speaker, time, location, date
-- Example: "When is the keynote?" → find session where name contains "keynote"
-- Example: "What sessions are in Ballroom A?" → find sessions by location
-
-👥 CREW PAGE (rows) - STAFF CALL TIMES:
-- The list of all crew members and when they need to arrive/work
-- This is the CALL SHEET - staff schedules and shift times
-- Contains: crew member names, roles, call times (when to show up), work hours
-- Fields: name, role, date, startTime (call time), endTime, totalHours, notes
-- Search by: person name, role, date, call time
-- Example: "What time do I need to be there?" → find user's call time in rows
-- Example: "Who's working on Feb 25?" → find crew members by date
-- Example: "What's John's call time?" → find row where name = John
-
-📷 GEAR PAGE (gear/gearInventorySystem):
-- Equipment lists, reservations, packing status
-- Categories: Cameras, Lenses, Lighting, Support, Audio, etc.
-- Search by: equipment type, brand, model, serial, packed status
-
-✅ TASKS PAGE (tasks):
-- To-do items with deadlines and completion status
-- Search by: title keywords, deadline dates, completion status
-
-✈️ TRAVEL & ACCOMMODATION (travel/accommodation/flightRequests):
-- Flight details, hotel bookings, transportation
-- FlightRequests: Official flight bookings with status (pending/booked)
-- Search by: person name, dates, airline, hotel, confirmation numbers
-- For "when do I fly in?" check flightRequests for passenger matching user
-
-💾 CARD LOG (cardLog):
-- Memory card usage tracking by date and person
-- Search by: date, card type, person, usage status
-
-📸 SHOTLIST PAGE (shotlists):
-- Photo checklists with completion tracking
-- Search by: shot type, completion status, list name
-
-📄 DOCUMENTS (documents):
-- PDFs, maps, floor plans, guides
-- Search by: filename, type, upload date
-
-📝 NOTES (adminNotes):
-- Important reminders and administrative notes
-- Search by: date, content, importance
-
-🏢 GENERAL INFO (general):
-- Event location, dates, client, budget, contacts, attendees
-- Core event details and contact information
-
-🔍 SMART SEARCH RULES:
-1. Always search the exact data below for answers
-2. Understand relationships: link crew to schedule, gear to crew, etc.
-3. Be time-aware: prioritize current/upcoming items
-4. Cross-reference data: if someone asks about "today's photographer", check both schedule and crew
-5. Use specific details: times, names, locations, dates
-6. If data missing, suggest which page/section to check
-
-🧠 INTELLIGENT CROSS-PAGE QUERIES:
-- "Who's shooting the keynote?" → Check schedule for keynote, then crew for photographer
-- "What gear does John need today?" → Check crew for John's assignments, then gear lists
-- "Are we ready for tomorrow's sessions?" → Check schedule + crew assignments + gear packed
-- "What's missing for the 2pm session?" → Check schedule, crew, gear, tasks for that time
-- "Who has the Canon 5D?" → Check gear reservations and crew assignments
-
-🌐 CROSS-EVENT QUERIES (when data available):
-- "What day is the [Event Name]?" → Check matchedEvents or allEventsOverview
-- "Is [Person] working on [Date]?" → Check personScheduleAcrossEvents
-- "What events do I have?" → Check allEventsOverview
-- "When do I fly in?" → Check flightRequests for current user as passenger
-
-📱 PAGE CONTEXT AWARENESS:
-- If on Schedule page: Prioritize schedule-related answers and cross-reference crew
-- If on Crew page: Focus on assignments and link to schedule sessions
-- If on Gear page: Emphasize equipment status and link to crew who need it
-- If on Tasks page: Show deadlines relative to schedule timing
-- Suggest relevant pages: "You can find more details on the [Page Name] page"
-
-💡 PROACTIVE ASSISTANCE:
-- Alert about conflicts: crew assigned to multiple sessions, gear double-booked
-- Remind about deadlines: tasks due before event dates
-- Suggest preparations: gear packing for upcoming sessions
-- Flag missing data: sessions without photographers, unpacked essential gear
-
-👤 PERSONALIZED USER RESPONSES:
-- Recognize when user asks about themselves: "What time do I need to be there?" "Am I working tomorrow?" "What's my call time?"
-- For personal questions, search the crew data (rows) for the current user's name
-- Show user's specific call times, roles, and assignments first
-- Provide personalized context: "Your call time is..." vs "John's call time is..."
-- If user is admin, provide management overview; if user, focus on personal schedule
-- Understand possessive questions: "my call time", "my assignments", "when do I work"
-
-📊 AVAILABLE DATA:
-${JSON.stringify(finalData, null, 2)}`;
-
-    // Build messages array with conversation history for context awareness
     const messages = [
-      { role: "system", content: systemPrompt }
+      { role: 'system', content: systemPrompt },
+      ...conversationHistory.slice(-6),
+      { role: 'user', content: message }
     ];
-    
-    // Add conversation history (keep last 4 messages for context to reduce tokens)
-    const recentHistory = conversationHistory.slice(-4);
-    messages.push(...recentHistory);
-    
-    // Add the current message
-    messages.push({ role: "user", content: message });
 
-    // Set up Server-Sent Events for streaming response
-    res.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization'
-    });
-
-    const stream = await openai.chat.completions.create({
-      model: "gpt-4o-mini", // Better reasoning, 128K context
-      messages: messages,
-      max_tokens: 500, // Increased for more complete answers
-      temperature: 0.2, // Lower for more focused responses
-      presence_penalty: 0.2,
-      frequency_penalty: 0.1,
-      stream: true
-    });
-
-    let fullResponse = '';
-
-    for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content || '';
-      if (content) {
-        fullResponse += content;
-        // Send each chunk to the client
-        res.write(`data: ${JSON.stringify({ content, done: false })}\n\n`);
-      }
-    }
-
-    // Send completion signal
-    res.write(`data: ${JSON.stringify({ content: '', done: true, fullResponse })}\n\n`);
-    res.end();
-
-    // Cache the response if it's not personalized
-    if (fullResponse && !message.toLowerCase().includes(req.user.fullName.split(' ')[0].toLowerCase())) {
-      setCachedResponse(cacheKey, fullResponse);
-    }
-
-    // Log for debugging data comprehension issues
-    console.log(`Chat query: "${message}"`);
-    console.log(`Data sections included:`, Object.keys(relevantData));
-    if (relevantData.programSchedule) console.log(`Schedule items: ${relevantData.programSchedule.length}`);
-    if (relevantData.rows) console.log(`Crew rows: ${relevantData.rows.length}`);
-    if (relevantData.tasks) console.log(`Tasks: ${relevantData.tasks.length}`);
-
+    await streamLumaResponse(res, messages);
   } catch (error) {
-    console.error('Chat API error:', error);
-    console.error('Error details:', {
-      message: error.message,
-      status: error.status,
-      type: error.type,
-      code: error.code
-    });
-    
-    // Handle different types of OpenAI errors for streaming
-    let errorMessage = 'AI service temporarily unavailable. Please try again later.';
-    
-    if (error.status === 429) {
-      errorMessage = 'OpenAI quota exceeded. Please add billing to your OpenAI account at platform.openai.com/billing';
-    } else if (error.status === 401) {
-      errorMessage = 'Invalid OpenAI API key. Please check your configuration.';
-    } else if (error.message?.includes('context_length_exceeded')) {
-      errorMessage = 'Query too complex. Try asking a more specific question.';
-    } else if (error.message?.includes('invalid_request_error')) {
-      errorMessage = 'Invalid request format. Please try a different question.';
-    } else if (error.type === 'invalid_request_error') {
-      errorMessage = 'Request format error. The data might be too large or malformed.';
-    }
-
-    // Send error as streaming event
-    try {
-      res.write(`data: ${JSON.stringify({ error: errorMessage, done: true })}\n\n`);
-      res.end();
-    } catch (writeError) {
-      // If we can't write to stream, fall back to regular error response
-      if (!res.headersSent) {
-        res.status(500).json({ error: errorMessage });
-      }
-    }
+    await handleLumaChatError(res, error, 'Chat API error:');
   }
 });
 

@@ -251,12 +251,7 @@ class ChatWidget {
         : `${this.API_BASE}/api/chat/global`;
 
       // Gather context
-      const pageContext = {
-        currentPage: this.getCurrentPageName(),
-        mode: this.mode,
-        browserLanguage: navigator.language || 'en-US',
-        pageData: this.getPageSpecificContext()
-      };
+      const pageContext = this.buildPageContext();
 
       const response = await fetch(endpoint, {
         method: 'POST',
@@ -459,38 +454,110 @@ class ChatWidget {
   }
 
   getCurrentPageName() {
-    const path = window.location.pathname;
-    const hash = window.location.hash;
-    
-    // Dashboard pages
-    if (path.includes('events') || hash.includes('events')) return 'events';
-    if (path.includes('users') || hash.includes('users')) return 'users';
-    if (path.includes('my-tasks') || hash.includes('my-tasks')) return 'my-tasks';
-    if (path.includes('call-times') || hash.includes('call-times')) return 'call-times';
-    if (path.includes('inventory')) return 'inventory';
+    const path = window.location.pathname.toLowerCase();
+    const hash = (window.location.hash || '').replace('#', '').toLowerCase();
+    const hashPage = hash.split('?')[0];
+
+    const aliases = {
+      travel: 'travel-accommodation',
+      tasks: 'todos',
+      notes: 'admin-notes',
+      users: 'events',
+      dashboard: 'events',
+      'inventory-management': 'inventory'
+    };
+
+    const eventPages = [
+      'executive-summary',
+      'travel-accommodation',
+      'admin-notes',
+      'card-log',
+      'general',
+      'schedule',
+      'crew',
+      'shotlist',
+      'todos',
+      'gear',
+      'documents',
+      'expenses'
+    ];
+    const dashboardPages = [
+      'event-calendar',
+      'my-tasks',
+      'call-times',
+      'flights',
+      'inventory',
+      'crew-planner',
+      'crew-calendar',
+      'events'
+    ];
+
+    for (const page of eventPages) {
+      if (hashPage === page) return page;
+    }
+    if (hashPage === 'tasks') return 'todos';
+    if (hashPage === 'travel') return 'travel-accommodation';
+    if (hashPage === 'notes') return 'admin-notes';
+
+    if (path.includes('event-calendar')) return 'event-calendar';
     if (path.includes('crew-planner')) return 'crew-planner';
     if (path.includes('crew-calendar')) return 'crew-calendar';
-    if (path.includes('event-calendar')) return 'event-calendar';
+    if (path.includes('inventory')) return 'inventory';
     if (path.includes('flights')) return 'flights';
-    
-    // Event pages
-    if (hash.includes('general')) return 'general';
-    if (hash.includes('schedule')) return 'schedule';
-    if (hash.includes('crew')) return 'crew';
-    if (hash.includes('shotlist')) return 'shotlist';
-    if (hash.includes('gear')) return 'gear';
-    if (hash.includes('tasks') || hash.includes('todos')) return 'tasks';
-    if (hash.includes('travel')) return 'travel';
-    if (hash.includes('card-log')) return 'card-log';
-    if (hash.includes('documents')) return 'documents';
-    if (hash.includes('notes')) return 'admin-notes';
-    
-    return 'dashboard';
+    if (path.includes('admin-timesheets') || path.includes('timesheet')) return 'events';
+
+    for (const page of dashboardPages) {
+      if (hashPage === page) return page;
+    }
+
+    return aliases[hashPage] || 'events';
   }
 
   getPageSpecificContext() {
     const currentPage = this.getCurrentPageName();
-    return { page: currentPage, mode: this.mode };
+    const eventTitle = document.getElementById('eventTitle')?.textContent ||
+      document.querySelector('.event-title')?.textContent ||
+      document.getElementById('sidebarEventName')?.textContent ||
+      null;
+
+    let dateFilter = null;
+    const dateSelect = document.getElementById('dateFilter') ||
+      document.getElementById('scheduleDateFilter') ||
+      document.querySelector('[data-schedule-date-filter]');
+    if (dateSelect && dateSelect.value && dateSelect.value !== 'all') {
+      dateFilter = dateSelect.value;
+    }
+
+    let gearList = null;
+    const gearSelect = document.getElementById('gearListSelect') ||
+      document.querySelector('[data-current-gear-list]');
+    if (gearSelect && (gearSelect.value || gearSelect.textContent)) {
+      gearList = gearSelect.value || gearSelect.textContent.trim();
+    }
+
+    return {
+      page: currentPage,
+      mode: this.mode,
+      tableId: this.tableId,
+      eventTitle,
+      dateFilter,
+      gearList
+    };
+  }
+
+  buildPageContext() {
+    const pageData = this.getPageSpecificContext();
+    return {
+      currentPage: pageData.page,
+      page: pageData.page,
+      mode: this.mode,
+      tableId: this.tableId,
+      eventTitle: pageData.eventTitle,
+      dateFilter: pageData.dateFilter,
+      gearList: pageData.gearList,
+      browserLanguage: navigator.language || 'en-US',
+      pageData
+    };
   }
 
   // Update tableId dynamically (for SPA navigation)
@@ -645,15 +712,15 @@ function startChatButtonMonitor() {
       window.chatWidget = null;
       initializeChatForCurrentPage();
     } else {
-      // Check if button is actually visible
+      // offsetParent is always null for position:fixed, so do not treat that as hidden
       const style = getComputedStyle(chatButton);
-      const isHidden = style.display === 'none' || 
-                       style.visibility === 'hidden' || 
+      const isFixed = style.position === 'fixed';
+      const isHidden = style.display === 'none' ||
+                       style.visibility === 'hidden' ||
                        style.opacity === '0' ||
-                       chatButton.offsetParent === null;
+                       (!isFixed && chatButton.offsetParent === null);
       
       if (isHidden) {
-        console.log('[Chat] Button exists but is hidden, forcing visible');
         chatButton.style.display = 'flex';
         chatButton.style.visibility = 'visible';
         chatButton.style.opacity = '1';

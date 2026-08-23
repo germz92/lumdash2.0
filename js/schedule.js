@@ -6438,12 +6438,23 @@ function setupAutoAssignControls() {
       refreshAutoAssignSummary();
     });
     body.addEventListener('click', event => {
-      const btn = event.target.closest('[data-auto-assign-swap]');
-      if (!btn) return;
-      const bar = btn.closest('.auto-assign-swap-bar');
-      const from = bar?.querySelector('[data-swap-from]')?.value;
-      const to = bar?.querySelector('[data-swap-to]')?.value;
-      swapAutoAssignPhotographers(from, to, btn.dataset.date);
+      const swapBtn = event.target.closest('[data-auto-assign-swap]');
+      if (swapBtn) {
+        const bar = swapBtn.closest('.auto-assign-swap-bar');
+        const from = bar?.querySelector('[data-swap-from]')?.value;
+        const to = bar?.querySelector('[data-swap-to]')?.value;
+        swapAutoAssignPhotographers(from, to, swapBtn.dataset.date);
+        return;
+      }
+      if (event.target.closest('[data-auto-assign-edit]')) {
+        submitAutoAssignEdit();
+      }
+    });
+    body.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' || event.shiftKey) return;
+      if (!event.target.closest('#autoAssignEditInput')) return;
+      event.preventDefault();
+      submitAutoAssignEdit();
     });
   }
 }
@@ -6522,7 +6533,24 @@ function collectAutoAssignPhotographerNames(day) {
   for (const row of day?.assignments || []) {
     splitAutoAssignNames(row.photographer).forEach(add);
   }
-  return names.sort((a, b) => a.localeCompare(b));
+  const byFirst = new Map();
+  for (const name of names) {
+    const first = name.split(/\s+/)[0].toLowerCase();
+    if (!byFirst.has(first)) byFirst.set(first, []);
+    if (!byFirst.get(first).some(existing => {
+      const a = existing.toLowerCase();
+      const b = name.toLowerCase();
+      return a === b || a.startsWith(`${b} `) || b.startsWith(`${a} `);
+    })) {
+      byFirst.get(first).push(name);
+    }
+  }
+  const short = [];
+  for (const group of byFirst.values()) {
+    if (group.length === 1) short.push(group[0].split(/\s+/)[0]);
+    else short.push(...group);
+  }
+  return short.sort((a, b) => a.localeCompare(b));
 }
 
 function swapAutoAssignNameList(value, from, to) {
@@ -6771,7 +6799,15 @@ function renderAutoAssignModal(proposal, { applied = false } = {}) {
     </section>`;
   }).join('');
 
-  body.innerHTML = `${autoAssignSummaryHtml(proposal)}${daysHtml}`;
+  const editBar = applied ? '' : `<div class="auto-assign-edit-bar">
+    ${proposal.editNote ? `<p class="auto-assign-edit-note">${escapeHtml(proposal.editNote)}</p>` : ''}
+    <label class="auto-assign-edit-label" for="autoAssignEditInput">Ask for a change</label>
+    <div class="auto-assign-edit-row">
+      <textarea id="autoAssignEditInput" rows="2" placeholder="Give Kristina fewer sessions and keep her on the longer ones">${escapeHtml(proposal.editDraft || '')}</textarea>
+      <button type="button" class="btn-primary" data-auto-assign-edit>Adjust</button>
+    </div>
+  </div>`;
+  body.innerHTML = `${autoAssignSummaryHtml(proposal)}${editBar}${daysHtml}`;
   if (applyBtn) {
     applyBtn.disabled = applied;
     applyBtn.textContent = applied ? 'Applied' : 'Apply';
@@ -6822,6 +6858,41 @@ async function openAutoAssignPreview() {
   } catch (err) {
     stopProgress();
     body.innerHTML = `<p class="auto-assign-empty">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+async function submitAutoAssignEdit() {
+  if (!autoAssignProposal) return;
+  syncAutoAssignEditsFromDom();
+  const input = document.getElementById('autoAssignEditInput');
+  const instruction = String(input?.value || '').trim();
+  if (!instruction) {
+    showImportantToast('Tell the agent what to change');
+    return;
+  }
+  const tableId = currentEventId || localStorage.getItem('eventId');
+  const applyBtn = document.getElementById('autoAssignApplyBtn');
+  if (applyBtn) applyBtn.disabled = true;
+  autoAssignProposal.editDraft = instruction;
+  showAutoAssignLoading('Adjusting assignments…', instruction);
+  try {
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/auto-assign-photographers/edit`, {
+      method: 'POST',
+      headers: autoAssignAuthHeaders(),
+      body: JSON.stringify({
+        instruction,
+        proposal: autoAssignProposal
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not adjust assignments');
+    autoAssignProposal = data;
+    autoAssignProposal.editDraft = '';
+    renderAutoAssignModal(data);
+    showImportantToast(data.editNote || 'Assignments updated');
+  } catch (err) {
+    renderAutoAssignModal(autoAssignProposal);
+    showImportantToast(err.message || 'Could not adjust assignments');
   }
 }
 

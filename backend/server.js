@@ -12,7 +12,7 @@ const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
 const OpenAI = require('openai');
 const { buildLumaContext } = require('./services/lumaContextBuilder');
-const { buildAssignmentProposal, canAssignPhotographers } = require('./services/photographerAssigner');
+const { buildAssignmentProposal, editAssignmentProposal, canAssignPhotographers } = require('./services/photographerAssigner');
 require('dotenv').config();
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 console.log('SENDGRID_API_KEY loaded:', !!process.env.SENDGRID_API_KEY);
@@ -5424,6 +5424,32 @@ app.post('/api/tables/:id/auto-assign-photographers', authenticate, async (req, 
   } catch (err) {
     console.error('[AutoAssign] Preview failed:', err);
     res.status(500).json({ error: 'Failed to build photographer assignments' });
+  }
+});
+
+app.post('/api/tables/:id/auto-assign-photographers/edit', authenticate, async (req, res) => {
+  if (!req.params.id || req.params.id === 'null') {
+    return res.status(400).json({ error: 'Invalid table ID' });
+  }
+  try {
+    const table = await Table.findById(req.params.id)
+      .select('title owners leads programSchedule rows')
+      .lean();
+    if (!table) return res.status(404).json({ error: 'Table not found' });
+    if (!canAssignPhotographers(table, req.user)) {
+      return res.status(403).json({ error: 'Only owners and leads can auto-assign photographers' });
+    }
+    const proposal = await editAssignmentProposal({
+      proposal: req.body?.proposal,
+      instruction: req.body?.instruction,
+      programSchedule: table.programSchedule || [],
+      rows: table.rows || [],
+      openai
+    });
+    res.json(proposal);
+  } catch (err) {
+    console.error('[AutoAssign] Edit failed:', err);
+    res.status(err.status || 500).json({ error: err.message || 'Failed to edit photographer assignments' });
   }
 });
 

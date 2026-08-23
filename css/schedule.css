@@ -2089,6 +2089,51 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
   opacity: 0.8;
 }
 
+.auto-assign-edit-bar {
+  margin: 0 0 16px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.auto-assign-edit-label {
+  display: block;
+  font-size: 12px;
+  opacity: 0.7;
+  margin-bottom: 8px;
+}
+
+.auto-assign-edit-note {
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(126, 182, 255, 0.12);
+  font-size: 13px;
+}
+
+.auto-assign-edit-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.auto-assign-edit-row textarea {
+  flex: 1;
+  min-height: 46px;
+  resize: vertical;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+  font: inherit;
+}
+
+.auto-assign-edit-row .btn-primary {
+  white-space: nowrap;
+}
+
 .auto-assign-swap-bar {
   display: flex;
   flex-wrap: wrap;

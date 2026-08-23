@@ -111,13 +111,31 @@ function intervalsOverlap(a0, a1, b0, b1) {
   return a0 < b1 && b0 < a1;
 }
 
+function normalizePersonName(name) {
+  return String(name || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function namesLikelySamePerson(left, right) {
+  const a = normalizePersonName(left);
+  const b = normalizePersonName(right);
+  if (!a || !b) return false;
+  return a === b || a.startsWith(`${b} `) || b.startsWith(`${a} `);
+}
+
+function sameCrewPerson(left, right) {
+  if (!left || !right) return false;
+  if (left === right || left.id === right.id) return true;
+  if (left.userId && right.userId && String(left.userId) === String(right.userId)) return true;
+  return namesLikelySamePerson(left.name, right.name);
+}
+
 function displayName(person, dayCrew) {
   const first = firstName(person.name);
   if (!first) return person.name;
-  const collisions = dayCrew.filter(other =>
-    firstName(other.name).toLowerCase() === first.toLowerCase()
+  const collision = (dayCrew || []).some(other =>
+    !sameCrewPerson(person, other) && firstName(other.name).toLowerCase() === first.toLowerCase()
   );
-  return collisions.length > 1 ? person.name : first;
+  return collision ? person.name : first;
 }
 
 function matchCrew(requested, crew) {
@@ -292,23 +310,79 @@ Rules:
   return { labels, source: 'keywords', classifyError: lastError?.message };
 }
 
-function mapCrewPerson(row) {
-  const roleKey = normalizeRole(row.role);
+function findCrewPerson(people, row) {
+  const userId = row.userId ? String(row.userId) : '';
+  if (userId) {
+    const byUser = people.find(person => person.userId && person.userId === userId);
+    if (byUser) return byUser;
+  }
+  return people.find(person => namesLikelySamePerson(person.name, row.name)) || null;
+}
+
+function mapShift(row) {
+  const start = parseTimeToMinutes(row.startTime);
+  const end = parseTimeToMinutes(row.endTime);
   return {
-    id: String(row._id || row.name),
-    name: String(row.name || '').trim(),
     role: row.role,
-    roleKey,
-    isLead: roleKey === ROLE_LEAD,
+    roleKey: normalizeRole(row.role),
+    isLead: normalizeRole(row.role) === ROLE_LEAD,
     isHeadshot: isHeadshotRole(row.role),
-    startMin: parseTimeToMinutes(row.startTime),
-    endMin: parseTimeToMinutes(row.endTime),
-    minutes: 0,
-    sessions: 0,
-    walkMinutes: 0,
-    walkSessions: 0,
-    bookings: []
+    start: start == null ? 0 : start,
+    end: end == null ? 24 * 60 : end
   };
+}
+
+function buildPhotoCrew(crewRows, date) {
+  const people = [];
+  for (const row of crewRows || []) {
+    if (row.date !== date) continue;
+    const name = String(row.name || '').trim();
+    if (!name || !isPhotoRole(row.role) || row.availabilityStatus === 'declined') continue;
+    const shift = mapShift(row);
+    if (shift.end <= shift.start) continue;
+    let person = findCrewPerson(people, row);
+    if (!person) {
+      person = {
+        id: row.userId ? `user:${row.userId}` : `name:${normalizePersonName(name)}`,
+        name,
+        userId: row.userId ? String(row.userId) : null,
+        shifts: [],
+        minutes: 0,
+        sessions: 0,
+        walkMinutes: 0,
+        walkSessions: 0,
+        bookings: []
+      };
+      people.push(person);
+    }
+    person.shifts.push(shift);
+    if (name.length > person.name.length) person.name = name;
+    if (!person.userId && row.userId) person.userId = String(row.userId);
+  }
+  return people.map(person => {
+    person.hasRegular = person.shifts.some(shift => !shift.isHeadshot);
+    person.hasHeadshot = person.shifts.some(shift => shift.isHeadshot);
+    person.isLead = person.shifts.some(shift => shift.isLead);
+    person.isHeadshot = person.hasHeadshot && !person.hasRegular;
+    person.role = [...new Set(person.shifts.map(shift => shift.role).filter(Boolean))].join(' / ');
+    person.startMin = Math.min(...person.shifts.map(shift => shift.start));
+    person.endMin = Math.max(...person.shifts.map(shift => shift.end));
+    return person;
+  });
+}
+
+function eligibleShifts(person, label, slotStart, slotEnd) {
+  const duration = label?.coverage === 'dedicated'
+    ? Math.max(1, slotEnd - slotStart)
+    : Math.min(label?.walkMinutes || VISIT_MINUTES, Math.max(1, slotEnd - slotStart));
+  return (person.shifts || []).filter(shift => {
+    if (label?.isHeadshot && !shift.isHeadshot) return false;
+    if (!label?.isHeadshot && shift.isHeadshot) return false;
+    if (label?.coverage === 'dedicated') {
+      return slotStart >= shift.start && slotEnd <= shift.end;
+    }
+    return Math.min(slotEnd, shift.end) - Math.max(slotStart, shift.start) >= duration;
+  });
 }
 
 function compareCandidates(a, b, session, sessionLabel) {
@@ -322,21 +396,18 @@ function compareCandidates(a, b, session, sessionLabel) {
     if (sessionGap) return sessionGap;
     if (minuteGap) return minuteGap;
   }
-  if ((sessionLabel.coverage === 'dedicated' || session.important) && a.person.isLead !== b.person.isLead) {
-    return a.person.isLead ? -1 : 1;
+  const start = parseTimeToMinutes(session.startTime);
+  const end = parseTimeToMinutes(session.endTime) ?? (start == null ? 0 : start + 60);
+  const leadA = start != null && eligibleShifts(a.person, sessionLabel, start, end).some(shift => shift.isLead);
+  const leadB = start != null && eligibleShifts(b.person, sessionLabel, start, end).some(shift => shift.isLead);
+  if ((sessionLabel.coverage === 'dedicated' || session.important) && leadA !== leadB) {
+    return leadA ? -1 : 1;
   }
   if (affA !== affB && Math.abs(minuteGap) < 20 && Math.abs(sessionGap) < 2) return affB - affA;
   if (minuteGap) return minuteGap;
   if (sessionGap) return sessionGap;
   if (affA !== affB) return affB - affA;
   return a.person.name.localeCompare(b.person.name);
-}
-
-function crewBounds(person) {
-  return {
-    start: person.startMin == null ? 0 : person.startMin,
-    end: person.endMin == null ? 24 * 60 : person.endMin
-  };
 }
 
 function isFree(person, start, end, loc) {
@@ -350,23 +421,24 @@ function isFree(person, start, end, loc) {
 }
 
 function findWindow(person, session, label, slotStart, slotEnd) {
-  const bounds = crewBounds(person);
-  if (bounds.end <= bounds.start) return null;
   const loc = session.location || '';
   const slotLength = Math.max(1, slotEnd - slotStart);
+  const shifts = eligibleShifts(person, label, slotStart, slotEnd);
+  if (!shifts.length) return null;
 
   if (label.coverage === 'dedicated') {
-    if (slotStart < bounds.start || slotEnd > bounds.end) return null;
     if (!isFree(person, slotStart, slotEnd, loc)) return null;
     return { start: slotStart, end: slotEnd, location: loc, minutes: slotLength };
   }
 
   const duration = Math.min(label.walkMinutes || VISIT_MINUTES, slotLength);
-  const earliest = Math.max(slotStart, bounds.start);
-  const latestStart = Math.min(slotEnd, bounds.end) - duration;
-  for (let start = earliest; start <= latestStart; start += STEP_MINUTES) {
-    if (isFree(person, start, start + duration, loc)) {
-      return { start, end: start + duration, location: loc, minutes: duration };
+  for (const shift of shifts) {
+    const earliest = Math.max(slotStart, shift.start);
+    const latestStart = Math.min(slotEnd, shift.end) - duration;
+    for (let start = earliest; start <= latestStart; start += STEP_MINUTES) {
+      if (isFree(person, start, start + duration, loc)) {
+        return { start, end: start + duration, location: loc, minutes: duration };
+      }
     }
   }
   return null;
@@ -419,7 +491,7 @@ function isUnderused(person, crew) {
 }
 
 function fillUnderusedPhotographers({ photoCrew, assignments, sorted, labels, regularCrew, headshotCrew }) {
-  const walkers = photoCrew.filter(person => !person.isHeadshot);
+  const walkers = photoCrew.filter(person => person.hasRegular);
   if (!walkers.length) return;
 
   let added = true;
@@ -442,8 +514,8 @@ function fillUnderusedPhotographers({ photoCrew, assignments, sorted, labels, re
       });
 
       for (const row of targets) {
-        if (person.isHeadshot && !row.isHeadshot) continue;
-        if (!person.isHeadshot && row.isHeadshot && headshotCrew.length) continue;
+        if (!person.hasRegular && !row.isHeadshot) continue;
+        if (!person.hasHeadshot && row.isHeadshot && headshotCrew.length) continue;
         if (assignmentHasName(row, person, photoCrew)) continue;
         const session = sorted.find(item => String(item._id) === row.programId);
         const label = labels.get(row.programId) || classifyWithKeywords(session || {});
@@ -473,6 +545,10 @@ function poolForSession(label, regularCrew, headshotCrew) {
   return regularCrew;
 }
 
+function alreadyBookedDuring(person, start, end) {
+  return (person.bookings || []).some(booking => intervalsOverlap(booking.start, booking.end, start, end));
+}
+
 function neededPhotographers(session, label, allSessions, labels, pool) {
   const notesMinimum = Math.max(1, label.photographerCount || 1);
   if (label.isHeadshot) return Math.min(notesMinimum, Math.max(1, pool.length));
@@ -493,7 +569,7 @@ function neededPhotographers(session, label, allSessions, labels, pool) {
   return notesMinimum;
 }
 
-function shareCoverageAcrossGatherings(assignments, sorted, labels) {
+function shareCoverageAcrossGatherings(assignments, sorted, labels, photoCrew) {
   for (const row of assignments) {
     const session = sorted.find(item => String(item._id) === row.programId);
     if (!session) continue;
@@ -503,11 +579,21 @@ function shareCoverageAcrossGatherings(assignments, sorted, labels) {
     if (!names.length) continue;
     for (const sibling of siblingGatherSessions(session, sorted, labels)) {
       const sibRow = assignments.find(item => item.programId === String(sibling._id));
-      if (!sibRow) continue;
+      const sibLabel = labels.get(String(sibling._id)) || classifyWithKeywords(sibling);
+      const slot = sessionSlot(sibling, sibLabel);
+      if (!sibRow || !slot) continue;
       const existing = String(sibRow.photographer || '').split(',').map(part => part.trim()).filter(Boolean);
-      const merged = [...new Set([...existing, ...names])];
-      if (merged.length === existing.length) continue;
-      sibRow.photographer = merged.join(', ');
+      const extra = [];
+      for (const name of names) {
+        if (existing.includes(name) || extra.includes(name)) continue;
+        const person = matchCrew(name, photoCrew);
+        if (!person) continue;
+        if (alreadyBookedDuring(person, slot.start, slot.end) || findWindow(person, sibling, sibLabel, slot.start, slot.end)) {
+          extra.push(name);
+        }
+      }
+      if (!extra.length) continue;
+      sibRow.photographer = [...existing, ...extra].join(', ');
       const note = `Same slot as ${session.name || 'main event'}`;
       if (!String(sibRow.why || '').includes(note)) {
         sibRow.why = [sibRow.why, note].filter(Boolean).join('; ');
@@ -527,15 +613,9 @@ function visitMinutesForSession(session, allSessions, labels, label, photographe
 
 function assignDay(date, sessions, crewRows, labels) {
   const warnings = [];
-  const photoCrew = (crewRows || [])
-    .filter(row => row.date === date)
-    .filter(row => row.name && String(row.name).trim())
-    .filter(row => isPhotoRole(row.role))
-    .filter(row => row.availabilityStatus !== 'declined')
-    .map(mapCrewPerson);
-
-  const regularCrew = photoCrew.filter(person => !person.isHeadshot);
-  const headshotCrew = photoCrew.filter(person => person.isHeadshot);
+  const photoCrew = buildPhotoCrew(crewRows, date);
+  const regularCrew = photoCrew.filter(person => person.hasRegular);
+  const headshotCrew = photoCrew.filter(person => person.hasHeadshot);
 
   if (!photoCrew.length) {
     warnings.push({ date, message: 'No photographers on crew this day.' });
@@ -577,9 +657,10 @@ function assignDay(date, sessions, crewRows, labels) {
 
     const slotEnd = end != null ? end : start + (label.coverage === 'dedicated' ? 60 : VISIT_MINUTES);
     const pool = poolForSession(label, regularCrew, headshotCrew);
-    const needed = neededPhotographers(session, label, sorted, labels, pool);
     const visitMinutes = visitMinutesForSession(session, sorted, labels, label, pool.length);
     const sessionLabel = visitMinutes ? { ...label, walkMinutes: visitMinutes } : label;
+    const availablePool = pool.filter(person => findWindow(person, session, sessionLabel, start, slotEnd));
+    const needed = neededPhotographers(session, label, sorted, labels, availablePool);
     const chosen = [];
     const reasons = [];
 
@@ -590,16 +671,13 @@ function assignDay(date, sessions, crewRows, labels) {
         warnings.push({ date, session: session.name, message: `${requested} is mentioned in notes but is not on crew.` });
         continue;
       }
-      if (person.isHeadshot && !label.isHeadshot) {
-        warnings.push({ date, session: session.name, message: `${person.name} is a headshot booth photographer — not used on this session.` });
-        continue;
-      }
-      if (!pool.includes(person) && !(label.isHeadshot && person.isHeadshot)) {
+      if (!eligibleShifts(person, sessionLabel, start, slotEnd).length) {
+        warnings.push({ date, session: session.name, message: `${displayName(person, photoCrew)} is mentioned in notes but is off the clock or in another role for this slot.` });
         continue;
       }
       const window = findWindow(person, session, sessionLabel, start, slotEnd);
       if (!window) {
-        warnings.push({ date, session: session.name, message: `${person.name} is named in notes but is not free or is off the clock.` });
+        warnings.push({ date, session: session.name, message: `${displayName(person, photoCrew)} is named in notes but is not free or is off the clock.` });
         continue;
       }
       book(person, window, sessionLabel.coverage === 'dedicated');
@@ -636,7 +714,9 @@ function assignDay(date, sessions, crewRows, labels) {
       } else if (label.isMainEvent && needed > 1) {
         reasons.push('Main event — extra coverage');
       } else if (label.coverage === 'dedicated') {
-        reasons.push(pick.person.isLead ? 'Lead on dedicated session' : 'Dedicated coverage');
+        reasons.push(eligibleShifts(pick.person, sessionLabel, start, slotEnd).some(shift => shift.isLead)
+          ? 'Lead on dedicated session'
+          : 'Dedicated coverage');
       } else if (visitMinutes === CRAMPED_VISIT_MINUTES) {
         reasons.push('Cramped slot — 10 min visit');
       } else if (!affinity && !session.important) {
@@ -652,16 +732,16 @@ function assignDay(date, sessions, crewRows, labels) {
     });
   }
 
-  shareCoverageAcrossGatherings(assignments, sorted, labels);
+  shareCoverageAcrossGatherings(assignments, sorted, labels, photoCrew);
   fillUnderusedPhotographers({ photoCrew, assignments, sorted, labels, regularCrew, headshotCrew });
 
   for (const person of photoCrew.filter(item => item.sessions === 0)) {
-    const hours = person.startMin != null || person.endMin != null
-      ? 'no session fits their hours/role'
+    const hours = person.shifts.some(shift => shift.start > 0 || shift.end < 24 * 60)
+      ? 'no session fits their call times or role windows'
       : 'no remaining session they can take';
     warnings.push({
       date,
-      message: `${person.name} unused — ${hours}.`,
+      message: `${displayName(person, photoCrew)} unused — ${hours}.`,
       unused: true
     });
   }
@@ -727,6 +807,249 @@ async function buildAssignmentProposal({ programSchedule = [], rows = [], dates 
   };
 }
 
+function splitPhotographerNames(value) {
+  return String(value || '').split(',').map(part => part.trim()).filter(Boolean);
+}
+
+function labelsFromProposal(sessions, proposal) {
+  const byId = new Map();
+  for (const day of proposal?.days || []) {
+    for (const row of day.assignments || []) {
+      byId.set(String(row.programId), row);
+    }
+  }
+  const labels = new Map();
+  for (const session of sessions) {
+    const fallback = classifyWithKeywords(session);
+    const row = byId.get(String(session._id));
+    labels.set(String(session._id), {
+      ...fallback,
+      coverage: row?.coverage === 'dedicated' || row?.coverage === 'walk' ? row.coverage : fallback.coverage,
+      isHeadshot: row?.isHeadshot != null ? !!row.isHeadshot : fallback.isHeadshot,
+      walkMinutes: row?.visitMinutes || fallback.walkMinutes
+    });
+  }
+  return labels;
+}
+
+function rebuildDayFromDesired(date, sessions, rows, labels, desired, note) {
+  const photoCrew = buildPhotoCrew(rows, date);
+  const sorted = [...sessions].sort((a, b) =>
+    (parseTimeToMinutes(a.startTime) ?? 9999) - (parseTimeToMinutes(b.startTime) ?? 9999)
+  );
+  const assignments = [];
+
+  for (const session of sorted) {
+    const label = labels.get(String(session._id)) || classifyWithKeywords(session);
+    const start = parseTimeToMinutes(session.startTime);
+    const end = parseTimeToMinutes(session.endTime);
+    const slotEnd = end != null ? end : start + (label.coverage === 'dedicated' ? 60 : VISIT_MINUTES);
+    const visitMinutes = label.coverage === 'dedicated' ? null : (label.walkMinutes || VISIT_MINUTES);
+    const sessionLabel = visitMinutes ? { ...label, walkMinutes: visitMinutes } : label;
+    const wanted = desired.get(String(session._id));
+    const chosen = [];
+    const reasons = [];
+
+    if (start != null) {
+      for (const name of splitPhotographerNames(wanted)) {
+        const person = matchCrew(name, photoCrew);
+        if (!person || chosen.includes(person)) continue;
+        const window = findWindow(person, session, sessionLabel, start, slotEnd);
+        if (!window) continue;
+        book(person, window, sessionLabel.coverage === 'dedicated');
+        chosen.push(person);
+      }
+    }
+
+    if (note && chosen.length) reasons.push(note);
+    if (start == null) reasons.push('Skipped — no start time');
+    else if (!chosen.length && splitPhotographerNames(wanted).length) {
+      reasons.push('Requested people were off the clock or already booked');
+    } else if (!chosen.length) reasons.push('Unassigned');
+
+    const original = sessions.find(item => String(item._id) === String(session._id));
+    assignments.push({
+      programId: String(session._id),
+      date,
+      name: session.name || '',
+      startTime: session.startTime || '',
+      endTime: session.endTime || '',
+      location: session.location || '',
+      coverage: label.coverage,
+      isHeadshot: !!label.isHeadshot,
+      previousPhotographer: original?.previousPhotographer || session.photographer || '',
+      photographer: chosen.map(person => displayName(person, photoCrew)).join(', '),
+      visitMinutes,
+      edited: true,
+      why: [...new Set(reasons)].join('; ') || 'Unassigned'
+    });
+  }
+
+  const warnings = [];
+  for (const person of photoCrew.filter(item => item.sessions === 0)) {
+    warnings.push({
+      date,
+      message: `${displayName(person, photoCrew)} unused — no session fits their call times or role windows.`,
+      unused: true
+    });
+  }
+
+  return {
+    date,
+    assignments,
+    warnings,
+    workload: photoCrew.map(person => ({
+      name: displayName(person, photoCrew),
+      fullName: person.name,
+      role: person.role,
+      minutes: person.minutes,
+      sessions: person.sessions
+    }))
+  };
+}
+
+async function requestAssignmentEdits(openai, instruction, payload) {
+  const attempts = [
+    { model: 'gpt-5.6-luna' },
+    { model: 'gpt-4o-mini', temperature: 0 }
+  ];
+  let lastError = null;
+  const messages = [
+    {
+      role: 'system',
+      content: `You edit conference photographer assignments. Return JSON only:
+{"summary":"one or two sentences","assignments":[{"programId":"","photographer":"Name, Name"}]}
+Rules:
+- Only use crew display names from the payload. Never invent people.
+- photographer is a comma-separated list of those display names, or "" to leave unassigned.
+- Only include sessions you change.
+- Honor call times and roles already described. Do not assign someone outside their hours or to a headshot-only window if they are not on booth then.
+- If asked to give someone fewer rooms / fewer sessions, remove them from short visits and keep them on longer or dedicated sessions.
+- If asked to give someone more work, add short visits they can take.
+- Keep other people assigned unless you need their slot.
+- Prefer the display names exactly as given.`
+    },
+    {
+      role: 'user',
+      content: JSON.stringify({ instruction, ...payload })
+    }
+  ];
+
+  for (const attempt of attempts) {
+    try {
+      const completion = await openai.chat.completions.create({
+        ...attempt,
+        response_format: { type: 'json_object' },
+        messages
+      });
+      const parsed = JSON.parse(completion.choices[0].message.content || '{}');
+      return {
+        summary: String(parsed.summary || '').trim(),
+        assignments: Array.isArray(parsed.assignments) ? parsed.assignments : [],
+        model: attempt.model
+      };
+    } catch (err) {
+      lastError = err;
+      console.error(`[AutoAssign] ${attempt.model} edit failed:`, err.message);
+    }
+  }
+  throw lastError || new Error('Could not edit assignments');
+}
+
+async function editAssignmentProposal({ proposal, instruction, programSchedule = [], rows = [], openai = null }) {
+  const text = String(instruction || '').trim();
+  if (!text) {
+    const error = new Error('Tell the agent what to change');
+    error.status = 400;
+    throw error;
+  }
+  if (!openai) {
+    const error = new Error('AI edits are unavailable right now');
+    error.status = 503;
+    throw error;
+  }
+
+  const dates = [...new Set((proposal?.days || []).map(day => day.date).filter(Boolean))];
+  const sessions = (programSchedule || []).filter(session =>
+    session && session._id && dates.includes(session.date)
+  );
+  const labels = labelsFromProposal(sessions, proposal);
+  const currentRows = (proposal?.days || []).flatMap(day => day.assignments || []);
+  const desired = new Map(currentRows.map(row => [String(row.programId), row.photographer || '']));
+
+  const crewByDay = {};
+  for (const date of dates) {
+    const people = buildPhotoCrew(rows, date);
+    crewByDay[date] = people.map(person => ({
+      name: displayName(person, people),
+      fullName: person.name,
+      role: person.role,
+      call: person.shifts.map(shift => ({
+        role: shift.role,
+        start: shift.start,
+        end: shift.end
+      }))
+    }));
+  }
+
+  const { summary, assignments, model } = await requestAssignmentEdits(openai, text, {
+    crewByDay,
+    sessions: currentRows.map(row => ({
+      programId: row.programId,
+      date: row.date,
+      name: row.name,
+      startTime: row.startTime,
+      endTime: row.endTime,
+      location: row.location,
+      coverage: row.coverage,
+      visitMinutes: row.visitMinutes,
+      photographer: row.photographer || ''
+    }))
+  });
+
+  for (const row of assignments) {
+    const id = String(row.programId || '');
+    if (!id || !desired.has(id)) continue;
+    desired.set(id, row.photographer == null ? '' : String(row.photographer));
+  }
+
+  const note = summary || 'Adjusted from your request';
+  const days = dates.map(date => {
+    const rebuilt = rebuildDayFromDesired(
+      date,
+      sessions.filter(session => session.date === date),
+      rows,
+      labels,
+      desired,
+      note
+    );
+    const prior = (proposal.days || []).find(day => day.date === date);
+    if (prior) {
+      rebuilt.swapFrom = prior.swapFrom;
+      rebuilt.swapTo = prior.swapTo;
+    }
+    for (const row of rebuilt.assignments) {
+      const before = currentRows.find(item => String(item.programId) === row.programId);
+      if (before) {
+        row.previousPhotographer = before.previousPhotographer || before.photographer || '';
+        row.originalPhotographer = before.originalPhotographer != null
+          ? before.originalPhotographer
+          : (before.photographer || '');
+        row.edited = row.photographer !== row.originalPhotographer;
+      }
+    }
+    return rebuilt;
+  });
+
+  return {
+    ...proposal,
+    days,
+    editNote: note,
+    editModel: model,
+    sessionCount: sessions.length
+  };
+}
+
 function canAssignPhotographers(table, user) {
   if (!table || !user) return false;
   if (user.role === 'admin') return true;
@@ -738,6 +1061,7 @@ function canAssignPhotographers(table, user) {
 
 module.exports = {
   buildAssignmentProposal,
+  editAssignmentProposal,
   canAssignPhotographers,
   classifyWithKeywords,
   parseTimeToMinutes

@@ -145,6 +145,10 @@
         </div>
         <div class="filter-right">
           <input type="text" id="searchInput" class="schedule-search-input" placeholder="Search programs...">
+          <button class="filter-action-btn" id="autoAssignBtn">
+            <span class="material-symbols-outlined">auto_fix_high</span>
+            <span>Auto Assign</span>
+          </button>
           <button class="filter-action-btn" id="importBtn">
             <span class="material-symbols-outlined">upload</span>
             <span>Import Schedule</span>
@@ -209,6 +213,28 @@
     <div class="modal-footer-dark">
       <button class="btn-secondary" id="cancelDeleteBtn">Cancel</button>
       <button class="btn-danger" id="confirmDeleteBtn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="dark-modal" id="autoAssignModal">
+  <div class="dark-modal-content auto-assign-modal-content">
+    <div class="modal-header-dark">
+      <div>
+        <h3>Auto Assign Photographers</h3>
+        <p class="auto-assign-header-sub">Review, edit, or swap before applying</p>
+      </div>
+      <button type="button" class="auto-assign-close" id="autoAssignCloseBtn" aria-label="Close">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark" id="autoAssignModalBody">
+      <p>Analyzing the schedule and crew…</p>
+    </div>
+    <div class="modal-footer-dark" id="autoAssignModalFooter">
+      <button class="btn-secondary" id="autoAssignCancelBtn">Cancel</button>
+      <button class="btn-secondary" id="autoAssignUndoBtn" style="display: none;">Undo</button>
+      <button class="btn-primary" id="autoAssignApplyBtn" disabled>Apply</button>
     </div>
   </div>
 </div>

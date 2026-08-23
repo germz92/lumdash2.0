@@ -12,6 +12,7 @@ const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
 const OpenAI = require('openai');
 const { buildLumaContext } = require('./services/lumaContextBuilder');
+const { buildAssignmentProposal, canAssignPhotographers } = require('./services/photographerAssigner');
 require('dotenv').config();
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 console.log('SENDGRID_API_KEY loaded:', !!process.env.SENDGRID_API_KEY);
@@ -5364,6 +5365,103 @@ app.patch('/api/tables/:id/program-field', authenticate, async (req, res) => {
   } catch (err) {
     console.error('❌ [ATOMIC] Error updating program field:', err);
     res.status(500).json({ error: 'Failed to update program field', details: err.message });
+  }
+});
+
+async function applyPhotographerField(tableId, programId, value, user, sessionId) {
+  const result = await Table.findOneAndUpdate(
+    { _id: tableId, 'programSchedule._id': programId },
+    {
+      $set: {
+        'programSchedule.$.photographer': value,
+        'programSchedule.$.lastModified': new Date(),
+        'programSchedule.$.lastModifiedBy': user.id
+      },
+      $inc: { 'programSchedule.$.rev': 1 }
+    },
+    { new: true }
+  );
+  if (!result) return null;
+  const updatedProgram = result.programSchedule.find(p => p._id.toString() === programId);
+  if (updatedProgram) {
+    io.to(`event-${tableId}`).emit('programFieldUpdated', {
+      eventId: tableId,
+      programId,
+      field: 'photographer',
+      value,
+      oldValue: null,
+      rev: updatedProgram.rev,
+      userId: user.id,
+      sessionId: sessionId || null,
+      userName: user.fullName || user.name || 'Unknown User',
+      timestamp: Date.now()
+    });
+  }
+  return updatedProgram;
+}
+
+app.post('/api/tables/:id/auto-assign-photographers', authenticate, async (req, res) => {
+  if (!req.params.id || req.params.id === 'null') {
+    return res.status(400).json({ error: 'Invalid table ID' });
+  }
+  try {
+    const table = await Table.findById(req.params.id)
+      .select('title owners leads programSchedule rows')
+      .lean();
+    if (!table) return res.status(404).json({ error: 'Table not found' });
+    if (!canAssignPhotographers(table, req.user)) {
+      return res.status(403).json({ error: 'Only owners and leads can auto-assign photographers' });
+    }
+
+    const dates = Array.isArray(req.body?.dates) ? req.body.dates : null;
+    const proposal = await buildAssignmentProposal({
+      programSchedule: table.programSchedule || [],
+      rows: table.rows || [],
+      dates,
+      openai
+    });
+    res.json(proposal);
+  } catch (err) {
+    console.error('[AutoAssign] Preview failed:', err);
+    res.status(500).json({ error: 'Failed to build photographer assignments' });
+  }
+});
+
+app.post('/api/tables/:id/auto-assign-photographers/apply', authenticate, async (req, res) => {
+  if (!req.params.id || req.params.id === 'null') {
+    return res.status(400).json({ error: 'Invalid table ID' });
+  }
+  const assignments = Array.isArray(req.body?.assignments) ? req.body.assignments : [];
+  if (!assignments.length) {
+    return res.status(400).json({ error: 'assignments are required' });
+  }
+  try {
+    const table = await Table.findById(req.params.id).select('owners leads programSchedule');
+    if (!table) return res.status(404).json({ error: 'Table not found' });
+    if (!canAssignPhotographers(table, req.user)) {
+      return res.status(403).json({ error: 'Only owners and leads can auto-assign photographers' });
+    }
+
+    const sessionId = req.body.sessionId || null;
+    const updated = [];
+    const skipped = [];
+    for (const row of assignments) {
+      const programId = row.programId;
+      if (!programId) continue;
+      const program = table.programSchedule.find(item => item._id.toString() === programId);
+      if (!program) {
+        skipped.push({ programId, reason: 'Session not found' });
+        continue;
+      }
+      const value = row.photographer == null ? '' : String(row.photographer);
+      const saved = await applyPhotographerField(req.params.id, programId, value, req.user, sessionId);
+      if (saved) updated.push({ programId, photographer: value });
+      else skipped.push({ programId, reason: 'Save failed' });
+    }
+    res.json({ updated: updated.length, skipped });
+  } catch (err) {
+    console.error('[AutoAssign] Apply failed:', err);
+    res.status(500).json({ error: 'Failed to apply photographer assignments' });
   }
 });
 

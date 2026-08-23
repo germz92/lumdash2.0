@@ -18,6 +18,7 @@ body:has(.schedule-page) #page-container {
 /* Hide export and import buttons for non-owners/non-leads */
 body.no-owner-controls .schedule-page #importBtn,
 body.no-owner-controls .schedule-page #exportBtn,
+body.no-owner-controls .schedule-page #autoAssignBtn,
 body.no-owner-controls .schedule-page #downloadTemplateBtn {
     display: none !important;
 }
@@ -1980,5 +1981,322 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
 /* Proper fix: Ensure delete buttons show for owners */
 .schedule-page .program-entry .entry-actions .delete-btn {
   display: inline-flex !important;
+}
+
+#autoAssignModal .dark-modal-content.auto-assign-modal-content {
+  max-width: min(96vw, 1180px);
+  width: min(96vw, 1180px);
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+}
+
+.auto-assign-modal-content .modal-header-dark {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 22px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.auto-assign-modal-content .modal-header-dark h3 {
+  margin: 0;
+}
+
+.auto-assign-header-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  opacity: 0.62;
+}
+
+.auto-assign-close {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 4px;
+  opacity: 0.7;
+}
+
+.auto-assign-close:hover {
+  opacity: 1;
+}
+
+.auto-assign-modal-content .modal-body-dark {
+  overflow-y: auto;
+  max-height: none;
+  flex: 1;
+  padding: 16px 22px 8px;
+}
+
+.auto-assign-modal-content .modal-footer-dark {
+  padding: 12px 22px 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.auto-assign-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 16px;
+  margin: 0 0 12px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.auto-assign-summary.is-complete {
+  border-color: rgba(110, 198, 146, 0.28);
+  background: rgba(110, 198, 146, 0.08);
+}
+
+.auto-assign-summary.has-unassigned {
+  border-color: rgba(246, 193, 119, 0.32);
+  background: rgba(246, 193, 119, 0.08);
+}
+
+.auto-assign-stat {
+  display: flex;
+  flex-direction: column;
+  min-width: 72px;
+}
+
+.auto-assign-stat strong {
+  font-size: 20px;
+  line-height: 1.1;
+}
+
+.auto-assign-stat span {
+  font-size: 12px;
+  opacity: 0.65;
+}
+
+.auto-assign-stat.is-ok strong {
+  color: #8ee0b0;
+}
+
+.auto-assign-stat.is-warn strong {
+  color: #f6c177;
+}
+
+.auto-assign-summary-copy {
+  margin: 0 0 0 auto;
+  font-size: 13px;
+  opacity: 0.8;
+}
+
+.auto-assign-swap-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.auto-assign-swap-bar select {
+  min-width: 140px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+  font: inherit;
+}
+
+.auto-assign-day {
+  margin-bottom: 22px;
+}
+
+.auto-assign-day-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 8px;
+}
+
+.auto-assign-day h4 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.auto-assign-day-gap {
+  font-size: 12px;
+  color: #f6c177;
+}
+
+.auto-assign-table-wrap {
+  overflow: auto;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+
+.auto-assign-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.auto-assign-table th,
+.auto-assign-table td {
+  text-align: left;
+  padding: 9px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  vertical-align: top;
+}
+
+.auto-assign-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  opacity: 0.7;
+  background: #1c1c1f;
+}
+
+.auto-assign-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.auto-assign-table tbody tr.is-unassigned {
+  background: rgba(246, 193, 119, 0.08);
+}
+
+.auto-assign-time {
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.auto-assign-loc,
+.auto-assign-why {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 12px;
+}
+
+.auto-assign-coverage {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+}
+
+.auto-assign-coverage.dedicated {
+  background: rgba(255, 193, 7, 0.2);
+}
+
+.auto-assign-photo-edit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 160px;
+}
+
+.auto-assign-photo-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+  color: inherit;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.auto-assign-photo-input:focus {
+  outline: none;
+  border-color: #7eb6ff;
+}
+
+.auto-assign-photo-input.is-edited {
+  border-color: #f6c177;
+}
+
+.auto-assign-edited {
+  font-size: 11px;
+  color: #f6c177;
+}
+
+.auto-assign-workload {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.auto-assign-workload li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+}
+
+.auto-assign-workload em {
+  font-style: normal;
+  opacity: 0.6;
+}
+
+.auto-assign-warnings {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+}
+
+.auto-assign-warnings li {
+  color: #f6c177;
+  margin-bottom: 4px;
+}
+
+.auto-assign-empty {
+  opacity: 0.75;
+}
+
+.auto-assign-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 260px;
+  text-align: center;
+}
+
+.auto-assign-loading p {
+  margin: 0;
+}
+
+.auto-assign-loading-sub {
+  opacity: 0.7;
+  font-size: 13px;
+}
+
+.auto-assign-spinner {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.15);
+  border-top-color: #7eb6ff;
+  animation: auto-assign-spin 0.7s linear infinite;
+}
+
+@keyframes auto-assign-spin {
+  to { transform: rotate(360deg); }
 }
   

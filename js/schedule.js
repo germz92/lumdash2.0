@@ -404,6 +404,8 @@ window.initPage = async function(id) {
     // Add event listener
     newExportBtn.addEventListener('click', exportScheduleToExcel);
   }
+
+  setupAutoAssignControls();
   
   console.log(`[INIT] Event listeners setup complete`);
 
@@ -6392,6 +6394,532 @@ window.initDarkThemeSchedule = initDarkThemeSchedule;
 window.renderDarkThemeCardView = renderDarkThemeCardView;
 window.createScheduleDateDropdown = createScheduleDateDropdown;
 window.updateScheduleDateDropdown = updateScheduleDateDropdown;
+window.openAutoAssignPreview = openAutoAssignPreview;
+
+let autoAssignProposal = null;
+let autoAssignUndoSnapshot = null;
+
+function autoAssignAuthHeaders() {
+  return {
+    'Content-Type': 'application/json',
+    'Authorization': localStorage.getItem('token')
+  };
+}
+
+function setupAutoAssignControls() {
+  const openBtn = document.getElementById('autoAssignBtn');
+  if (openBtn) {
+    const fresh = openBtn.cloneNode(true);
+    openBtn.parentNode.replaceChild(fresh, openBtn);
+    fresh.addEventListener('click', openAutoAssignPreview);
+  }
+  const closeBtn = document.getElementById('autoAssignCloseBtn');
+  const cancelBtn = document.getElementById('autoAssignCancelBtn');
+  const applyBtn = document.getElementById('autoAssignApplyBtn');
+  const undoBtn = document.getElementById('autoAssignUndoBtn');
+  const body = document.getElementById('autoAssignModalBody');
+  if (closeBtn) closeBtn.onclick = closeAutoAssignModal;
+  if (cancelBtn) cancelBtn.onclick = closeAutoAssignModal;
+  if (applyBtn) applyBtn.onclick = applyAutoAssignProposal;
+  if (undoBtn) undoBtn.onclick = undoAutoAssign;
+  if (body && !body.dataset.autoAssignBound) {
+    body.dataset.autoAssignBound = '1';
+    body.addEventListener('input', event => {
+      const input = event.target.closest('.auto-assign-photo-input');
+      if (!input) return;
+      updateAutoAssignPhotographer(input.dataset.programId, input.value);
+      const original = input.dataset.original || '';
+      const edited = input.value.trim() !== original;
+      input.classList.toggle('is-edited', edited);
+      const badge = input.parentElement?.querySelector('.auto-assign-edited');
+      if (badge) badge.hidden = !edited;
+      const row = input.closest('tr');
+      if (row) row.classList.toggle('is-unassigned', !input.value.trim());
+      refreshAutoAssignSummary();
+    });
+    body.addEventListener('click', event => {
+      const btn = event.target.closest('[data-auto-assign-swap]');
+      if (!btn) return;
+      const bar = btn.closest('.auto-assign-swap-bar');
+      const from = bar?.querySelector('[data-swap-from]')?.value;
+      const to = bar?.querySelector('[data-swap-to]')?.value;
+      swapAutoAssignPhotographers(from, to, btn.dataset.date);
+    });
+  }
+}
+
+function autoAssignTimeToMinutes(value) {
+  if (value == null || value === '') return 9999;
+  const raw = String(value).trim();
+  const ampm = raw.match(/^(\d{1,2})(?::(\d{2}))?(?::\d{2})?\s*(am|pm)$/i);
+  if (ampm) {
+    let hours = parseInt(ampm[1], 10);
+    const minutes = parseInt(ampm[2] || '0', 10);
+    const suffix = ampm[3].toLowerCase();
+    if (suffix === 'pm' && hours !== 12) hours += 12;
+    if (suffix === 'am' && hours === 12) hours = 0;
+    return hours * 60 + minutes;
+  }
+  const match = raw.match(/^(\d{1,2})(?::(\d{2}))?/);
+  if (!match) return 9999;
+  return parseInt(match[1], 10) * 60 + parseInt(match[2] || '0', 10);
+}
+
+function sortAutoAssignRowsByTime(rows) {
+  return [...(rows || [])].sort((a, b) => {
+    const byTime = autoAssignTimeToMinutes(a.startTime) - autoAssignTimeToMinutes(b.startTime);
+    if (byTime) return byTime;
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
+}
+
+function updateAutoAssignPhotographer(programId, photographer) {
+  if (!programId || !autoAssignProposal) return;
+  for (const day of autoAssignProposal.days || []) {
+    const row = (day.assignments || []).find(item => String(item.programId) === String(programId));
+    if (!row) continue;
+    if (row.originalPhotographer == null) row.originalPhotographer = row.photographer || '';
+    row.photographer = String(photographer || '').trim();
+    row.edited = row.photographer !== row.originalPhotographer;
+    return;
+  }
+}
+
+function syncAutoAssignEditsFromDom() {
+  document.querySelectorAll('#autoAssignModal .auto-assign-photo-input').forEach(input => {
+    updateAutoAssignPhotographer(input.dataset.programId, input.value);
+  });
+}
+
+function splitAutoAssignNames(value) {
+  return String(value || '').split(',').map(part => part.trim()).filter(Boolean);
+}
+
+function autoAssignNamesMatch(left, right) {
+  const a = String(left || '').trim().toLowerCase();
+  const b = String(right || '').trim().toLowerCase();
+  if (!a || !b) return false;
+  if (a === b) return true;
+  const aFirst = a.split(/\s+/)[0];
+  const bFirst = b.split(/\s+/)[0];
+  return aFirst === b || bFirst === a || (aFirst === bFirst && (a.startsWith(b) || b.startsWith(a)));
+}
+
+function collectAutoAssignPhotographerNames(day) {
+  const names = [];
+  const seen = new Set();
+  const add = name => {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) return;
+    const key = trimmed.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    names.push(trimmed);
+  };
+  for (const person of day?.workload || []) {
+    add(person.name || person.fullName);
+  }
+  for (const row of day?.assignments || []) {
+    splitAutoAssignNames(row.photographer).forEach(add);
+  }
+  return names.sort((a, b) => a.localeCompare(b));
+}
+
+function swapAutoAssignNameList(value, from, to) {
+  const names = splitAutoAssignNames(value);
+  if (!names.length) return value || '';
+  const next = names.map(name => {
+    if (autoAssignNamesMatch(name, from)) return to;
+    if (autoAssignNamesMatch(name, to)) return from;
+    return name;
+  });
+  return next.join(', ');
+}
+
+function recountAutoAssignWorkload(day) {
+  const counts = new Map();
+  for (const row of day.assignments || []) {
+    for (const name of splitAutoAssignNames(row.photographer)) {
+      const key = name.toLowerCase();
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+  }
+  for (const person of day.workload || []) {
+    const key = String(person.name || person.fullName || '').trim().toLowerCase();
+    if (counts.has(key)) person.sessions = counts.get(key);
+  }
+}
+
+function swapAutoAssignPhotographers(from, to, date) {
+  if (!autoAssignProposal) return;
+  syncAutoAssignEditsFromDom();
+  const left = String(from || '').trim();
+  const right = String(to || '').trim();
+  if (!left || !right || autoAssignNamesMatch(left, right)) {
+    showImportantToast('Pick two different photographers to swap');
+    return;
+  }
+  const day = (autoAssignProposal.days || []).find(item => String(item.date) === String(date));
+  if (!day) {
+    showImportantToast('Could not find that day to swap');
+    return;
+  }
+
+  let changed = 0;
+  for (const row of day.assignments || []) {
+    const next = swapAutoAssignNameList(row.photographer, left, right);
+    if (next === (row.photographer || '')) continue;
+    if (row.originalPhotographer == null) row.originalPhotographer = row.photographer || '';
+    row.photographer = next;
+    row.edited = row.photographer !== row.originalPhotographer;
+    const note = `Swapped ${left} ↔ ${right}`;
+    if (!String(row.why || '').includes(note)) {
+      row.why = [row.why, note].filter(Boolean).join('; ');
+    }
+    changed += 1;
+  }
+  const personA = (day.workload || []).find(item =>
+    autoAssignNamesMatch(item.name, left) || autoAssignNamesMatch(item.fullName, left)
+  );
+  const personB = (day.workload || []).find(item =>
+    autoAssignNamesMatch(item.name, right) || autoAssignNamesMatch(item.fullName, right)
+  );
+  if (personA && personB && personA !== personB) {
+    const minutes = personA.minutes;
+    personA.minutes = personB.minutes;
+    personB.minutes = minutes;
+  }
+  recountAutoAssignWorkload(day);
+  day.swapFrom = left;
+  day.swapTo = right;
+  renderAutoAssignModal(autoAssignProposal);
+  const dayLabel = formatAutoAssignDate(day.date);
+  showImportantToast(changed
+    ? `Swapped ${left} and ${right} on ${dayLabel} (${changed} session${changed === 1 ? '' : 's'})`
+    : `${left} and ${right} have no sessions to swap on ${dayLabel}`);
+}
+
+function autoAssignSwapOptions(names, selected) {
+  return names.map(name =>
+    `<option value="${escapeHtml(name)}" ${name === selected ? 'selected' : ''}>${escapeHtml(name)}</option>`
+  ).join('');
+}
+
+function closeAutoAssignModal() {
+  const modal = document.getElementById('autoAssignModal');
+  if (modal) modal.classList.remove('show');
+}
+
+function showAutoAssignLoading(title, subtitle) {
+  const body = document.getElementById('autoAssignModalBody');
+  if (!body) return;
+  body.innerHTML = `<div class="auto-assign-loading">
+    <div class="auto-assign-spinner" aria-hidden="true"></div>
+    <p>${escapeHtml(title)}</p>
+    <p class="auto-assign-loading-sub">${escapeHtml(subtitle)}</p>
+  </div>`;
+}
+
+function startAutoAssignProgress() {
+  const steps = [
+    ['Reading the schedule…', 'Pulling sessions and crew for this date.'],
+    ['Labeling sessions…', 'Deciding short visits vs dedicated coverage.'],
+    ['Assigning photographers…', 'Matching people to rooms and travel time.'],
+    ['Balancing the day…', 'Spreading leftover coverage so fewer people sit idle.']
+  ];
+  const started = Date.now();
+  const paint = () => {
+    const secs = Math.floor((Date.now() - started) / 1000);
+    const step = steps[Math.min(steps.length - 1, Math.floor(secs / 2))];
+    showAutoAssignLoading(step[0], `${step[1]} ${secs}s elapsed`);
+  };
+  paint();
+  const timer = setInterval(paint, 400);
+  let stopped = false;
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    clearInterval(timer);
+  };
+}
+
+function isAutoAssignUnassigned(row) {
+  return !String(row?.photographer || '').trim();
+}
+
+function summarizeAutoAssign(proposal) {
+  const rows = collectAutoAssignRows(proposal);
+  const unassigned = rows.filter(isAutoAssignUnassigned).length;
+  return {
+    total: rows.length,
+    unassigned,
+    assigned: Math.max(0, rows.length - unassigned)
+  };
+}
+
+function autoAssignSummaryHtml(proposal) {
+  const stats = summarizeAutoAssign(proposal);
+  const unassignedLabel = stats.unassigned === 1 ? 'session unassigned' : 'sessions unassigned';
+  const status = stats.unassigned
+    ? `${stats.unassigned} of ${stats.total} ${unassignedLabel}`
+    : `All ${stats.total} session${stats.total === 1 ? '' : 's'} assigned`;
+  return `<div class="auto-assign-summary ${stats.unassigned ? 'has-unassigned' : 'is-complete'}">
+    <div class="auto-assign-stat">
+      <strong>${stats.total}</strong>
+      <span>sessions</span>
+    </div>
+    <div class="auto-assign-stat is-ok">
+      <strong>${stats.assigned}</strong>
+      <span>assigned</span>
+    </div>
+    <div class="auto-assign-stat ${stats.unassigned ? 'is-warn' : 'is-ok'}">
+      <strong>${stats.unassigned}</strong>
+      <span>unassigned</span>
+    </div>
+    <p class="auto-assign-summary-copy">${status}</p>
+  </div>`;
+}
+
+function refreshAutoAssignSummary() {
+  if (!autoAssignProposal) return;
+  syncAutoAssignEditsFromDom();
+  const host = document.querySelector('#autoAssignModal .auto-assign-summary');
+  if (!host) return;
+  host.outerHTML = autoAssignSummaryHtml(autoAssignProposal);
+}
+
+function formatAutoAssignDate(dateStr) {
+  if (!dateStr) return 'No date';
+  const [year, month, day] = String(dateStr).split('-').map(Number);
+  if (!year || !month || !day) return dateStr;
+  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'short',
+    day: 'numeric'
+  });
+}
+
+function renderAutoAssignModal(proposal, { applied = false } = {}) {
+  const body = document.getElementById('autoAssignModalBody');
+  const applyBtn = document.getElementById('autoAssignApplyBtn');
+  const undoBtn = document.getElementById('autoAssignUndoBtn');
+  if (!body) return;
+
+  if (!proposal || !proposal.days || !proposal.days.length) {
+    body.innerHTML = '<p class="auto-assign-empty">No sessions found for the current date filter.</p>';
+    if (applyBtn) applyBtn.disabled = true;
+    return;
+  }
+
+  const daysHtml = proposal.days.map(day => {
+    const dayUnassigned = (day.assignments || []).filter(isAutoAssignUnassigned).length;
+    const rows = sortAutoAssignRowsByTime(day.assignments).map(row => {
+      const time = [formatTimeDisplay(row.startTime), formatTimeDisplay(row.endTime)].filter(Boolean).join(' – ');
+      const coverage = row.coverage === 'dedicated'
+        ? 'Stay the whole session'
+        : `Visit ~${row.visitMinutes || 15} min`;
+      const original = row.originalPhotographer != null ? row.originalPhotographer : (row.photographer || '');
+      const edited = !!row.edited;
+      const unassigned = isAutoAssignUnassigned(row);
+      const photographerCell = applied
+        ? escapeHtml(row.photographer || 'Unassigned')
+        : `<div class="auto-assign-photo-edit">
+            <input type="text" class="auto-assign-photo-input${edited ? ' is-edited' : ''}" data-program-id="${escapeHtml(row.programId)}" data-original="${escapeHtml(original)}" value="${escapeHtml(row.photographer || '')}" placeholder="Unassigned">
+            <span class="auto-assign-edited" ${edited ? '' : 'hidden'}>Edited</span>
+          </div>`;
+      return `<tr class="${unassigned ? 'is-unassigned' : ''}">
+        <td class="auto-assign-time">${time || '—'}</td>
+        <td>${escapeHtml(row.name || 'Untitled')}</td>
+        <td class="auto-assign-loc">${escapeHtml(row.location || '')}</td>
+        <td><span class="auto-assign-coverage ${row.coverage || ''}">${coverage}</span></td>
+        <td>${photographerCell}</td>
+        <td class="auto-assign-why">${escapeHtml(row.why || '')}</td>
+      </tr>`;
+    }).join('');
+    const workload = (day.workload || []).map(person =>
+      `<li><span>${escapeHtml(person.name)}</span><em>${person.sessions} session${person.sessions === 1 ? '' : 's'}</em><em>${person.minutes} min</em></li>`
+    ).join('');
+    const warnings = (day.warnings || []).map(item => `<li>${escapeHtml(item.message)}</li>`).join('');
+    const names = collectAutoAssignPhotographerNames(day);
+    const swapFrom = day.swapFrom && names.includes(day.swapFrom) ? day.swapFrom : names[0] || '';
+    const swapTo = day.swapTo && names.includes(day.swapTo) && day.swapTo !== swapFrom
+      ? day.swapTo
+      : (names.find(name => name !== swapFrom) || '');
+    const swapBar = !applied && names.length >= 2
+      ? `<div class="auto-assign-swap-bar">
+          <span>Swap this day</span>
+          <select data-swap-from aria-label="First photographer">${autoAssignSwapOptions(names, swapFrom)}</select>
+          <span>with</span>
+          <select data-swap-to aria-label="Second photographer">${autoAssignSwapOptions(names, swapTo)}</select>
+          <button type="button" class="btn-secondary" data-auto-assign-swap data-date="${escapeHtml(day.date || '')}">Swap sessions</button>
+        </div>`
+      : '';
+    return `<section class="auto-assign-day">
+      <div class="auto-assign-day-head">
+        <h4>${escapeHtml(formatAutoAssignDate(day.date))}</h4>
+        ${dayUnassigned ? `<span class="auto-assign-day-gap">${dayUnassigned} unassigned</span>` : ''}
+      </div>
+      ${swapBar}
+      <div class="auto-assign-table-wrap">
+        <table class="auto-assign-table">
+          <thead><tr><th>Time</th><th>Session</th><th>Location</th><th>Type</th><th>Photographer</th><th>Why</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="6">No sessions</td></tr>'}</tbody>
+        </table>
+      </div>
+      ${workload ? `<ul class="auto-assign-workload">${workload}</ul>` : ''}
+      ${warnings ? `<ul class="auto-assign-warnings">${warnings}</ul>` : ''}
+    </section>`;
+  }).join('');
+
+  body.innerHTML = `${autoAssignSummaryHtml(proposal)}${daysHtml}`;
+  if (applyBtn) {
+    applyBtn.disabled = applied;
+    applyBtn.textContent = applied ? 'Applied' : 'Apply';
+  }
+  if (undoBtn) undoBtn.style.display = applied && autoAssignUndoSnapshot ? 'inline-flex' : 'none';
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+async function openAutoAssignPreview() {
+  if (!isOwner) {
+    showImportantToast('Only owners and leads can auto-assign');
+    return;
+  }
+  const modal = document.getElementById('autoAssignModal');
+  const body = document.getElementById('autoAssignModalBody');
+  const applyBtn = document.getElementById('autoAssignApplyBtn');
+  const undoBtn = document.getElementById('autoAssignUndoBtn');
+  if (!modal || !body) return;
+  autoAssignProposal = null;
+  if (applyBtn) {
+    applyBtn.disabled = true;
+    applyBtn.textContent = 'Apply';
+  }
+  if (undoBtn) undoBtn.style.display = 'none';
+  const stopProgress = startAutoAssignProgress();
+  modal.classList.add('show');
+
+  const tableId = currentEventId || localStorage.getItem('eventId');
+  const dates = filterDate && filterDate !== 'all' ? [filterDate] : null;
+  try {
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/auto-assign-photographers`, {
+      method: 'POST',
+      headers: autoAssignAuthHeaders(),
+      body: JSON.stringify({ dates })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not build assignments');
+    autoAssignProposal = data;
+    stopProgress();
+    renderAutoAssignModal(data);
+  } catch (err) {
+    stopProgress();
+    body.innerHTML = `<p class="auto-assign-empty">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+function collectAutoAssignRows(proposal) {
+  return (proposal?.days || []).flatMap(day => day.assignments || []);
+}
+
+function writeLocalPhotographer(programId, photographer) {
+  const program = (tableData.programs || []).find(item => String(item._id) === String(programId));
+  if (program) program.photographer = photographer;
+}
+
+async function applyAutoAssignProposal() {
+  if (!autoAssignProposal) return;
+  syncAutoAssignEditsFromDom();
+  const tableId = currentEventId || localStorage.getItem('eventId');
+  const rows = collectAutoAssignRows(autoAssignProposal).filter(row => row.programId);
+  const editingKey = window.currentlyEditingField || '';
+  const toApply = [];
+  const skipped = [];
+  for (const row of rows) {
+    if (editingKey === `${row.programId}-photographer`) {
+      skipped.push(row.name || 'a session');
+      continue;
+    }
+    toApply.push({
+      programId: row.programId,
+      photographer: row.photographer || '',
+      previousPhotographer: row.previousPhotographer || ''
+    });
+  }
+  if (!toApply.length) {
+    showImportantToast('Nothing to apply');
+    return;
+  }
+  const applyBtn = document.getElementById('autoAssignApplyBtn');
+  if (applyBtn) {
+    applyBtn.disabled = true;
+    applyBtn.textContent = 'Applying…';
+  }
+  showAutoAssignLoading('Applying assignments…', 'Writing photographers onto the schedule.');
+  try {
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/auto-assign-photographers/apply`, {
+      method: 'POST',
+      headers: autoAssignAuthHeaders(),
+      body: JSON.stringify({
+        assignments: toApply,
+        sessionId: window.SimpleCollab?.getCurrentUser?.()?.sessionId
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Apply failed');
+    autoAssignUndoSnapshot = toApply;
+    for (const row of toApply) writeLocalPhotographer(row.programId, row.photographer);
+    renderProgramSections(isOwner);
+    renderAutoAssignModal(autoAssignProposal, { applied: true });
+    showImportantToast(skipped.length
+      ? `Assigned photographers (skipped ${skipped.length} being edited)`
+      : 'Photographers assigned');
+  } catch (err) {
+    if (applyBtn) {
+      applyBtn.disabled = false;
+      applyBtn.textContent = 'Apply';
+    }
+    renderAutoAssignModal(autoAssignProposal);
+    showImportantToast(err.message || 'Apply failed');
+  }
+}
+
+async function undoAutoAssign() {
+  if (!autoAssignUndoSnapshot) return;
+  const tableId = currentEventId || localStorage.getItem('eventId');
+  const assignments = autoAssignUndoSnapshot.map(row => ({
+    programId: row.programId,
+    photographer: row.previousPhotographer || ''
+  }));
+  try {
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/auto-assign-photographers/apply`, {
+      method: 'POST',
+      headers: autoAssignAuthHeaders(),
+      body: JSON.stringify({
+        assignments,
+        sessionId: window.SimpleCollab?.getCurrentUser?.()?.sessionId
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Undo failed');
+    for (const row of autoAssignUndoSnapshot) {
+      writeLocalPhotographer(row.programId, row.previousPhotographer || '');
+    }
+    autoAssignUndoSnapshot = null;
+    renderProgramSections(isOwner);
+    renderAutoAssignModal(autoAssignProposal, { applied: false });
+    showImportantToast('Auto assign undone');
+  } catch (err) {
+    showImportantToast(err.message || 'Undo failed');
+  }
+}
 
 console.log('✅ [DARK THEME] Dark theme schedule functionality loaded');
 

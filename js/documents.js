@@ -478,6 +478,11 @@ class DocumentsPage {
     // Validate file
     const maxSize = 10 * 1024 * 1024; // 10MB
     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    const fileName = (file.name || '').toLowerCase();
+    const allowedExt = ['.pdf', '.jpg', '.jpeg', '.png'].some(ext => fileName.endsWith(ext));
+    const mime = (file.type || '').toLowerCase();
+    const allowedByMime = allowedTypes.includes(mime);
+    const allowedByExt = allowedExt && (!mime || mime === 'application/octet-stream');
     
     console.log('Uploading file:', file.name, 'Type:', file.type, 'Size:', file.size);
     
@@ -486,7 +491,7 @@ class DocumentsPage {
       return;
     }
 
-    if (!allowedTypes.includes(file.type)) {
+    if (!allowedByMime && !allowedByExt) {
       this.showError('Only PDF, JPG, and PNG files are allowed');
       return;
     }
@@ -515,7 +520,14 @@ class DocumentsPage {
       if (!response.ok) {
         const errorText = await response.text();
         console.log('Upload error response:', errorText);
-        throw new Error(`Upload failed: ${response.status} ${errorText}`);
+        let message = `Upload failed (${response.status})`;
+        try {
+          const parsed = JSON.parse(errorText);
+          message = parsed.error || parsed.message || message;
+        } catch (_) {
+          if (errorText) message = errorText;
+        }
+        throw new Error(message);
       }
 
       const result = await response.json();

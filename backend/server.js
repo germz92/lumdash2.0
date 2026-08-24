@@ -87,20 +87,42 @@ function setCachedResponse(cacheKey, response) {
 
 // Configure multer for file uploads
 const storage = multer.memoryStorage();
+const allowedDocumentMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+const allowedDocumentExtensions = ['.pdf', '.jpg', '.jpeg', '.png'];
+
+function hasAllowedDocumentExtension(filename = '') {
+  const lower = filename.toLowerCase();
+  return allowedDocumentExtensions.some(ext => lower.endsWith(ext));
+}
+
 const upload = multer({
   storage: storage,
   limits: {
     fileSize: 10 * 1024 * 1024 // 10MB limit
   },
   fileFilter: (req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
-    if (allowedTypes.includes(file.mimetype)) {
+    const mime = (file.mimetype || '').toLowerCase();
+    const allowedByMime = allowedDocumentMimeTypes.includes(mime);
+    const allowedByExt = hasAllowedDocumentExtension(file.originalname) &&
+      (!mime || mime === 'application/octet-stream');
+    if (allowedByMime || allowedByExt) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only JPG, PNG, and PDF files are allowed.'), false);
+      cb(new Error('Invalid file type. Only JPG, PNG, and PDF files are allowed.'));
     }
   }
 });
+
+function handleDocumentFileUpload(req, res, next) {
+  upload.single('file')(req, res, (err) => {
+    if (!err) return next();
+    console.error('Document multer error:', err);
+    const message = err.code === 'LIMIT_FILE_SIZE'
+      ? 'File size must be less than 10MB'
+      : (err.message || 'Invalid file upload');
+    return res.status(400).json({ error: message });
+  });
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -8028,6 +8050,46 @@ app.get('/api/debug/gear/:gearId', authenticate, async (req, res) => {
 
 // DOCUMENT MANAGEMENT ENDPOINTS
 
+function uploadEventDocumentToCloudinary(file, eventId) {
+  const cleanFilename = (file.originalname || 'document').replace(/\.[^/.]+$/, '');
+  const sanitizedFilename = cleanFilename.replace(/[^a-zA-Z0-9.-]/g, '_') || 'document';
+  const isPdf = (file.mimetype || '').toLowerCase() === 'application/pdf' ||
+    /\.pdf$/i.test(file.originalname || '');
+
+  const streamUpload = (resourceType) => new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        resource_type: resourceType,
+        folder: `lumdash/events/${eventId}/documents`,
+        public_id: `${Date.now()}_${sanitizedFilename}`,
+        use_filename: false,
+        unique_filename: true
+      },
+      (error, result) => {
+        if (error) {
+          console.error('Cloudinary upload error:', error);
+          reject(error);
+        } else {
+          console.log('Cloudinary upload success:', {
+            public_id: result.public_id,
+            secure_url: result.secure_url,
+            resource_type: result.resource_type,
+            format: result.format
+          });
+          resolve(result);
+        }
+      }
+    );
+    uploadStream.end(file.buffer);
+  });
+
+  return streamUpload('image').catch((err) => {
+    if (!isPdf) throw err;
+    console.warn('PDF image upload failed, retrying as raw:', err.message);
+    return streamUpload('raw');
+  });
+}
+
 // Get all documents for an event
 app.get('/api/tables/:id/documents', authenticate, async (req, res) => {
   try {
@@ -8064,10 +8126,11 @@ app.get('/api/tables/:id/documents/:documentId', authenticate, async (req, res) 
 });
 
 // Upload a new document
-app.post('/api/tables/:id/documents', authenticate, upload.single('file'), async (req, res) => {
+app.post('/api/tables/:id/documents', authenticate, handleDocumentFileUpload, async (req, res) => {
   try {
     const table = await Table.findById(req.params.id);
-    if (!table || !table.owners.includes(req.user.id)) {
+    const isOwner = !!(table && table.owners && table.owners.map(String).includes(String(req.user.id)));
+    if (!table || !isOwner) {
       return res.status(403).json({ error: 'Not authorized or not found' });
     }
     
@@ -8075,65 +8138,14 @@ app.post('/api/tables/:id/documents', authenticate, upload.single('file'), async
       return res.status(400).json({ error: 'No file uploaded' });
     }
     
-    // Upload to Cloudinary
-    const uploadResult = await new Promise((resolve, reject) => {
-      // Clean the filename - remove extension for public_id since Cloudinary adds it automatically
-      const cleanFilename = req.file.originalname.replace(/\.[^/.]+$/, ""); // Remove extension
-      const sanitizedFilename = cleanFilename.replace(/[^a-zA-Z0-9.-]/g, '_');
-      
-      const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          resource_type: 'image', // Use 'image' for all files including PDFs
-          folder: `lumdash/events/${req.params.id}/documents`,
-          public_id: `${Date.now()}_${sanitizedFilename}`, // Don't include extension here
-          use_filename: false, // Don't use original filename to avoid conflicts
-          unique_filename: true,
-          // Ensure files are publicly accessible for viewing (not downloading)
-          type: 'upload',
-          access_mode: 'public',
-          // For PDFs, add flags to prevent download and enable inline viewing
-          ...(req.file.mimetype === 'application/pdf' && {
-            flags: 'attachment:false'
-          })
-        },
-        (error, result) => {
-          if (error) {
-            console.error('Cloudinary upload error:', error);
-            reject(error);
-          } else {
-            // For PDFs, modify the URL to force inline viewing
-            let finalUrl = result.secure_url;
-            if (req.file.mimetype === 'application/pdf') {
-              // For raw PDFs, we need to use a different approach
-              // Replace the /raw/upload/ with /image/upload/ and add fl_attachment:false
-              finalUrl = result.secure_url.replace('/raw/upload/', '/image/upload/fl_attachment:false/');
-            }
-            
-            console.log('Cloudinary upload success:', {
-              public_id: result.public_id,
-              secure_url: result.secure_url,
-              final_url: finalUrl,
-              resource_type: result.resource_type,
-              format: result.format
-            });
-            
-            // Return the modified result
-            resolve({
-              ...result,
-              secure_url: finalUrl
-            });
-          }
-        }
-      );
-      uploadStream.end(req.file.buffer);
-    });
+    const uploadResult = await uploadEventDocumentToCloudinary(req.file, req.params.id);
     
     // Add document to table
     const newDocument = {
       originalName: req.file.originalname,
       cloudinaryPublicId: uploadResult.public_id,
       url: uploadResult.secure_url,
-      fileType: req.file.mimetype,
+      fileType: req.file.mimetype || 'application/octet-stream',
       size: req.file.size,
       uploadedBy: req.user.id,
       uploadedAt: new Date()
@@ -8152,7 +8164,9 @@ app.post('/api/tables/:id/documents', authenticate, upload.single('file'), async
     
   } catch (err) {
     console.error('Error uploading document:', err);
-    res.status(500).json({ error: 'Failed to upload document' });
+    const message = err.message || 'Failed to upload document';
+    const status = err.http_code === 400 ? 400 : 500;
+    res.status(status).json({ error: message });
   }
 });
 
@@ -11360,8 +11374,7 @@ async function uploadPostProductionAttachment(file, itemId) {
         public_id: `${Date.now()}_${sanitizedFilename}`,
         use_filename: false,
         unique_filename: true,
-        type: 'upload',
-        access_mode: 'public'
+        type: 'upload'
       },
       (error, result) => {
         if (error) reject(error);

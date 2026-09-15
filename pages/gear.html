@@ -940,6 +940,82 @@
     #createTemplateModal #templateItemsPreview strong {
         color: var(--text-primary);
     }
+    .template-lens-choice {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px 18px;
+        margin-top: 8px;
+        font-size: 12px;
+    }
+    .template-lens-choice label {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--text-secondary);
+        font-weight: 400;
+        cursor: pointer;
+        margin: 0;
+    }
+    .template-lens-choice input[type="radio"] {
+        accent-color: var(--brand-red);
+        margin: 0;
+    }
+    .template-lens-choice .choice-disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+    }
+    .template-lens-note {
+        width: 100%;
+        font-size: 11px;
+        color: var(--text-muted);
+        margin-top: -4px;
+    }
+
+    .template-class-section {
+        margin-top: 24px;
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        background: var(--bg-tertiary);
+    }
+    .template-class-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px;
+        border-bottom: 1px solid var(--border-subtle);
+    }
+    .template-class-header h4 {
+        margin: 0 0 4px 0;
+        color: var(--text-primary);
+        font-size: var(--font-size-base);
+        font-weight: var(--font-weight-semibold);
+    }
+    .template-class-meta {
+        font-size: 13px;
+        color: var(--text-tertiary);
+    }
+    .template-class-actions {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-shrink: 0;
+    }
+    .template-class-empty {
+        padding: 20px 16px;
+        color: var(--text-tertiary);
+        font-size: 14px;
+    }
+    #packageContentsModal .template-class-section .pkg-table {
+        margin: 0;
+    }
+    #packageContentsModal .template-class-section input[type="checkbox"] {
+        accent-color: var(--brand-red);
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+    }
 
     /* --- Template list items --- */
     #templatesContainer .template-item {
@@ -1499,6 +1575,28 @@
         let eventId = null;
         let currentUser = null;
         let userPermissions = { canReserve: false, canManageLists: false, canPack: true };
+
+        function isLensCategory(category) {
+            return /lens/i.test(category || '');
+        }
+
+        function getGearBrandModel(item) {
+            const brand = item.brand || (item.inventoryId?.label?.split(' ')[0]) || 'Unknown';
+            const model = item.model || (item.inventoryId?.label?.split(' ').slice(1).join(' ')) || 'Unknown';
+            const category = item.category || item.inventoryId?.category || 'Accessories';
+            return { brand, model, category };
+        }
+
+        function getItemLensClass(item) {
+            return item.inventoryId?.lensClass || item.lensClass || null;
+        }
+
+        function templateItemLabel(item) {
+            if (item.matchType === 'class' && item.lensClass) {
+                return `Class: ${item.lensClass}`;
+            }
+            return `${item.brand || ''} ${item.model || ''}`.trim() || 'Unknown item';
+        }
 
         // Helper: get the display name for a list (uses displayName alias if set, otherwise the real name)
         function getListDisplayName(listName) {
@@ -2762,7 +2860,7 @@
             const tbody = document.getElementById('templateDetailsBody');
             tbody.innerHTML = template.items.map(item => `
                 <tr>
-                    <td style="font-weight: 500;">${item.brand} ${item.model}</td>
+                    <td style="font-weight: 500;">${templateItemLabel(item)}</td>
                     <td style="text-align: center;"><span class="qty-badge">${item.quantity}</span></td>
                 </tr>
             `).join('');
@@ -2859,18 +2957,31 @@
 
             // Show current gear items in preview using direct brand/model fields (more reliable)
             const previewContainer = document.getElementById('templateItemsPreview');
-            previewContainer.innerHTML = validGear.map(item => {
-                // Use direct brand/model fields from ReservedGearItem (guaranteed to exist)
-                // Fall back to parsing inventoryId.label if direct fields aren't available
-                const brand = item.brand || (item.inventoryId?.label?.split(' ')[0]) || 'Unknown';
-                const model = item.model || (item.inventoryId?.label?.split(' ').slice(1).join(' ')) || 'Unknown';
-                const category = item.category || item.inventoryId?.category || 'Accessories';
+            previewContainer.innerHTML = validGear.map((item, index) => {
+                const { brand, model, category } = getGearBrandModel(item);
+                const lens = isLensCategory(category);
+                const lensClass = getItemLensClass(item);
+                const canUseClass = lens && !!lensClass;
+                const choiceHtml = lens ? `
+                    <div class="template-lens-choice">
+                        <label>
+                            <input type="radio" name="lensMatch_${index}" value="model" checked>
+                            Specific model
+                        </label>
+                        <label class="${canUseClass ? '' : 'choice-disabled'}">
+                            <input type="radio" name="lensMatch_${index}" value="class" ${canUseClass ? '' : 'disabled'}>
+                            Class${lensClass ? `: ${lensClass}` : ''}
+                        </label>
+                        ${canUseClass ? '' : '<div class="template-lens-note">No class set — edit this lens in Inventory Management</div>'}
+                    </div>
+                ` : '';
                 
                 return `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border-subtle);">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--border-subtle);">
                         <div>
                             <strong style="color: var(--text-primary);">${brand} ${model}</strong>
                             <div style="font-size: 12px; color: var(--text-tertiary); margin-top: 2px;">${category}</div>
+                            ${choiceHtml}
                         </div>
                         <span class="qty-badge">×${item.quantity || 1}</span>
                     </div>
@@ -2909,12 +3020,30 @@
             // Filter out invalid items and convert to template items
             // Use direct brand/model fields from ReservedGearItem (more reliable than parsing label)
             const validGear = currentGear.filter(item => item.inventoryId || item.brand);
-            const items = validGear.map(item => ({
-                brand: item.brand || (item.inventoryId?.label?.split(' ')[0]) || 'Unknown',
-                model: item.model || (item.inventoryId?.label?.split(' ').slice(1).join(' ')) || 'Unknown',
-                category: item.category || item.inventoryId?.category || 'Accessories',
-                quantity: item.quantity || 1
-            }));
+            const items = validGear.map((item, index) => {
+                const { brand, model, category } = getGearBrandModel(item);
+                const lensClass = getItemLensClass(item);
+                const matchChoice = isLensCategory(category)
+                    ? (document.querySelector(`input[name="lensMatch_${index}"]:checked`)?.value || 'model')
+                    : 'model';
+
+                if (matchChoice === 'class' && lensClass) {
+                    return {
+                        matchType: 'class',
+                        lensClass,
+                        category: category || 'Lenses',
+                        quantity: item.quantity || 1
+                    };
+                }
+
+                return {
+                    matchType: 'model',
+                    brand,
+                    model,
+                    category,
+                    quantity: item.quantity || 1
+                };
+            });
 
             if (items.length === 0) {
                 alert('No valid items to save in template');
@@ -3002,6 +3131,105 @@
         let selectedPackageSerials = []; // Multi-select: [{serial, inventoryId}]
         let selectedPackageQuantity = 1;
 
+        function getTemplateItemStatus(item, qtyOverride) {
+            const templateQty = qtyOverride || item.templateQuantity || 1;
+            const availableQty = item.availableQuantity || 0;
+            let statusClass, statusText, actionHTML;
+            if (item.notInInventory) {
+                statusText = 'Not in inventory';
+                statusClass = 'status-unavailable';
+                actionHTML = '';
+            } else if (availableQty >= templateQty) {
+                statusText = 'Available';
+                statusClass = 'status-available';
+                actionHTML = `<button class="package-btn primary" onclick="openAddItemsModal('${item._id}', ${templateQty})" style="padding: 6px 14px; font-size: 13px;">
+                    <span class="material-symbols-outlined" style="font-size: 16px;">add</span> Add Items
+                </button>`;
+            } else if (availableQty > 0) {
+                statusText = 'Partial';
+                statusClass = 'status-partial';
+                actionHTML = `<button class="package-btn" onclick="openAddItemsModal('${item._id}', ${availableQty})" style="padding: 6px 14px; font-size: 13px; border-color: #f59e0b; color: #f59e0b;">
+                    <span class="material-symbols-outlined" style="font-size: 16px;">add</span> Add Available
+                </button>`;
+            } else {
+                statusText = 'Out of Stock';
+                statusClass = 'status-unavailable';
+                actionHTML = '';
+            }
+            return { statusClass, statusText, actionHTML, templateQty, availableQty };
+        }
+
+        function renderClassTemplateSection(classItem) {
+            const needed = classItem.templateQuantity || 1;
+            const availableQty = classItem.availableQuantity || 0;
+            let statusClass = 'status-unavailable';
+            let statusText = 'Out of Stock';
+            if (classItem.notInInventory || !classItem.classOptions?.length) {
+                statusText = 'None classified';
+            } else if (availableQty >= needed) {
+                statusClass = 'status-available';
+                statusText = 'Available';
+            } else if (availableQty > 0) {
+                statusClass = 'status-partial';
+                statusText = 'Partial';
+            }
+
+            let body = '';
+            if (!classItem.classOptions || classItem.classOptions.length === 0) {
+                body = `<div class="template-class-empty">No lenses classified as ${classItem.lensClass}.</div>`;
+            } else {
+                const rows = classItem.classOptions.map(option => {
+                    const optionAvailable = option.availableQuantity || 0;
+                    const disabled = optionAvailable <= 0;
+                    const optionStatus = optionAvailable > 0 ? 'Available' : 'Out of Stock';
+                    const optionStatusClass = optionAvailable > 0 ? 'status-available' : 'status-unavailable';
+                    return `
+                        <tr style="${disabled ? 'opacity: 0.4;' : ''}">
+                            <td style="text-align: center;">
+                                <input type="checkbox" class="class-lens-checkbox" data-class-id="${classItem._id}" data-option-id="${option._id}" ${disabled ? 'disabled' : ''}>
+                            </td>
+                            <td style="font-weight: 500;">${option.brand} ${option.model}</td>
+                            <td style="text-align: center;"><span class="qty-badge">${optionAvailable}</span></td>
+                            <td><span class="${optionStatusClass}">${optionStatus}</span></td>
+                        </tr>
+                    `;
+                }).join('');
+                body = `
+                    <table class="pkg-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;"></th>
+                                <th>Lens</th>
+                                <th style="text-align: center;">Available</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                    </table>
+                `;
+            }
+
+            return `
+                <div class="template-class-section" data-class-id="${classItem._id}">
+                    <div class="template-class-header">
+                        <div>
+                            <h4>Class: ${classItem.lensClass}</h4>
+                            <div class="template-class-meta">Need ${needed} · ${availableQty} available</div>
+                        </div>
+                        <div class="template-class-actions">
+                            <span class="${statusClass}">${statusText}</span>
+                            ${classItem.classOptions?.length ? `
+                                <button class="package-btn primary" onclick="addSelectedClassLenses('${classItem._id}')" style="padding: 6px 14px; font-size: 13px;">
+                                    <span class="material-symbols-outlined" style="font-size: 16px;">add</span> Add Selected
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                    ${body}
+                </div>
+            `;
+        }
+
         // Show template contents modal with availability (table layout)
         async function showTemplateContentsModal(selectedTemplate) {
             try {
@@ -3023,65 +3251,56 @@
                         </div>
                     `;
                 } else {
-                    // Build table layout: Item | Qty | Available | Status | Action
-                    let tableHTML = `
-                        <table class="pkg-table">
-                            <thead>
-                                <tr>
-                                    <th>Item</th>
-                                    <th style="text-align: center;">Qty</th>
-                                    <th style="text-align: center;">Available</th>
-                                    <th>Status</th>
-                                    <th style="text-align: right;"></th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                    `;
+                    const modelItems = inventoryItems.filter(item => item.matchType !== 'class');
+                    const classItems = inventoryItems.filter(item => item.matchType === 'class');
+                    let html = '';
 
-                    inventoryItems.forEach(item => {
-                        const templateQty = item.templateQuantity || 1;
-                        const availableQty = item.availableQuantity || 0;
-                        
-                        // Determine status
-                        let statusClass, statusText, actionHTML;
-                        if (item.notInInventory) {
-                            statusText = 'Not in inventory';
-                            statusClass = 'status-unavailable';
-                            actionHTML = '';
-                        } else if (availableQty >= templateQty) {
-                            statusText = 'Available';
-                            statusClass = 'status-available';
-                            actionHTML = `<button class="package-btn primary" onclick="openAddItemsModal('${item._id}', ${templateQty})" style="padding: 6px 14px; font-size: 13px;">
-                                <span class="material-symbols-outlined" style="font-size: 16px;">add</span> Add Items
-                            </button>`;
-                        } else if (availableQty > 0) {
-                            statusText = 'Partial';
-                            statusClass = 'status-partial';
-                            actionHTML = `<button class="package-btn" onclick="openAddItemsModal('${item._id}', ${availableQty})" style="padding: 6px 14px; font-size: 13px; border-color: #f59e0b; color: #f59e0b;">
-                                <span class="material-symbols-outlined" style="font-size: 16px;">add</span> Add Available
-                            </button>`;
-                        } else {
-                            statusText = 'Out of Stock';
-                            statusClass = 'status-unavailable';
-                            actionHTML = '';
-                        }
-
-                        tableHTML += `
-                            <tr>
-                                <td style="font-weight: 500;">${item.brand} ${item.model}</td>
-                                <td style="text-align: center;"><span class="qty-badge">${templateQty}</span></td>
-                                <td style="text-align: center;"><span class="qty-badge">${availableQty}</span></td>
-                                <td><span class="${statusClass}">${statusText}</span></td>
-                                <td style="text-align: right;">${actionHTML}</td>
-                            </tr>
+                    if (modelItems.length > 0) {
+                        html += `
+                            <table class="pkg-table">
+                                <thead>
+                                    <tr>
+                                        <th>Item</th>
+                                        <th style="text-align: center;">Qty</th>
+                                        <th style="text-align: center;">Available</th>
+                                        <th>Status</th>
+                                        <th style="text-align: right;"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
                         `;
+
+                        modelItems.forEach(item => {
+                            const templateQty = item.templateQuantity || 1;
+                            const availableQty = item.availableQuantity || 0;
+                            const { statusClass, statusText, actionHTML } = getTemplateItemStatus(item);
+                            html += `
+                                <tr>
+                                    <td style="font-weight: 500;">${item.brand} ${item.model}</td>
+                                    <td style="text-align: center;"><span class="qty-badge">${templateQty}</span></td>
+                                    <td style="text-align: center;"><span class="qty-badge">${availableQty}</span></td>
+                                    <td><span class="${statusClass}">${statusText}</span></td>
+                                    <td style="text-align: right;">${actionHTML}</td>
+                                </tr>
+                            `;
+                        });
+
+                        html += `</tbody></table>`;
+                    }
+
+                    classItems.forEach(classItem => {
+                        html += renderClassTemplateSection(classItem);
                     });
 
-                    tableHTML += `</tbody></table>`;
-                    container.innerHTML = tableHTML;
+                    container.innerHTML = html;
                 }
                 
                 currentPackageItems = inventoryItems;
+                const addAllBtn = document.getElementById('addAllBtn');
+                if (addAllBtn) {
+                    const hasModelItems = inventoryItems.some(item => item.matchType !== 'class');
+                    addAllBtn.style.display = hasModelItems ? '' : 'none';
+                }
                 document.getElementById('packageContentsModal').style.display = 'block';
                 
             } catch (error) {
@@ -3123,7 +3342,57 @@
                 const norm = (s) => (s ?? '').toString().trim().replace(/\s+/g, ' ').toLowerCase();
                 const templateInventoryItems = [];
                 
-                templateItems.forEach(templateItem => {
+                templateItems.forEach((templateItem, idx) => {
+                    if (templateItem.matchType === 'class') {
+                        const tClass = norm(templateItem.lensClass);
+                        const matchingItems = allInventory.filter(invItem => {
+                            return isLensCategory(invItem.category) && norm(invItem.lensClass) === tClass;
+                        });
+
+                        const groups = new Map();
+                        matchingItems.forEach(invItem => {
+                            const invLabelParts = (invItem.label || '').split(' ');
+                            const brand = invLabelParts[0] || 'Unknown';
+                            const model = invLabelParts.slice(1).join(' ') || 'Unknown';
+                            const key = `${norm(brand)}|${norm(model)}`;
+                            if (!groups.has(key)) {
+                                groups.set(key, { brand, model, items: [] });
+                            }
+                            groups.get(key).items.push(invItem);
+                        });
+
+                        const classOptions = [...groups.values()].map(group => {
+                            const totalAvailable = group.items.reduce((sum, item) => sum + (item.availableQuantity ?? 0), 0);
+                            const totalQuantity = group.items.reduce((sum, item) => sum + (item.quantity || 1), 0);
+                            return {
+                                ...group.items[0],
+                                brand: group.brand,
+                                model: group.model,
+                                category: templateItem.category || 'Lenses',
+                                availableQuantity: totalAvailable,
+                                quantity: totalQuantity,
+                                matchingItems: group.items
+                            };
+                        });
+
+                        const totalAvailable = classOptions.reduce((sum, option) => sum + (option.availableQuantity || 0), 0);
+                        const totalQuantity = classOptions.reduce((sum, option) => sum + (option.quantity || 0), 0);
+
+                        templateInventoryItems.push({
+                            _id: `class_${(tClass || 'unknown').replace(/\s+/g, '_')}_${idx}`,
+                            matchType: 'class',
+                            lensClass: templateItem.lensClass,
+                            category: templateItem.category || 'Lenses',
+                            templateQuantity: templateItem.quantity || 1,
+                            availableQuantity: totalAvailable,
+                            quantity: totalQuantity,
+                            classOptions,
+                            matchingItems,
+                            notInInventory: matchingItems.length === 0
+                        });
+                        return;
+                    }
+
                     const tBrand = norm(templateItem.brand);
                     const tModel = norm(templateItem.model);
                     const tCategory = norm(templateItem.category);
@@ -3155,6 +3424,7 @@
                         // Use the first matching item as the representative
                         const representativeItem = {
                             ...matchingItems[0],
+                            matchType: 'model',
                             brand: templateItem.brand,
                             model: templateItem.model,
                             category: templateItem.category,
@@ -3170,6 +3440,7 @@
                         // silently dropping them, so the user knows what's missing.
                         templateInventoryItems.push({
                             _id: `unmatched_${tBrand}_${tModel}_${Math.random().toString(36).slice(2, 8)}`,
+                            matchType: 'model',
                             brand: templateItem.brand,
                             model: templateItem.model,
                             category: templateItem.category,
@@ -3190,9 +3461,77 @@
             }
         }
 
+        function findPackageItemById(inventoryId) {
+            const direct = currentPackageItems.find(item => item._id === inventoryId);
+            if (direct && direct.matchType !== 'class') return direct;
+            for (const item of currentPackageItems) {
+                if (item.classOptions) {
+                    const option = item.classOptions.find(opt => opt._id === inventoryId);
+                    if (option) return option;
+                }
+            }
+            return direct && direct.matchType !== 'class' ? direct : null;
+        }
+
+        async function addSelectedClassLenses(classItemId) {
+            const classItem = currentPackageItems.find(item => item._id === classItemId);
+            if (!classItem || !classItem.classOptions) {
+                alert('Class item not found');
+                return;
+            }
+
+            const checked = Array.from(document.querySelectorAll(`.class-lens-checkbox[data-class-id="${classItemId}"]:checked`));
+            if (checked.length === 0) {
+                alert('Select at least one lens from this class');
+                return;
+            }
+
+            const selectedOptions = checked.map(input => {
+                return classItem.classOptions.find(opt => opt._id === input.getAttribute('data-option-id'));
+            }).filter(Boolean);
+
+            if (selectedOptions.length === 0) {
+                alert('Selected lenses could not be found');
+                return;
+            }
+
+            const needed = classItem.templateQuantity || 1;
+
+            if (selectedOptions.length === 1) {
+                const option = selectedOptions[0];
+                const qty = Math.min(needed, option.availableQuantity || 0);
+                if (qty <= 0) {
+                    alert(`${option.brand} ${option.model} is not available`);
+                    return;
+                }
+                openAddItemsModal(option._id, qty);
+                return;
+            }
+
+            try {
+                let added = 0;
+                for (const option of selectedOptions) {
+                    const unit = (option.matchingItems || []).find(mi => (mi.availableQuantity ?? 0) > 0);
+                    if (!unit) continue;
+                    await addPackageItemToCartDirect(unit._id, 1, null);
+                    added += 1;
+                }
+                if (added === 0) {
+                    alert('None of the selected lenses could be added');
+                    return;
+                }
+                showToast(`Added ${added} selected lens${added === 1 ? '' : 'es'} to cart`, 'success');
+                await loadGear();
+                updateCartBadge();
+            } catch (error) {
+                console.error('Error adding selected class lenses:', error);
+                alert('Failed to add selected lenses: ' + (error.message || 'Unknown error'));
+            }
+        }
+
         // Open Add Items modal for a specific template item (used by both "Add Items" and "Add Available")
         function openAddItemsModal(inventoryId, maxQuantity) {
-            const templateItem = currentPackageItems.find(item => item._id === inventoryId);
+            const templateItem = findPackageItemById(inventoryId);
             if (!templateItem) {
                 alert('Item not found');
                 return;
@@ -3614,7 +3953,7 @@
 
         // Add all available package items to cart (batch - single API call)
         async function addAllAvailableToCart() {
-            const availableItems = currentPackageItems.filter(item => item.availableQuantity > 0);
+            const availableItems = currentPackageItems.filter(item => item.matchType !== 'class' && item.availableQuantity > 0);
             
             if (availableItems.length === 0) {
                 alert('No items are available to add to cart');
@@ -4005,6 +4344,7 @@
         window.closeTemplateDetailsModal = closeTemplateDetailsModal;
         window.deleteTemplateFromDetails = deleteTemplateFromDetails;
         window.openAddItemsModal = openAddItemsModal;
+        window.addSelectedClassLenses = addSelectedClassLenses;
         window.handleSerialCheckbox = handleSerialCheckbox;
         window.toggleAllListsProgress = toggleAllListsProgress;
         window.switchToListFromProgress = switchToListFromProgress;

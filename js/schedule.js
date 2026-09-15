@@ -55,6 +55,9 @@ let searchQuery = '';
 let filterDate = 'all';
 let allNotesVisible = false;
 let isOwner = false;
+let canUsePhotoTools = false;
+let photoCoverageReport = null;
+let coverageRefreshTimer = null;
 let lastKnownEventId = null; // Add this declaration
 let cachedScheduleUsers = []; // Cached user list for photographer auto-suggest
 
@@ -625,9 +628,11 @@ async function loadPrograms(tableId = null, retryCount = 0) {
     // Check permissions using the data we just fetched
     const isOwnerRaw = userId && Array.isArray(data.owners) && data.owners.includes(userId);
     const isLead = userId && Array.isArray(data.leads) && data.leads.includes(userId);
+    const isAdmin = getUserRoleFromToken() === 'admin';
     const hasScheduleAccess = isOwnerRaw || isLead;
+    canUsePhotoTools = hasScheduleAccess || isAdmin;
     
-    console.log(`[LOAD] Access check - isOwner: ${isOwnerRaw}, isLead: ${isLead}, hasAccess: ${hasScheduleAccess}`);
+    console.log(`[LOAD] Access check - isOwner: ${isOwnerRaw}, isLead: ${isLead}, isAdmin: ${isAdmin}, hasAccess: ${hasScheduleAccess}`);
     logEventIdState('AFTER_ACCESS_CHECK');
     
     // Set global variables
@@ -643,6 +648,11 @@ async function loadPrograms(tableId = null, retryCount = 0) {
       document.body.classList.remove('has-owner-controls');
       console.log('[LOAD] Added no-owner-controls body class');
     }
+    if (canUsePhotoTools) {
+      document.body.classList.add('has-photo-coverage');
+    } else {
+      document.body.classList.remove('has-photo-coverage');
+    }
     logEventIdState('AFTER_BODY_CLASS_UPDATE');
 
     console.log(`[LOAD] Calling renderProgramSections with hasScheduleAccess: ${hasScheduleAccess}...`);
@@ -654,6 +664,7 @@ async function loadPrograms(tableId = null, retryCount = 0) {
     setupDateFilterOptions();
     console.log(`[LOAD] Date filter options setup complete`);
     logEventIdState('AFTER_DATE_FILTER_SETUP');
+    refreshPhotographerCoverage();
 
     // Initialize simple collaborative features if available (UI notifications disabled)
     if (window.SimpleCollab && !window.__simpleCollabInitialized) {
@@ -696,7 +707,9 @@ async function loadPrograms(tableId = null, retryCount = 0) {
         programList.innerHTML = '<p>Error loading schedule. Please try again.</p>';
       }
       isOwner = false; // Reset on error
-      document.body.classList.remove('has-owner-controls');
+      canUsePhotoTools = false;
+      photoCoverageReport = null;
+      document.body.classList.remove('has-owner-controls', 'has-photo-coverage');
       document.body.classList.add('no-owner-controls');
       renderProgramSections(false); // Render without access on error
     }
@@ -761,10 +774,14 @@ function getUserName() {
 }
 
 function getUserRoleFromToken() {
-  const token = localStorage.getItem('token');
-  if (!token) return null;
-  const payload = JSON.parse(atob(token.split('.')[1]));
-  return payload.role;
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return null;
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    return payload.role;
+  } catch (error) {
+    return null;
+  }
 }
 
 async function savePrograms() {
@@ -989,6 +1006,12 @@ function renderProgramSections(hasScheduleAccess) {
       ${hasScheduleAccess ? `<button class="delete-date-btn" onclick="deleteDate('${date}')"><span class="material-symbols-outlined">delete</span></button>` : ''}
     `;
     section.appendChild(headerWrapper);
+    if (canUsePhotoTools) {
+      const chips = document.createElement('div');
+      chips.className = 'date-coverage-chips';
+      chips.setAttribute('data-coverage-date', date);
+      section.appendChild(chips);
+    }
 
     matchingPrograms.forEach(program => {
       const entry = document.createElement('div');
@@ -1105,6 +1128,8 @@ function renderProgramSections(hasScheduleAccess) {
 
     container.appendChild(section);
   });
+
+  paintDateCoverageChips();
 
   // After rendering is complete, restore scroll position if needed
   setTimeout(() => {
@@ -2796,6 +2821,10 @@ function autoSave(field, date, ignoredIndex, key) {
     console.log(`[AUTOSAVE] No change detected for field ${fieldKey}, skipping save`);
     return;
   }
+
+  if (fieldKey === 'photographer') {
+    schedulePhotographerCoverageRefresh();
+  }
   
   // If startTime or endTime was changed, re-render to reorder programs
   const shouldReorder = fieldKey === 'startTime' || fieldKey === 'endTime';
@@ -3601,6 +3630,8 @@ function resetModuleVariables() {
   filterDate = 'all';
   allNotesVisible = false;
   isOwner = false;
+  canUsePhotoTools = false;
+  photoCoverageReport = null;
   pendingScrollRestore = null;
   currentEventId = null;
   
@@ -5135,6 +5166,12 @@ function renderScheduleTable() {
       ${isOwner ? `<button class="date-action-btn" data-date="${date}" title="More options"><span class="material-symbols-outlined">more_horiz</span></button>` : ''}
     `;
     section.appendChild(dateHeader);
+    if (canUsePhotoTools) {
+      const chips = document.createElement('div');
+      chips.className = 'date-coverage-chips';
+      chips.setAttribute('data-coverage-date', date);
+      section.appendChild(chips);
+    }
     
     // Add date action menu handler
     if (isOwner) {
@@ -5250,6 +5287,7 @@ function renderScheduleTable() {
     tableContainer.appendChild(section);
   });
   
+  paintDateCoverageChips();
   console.log('[TABLE VIEW] Table rendered successfully');
 }
 
@@ -5405,7 +5443,10 @@ function makeTableCellEditable(cell, program) {
         const liveProgramId = tableData.programs[programIndex] && tableData.programs[programIndex]._id;
         if (liveProgramId) {
           atomicSaveField(inputElement, field, liveProgramId, newValue, currentValue)
-            .then(() => console.log(`[TABLE VIEW] Saved ${field} for program ${programIndex}`))
+            .then(() => {
+              console.log(`[TABLE VIEW] Saved ${field} for program ${programIndex}`);
+              if (field === 'photographer') schedulePhotographerCoverageRefresh();
+            })
             .catch(err => {
               console.error(`[TABLE VIEW] Failed to save ${field}:`, err);
               alert('Failed to save changes. Please try again.');
@@ -6009,6 +6050,12 @@ function renderDarkThemeCardView(hasScheduleAccess) {
       ` : ''}
     `;
     section.appendChild(header);
+    if (canUsePhotoTools) {
+      const chips = document.createElement('div');
+      chips.className = 'date-coverage-chips';
+      chips.setAttribute('data-coverage-date', date);
+      section.appendChild(chips);
+    }
     
     // Create program entry cards
     matchingPrograms.forEach(program => {
@@ -6126,6 +6173,7 @@ function renderDarkThemeCardView(hasScheduleAccess) {
     
     container.appendChild(section);
   });
+  paintDateCoverageChips();
 }
 
 // Format time for display (convert 24h to 12h)
@@ -6395,9 +6443,11 @@ window.renderDarkThemeCardView = renderDarkThemeCardView;
 window.createScheduleDateDropdown = createScheduleDateDropdown;
 window.updateScheduleDateDropdown = updateScheduleDateDropdown;
 window.openAutoAssignPreview = openAutoAssignPreview;
+window.openPhotographerCoverage = openPhotographerCoverage;
 
 let autoAssignProposal = null;
 let autoAssignUndoSnapshot = null;
+let autoAssignSelectedDate = null;
 
 function autoAssignAuthHeaders() {
   return {
@@ -6406,18 +6456,25 @@ function autoAssignAuthHeaders() {
   };
 }
 
+function bindOnceClick(id, handler) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const fresh = el.cloneNode(true);
+  el.parentNode.replaceChild(fresh, el);
+  fresh.addEventListener('click', handler);
+}
+
 function setupAutoAssignControls() {
-  const openBtn = document.getElementById('autoAssignBtn');
-  if (openBtn) {
-    const fresh = openBtn.cloneNode(true);
-    openBtn.parentNode.replaceChild(fresh, openBtn);
-    fresh.addEventListener('click', openAutoAssignPreview);
-  }
+  bindOnceClick('autoAssignBtn', openAutoAssignPreview);
+  bindOnceClick('coverageBtn', openPhotographerCoverage);
+  bindOnceClick('coverageCloseBtn', closeCoverageModal);
+  bindOnceClick('coverageDoneBtn', closeCoverageModal);
   const closeBtn = document.getElementById('autoAssignCloseBtn');
   const cancelBtn = document.getElementById('autoAssignCancelBtn');
   const applyBtn = document.getElementById('autoAssignApplyBtn');
   const undoBtn = document.getElementById('autoAssignUndoBtn');
   const body = document.getElementById('autoAssignModalBody');
+  const coverageBody = document.getElementById('coverageModalBody');
   if (closeBtn) closeBtn.onclick = closeAutoAssignModal;
   if (cancelBtn) cancelBtn.onclick = closeAutoAssignModal;
   if (applyBtn) applyBtn.onclick = applyAutoAssignProposal;
@@ -6438,6 +6495,11 @@ function setupAutoAssignControls() {
       refreshAutoAssignSummary();
     });
     body.addEventListener('click', event => {
+      const dateBtn = event.target.closest('[data-auto-assign-date]');
+      if (dateBtn) {
+        runAutoAssignPreviewForDate(dateBtn.dataset.autoAssignDate);
+        return;
+      }
       const swapBtn = event.target.closest('[data-auto-assign-swap]');
       if (swapBtn) {
         const bar = swapBtn.closest('.auto-assign-swap-bar');
@@ -6455,6 +6517,15 @@ function setupAutoAssignControls() {
       if (!event.target.closest('#autoAssignEditInput')) return;
       event.preventDefault();
       submitAutoAssignEdit();
+    });
+  }
+  if (coverageBody && !coverageBody.dataset.coverageBound) {
+    coverageBody.dataset.coverageBound = '1';
+    coverageBody.addEventListener('click', event => {
+      const navBtn = event.target.closest('[data-coverage-jump]');
+      if (!navBtn) return;
+      const target = document.getElementById(`coverage-day-${navBtn.dataset.coverageJump}`);
+      if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
   }
 }
@@ -6734,10 +6805,11 @@ function renderAutoAssignModal(proposal, { applied = false } = {}) {
   if (!body) return;
 
   if (!proposal || !proposal.days || !proposal.days.length) {
-    body.innerHTML = '<p class="auto-assign-empty">No sessions found for the current date filter.</p>';
+    body.innerHTML = '<p class="auto-assign-empty">No sessions found for this day.</p>';
     if (applyBtn) applyBtn.disabled = true;
     return;
   }
+  if (proposal.days[0]?.date) setAutoAssignHeader(proposal.days[0].date);
 
   const daysHtml = proposal.days.map(day => {
     const dayUnassigned = (day.assignments || []).filter(isAutoAssignUnassigned).length;
@@ -6824,8 +6896,8 @@ function escapeHtml(value) {
 }
 
 async function openAutoAssignPreview() {
-  if (!isOwner) {
-    showImportantToast('Only owners and leads can auto-assign');
+  if (!canUsePhotoTools) {
+    showImportantToast('Only owners, leads, and admins can auto-assign');
     return;
   }
   const modal = document.getElementById('autoAssignModal');
@@ -6839,16 +6911,77 @@ async function openAutoAssignPreview() {
     applyBtn.textContent = 'Apply';
   }
   if (undoBtn) undoBtn.style.display = 'none';
-  const stopProgress = startAutoAssignProgress();
   modal.classList.add('show');
 
+  const date = resolveAutoAssignDate();
+  if (!date) {
+    renderAutoAssignDayPicker();
+    return;
+  }
+  await runAutoAssignPreviewForDate(date);
+}
+
+function getScheduleDates() {
+  return [...new Set((tableData.programs || []).map(item => item.date).filter(Boolean))].sort();
+}
+
+function resolveAutoAssignDate() {
+  if (filterDate && filterDate !== 'all') return filterDate;
+  const dates = getScheduleDates();
+  if (dates.length === 1) return dates[0];
+  return null;
+}
+
+function setAutoAssignHeader(date) {
+  const sub = document.getElementById('autoAssignHeaderSub');
+  if (!sub) return;
+  sub.textContent = date
+    ? `${formatAutoAssignDate(date)} · Review, edit, or swap before applying`
+    : 'Auto Assign runs one day at a time. Pick a date.';
+}
+
+function renderAutoAssignDayPicker() {
+  const body = document.getElementById('autoAssignModalBody');
+  const applyBtn = document.getElementById('autoAssignApplyBtn');
+  if (!body) return;
+  setAutoAssignHeader(null);
+  const dates = getScheduleDates();
+  if (!dates.length) {
+    body.innerHTML = '<p class="auto-assign-empty">Add sessions to a date before auto-assigning photographers.</p>';
+    if (applyBtn) applyBtn.disabled = true;
+    return;
+  }
+  body.innerHTML = `<p class="auto-assign-empty">Auto Assign runs one day at a time. Pick a date:</p>
+    <div class="auto-assign-day-picker">
+      ${dates.map(date =>
+        `<button type="button" class="filter-action-btn" data-auto-assign-date="${escapeHtml(date)}">${escapeHtml(formatAutoAssignDate(date))}</button>`
+      ).join('')}
+    </div>`;
+  if (applyBtn) applyBtn.disabled = true;
+}
+
+async function runAutoAssignPreviewForDate(date) {
+  const modal = document.getElementById('autoAssignModal');
+  const body = document.getElementById('autoAssignModalBody');
+  const applyBtn = document.getElementById('autoAssignApplyBtn');
+  const undoBtn = document.getElementById('autoAssignUndoBtn');
+  if (!modal || !body || !date) return;
+  autoAssignSelectedDate = date;
+  autoAssignProposal = null;
+  if (applyBtn) {
+    applyBtn.disabled = true;
+    applyBtn.textContent = 'Apply';
+  }
+  if (undoBtn) undoBtn.style.display = 'none';
+  setAutoAssignHeader(date);
+  const stopProgress = startAutoAssignProgress();
+  modal.classList.add('show');
   const tableId = currentEventId || localStorage.getItem('eventId');
-  const dates = filterDate && filterDate !== 'all' ? [filterDate] : null;
   try {
     const res = await fetch(`${API_BASE}/api/tables/${tableId}/auto-assign-photographers`, {
       method: 'POST',
       headers: autoAssignAuthHeaders(),
-      body: JSON.stringify({ dates })
+      body: JSON.stringify({ dates: [date] })
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Could not build assignments');
@@ -6949,6 +7082,7 @@ async function applyAutoAssignProposal() {
     for (const row of toApply) writeLocalPhotographer(row.programId, row.photographer);
     renderProgramSections(isOwner);
     renderAutoAssignModal(autoAssignProposal, { applied: true });
+    refreshPhotographerCoverage();
     showImportantToast(skipped.length
       ? `Assigned photographers (skipped ${skipped.length} being edited)`
       : 'Photographers assigned');
@@ -6986,9 +7120,139 @@ async function undoAutoAssign() {
     autoAssignUndoSnapshot = null;
     renderProgramSections(isOwner);
     renderAutoAssignModal(autoAssignProposal, { applied: false });
+    refreshPhotographerCoverage();
     showImportantToast('Auto assign undone');
   } catch (err) {
     showImportantToast(err.message || 'Undo failed');
+  }
+}
+
+function formatCoverageMinutes(mins) {
+  const n = Math.max(0, Math.round(Number(mins) || 0));
+  const hours = Math.floor(n / 60);
+  const minutes = n % 60;
+  if (hours && minutes) return `${hours}h ${minutes}m`;
+  if (hours) return `${hours}h`;
+  return `${n} min`;
+}
+
+function schedulePhotographerCoverageRefresh() {
+  clearTimeout(coverageRefreshTimer);
+  coverageRefreshTimer = setTimeout(() => refreshPhotographerCoverage(), 600);
+}
+
+function paintDateCoverageChips() {
+  document.querySelectorAll('[data-coverage-date]').forEach(el => {
+    const date = el.getAttribute('data-coverage-date');
+    if (!photoCoverageReport) {
+      el.innerHTML = '';
+      return;
+    }
+    const day = (photoCoverageReport.days || []).find(item => String(item.date) === String(date));
+    const people = (day?.photographers || []).filter(person => person.sessions > 0);
+    if (!people.length) {
+      el.innerHTML = '<span class="coverage-chip is-empty">No photographers assigned</span>';
+      return;
+    }
+    el.innerHTML = people.map(person =>
+      `<span class="coverage-chip"><strong>${escapeHtml(person.name)}</strong><em>${person.sessions} · ${escapeHtml(formatCoverageMinutes(person.minutes))}</em></span>`
+    ).join('');
+  });
+}
+
+async function refreshPhotographerCoverage() {
+  if (!canUsePhotoTools) {
+    photoCoverageReport = null;
+    paintDateCoverageChips();
+    return null;
+  }
+  const tableId = currentEventId || localStorage.getItem('eventId');
+  if (!tableId) return null;
+  try {
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/photographer-coverage`, {
+      headers: { Authorization: localStorage.getItem('token') }
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Could not load coverage');
+    photoCoverageReport = data;
+    paintDateCoverageChips();
+    const coverageModal = document.getElementById('coverageModal');
+    if (coverageModal && coverageModal.classList.contains('show')) {
+      renderCoverageModal(data);
+    }
+    return data;
+  } catch (err) {
+    console.warn('[Coverage] Failed to load photographer coverage:', err);
+    return null;
+  }
+}
+
+function closeCoverageModal() {
+  const modal = document.getElementById('coverageModal');
+  if (modal) modal.classList.remove('show');
+}
+
+async function openPhotographerCoverage() {
+  if (!canUsePhotoTools) {
+    showImportantToast('Only owners, leads, and admins can view coverage');
+    return;
+  }
+  const modal = document.getElementById('coverageModal');
+  const body = document.getElementById('coverageModalBody');
+  if (!modal || !body) return;
+  modal.classList.add('show');
+  if (photoCoverageReport) {
+    renderCoverageModal(photoCoverageReport);
+  } else {
+    body.innerHTML = '<p class="auto-assign-empty">Loading coverage…</p>';
+  }
+  const report = await refreshPhotographerCoverage();
+  if (report) renderCoverageModal(report);
+  else if (!photoCoverageReport) {
+    body.innerHTML = '<p class="auto-assign-empty">Could not load photographer coverage.</p>';
+  }
+}
+
+function renderCoverageModal(report) {
+  const body = document.getElementById('coverageModalBody');
+  if (!body) return;
+  const days = report?.days || [];
+  if (!days.length) {
+    body.innerHTML = '<p class="auto-assign-empty">No sessions found to report.</p>';
+    return;
+  }
+  const focusDate = filterDate && filterDate !== 'all' ? filterDate : days[0].date;
+  const nav = days.length > 1
+    ? `<div class="coverage-day-nav">${days.map(day =>
+        `<button type="button" class="${day.date === focusDate ? 'is-active' : ''}" data-coverage-jump="${escapeHtml(day.date)}">${escapeHtml(formatAutoAssignDate(day.date))}</button>`
+      ).join('')}</div>`
+    : '';
+  const daysHtml = days.map(day => {
+    const rows = (day.photographers || []).map(person => {
+      const unused = !person.sessions;
+      return `<tr class="${unused ? 'is-unused' : ''}">
+        <td>${escapeHtml(person.name)}${person.role ? `<span class="coverage-role">${escapeHtml(person.role)}</span>` : ''}</td>
+        <td>${person.sessions}</td>
+        <td>${escapeHtml(formatCoverageMinutes(person.minutes))}</td>
+      </tr>`;
+    }).join('');
+    return `<section class="coverage-day" id="coverage-day-${escapeHtml(day.date)}">
+      <h4>${escapeHtml(formatAutoAssignDate(day.date))}</h4>
+      <p class="coverage-day-meta">${day.assignedSessions} of ${day.sessionCount} sessions assigned${day.unassigned ? ` · ${day.unassigned} unassigned` : ''}</p>
+      <div class="coverage-table-wrap">
+        <table class="coverage-table">
+          <thead><tr><th>Photographer</th><th>Sessions</th><th>Minutes</th></tr></thead>
+          <tbody>${rows || '<tr><td colspan="3">No photographers assigned</td></tr>'}</tbody>
+        </table>
+      </div>
+    </section>`;
+  }).join('');
+  body.innerHTML = `${nav}${daysHtml}`;
+  if (focusDate) {
+    const target = document.getElementById(`coverage-day-${focusDate}`);
+    if (target && days.length > 1) {
+      setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+    }
   }
 }
 

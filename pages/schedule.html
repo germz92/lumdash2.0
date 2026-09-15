@@ -145,6 +145,10 @@
         </div>
         <div class="filter-right">
           <input type="text" id="searchInput" class="schedule-search-input" placeholder="Search programs...">
+          <button class="filter-action-btn" id="coverageBtn">
+            <span class="material-symbols-outlined">monitoring</span>
+            <span>Coverage</span>
+          </button>
           <button class="filter-action-btn" id="autoAssignBtn">
             <span class="material-symbols-outlined">auto_fix_high</span>
             <span>Auto Assign</span>
@@ -222,7 +226,7 @@
     <div class="modal-header-dark">
       <div>
         <h3>Auto Assign Photographers</h3>
-        <p class="auto-assign-header-sub">Review, edit, or swap before applying</p>
+        <p class="auto-assign-header-sub" id="autoAssignHeaderSub">Assign one day at a time</p>
       </div>
       <button type="button" class="auto-assign-close" id="autoAssignCloseBtn" aria-label="Close">
         <span class="material-symbols-outlined">close</span>
@@ -235,6 +239,26 @@
       <button class="btn-secondary" id="autoAssignCancelBtn">Cancel</button>
       <button class="btn-secondary" id="autoAssignUndoBtn" style="display: none;">Undo</button>
       <button class="btn-primary" id="autoAssignApplyBtn" disabled>Apply</button>
+    </div>
+  </div>
+</div>
+
+<div class="dark-modal" id="coverageModal">
+  <div class="dark-modal-content auto-assign-modal-content coverage-modal-content">
+    <div class="modal-header-dark">
+      <div>
+        <h3>Photographer Coverage</h3>
+        <p class="auto-assign-header-sub">Sessions and minutes each photographer is covering, by day</p>
+      </div>
+      <button type="button" class="auto-assign-close" id="coverageCloseBtn" aria-label="Close">
+        <span class="material-symbols-outlined">close</span>
+      </button>
+    </div>
+    <div class="modal-body-dark" id="coverageModalBody">
+      <p>Loading coverage…</p>
+    </div>
+    <div class="modal-footer-dark">
+      <button class="btn-secondary" id="coverageDoneBtn">Close</button>
     </div>
   </div>
 </div>

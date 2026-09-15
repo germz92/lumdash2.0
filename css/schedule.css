@@ -18,9 +18,18 @@ body:has(.schedule-page) #page-container {
 /* Hide export and import buttons for non-owners/non-leads */
 body.no-owner-controls .schedule-page #importBtn,
 body.no-owner-controls .schedule-page #exportBtn,
-body.no-owner-controls .schedule-page #autoAssignBtn,
 body.no-owner-controls .schedule-page #downloadTemplateBtn {
     display: none !important;
+}
+
+.schedule-page #coverageBtn,
+body.no-owner-controls .schedule-page #autoAssignBtn {
+    display: none !important;
+}
+
+body.has-photo-coverage .schedule-page #coverageBtn,
+body.has-photo-coverage .schedule-page #autoAssignBtn {
+    display: inline-flex !important;
 }
 
 /* Export button styling */
@@ -2343,5 +2352,118 @@ body.no-owner-controls .schedule-page #downloadTemplateBtn {
 
 @keyframes auto-assign-spin {
   to { transform: rotate(360deg); }
+}
+
+.auto-assign-day-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.auto-assign-day-picker button {
+  cursor: pointer;
+}
+
+.date-coverage-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: center;
+  margin: -2px 0 10px;
+}
+
+.coverage-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(126, 182, 255, 0.12);
+  border: 1px solid rgba(126, 182, 255, 0.18);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.coverage-chip em {
+  font-style: normal;
+  opacity: 0.7;
+}
+
+.coverage-chip.is-empty {
+  opacity: 0.55;
+}
+
+.coverage-day-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 14px;
+}
+
+.coverage-day-nav button {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: inherit;
+  border-radius: 999px;
+  padding: 6px 12px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.coverage-day-nav button.is-active,
+.coverage-day-nav button:hover {
+  border-color: rgba(126, 182, 255, 0.4);
+  background: rgba(126, 182, 255, 0.12);
+}
+
+.coverage-day {
+  margin: 0 0 22px;
+}
+
+.coverage-day h4 {
+  margin: 0 0 8px;
+}
+
+.coverage-day-meta {
+  margin: 0 0 10px;
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+.coverage-table-wrap {
+  overflow-x: auto;
+}
+
+.coverage-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.coverage-table th,
+.coverage-table td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.coverage-table th:nth-child(2),
+.coverage-table th:nth-child(3),
+.coverage-table td:nth-child(2),
+.coverage-table td:nth-child(3) {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.coverage-table .is-unused {
+  opacity: 0.55;
+}
+
+.coverage-table .coverage-role {
+  display: block;
+  font-size: 11px;
+  opacity: 0.55;
+  font-weight: 400;
 }
   

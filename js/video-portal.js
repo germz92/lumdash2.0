@@ -969,30 +969,43 @@
     }
 
     const people = activePeople(c).map(ct => `
-      <div class="vp-contact-row" data-person="${ct._id}">
+      <div class="vp-contact-row" data-person="${ct._id}" data-client="${c._id}" data-name="${escapeHtml(ct.name || '')}" data-email="${escapeHtml(ct.email || '')}">
         <div class="vp-contact-info">
           <div class="vp-contact-name">${escapeHtml(ct.name || ct.email || 'Person')}</div>
+          <input type="text" class="vp-contact-name-input" value="${escapeHtml(ct.name || '')}" placeholder="Name" aria-label="Name" autocomplete="name">
         </div>
-        <div class="vp-contact-email">${ct.email ? escapeHtml(ct.email) : 'No email'}</div>
+        <div class="vp-contact-email-cell">
+          <div class="vp-contact-email">${ct.email ? escapeHtml(ct.email) : 'No email'}</div>
+          <input type="email" class="vp-contact-email-input" value="${escapeHtml(ct.email || '')}" placeholder="Email (optional)" aria-label="Email" autocomplete="email">
+        </div>
         <span class="vp-contact-meta">${ct.invitedAt ? `Sent ${fmtDate(ct.invitedAt)}` : 'Not sent'}${ct.lastAccessAt ? ` · Last visit ${fmtDate(ct.lastAccessAt)}` : ''}</span>
         <div class="vp-contact-actions">
-          <button type="button" class="vp-btn secondary small" data-action="assign-person-videos" data-person="${ct._id}" data-client="${c._id}" title="Choose which videos this person can see">
-            <span class="material-symbols-outlined">movie</span>
-            <span class="vp-assign-btn-label">${personAssignCountLabel(c._id, ct._id)}</span>
-          </button>
-          <button class="vp-icon-btn" title="Copy this person's portal link" data-action="copy-person-link" data-token="${escapeHtml(ct.token || '')}">
-            <span class="material-symbols-outlined">content_copy</span>
-          </button>
-          <button class="vp-icon-btn" title="Open this person's portal" data-action="open-portal" data-token="${escapeHtml(ct.token || '')}">
-            <span class="material-symbols-outlined">open_in_new</span>
-          </button>
-          ${ct.email ? `
-          <button class="vp-icon-btn" title="Email this person their unique link" data-action="invite" data-client="${c._id}" data-contact="${ct._id}">
-            <span class="material-symbols-outlined">forward_to_inbox</span>
-          </button>` : ''}
-          <button class="vp-icon-btn danger" title="Remove person" data-action="remove-contact" data-client="${c._id}" data-contact="${ct._id}">
-            <span class="material-symbols-outlined">close</span>
-          </button>
+          <div class="vp-contact-view-actions">
+            <button type="button" class="vp-icon-btn" title="Edit name and email" data-action="edit-contact" data-client="${c._id}" data-contact="${ct._id}">
+              <span class="material-symbols-outlined">edit</span>
+            </button>
+            <button type="button" class="vp-btn secondary small" data-action="assign-person-videos" data-person="${ct._id}" data-client="${c._id}" title="Choose which videos this person can see">
+              <span class="material-symbols-outlined">movie</span>
+              <span class="vp-assign-btn-label">${personAssignCountLabel(c._id, ct._id)}</span>
+            </button>
+            <button class="vp-icon-btn" title="Copy this person's portal link" data-action="copy-person-link" data-token="${escapeHtml(ct.token || '')}">
+              <span class="material-symbols-outlined">content_copy</span>
+            </button>
+            <button class="vp-icon-btn" title="Open this person's portal" data-action="open-portal" data-token="${escapeHtml(ct.token || '')}">
+              <span class="material-symbols-outlined">open_in_new</span>
+            </button>
+            ${ct.email ? `
+            <button class="vp-icon-btn" title="Email this person their unique link" data-action="invite" data-client="${c._id}" data-contact="${ct._id}">
+              <span class="material-symbols-outlined">forward_to_inbox</span>
+            </button>` : ''}
+            <button class="vp-icon-btn danger" title="Remove person" data-action="remove-contact" data-client="${c._id}" data-contact="${ct._id}">
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+          <div class="vp-contact-edit-actions">
+            <button type="button" class="vp-btn secondary small" data-action="cancel-edit-contact" data-client="${c._id}" data-contact="${ct._id}">Cancel</button>
+            <button type="button" class="vp-btn primary small" data-action="save-contact" data-client="${c._id}" data-contact="${ct._id}">Save</button>
+          </div>
         </div>
       </div>`).join('');
 
@@ -1095,7 +1108,7 @@
         <div class="vp-client-edit-cols">
           <section class="vp-client-panel vp-client-panel-people">
             <div class="vp-client-section-title">People</div>
-            <p class="vp-share-hint vp-client-panel-intro">Each person gets a unique link. Use Assign videos to choose what they see.</p>
+            <p class="vp-share-hint vp-client-panel-intro">Each person gets a unique link. Edit their name or email, then use Assign videos to choose what they see.</p>
             ${people ? `
             <div class="vp-people-table">
               <div class="vp-people-head">
@@ -1185,6 +1198,23 @@
       });
     });
 
+    body.querySelectorAll('.vp-contact-name-input, .vp-contact-email-input').forEach(input => {
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const row = input.closest('.vp-contact-row');
+          const saveBtn = row?.querySelector('[data-action="save-contact"]');
+          if (saveBtn) handleClientAction(saveBtn);
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          const row = input.closest('.vp-contact-row');
+          const cancelBtn = row?.querySelector('[data-action="cancel-edit-contact"]');
+          if (cancelBtn) handleClientAction(cancelBtn);
+        }
+      });
+    });
+
     body.querySelectorAll('.vp-brand-logo-file').forEach(input => {
       input.addEventListener('change', async () => {
         const file = input.files && input.files[0];
@@ -1222,6 +1252,19 @@
     await refreshClientsUi();
   }
 
+  function contactRowFromBtn(btn) {
+    return btn?.closest?.('.vp-contact-row') || null;
+  }
+
+  function cancelContactEdit(row) {
+    if (!row) return;
+    const nameInput = row.querySelector('.vp-contact-name-input');
+    const emailInput = row.querySelector('.vp-contact-email-input');
+    if (nameInput) nameInput.value = row.dataset.name || '';
+    if (emailInput) emailInput.value = row.dataset.email || '';
+    row.classList.remove('is-editing');
+  }
+
   async function handleClientAction(btn) {
     const action = btn.dataset.action;
     const clientId = btn.dataset.client || editingClientId;
@@ -1239,6 +1282,52 @@
           await api(`/api/portal-clients/${clientId}/share-token/reroll`, { method: 'POST' });
           await refreshClientsUi();
           toast('Company preview link replaced — copy the new one');
+        } finally {
+          btn.disabled = false;
+        }
+        return;
+      }
+      if (action === 'edit-contact') {
+        const row = contactRowFromBtn(btn);
+        if (!row) return;
+        document.querySelectorAll('#clientEditBody .vp-contact-row.is-editing').forEach(other => {
+          if (other !== row) cancelContactEdit(other);
+        });
+        row.classList.add('is-editing');
+        const nameInput = row.querySelector('.vp-contact-name-input');
+        if (nameInput) {
+          nameInput.focus();
+          nameInput.select();
+        }
+        return;
+      }
+      if (action === 'cancel-edit-contact') {
+        cancelContactEdit(contactRowFromBtn(btn));
+        return;
+      }
+      if (action === 'save-contact') {
+        const row = contactRowFromBtn(btn);
+        if (!row) return;
+        const name = (row.querySelector('.vp-contact-name-input')?.value || '').trim();
+        const email = (row.querySelector('.vp-contact-email-input')?.value || '').trim();
+        if (!name) {
+          toast('Name is required', 'error');
+          row.querySelector('.vp-contact-name-input')?.focus();
+          return;
+        }
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          toast('Enter a valid email address', 'error');
+          row.querySelector('.vp-contact-email-input')?.focus();
+          return;
+        }
+        btn.disabled = true;
+        try {
+          await api(`/api/portal-clients/${clientId}/contacts/${btn.dataset.contact}`, {
+            method: 'PUT',
+            body: JSON.stringify({ name, email })
+          });
+          await refreshClientsUi();
+          toast('Person updated');
         } finally {
           btn.disabled = false;
         }

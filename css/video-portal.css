@@ -757,6 +757,36 @@
   flex-wrap: wrap;
   justify-content: flex-end;
 }
+.vp-client-edit-view .vp-contact-view-actions,
+.vp-client-edit-view .vp-contact-edit-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  justify-content: flex-end;
+  align-items: center;
+}
+.vp-client-edit-view .vp-contact-edit-actions { display: none; }
+.vp-client-edit-view .vp-contact-name-input,
+.vp-client-edit-view .vp-contact-email-input {
+  display: none;
+  width: 100%;
+  min-width: 0;
+  padding: 7px 10px;
+  font-size: 0.8rem;
+}
+.vp-client-edit-view .vp-contact-row.is-editing .vp-contact-name,
+.vp-client-edit-view .vp-contact-row.is-editing .vp-contact-email {
+  display: none;
+}
+.vp-client-edit-view .vp-contact-row.is-editing .vp-contact-name-input,
+.vp-client-edit-view .vp-contact-row.is-editing .vp-contact-email-input {
+  display: block;
+}
+.vp-client-edit-view .vp-contact-row.is-editing .vp-contact-view-actions { display: none; }
+.vp-client-edit-view .vp-contact-row.is-editing .vp-contact-edit-actions { display: flex; }
+.vp-client-edit-view .vp-contact-email-cell {
+  min-width: 0;
+}
 .vp-assign-modal-overlay { z-index: 1100; }
 .vp-assign-modal { max-width: 520px; }
 .vp-assign-toolbar {
@@ -830,7 +860,8 @@
     grid-template-columns: 1fr auto;
     gap: 6px 10px;
   }
-  .vp-client-edit-view .vp-contact-email { grid-column: 1; }
+  .vp-client-edit-view .vp-contact-email,
+  .vp-client-edit-view .vp-contact-email-cell { grid-column: 1; }
   .vp-client-edit-view .vp-contact-meta { grid-column: 1; }
   .vp-client-edit-view .vp-contact-actions { grid-column: 2; grid-row: 1 / span 3; align-self: start; }
   .vp-client-edit-view .vp-branding-fields { grid-template-columns: 1fr; }

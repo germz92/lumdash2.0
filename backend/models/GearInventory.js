@@ -40,6 +40,12 @@ const gearInventorySchema = new mongoose.Schema({
     default: 1,
     min: 1 
   },
+  // Optical class for lenses (ultrawide, telephoto zoom, etc.)
+  lensClass: {
+    type: String,
+    default: null,
+    trim: true
+  },
   
   // Current active reservations (the single source of truth)
   reservations: [{

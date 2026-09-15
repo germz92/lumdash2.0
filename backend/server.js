@@ -12,7 +12,7 @@ const cloudinary = require('cloudinary').v2;
 const multer = require('multer');
 const OpenAI = require('openai');
 const { buildLumaContext } = require('./services/lumaContextBuilder');
-const { buildAssignmentProposal, editAssignmentProposal, canAssignPhotographers } = require('./services/photographerAssigner');
+const { buildAssignmentProposal, editAssignmentProposal, buildCoverageReport, canAssignPhotographers } = require('./services/photographerAssigner');
 require('dotenv').config();
 sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 console.log('SENDGRID_API_KEY loaded:', !!process.env.SENDGRID_API_KEY);
@@ -1505,6 +1505,7 @@ const GearInventory = require('./models/GearInventory');
 const GearPackage = require('./models/GearPackage');
 const ReservedGearItem = require('./models/ReservedGearItem');
 const PackageTemplate = require('./models/PackageTemplate');
+const { lensClassForCategory } = require('./constants/lensClasses');
 const Cart = require('./models/Cart');
 const FolderLog = require('./models/FolderLog');
 const ManualReservation = require('./models/ManualReservation');
@@ -5432,14 +5433,19 @@ app.post('/api/tables/:id/auto-assign-photographers', authenticate, async (req, 
       .lean();
     if (!table) return res.status(404).json({ error: 'Table not found' });
     if (!canAssignPhotographers(table, req.user)) {
-      return res.status(403).json({ error: 'Only owners and leads can auto-assign photographers' });
+      return res.status(403).json({ error: 'Only owners, leads, and admins can auto-assign photographers' });
     }
 
-    const dates = Array.isArray(req.body?.dates) ? req.body.dates : null;
+    const requested = Array.isArray(req.body?.dates)
+      ? req.body.dates.filter(date => date && date !== 'all')
+      : [];
+    if (requested.length !== 1) {
+      return res.status(400).json({ error: 'Auto-assign one day at a time' });
+    }
     const proposal = await buildAssignmentProposal({
       programSchedule: table.programSchedule || [],
       rows: table.rows || [],
-      dates,
+      dates: requested,
       openai
     });
     res.json(proposal);
@@ -5459,7 +5465,7 @@ app.post('/api/tables/:id/auto-assign-photographers/edit', authenticate, async (
       .lean();
     if (!table) return res.status(404).json({ error: 'Table not found' });
     if (!canAssignPhotographers(table, req.user)) {
-      return res.status(403).json({ error: 'Only owners and leads can auto-assign photographers' });
+      return res.status(403).json({ error: 'Only owners, leads, and admins can auto-assign photographers' });
     }
     const proposal = await editAssignmentProposal({
       proposal: req.body?.proposal,
@@ -5475,6 +5481,31 @@ app.post('/api/tables/:id/auto-assign-photographers/edit', authenticate, async (
   }
 });
 
+app.get('/api/tables/:id/photographer-coverage', authenticate, async (req, res) => {
+  if (!req.params.id || req.params.id === 'null') {
+    return res.status(400).json({ error: 'Invalid table ID' });
+  }
+  try {
+    const table = await Table.findById(req.params.id)
+      .select('title owners leads programSchedule rows')
+      .lean();
+    if (!table) return res.status(404).json({ error: 'Table not found' });
+    if (!canAssignPhotographers(table, req.user)) {
+      return res.status(403).json({ error: 'Only owners, leads, and admins can view photographer coverage' });
+    }
+    const dates = req.query.date && req.query.date !== 'all' ? [req.query.date] : null;
+    const report = buildCoverageReport({
+      programSchedule: table.programSchedule || [],
+      rows: table.rows || [],
+      dates
+    });
+    res.json(report);
+  } catch (err) {
+    console.error('[AutoAssign] Coverage report failed:', err);
+    res.status(500).json({ error: 'Failed to build photographer coverage' });
+  }
+});
+
 app.post('/api/tables/:id/auto-assign-photographers/apply', authenticate, async (req, res) => {
   if (!req.params.id || req.params.id === 'null') {
     return res.status(400).json({ error: 'Invalid table ID' });
@@ -5487,7 +5518,7 @@ app.post('/api/tables/:id/auto-assign-photographers/apply', authenticate, async 
     const table = await Table.findById(req.params.id).select('owners leads programSchedule');
     if (!table) return res.status(404).json({ error: 'Table not found' });
     if (!canAssignPhotographers(table, req.user)) {
-      return res.status(403).json({ error: 'Only owners and leads can auto-assign photographers' });
+      return res.status(403).json({ error: 'Only owners, leads, and admins can auto-assign photographers' });
     }
 
     const sessionId = req.body.sessionId || null;
@@ -6152,7 +6183,7 @@ app.post('/api/gear-inventory', authenticate, async (req, res) => {
   if (!canManageGearInventory(req.user)) {
     return res.status(403).json({ error: 'Not authorized to edit gear inventory' });
   }
-  const { label, category, serial, quantity = 1 } = req.body;
+  const { label, category, serial, quantity = 1, lensClass } = req.body;
   if (!label || !category) {
     return res.status(400).json({ error: 'Label and category are required' });
   }
@@ -6161,6 +6192,8 @@ app.post('/api/gear-inventory', authenticate, async (req, res) => {
   if (quantity < 1 || !Number.isInteger(quantity)) {
     return res.status(400).json({ error: 'Quantity must be a positive integer' });
   }
+
+  const resolvedLensClass = lensClassForCategory(category, lensClass);
   
   try {
     // Convert empty strings to "N/A"
@@ -6183,7 +6216,8 @@ app.post('/api/gear-inventory', authenticate, async (req, res) => {
       label, 
       category, 
       serial: serialValue,
-      quantity
+      quantity,
+      lensClass: resolvedLensClass
     });
     await gear.save();
     res.json({ message: 'Gear added', gear });
@@ -6225,7 +6259,7 @@ app.put('/api/gear-inventory/:id', authenticate, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to edit gear inventory' });
     }
     const gearId = req.params.id;
-    const { label, category, serial, quantity = 1 } = req.body;
+    const { label, category, serial, quantity = 1, lensClass } = req.body;
     
     if (!gearId) return res.status(400).json({ error: 'Missing gear ID' });
     if (!label || !category) return res.status(400).json({ error: 'Label and category are required' });
@@ -6266,6 +6300,7 @@ app.put('/api/gear-inventory/:id', authenticate, async (req, res) => {
     gear.category = category;
     gear.serial = serialValue;
     gear.quantity = quantity;
+    gear.lensClass = lensClassForCategory(category, lensClass);
     
     await gear.save();
     const updated = await GearInventory.findById(gearId).populate('notes.createdBy', 'fullName email');
@@ -6954,7 +6989,7 @@ app.get('/api/gear-packages/event/:eventId', authenticate, async (req, res) => {
     const reservedItems = await ReservedGearItem.find({ 
       eventId,
       listName: listName || 'Main List'
-    }).populate('inventoryId', 'label category serial quantity');
+    }).populate('inventoryId', 'label category serial quantity lensClass');
 
     console.log(`[GEAR LOAD] Found ${reservedItems.length} reserved items (all users)`);
 
@@ -7185,6 +7220,9 @@ app.post('/api/package-templates', authenticate, async (req, res) => {
     res.status(201).json(template);
   } catch (error) {
     console.error('Error creating package template:', error);
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Failed to create package template' });
   }
 });
@@ -7214,6 +7252,9 @@ app.put('/api/package-templates/:id', authenticate, async (req, res) => {
     res.json(template);
   } catch (error) {
     console.error('Error updating package template:', error);
+    if (error.name === 'ValidationError') {
+      return res.status(400).json({ error: error.message });
+    }
     res.status(500).json({ error: 'Failed to update package template' });
   }
 });
@@ -9247,7 +9288,7 @@ app.get('/api/manual-reservations', authenticate, async (req, res) => {
     }
 
     const reservations = await ManualReservation.find({})
-      .populate('inventoryId', 'label category serial quantity')
+      .populate('inventoryId', 'label category serial quantity lensClass')
       .populate('createdBy', 'fullName email')
       .sort({ createdAt: -1 });
 
@@ -9331,7 +9372,7 @@ app.post('/api/manual-reservations/bulk', authenticate, async (req, res) => {
         });
 
         await reservation.save();
-        await reservation.populate('inventoryId', 'label category serial quantity');
+        await reservation.populate('inventoryId', 'label category serial quantity lensClass');
         await reservation.populate('createdBy', 'fullName email');
         
         createdReservations.push(reservation);
@@ -9441,7 +9482,7 @@ app.post('/api/manual-reservations', authenticate, async (req, res) => {
     await reservation.save();
 
     // Populate the response
-    await reservation.populate('inventoryId', 'label category serial quantity');
+    await reservation.populate('inventoryId', 'label category serial quantity lensClass');
     await reservation.populate('createdBy', 'fullName email');
 
     // Send confirmation email
@@ -9451,7 +9492,7 @@ app.post('/api/manual-reservations', authenticate, async (req, res) => {
         personEmail: personEmail.trim().toLowerCase(),
         startDate: startDate,
         endDate: endDate
-      }).populate('inventoryId', 'label category serial quantity');
+      }).populate('inventoryId', 'label category serial quantity lensClass');
 
       const emailHtml = formatReservationEmail(allPersonReservations, personName);
 
@@ -9523,7 +9564,7 @@ app.post('/api/manual-reservations/send-email', authenticate, async (req, res) =
       personName: personName,
       startDate: startDate,
       endDate: endDate
-    }).populate('inventoryId', 'label category serial quantity');
+    }).populate('inventoryId', 'label category serial quantity lensClass');
 
     if (reservations.length === 0) {
       return res.status(404).json({ error: 'No reservations found for the specified criteria' });
@@ -14910,7 +14951,10 @@ app.post('/api/portal-clients/:id/contacts', authenticate, async (req, res) => {
 
     const name = String(req.body.name || '').trim();
     if (!name) return res.status(400).json({ error: 'Name is required' });
-    const email = String(req.body.email || '').trim().toLowerCase();
+    const email = normalizePortalContactEmail(req.body.email);
+    if (email && !isValidPortalContactEmail(email)) {
+      return res.status(400).json({ error: 'Enter a valid email address' });
+    }
     if (email && client.contacts.some(c => c.email && c.email === email && !c.revokedAt)) {
       return res.status(400).json({ error: 'This email is already a person on this client' });
     }
@@ -14924,6 +14968,56 @@ app.post('/api/portal-clients/:id/contacts', authenticate, async (req, res) => {
     res.status(201).json(sanitizePortalClient(client));
   } catch (err) {
     console.error('Error adding portal contact:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+function normalizePortalContactEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isValidPortalContactEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+// Update a person's name / email (portal link stays the same)
+app.put('/api/portal-clients/:id/contacts/:contactId', authenticate, async (req, res) => {
+  try {
+    const client = await Client.findById(req.params.id);
+    if (!client) return res.status(404).json({ error: 'Client not found' });
+
+    const contact = client.contacts.id(req.params.contactId);
+    if (!contact || contact.revokedAt) return res.status(404).json({ error: 'Contact not found' });
+
+    if (req.body.name !== undefined) {
+      const name = String(req.body.name || '').trim();
+      if (!name) return res.status(400).json({ error: 'Name is required' });
+      contact.name = name;
+    }
+
+    if (req.body.email !== undefined) {
+      const email = normalizePortalContactEmail(req.body.email);
+      if (email && !isValidPortalContactEmail(email)) {
+        return res.status(400).json({ error: 'Enter a valid email address' });
+      }
+      if (email && client.contacts.some(c =>
+        String(c._id) !== String(contact._id) &&
+        !c.revokedAt &&
+        c.email &&
+        c.email === email
+      )) {
+        return res.status(400).json({ error: 'This email is already a person on this client' });
+      }
+      if (email !== (contact.email || '')) {
+        contact.invitedAt = null;
+      }
+      contact.email = email;
+    }
+
+    await client.save();
+    res.json(sanitizePortalClient(client));
+  } catch (err) {
+    console.error('Error updating portal contact:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });

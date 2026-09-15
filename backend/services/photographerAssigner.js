@@ -1059,9 +1059,101 @@ function canAssignPhotographers(table, user) {
   return isOwner || isLead;
 }
 
+function sessionReportMinutes(session, daySessions, labels, photographerCount) {
+  const label = labels.get(String(session._id)) || classifyWithKeywords(session);
+  const start = parseTimeToMinutes(session.startTime);
+  const end = parseTimeToMinutes(session.endTime);
+  if (label.coverage === 'dedicated' && start != null && end != null) {
+    return Math.max(end - start, 1);
+  }
+  return visitMinutesForSession(session, daySessions, labels, label, photographerCount) || VISIT_MINUTES;
+}
+
+function coverageDisplayName(fullName, photoCrew, allFullNames) {
+  const person = matchCrew(fullName, photoCrew);
+  if (person) return displayName(person, photoCrew);
+  const first = firstName(fullName);
+  const collision = (allFullNames || []).some(other =>
+    firstName(other).toLowerCase() === first.toLowerCase() &&
+    String(other).trim().toLowerCase() !== String(fullName).trim().toLowerCase()
+  );
+  return collision ? String(fullName).trim() : (first || fullName);
+}
+
+function buildCoverageReport({ programSchedule = [], rows = [], dates = null }) {
+  const dateFilter = Array.isArray(dates) && dates.length && !dates.includes('all')
+    ? new Set(dates)
+    : null;
+  const sessions = (programSchedule || []).filter(session => {
+    if (!session || !session._id) return false;
+    if (dateFilter && !dateFilter.has(session.date)) return false;
+    return true;
+  });
+  const datesInPlay = [...new Set(sessions.map(session => session.date).filter(Boolean))].sort();
+
+  return {
+    days: datesInPlay.map(date => {
+      const daySessions = sessions.filter(session => session.date === date);
+      const labels = new Map();
+      for (const session of daySessions) {
+        labels.set(String(session._id), classifyWithKeywords(session));
+      }
+      const photoCrew = buildPhotoCrew(rows, date);
+      const byKey = new Map();
+      const add = (key, name, fullName, role, minutes, sessionCount) => {
+        const rec = byKey.get(key) || {
+          name,
+          fullName: fullName || name,
+          role: role || '',
+          minutes: 0,
+          sessions: 0
+        };
+        rec.sessions += sessionCount;
+        rec.minutes += minutes;
+        if (role && !rec.role) rec.role = role;
+        if (fullName && String(fullName).length > String(rec.fullName || '').length) rec.fullName = fullName;
+        byKey.set(key, rec);
+      };
+
+      for (const person of photoCrew) {
+        add(person.id, displayName(person, photoCrew), person.name, person.role, 0, 0);
+      }
+
+      for (const session of daySessions) {
+        const minutes = sessionReportMinutes(session, daySessions, labels, photoCrew.length);
+        for (const raw of splitPhotographerNames(session.photographer)) {
+          const person = matchCrew(raw, photoCrew);
+          if (person) {
+            add(person.id, displayName(person, photoCrew), person.name, person.role, minutes, 1);
+            continue;
+          }
+          add(`typed:${raw.trim().toLowerCase()}`, firstName(raw) || raw, raw, '', minutes, 1);
+        }
+      }
+
+      const allFullNames = [...byKey.values()].map(item => item.fullName);
+      for (const rec of byKey.values()) {
+        rec.name = coverageDisplayName(rec.fullName, photoCrew, allFullNames);
+      }
+
+      const assignedSessions = daySessions.filter(session => splitPhotographerNames(session.photographer).length).length;
+      return {
+        date,
+        sessionCount: daySessions.length,
+        assignedSessions,
+        unassigned: Math.max(0, daySessions.length - assignedSessions),
+        photographers: [...byKey.values()].sort((a, b) =>
+          b.minutes - a.minutes || b.sessions - a.sessions || a.name.localeCompare(b.name)
+        )
+      };
+    })
+  };
+}
+
 module.exports = {
   buildAssignmentProposal,
   editAssignmentProposal,
+  buildCoverageReport,
   canAssignPhotographers,
   classifyWithKeywords,
   parseTimeToMinutes

@@ -26,11 +26,11 @@
         <div class="vp-header-actions">
           <button class="vp-btn secondary" id="manageClientsBtn">
             <span class="material-symbols-outlined">group</span>
-            <span>Clients</span>
+            <span class="vp-btn-label">Clients</span>
           </button>
           <button class="vp-btn primary" id="newProjectBtn">
             <span class="material-symbols-outlined">add</span>
-            <span>New Project</span>
+            <span class="vp-btn-label">New<span class="vp-btn-label-rest"> Project</span></span>
           </button>
         </div>
       </header>
@@ -61,9 +61,12 @@
       <!-- Full-page project detail view (replaces the grid when a project is open) -->
       <div class="vp-detail-view" id="vpDetailView" style="display:none;">
         <div class="vp-detail-topbar">
+          <button type="button" class="mobile-menu-btn" title="Open menu">
+            <span class="material-symbols-outlined">menu</span>
+          </button>
           <button type="button" class="vp-back-btn" id="vpBackBtn">
             <span class="material-symbols-outlined">arrow_back</span>
-            <span>All projects</span>
+            <span class="vp-back-label">All projects</span>
           </button>
           <div class="vp-detail-titles">
             <div class="vp-detail-title-row">
@@ -87,11 +90,11 @@
           <div class="vp-detail-header-actions">
             <button type="button" class="vp-btn secondary small" id="openProjectClientBtn" title="Open this client’s page">
               <span class="material-symbols-outlined">group</span>
-              <span>Go to client</span>
+              <span class="vp-btn-label">Go to client</span>
             </button>
             <button type="button" class="vp-btn secondary small" id="projectShareBtn" title="Share this video">
               <span class="material-symbols-outlined">ios_share</span>
-              <span>Share</span>
+              <span class="vp-btn-label">Share</span>
             </button>
             <button class="vp-icon-btn danger" id="deleteProjectBtn" title="Delete project" style="display:none;">
               <span class="material-symbols-outlined">delete</span>
@@ -252,9 +255,12 @@
       <!-- Full-page clients management -->
       <div class="vp-clients-view" id="vpClientsView" style="display:none;">
         <div class="vp-detail-topbar">
+          <button type="button" class="mobile-menu-btn" title="Open menu">
+            <span class="material-symbols-outlined">menu</span>
+          </button>
           <button type="button" class="vp-back-btn" id="vpClientsBackBtn">
             <span class="material-symbols-outlined">arrow_back</span>
-            <span>All projects</span>
+            <span class="vp-back-label">All projects</span>
           </button>
           <div class="vp-detail-titles">
             <h2>Clients</h2>
@@ -276,9 +282,12 @@
       <!-- Full-page client editor -->
       <div class="vp-clients-view vp-client-edit-view" id="vpClientEditView" style="display:none;">
         <div class="vp-detail-topbar">
+          <button type="button" class="mobile-menu-btn" title="Open menu">
+            <span class="material-symbols-outlined">menu</span>
+          </button>
           <button type="button" class="vp-back-btn" id="vpClientEditBackBtn">
             <span class="material-symbols-outlined">arrow_back</span>
-            <span>Clients</span>
+            <span class="vp-back-label">Clients</span>
           </button>
           <div class="vp-detail-titles">
             <h2 id="clientEditTitle">Client</h2>
@@ -287,7 +296,7 @@
           <div class="vp-detail-header-actions">
             <button type="button" class="vp-btn secondary small" id="clientEditViewProjectsBtn" title="View all projects for this client">
               <span class="material-symbols-outlined">movie</span>
-              <span>View projects</span>
+              <span class="vp-btn-label">View projects</span>
             </button>
             <button type="button" class="vp-icon-btn" id="clientEditArchiveBtn" title="Archive client">
               <span class="material-symbols-outlined">archive</span>

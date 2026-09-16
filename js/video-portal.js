@@ -3363,21 +3363,31 @@
   }
 
   function setupMobileMenu() {
-    const menuBtn = document.getElementById('mobileMenuBtn');
+    const page = document.querySelector('.video-portal-page');
     const sidebar = document.getElementById('dashboardSidebar');
-    const overlay = document.querySelector('.sidebar-overlay');
+    const overlay = document.getElementById('dashboardSidebarOverlay') || document.querySelector('.sidebar-overlay');
+    const setOpen = (open) => {
+      if (!sidebar) return;
+      sidebar.classList.toggle('show', open);
+      sidebar.classList.toggle('open', open);
+      if (overlay) overlay.classList.toggle('show', open);
+      document.body.style.overflow = open ? 'hidden' : '';
+    };
 
-    if (menuBtn && sidebar) {
-      menuBtn.onclick = () => {
-        sidebar.classList.toggle('show');
-        if (overlay) overlay.classList.toggle('show');
-      };
+    if (page && !page.dataset.menuBound) {
+      page.dataset.menuBound = '1';
+      page.addEventListener('click', (e) => {
+        const btn = e.target.closest('.mobile-menu-btn');
+        if (!btn) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        const open = !(sidebar && (sidebar.classList.contains('show') || sidebar.classList.contains('open')));
+        setOpen(open);
+      }, true);
     }
-    if (overlay) {
-      overlay.onclick = () => {
-        if (sidebar) sidebar.classList.remove('show');
-        overlay.classList.remove('show');
-      };
+    if (overlay && !overlay.dataset.vpBound) {
+      overlay.dataset.vpBound = '1';
+      overlay.onclick = () => setOpen(false);
     }
   }
 

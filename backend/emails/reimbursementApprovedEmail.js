@@ -81,7 +81,7 @@ function buildReimbursementApprovedEmail(data) {
             <td style="padding:28px 32px;">
               <p style="margin:0 0 16px;font-size:15px;">Hi ${submitterName},</p>
               <p style="margin:0 0 24px;font-size:15px;color:#444;">
-                Good news — your reimbursement request for <strong>${eventName}</strong> has been <strong style="color:#15803d;">approved</strong>.
+                Good news — your reimbursement request for <strong>${eventName}</strong> has been <strong style="color:#15803d;">approved</strong> and will be processed within <strong>7–10 business days</strong>.
               </p>
 
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
@@ -116,8 +116,8 @@ function buildReimbursementApprovedEmail(data) {
                   <td style="background:#f8f9fa;border-left:4px solid #CC0007;border-radius:4px;padding:16px 18px;">
                     <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#333;">What happens next</p>
                     <p style="margin:0;font-size:14px;color:#444;">
-                      Your reimbursement will be processed via <strong>direct deposit</strong>. Please allow
-                      <strong>1–3 business days</strong> for the payment to appear in your account.
+                      Your reimbursement has been approved and will be processed within
+                      <strong>7–10 business days</strong>.
                     </p>
                   </td>
                 </tr>
@@ -149,7 +149,7 @@ function buildReimbursementApprovedText(data) {
   const lines = [
     `Hi ${data.submitterName || 'there'},`,
     '',
-    `Good news — your reimbursement request for ${data.eventName || 'your event'} has been approved.`,
+    `Good news — your reimbursement request for ${data.eventName || 'your event'} has been approved and will be processed within 7-10 business days.`,
     '',
     'REQUEST SUMMARY',
     `Event: ${data.eventName || 'your event'}`,
@@ -160,7 +160,7 @@ function buildReimbursementApprovedText(data) {
   lines.push(
     '',
     'WHAT HAPPENS NEXT',
-    'Your reimbursement will be processed via direct deposit. Please allow 1-3 business days for the payment to appear in your account.',
+    'Your reimbursement has been approved and will be processed within 7-10 business days.',
     '',
     'Questions? Contact info@lumetrymedia.com',
     '',

@@ -60,6 +60,13 @@
 
       <!-- Full-page project detail view (replaces the grid when a project is open) -->
       <div class="vp-detail-view" id="vpDetailView" style="display:none;">
+        <div class="vp-drop-overlay" id="vpDropOverlay" aria-hidden="true">
+          <div class="vp-drop-overlay-card">
+            <span class="material-symbols-outlined">cloud_upload</span>
+            <strong id="vpDropOverlayTitle">Drop to add as new version</strong>
+            <span>One video file · uploads keep running while you move to other projects</span>
+          </div>
+        </div>
         <div class="vp-detail-topbar">
           <button type="button" class="mobile-menu-btn" title="Open menu">
             <span class="material-symbols-outlined">menu</span>
@@ -148,17 +155,26 @@
               <span class="vp-annotate-hint" id="annotateHint"></span>
             </div>
 
-            <div class="vp-upload-box">
+            <div class="vp-upload-box" id="uploadBox">
               <div class="vp-thumb-label" id="uploadBoxLabel">Upload version</div>
+              <div class="vp-dropzone" id="versionDropzone" tabindex="0" role="button" aria-label="Choose or drop a video file">
+                <input type="file" id="versionFile" accept="video/*" hidden>
+                <span class="material-symbols-outlined vp-dropzone-icon">cloud_upload</span>
+                <div class="vp-dropzone-text">
+                  <strong>Drag &amp; drop the video file here</strong>
+                  <span>or <u>browse</u> — one video per version</span>
+                </div>
+              </div>
+              <div class="vp-pending-files" id="pendingFiles" style="display:none;"></div>
+              <input type="text" id="versionNotes" placeholder="What changed in this cut? (goes in the client email)">
               <div class="vp-upload-row">
-                <input type="file" id="versionFile" accept="video/*">
                 <label class="vp-check"><input type="checkbox" id="notifyClientCheck" checked> Email client</label>
-                <button class="vp-btn primary small" id="uploadVersionBtn">
+                <span class="vp-upload-row-spacer"></span>
+                <button class="vp-btn primary small" id="uploadVersionBtn" disabled>
                   <span class="material-symbols-outlined">upload</span>
                   <span id="uploadVersionBtnLabel">Upload version</span>
                 </button>
               </div>
-              <input type="text" id="versionNotes" placeholder="What changed in this cut? (goes in the client email)">
               <div class="vp-upload-hint" id="uploadBoxHint"></div>
               <div class="vp-upload-progress" id="uploadProgress" style="display:none;"></div>
             </div>

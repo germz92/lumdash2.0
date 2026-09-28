@@ -1620,6 +1620,11 @@
     updateCompareUi();
     pendingMentions = [];
     annotateTool = 'off';
+    // Files picked for a different project must not carry over.
+    pendingFiles = [];
+    const versionFileInput = document.getElementById('versionFile');
+    if (versionFileInput) versionFileInput.value = '';
+    renderPendingFiles();
     loadTeamUsers();
 
     const dueInput = document.getElementById('feedbackDueInput');
@@ -1689,8 +1694,14 @@
     detail = null;
     compareMode = false;
     viewingCommentId = null;
+    pendingFiles = [];
+    dragDepth = 0;
     const detailView = document.getElementById('vpDetailView');
-    if (detailView) detailView.style.display = 'none';
+    if (detailView) {
+      detailView.style.display = 'none';
+      detailView.classList.remove('is-dragging');
+    }
+    renderPendingFiles();
   }
 
   function closeDetailView() {
@@ -1977,26 +1988,37 @@
     const nextNum = hasVersion
       ? Math.max(...versions.map(v => Number(v.versionNumber) || 0)) + 1
       : 1;
+    const hasPending = pendingFiles.length > 0;
+    const busy = detail ? projectHasActiveVersionUpload(detail._id) : false;
     const label = document.getElementById('uploadBoxLabel');
+    const btn = document.getElementById('uploadVersionBtn');
     const btnLabel = document.getElementById('uploadVersionBtnLabel');
     const hint = document.getElementById('uploadBoxHint');
     const notes = document.getElementById('versionNotes');
+    const dropzone = document.getElementById('versionDropzone');
     if (label) {
       label.textContent = hasVersion ? `Upload new version (v${nextNum})` : 'Upload first version';
     }
+    if (btn) btn.disabled = !hasPending || busy;
+    if (dropzone) dropzone.classList.toggle('is-disabled', busy);
     if (btnLabel) {
       btnLabel.textContent = hasVersion ? `Upload v${nextNum}` : 'Upload version';
     }
     if (hint) {
-      hint.textContent = hasVersion
-        ? `Adds a new cut as v${nextNum}. The current version stays in the version menu for compare.`
-        : 'Upload the first review cut for this project.';
+      if (busy) {
+        hint.textContent = 'A version is uploading for this project. You can open other projects and start their uploads in the meantime.';
+      } else if (hasVersion) {
+        hint.textContent = `Adds a new cut as v${nextNum}. The current version stays in the version menu for compare.`;
+      } else {
+        hint.textContent = 'Upload the first review cut for this project.';
+      }
     }
     if (notes) {
       notes.placeholder = hasVersion
         ? `What changed in v${nextNum}? (goes in the client email)`
         : 'What should the client know about this cut? (goes in the client email)';
     }
+    renderInlineUploadProgress();
   }
 
   function renderPlayer() {
@@ -2383,7 +2405,10 @@
             detail = refreshed;
             if (!currentVersion()) currentVersionId = updated._id;
             renderVersionBar();
-            renderPlayer();
+            // Only reload the player when the cut being watched is the one that changed.
+            if (String(currentVersionId) === String(updated._id)) renderPlayer();
+            // Other cuts may still be processing (parallel uploads) — keep watching them.
+            pollProcessingVersions();
             return;
           }
         } catch { /* keep polling */ }
@@ -2613,33 +2638,461 @@
   // ---- Upload ----
   // Bunny TUS: finite chunks so onProgress fires during upload (Infinity = one request → 0% then 100%).
   const TUS_CHUNK_SIZE = 16 * 1024 * 1024;
+  const MAX_PARALLEL_UPLOADS = 3;
+  const ACTIVE_UPLOAD_STATUSES = new Set(['queued', 'preparing', 'uploading', 'finishing']);
 
-  function setUploadProgress(pct, label) {
-    const wrap = document.getElementById('uploadProgress');
-    if (!wrap) return;
-    wrap.style.display = 'block';
-    const indeterminate = pct < 0;
-    const clamped = indeterminate ? 0 : Math.max(0, Math.min(100, Math.round(pct)));
-    const text = label || (indeterminate ? 'Working…' : `Uploading… ${clamped}%`);
+  function fmtBytes(n) {
+    const num = Number(n) || 0;
+    if (num < 1024) return `${num} B`;
+    const units = ['KB', 'MB', 'GB', 'TB'];
+    let v = num / 1024;
+    let i = 0;
+    while (v >= 1024 && i < units.length - 1) { v /= 1024; i++; }
+    return `${v >= 100 ? Math.round(v) : v.toFixed(1)} ${units[i]}`;
+  }
 
-    let labelEl = wrap.querySelector('.vp-progress-label');
-    let track = wrap.querySelector('.vp-progress-track');
-    let fill = wrap.querySelector('.vp-progress-fill');
-    if (!labelEl || !track || !fill) {
-      wrap.innerHTML = `
-        <div class="vp-progress-label"></div>
-        <div class="vp-progress-track">
-          <div class="vp-progress-fill" style="width:0%"></div>
-        </div>`;
-      labelEl = wrap.querySelector('.vp-progress-label');
-      track = wrap.querySelector('.vp-progress-track');
-      fill = wrap.querySelector('.vp-progress-fill');
+  function isJobActive(job) { return ACTIVE_UPLOAD_STATUSES.has(job.status); }
+
+  // Global upload manager. Lives on `window` so uploads keep running (and the
+  // lower-right tray keeps showing) when the SPA swaps this page out for another
+  // dashboard page, or when the user moves between projects inside the portal.
+  function createUploadManager() {
+    const jobs = [];
+    const prepareLocks = new Map();
+    let host = null;       // page hooks: { onChange, onJobPrepared, onJobDone, openProject }
+    let seq = 0;
+    let collapsed = false;
+    let renderScheduled = false;
+
+    function cancelError() {
+      const err = new Error('Upload cancelled');
+      err.isCancel = true;
+      return err;
     }
 
-    labelEl.textContent = text;
-    track.classList.toggle('indeterminate', indeterminate);
-    fill.style.width = indeterminate ? '40%' : `${clamped}%`;
+    // Serialise `prepare` per project so parallel files get consecutive version numbers.
+    function withProjectLock(key, fn) {
+      const prev = prepareLocks.get(key) || Promise.resolve();
+      const run = prev.catch(() => {}).then(fn);
+      const tracked = run.catch(() => {});
+      prepareLocks.set(key, tracked);
+      tracked.then(() => { if (prepareLocks.get(key) === tracked) prepareLocks.delete(key); });
+      return run;
+    }
+
+    function emit() {
+      if (!renderScheduled) {
+        renderScheduled = true;
+        requestAnimationFrame(() => {
+          renderScheduled = false;
+          renderTray();
+          try { host?.onChange?.(jobs); } catch (err) { console.error('upload host onChange failed', err); }
+        });
+      }
+    }
+
+    function enqueue(spec) {
+      const file = spec.file;
+      const job = {
+        id: `u${++seq}-${Date.now()}`,
+        kind: spec.kind === 'replace' ? 'replace' : 'version',
+        projectId: String(spec.projectId),
+        projectTitle: spec.projectTitle || 'Project',
+        file,
+        fileName: file.name,
+        fileSize: file.size || 0,
+        notes: spec.notes || '',
+        notifyClient: !!spec.notifyClient,
+        versionId: spec.versionId || null,
+        versionNumber: spec.versionNumber || null,
+        status: 'queued',
+        pct: 0,
+        bytesUploaded: 0,
+        bytesTotal: file.size || 0,
+        error: '',
+        cancelled: false,
+        replaceStarted: false,
+        createdAt: Date.now(),
+        finishedAt: null,
+        _abort: null
+      };
+      jobs.push(job);
+      collapsed = false;
+      emit();
+      pump();
+      return job;
+    }
+
+    function pump() {
+      const running = jobs.filter(j => j.status === 'preparing' || j.status === 'uploading' || j.status === 'finishing').length;
+      let slots = MAX_PARALLEL_UPLOADS - running;
+      for (const job of jobs) {
+        if (slots <= 0) break;
+        if (job.status !== 'queued') continue;
+        slots--;
+        runJob(job);
+      }
+    }
+
+    async function tusUpload(job, tus) {
+      if (!tus?.endpoint || !tus.signature || !tus.videoId || !tus.libraryId) {
+        throw new Error('Upload credentials were incomplete');
+      }
+      const tusLib = await ensureTusClient();
+      if (job.cancelled) throw cancelError();
+
+      const report = (bytesUploaded, bytesTotal) => {
+        const total = bytesTotal > 0 ? bytesTotal : job.fileSize;
+        job.bytesUploaded = bytesUploaded;
+        job.bytesTotal = total;
+        job.pct = total > 0 ? Math.min(99, Math.round((bytesUploaded / total) * 100)) : 0;
+        emit();
+      };
+
+      await new Promise((resolve, reject) => {
+        const upload = new tusLib.Upload(job.file, {
+          endpoint: tus.endpoint,
+          chunkSize: TUS_CHUNK_SIZE,
+          retryDelays: [0, 3000, 5000, 10000, 20000, 60000],
+          // Every prepare creates a fresh Bunny video, so a stored upload URL from an
+          // earlier attempt would point at the wrong video — never resume across attempts.
+          storeFingerprintForResuming: false,
+          headers: {
+            AuthorizationSignature: tus.AuthorizationSignature || tus.signature,
+            AuthorizationExpire: String(tus.AuthorizationExpire || tus.expirationTime),
+            VideoId: tus.VideoId || tus.videoId,
+            LibraryId: String(tus.LibraryId || tus.libraryId)
+          },
+          metadata: {
+            filename: job.file.name,
+            filetype: job.file.type || 'video/mp4',
+            title: job.file.name
+          },
+          onError: (err) => reject(err),
+          onProgress: report,
+          onChunkComplete: (chunkSize, bytesAccepted, bytesTotal) => report(bytesAccepted, bytesTotal),
+          onSuccess: () => resolve()
+        });
+        job._abort = () => {
+          try { upload.abort(); } catch { /* ignore */ }
+          reject(cancelError());
+        };
+        upload.start();
+      });
+    }
+
+    async function cleanupAfterFailure(job, wasCancel) {
+      const base = `/api/video-projects/${job.projectId}/versions/${job.versionId}`;
+      try {
+        if (job.kind === 'replace') {
+          if (job.replaceStarted) await api(`${base}/replace/fail`, { method: 'POST', body: '{}' });
+          return;
+        }
+        if (!job.versionId) return;
+        if (wasCancel) {
+          // Remove the placeholder version entirely (admins); fall back to marking it failed.
+          try { await api(base, { method: 'DELETE' }); return; }
+          catch { /* not admin or already gone */ }
+        }
+        await api(`${base}/fail`, { method: 'POST', body: '{}' });
+      } catch { /* best effort */ }
+    }
+
+    async function runJob(job) {
+      job.status = 'preparing';
+      emit();
+      try {
+        let tusCreds;
+        if (job.kind === 'replace') {
+          const prepared = await api(
+            `/api/video-projects/${job.projectId}/versions/${job.versionId}/replace/prepare`,
+            { method: 'POST', body: '{}' }
+          );
+          job.replaceStarted = true;
+          tusCreds = prepared.tus;
+        } else {
+          const prepared = await withProjectLock(job.projectId, () => {
+            if (job.cancelled) throw cancelError();
+            return api(`/api/video-projects/${job.projectId}/versions/prepare`, {
+              method: 'POST',
+              body: JSON.stringify({ notes: job.notes, notifyClient: job.notifyClient })
+            });
+          });
+          job.versionId = prepared.versionId;
+          job.versionNumber = prepared.versionNumber;
+          tusCreds = prepared.tus;
+        }
+        if (job.cancelled) throw cancelError();
+
+        job.status = 'uploading';
+        emit();
+        try { host?.onJobPrepared?.(job); } catch { /* ignore */ }
+
+        await tusUpload(job, tusCreds || {});
+        if (job.cancelled) throw cancelError();
+
+        job.status = 'finishing';
+        job.pct = 100;
+        emit();
+        const completePath = job.kind === 'replace'
+          ? `/api/video-projects/${job.projectId}/versions/${job.versionId}/replace/complete`
+          : `/api/video-projects/${job.projectId}/versions/${job.versionId}/complete`;
+        await api(completePath, {
+          method: 'POST',
+          body: JSON.stringify(job.kind === 'replace' ? {} : { notifyClient: job.notifyClient })
+        });
+
+        job.status = 'done';
+        job.finishedAt = Date.now();
+        emit();
+        toast(job.kind === 'replace'
+          ? `v${job.versionNumber} file replaced — ${job.projectTitle}`
+          : `v${job.versionNumber} uploaded — ${job.projectTitle}`);
+        try { host?.onJobDone?.(job); } catch { /* ignore */ }
+      } catch (err) {
+        const wasCancel = !!(job.cancelled || err?.isCancel);
+        job.status = wasCancel ? 'cancelled' : 'error';
+        job.error = wasCancel ? 'Cancelled' : (err?.message || 'Upload failed');
+        job.finishedAt = Date.now();
+        emit();
+        await cleanupAfterFailure(job, wasCancel);
+        if (wasCancel) {
+          const idx = jobs.indexOf(job);
+          if (idx >= 0) jobs.splice(idx, 1);
+          emit();
+        } else {
+          toast(`${job.fileName}: ${job.error}`, 'error');
+        }
+        try { host?.onJobDone?.(job); } catch { /* ignore */ }
+      } finally {
+        job._abort = null;
+        pump();
+      }
+    }
+
+    function canCancel(job) {
+      return job.status === 'queued' || job.status === 'preparing' || job.status === 'uploading';
+    }
+
+    function cancel(jobId) {
+      const job = jobs.find(j => j.id === jobId);
+      if (!job || !canCancel(job)) return;
+      job.cancelled = true;
+      if (job.status === 'queued') {
+        jobs.splice(jobs.indexOf(job), 1);
+        emit();
+        return;
+      }
+      if (job._abort) job._abort();
+      // preparing/finishing: runJob checks `cancelled` at the next step
+      emit();
+    }
+
+    function clearFinished() {
+      for (let i = jobs.length - 1; i >= 0; i--) {
+        if (!isJobActive(jobs[i])) jobs.splice(i, 1);
+      }
+      emit();
+    }
+
+    // ---- Lower-right tray (Drive / Dropbox style) ----
+    const TRAY_CSS = `
+#vpUploadTray{position:fixed;right:96px;bottom:24px;width:360px;max-width:calc(100vw - 120px);z-index:900;
+  background:#18181c;border:1px solid rgba(255,255,255,.12);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.55);
+  color:#fff;font-family:inherit;font-size:13px;overflow:hidden;display:none}
+#vpUploadTray.is-visible{display:block}
+.vp-utray-head{display:flex;align-items:center;gap:6px;padding:10px 8px 10px 14px;background:#1e1e24;border-bottom:1px solid rgba(255,255,255,.08)}
+.vp-utray-title{flex:1;min-width:0;font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vp-utray-btn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border:none;border-radius:6px;
+  background:transparent;color:rgba(255,255,255,.6);cursor:pointer;padding:0;flex-shrink:0}
+.vp-utray-btn:hover{background:rgba(255,255,255,.08);color:#fff}
+.vp-utray-btn .material-symbols-outlined{font-size:18px}
+#vpUploadTray.is-collapsed .vp-utray-body{display:none}
+#vpUploadTray.is-collapsed .vp-utray-btn[data-act="toggle"] .material-symbols-outlined{transform:rotate(180deg)}
+.vp-utray-body{max-height:min(320px,50vh);overflow-y:auto}
+.vp-utray-row{display:flex;align-items:center;gap:10px;padding:10px 10px 10px 14px;border-bottom:1px solid rgba(255,255,255,.06);cursor:pointer}
+.vp-utray-row:last-child{border-bottom:none}
+.vp-utray-row:hover{background:rgba(255,255,255,.03)}
+.vp-utray-icon{font-size:22px;color:rgba(255,255,255,.45);flex-shrink:0}
+.vp-utray-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.vp-utray-name{font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vp-utray-sub{font-size:11.5px;color:rgba(255,255,255,.5);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums}
+.vp-utray-row.is-error .vp-utray-sub{color:#f87171}
+.vp-utray-track{height:4px;border-radius:999px;background:rgba(255,255,255,.1);overflow:hidden;margin-top:2px}
+.vp-utray-fill{height:100%;width:0;background:#ef4444;border-radius:999px;transition:width .25s ease}
+.vp-utray-track.indeterminate .vp-utray-fill{width:40%!important;animation:vp-utray-slide 1.2s ease-in-out infinite}
+.vp-utray-row.is-done .vp-utray-track,.vp-utray-row.is-error .vp-utray-track{display:none}
+.vp-utray-right{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.vp-utray-pct{font-size:12px;color:rgba(255,255,255,.6);font-variant-numeric:tabular-nums;min-width:34px;text-align:right}
+.vp-utray-state{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px}
+.vp-utray-state .material-symbols-outlined{font-size:20px}
+.vp-utray-row.is-done .vp-utray-state{color:#2ecc71}
+.vp-utray-row.is-error .vp-utray-state{color:#f87171}
+@keyframes vp-utray-slide{0%{transform:translateX(-120%)}100%{transform:translateX(280%)}}
+@media (max-width:768px){#vpUploadTray{left:12px;right:12px;bottom:148px;width:auto;max-width:none}}
+`;
+
+    function ensureTrayDom() {
+      if (!document.getElementById('vpUploadTrayStyles')) {
+        const style = document.createElement('style');
+        style.id = 'vpUploadTrayStyles';
+        style.textContent = TRAY_CSS;
+        document.head.appendChild(style);
+      }
+      let tray = document.getElementById('vpUploadTray');
+      if (tray) return tray;
+      tray = document.createElement('div');
+      tray.id = 'vpUploadTray';
+      tray.setAttribute('role', 'status');
+      tray.setAttribute('aria-live', 'polite');
+      tray.innerHTML = `
+        <div class="vp-utray-head">
+          <div class="vp-utray-title"></div>
+          <button type="button" class="vp-utray-btn" data-act="toggle" title="Collapse">
+            <span class="material-symbols-outlined">expand_more</span>
+          </button>
+          <button type="button" class="vp-utray-btn" data-act="close" title="Close">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="vp-utray-body"></div>`;
+      tray.addEventListener('click', (e) => {
+        const actBtn = e.target.closest('[data-act]');
+        if (actBtn) {
+          e.stopPropagation();
+          const act = actBtn.dataset.act;
+          if (act === 'toggle') { collapsed = !collapsed; renderTray(); }
+          else if (act === 'close') clearFinished();
+          else if (act === 'cancel') cancel(actBtn.closest('.vp-utray-row')?.dataset.id);
+          return;
+        }
+        const row = e.target.closest('.vp-utray-row');
+        if (row) {
+          const job = jobs.find(j => j.id === row.dataset.id);
+          if (job) openProject(job.projectId);
+        }
+      });
+      document.body.appendChild(tray);
+      return tray;
+    }
+
+    function openProject(projectId) {
+      // A host returning `false` means its page is no longer mounted.
+      if (host?.openProject && host.openProject(projectId) !== false) return;
+      // Portal script not on this page: hop back to the portal and open it there.
+      sessionStorage.setItem('openVideoProjectId', projectId);
+      if (typeof window.navigate === 'function') window.navigate('video-portal');
+      else location.hash = `#video-portal?projectId=${encodeURIComponent(projectId)}`;
+    }
+
+    function jobStatusText(job) {
+      const v = job.versionNumber ? `v${job.versionNumber}` : '';
+      const where = [job.projectTitle, v].filter(Boolean).join(' · ');
+      switch (job.status) {
+        case 'queued': return `${where} · Waiting…`;
+        case 'preparing': return `${where} · Preparing…`;
+        case 'uploading': return `${where} · ${fmtBytes(job.bytesUploaded)} / ${fmtBytes(job.bytesTotal || job.fileSize)}`;
+        case 'finishing': return `${where} · Finishing…`;
+        case 'done': return `${where} · Uploaded, processing on video host`;
+        case 'error': return `${where} · ${job.error || 'Failed'}`;
+        case 'cancelled': return `${where} · Cancelled`;
+        default: return where;
+      }
+    }
+
+    function renderTray() {
+      const tray = ensureTrayDom();
+      if (!jobs.length) {
+        tray.classList.remove('is-visible');
+        return;
+      }
+      tray.classList.add('is-visible');
+      tray.classList.toggle('is-collapsed', collapsed);
+
+      const active = jobs.filter(isJobActive);
+      const failed = jobs.filter(j => j.status === 'error');
+      const doneCount = jobs.filter(j => j.status === 'done').length;
+      const title = tray.querySelector('.vp-utray-title');
+      if (active.length) {
+        const total = active.reduce((s, j) => s + (j.bytesTotal || j.fileSize || 0), 0);
+        const up = active.reduce((s, j) => s + (j.status === 'finishing' ? (j.bytesTotal || j.fileSize || 0) : j.bytesUploaded), 0);
+        const pct = total > 0 ? Math.min(99, Math.round((up / total) * 100)) : null;
+        title.textContent = `Uploading ${active.length} item${active.length === 1 ? '' : 's'}${pct != null ? ` · ${pct}%` : ''}`;
+      } else if (failed.length) {
+        title.textContent = `${failed.length} upload${failed.length === 1 ? '' : 's'} failed${doneCount ? `, ${doneCount} complete` : ''}`;
+      } else {
+        title.textContent = `${doneCount} upload${doneCount === 1 ? '' : 's'} complete`;
+      }
+      const closeBtn = tray.querySelector('[data-act="close"]');
+      closeBtn.style.display = active.length ? 'none' : '';
+      tray.querySelector('[data-act="toggle"]').title = collapsed ? 'Expand' : 'Collapse';
+
+      const body = tray.querySelector('.vp-utray-body');
+      const seen = new Set();
+      jobs.forEach((job, index) => {
+        seen.add(job.id);
+        let row = body.querySelector(`.vp-utray-row[data-id="${job.id}"]`);
+        if (!row) {
+          row = document.createElement('div');
+          row.className = 'vp-utray-row';
+          row.dataset.id = job.id;
+          row.innerHTML = `
+            <span class="material-symbols-outlined vp-utray-icon">movie</span>
+            <div class="vp-utray-info">
+              <div class="vp-utray-name"></div>
+              <div class="vp-utray-sub"></div>
+              <div class="vp-utray-track"><div class="vp-utray-fill"></div></div>
+            </div>
+            <div class="vp-utray-right">
+              <span class="vp-utray-pct"></span>
+              <button type="button" class="vp-utray-btn" data-act="cancel" title="Cancel upload">
+                <span class="material-symbols-outlined">close</span>
+              </button>
+              <span class="vp-utray-state"><span class="material-symbols-outlined"></span></span>
+            </div>`;
+          row.querySelector('.vp-utray-name').textContent = job.fileName;
+          row.title = `Open ${job.projectTitle}`;
+        }
+        if (body.children[index] !== row) body.insertBefore(row, body.children[index] || null);
+
+        row.classList.toggle('is-done', job.status === 'done');
+        row.classList.toggle('is-error', job.status === 'error');
+        row.querySelector('.vp-utray-sub').textContent = jobStatusText(job);
+        const indeterminate = job.status === 'queued' || job.status === 'preparing' || job.status === 'finishing';
+        const track = row.querySelector('.vp-utray-track');
+        track.classList.toggle('indeterminate', indeterminate);
+        row.querySelector('.vp-utray-fill').style.width = indeterminate ? '40%' : `${job.pct}%`;
+        const pctEl = row.querySelector('.vp-utray-pct');
+        pctEl.textContent = job.status === 'uploading' ? `${job.pct}%` : '';
+        pctEl.style.display = job.status === 'uploading' ? '' : 'none';
+        row.querySelector('[data-act="cancel"]').style.display = canCancel(job) ? '' : 'none';
+        const state = row.querySelector('.vp-utray-state');
+        const stateIcon = state.querySelector('.material-symbols-outlined');
+        if (job.status === 'done') { stateIcon.textContent = 'check_circle'; state.style.display = ''; }
+        else if (job.status === 'error') { stateIcon.textContent = 'error'; state.style.display = ''; }
+        else state.style.display = 'none';
+      });
+      Array.from(body.children).forEach(row => { if (!seen.has(row.dataset.id)) row.remove(); });
+    }
+
+    window.addEventListener('beforeunload', (e) => {
+      if (!jobs.some(isJobActive)) return;
+      e.preventDefault();
+      e.returnValue = 'Uploads are still in progress. Leaving now will cancel them.';
+    });
+
+    return {
+      enqueue,
+      cancel,
+      clearFinished,
+      getJobs: () => jobs,
+      hasActive: () => jobs.some(isJobActive),
+      setHost(next) { host = next; emit(); },
+      clearHost(prev) { if (!prev || host === prev) host = null; }
+    };
   }
+
+  const uploadManager = window.__vpUploadManager || (window.__vpUploadManager = createUploadManager());
 
   function ensureTusClient() {
     return new Promise((resolve, reject) => {
@@ -2666,105 +3119,276 @@
     });
   }
 
-  async function tusUploadToBunny(file, tus) {
-    if (!tus?.endpoint || !tus.signature || !tus.videoId || !tus.libraryId) {
-      throw new Error('Upload credentials were incomplete');
-    }
-    const tusLib = await ensureTusClient();
-    const fileSize = file.size || 0;
-    setUploadProgress(0, 'Uploading to video host… 0%');
+  // ---- Page-side upload UI (pending files, drag & drop, inline progress) ----
+  let pendingFiles = [];     // files chosen/dropped but not yet queued
+  let dragDepth = 0;         // nested dragenter/dragleave bookkeeping for the detail view
 
-    const reportProgress = (bytesUploaded, bytesTotal) => {
-      const total = bytesTotal > 0 ? bytesTotal : fileSize;
-      if (!(total > 0)) {
-        setUploadProgress(-1, 'Uploading to video host…');
-        return;
-      }
-      const pct = Math.min(99, Math.round((bytesUploaded / total) * 100));
-      setUploadProgress(pct, `Uploading to video host… ${pct}%`);
-    };
+  // True while this instance of the page is still mounted in the SPA container.
+  function portalMounted() { return !!document.getElementById('uploadBox'); }
 
-    await new Promise((resolve, reject) => {
-      const upload = new tusLib.Upload(file, {
-        endpoint: tus.endpoint,
-        chunkSize: TUS_CHUNK_SIZE,
-        retryDelays: [0, 3000, 5000, 10000, 20000, 60000],
-        headers: {
-          AuthorizationSignature: tus.AuthorizationSignature || tus.signature,
-          AuthorizationExpire: String(tus.AuthorizationExpire || tus.expirationTime),
-          VideoId: tus.VideoId || tus.videoId,
-          LibraryId: String(tus.LibraryId || tus.libraryId)
-        },
-        metadata: {
-          filename: file.name,
-          filetype: file.type || 'video/mp4',
-          title: file.name
-        },
-        onError: (err) => reject(err),
-        onProgress: reportProgress,
-        onChunkComplete: (chunkSize, bytesAccepted, bytesTotal) => {
-          reportProgress(bytesAccepted, bytesTotal);
-        },
-        onSuccess: () => resolve()
-      });
-
-      upload.findPreviousUploads()
-        .then((previous) => {
-          if (previous?.length) upload.resumeFromPreviousUpload(previous[0]);
-          upload.start();
-        })
-        .catch(() => upload.start());
-    });
+  function isVideoFile(file) {
+    if (!file) return false;
+    if (file.type && file.type.startsWith('video/')) return true;
+    return /\.(mp4|mov|m4v|mkv|webm|avi|mxf|mts|m2ts|wmv|flv|3gp|ts)$/i.test(file.name || '');
   }
 
-  async function uploadVersion() {
-    const fileInput = document.getElementById('versionFile');
-    const file = fileInput.files[0];
-    if (!file) { toast('Choose a video file first', 'error'); return; }
+  // Is a new-version upload already running for this project? (one cut per version;
+  // parallelism is across projects, not within one)
+  function projectHasActiveVersionUpload(projectId) {
+    return projectJobs(projectId).some(j => j.kind === 'version' && isJobActive(j));
+  }
+
+  // One video per version: keep a single pending file (the latest pick replaces it).
+  function addPendingFiles(fileList) {
     if (!detail) return;
-
-    const btn = document.getElementById('uploadVersionBtn');
-    const notes = document.getElementById('versionNotes').value.trim();
-    const notifyClient = !!document.getElementById('notifyClientCheck')?.checked;
-    btn.disabled = true;
-    setUploadProgress(-1, 'Preparing upload…');
-
-    let versionId = null;
-    try {
-      const prepared = await api(`/api/video-projects/${detail._id}/versions/prepare`, {
-        method: 'POST',
-        body: JSON.stringify({ notes, notifyClient })
-      });
-      versionId = prepared.versionId;
-      await tusUploadToBunny(file, prepared.tus || {});
-
-      setUploadProgress(-1, 'Finishing upload…');
-      await api(`/api/video-projects/${detail._id}/versions/${versionId}/complete`, {
-        method: 'POST',
-        body: JSON.stringify({ notifyClient })
-      });
-
-      setUploadProgress(100, 'Upload complete — processing…');
-      fileInput.value = '';
-      document.getElementById('versionNotes').value = '';
-      toast('Version uploaded');
-      await openDetail(detail._id);
-      await loadProjects();
-    } catch (err) {
-      const msg = err?.message || 'Upload failed';
-      if (versionId) {
-        try {
-          await api(`/api/video-projects/${detail._id}/versions/${versionId}/fail`, {
-            method: 'POST',
-            body: JSON.stringify({})
-          });
-        } catch { /* best effort */ }
-      }
-      setUploadProgress(0, msg);
-      toast(msg, 'error');
-    } finally {
-      btn.disabled = false;
+    const incoming = Array.from(fileList || []);
+    if (!incoming.length) return;
+    if (projectHasActiveVersionUpload(detail._id)) {
+      toast('A version is already uploading for this project — wait for it to finish or cancel it first', 'error');
+      return;
     }
+    const video = incoming.find(isVideoFile);
+    if (!video) {
+      toast('Only video files can be uploaded as a version', 'error');
+      return;
+    }
+    if (incoming.length > 1) {
+      toast(`Each version is one video — using "${video.name}"`, 'error');
+    }
+    pendingFiles = [video];
+    renderPendingFiles();
+    const box = document.getElementById('uploadBox');
+    if (box && typeof box.scrollIntoView === 'function') box.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }
+
+  function removePendingFile(index) {
+    pendingFiles.splice(index, 1);
+    renderPendingFiles();
+  }
+
+  function clearPendingFiles() {
+    pendingFiles = [];
+    const input = document.getElementById('versionFile');
+    if (input) input.value = '';
+    renderPendingFiles();
+  }
+
+  function renderPendingFiles() {
+    const wrap = document.getElementById('pendingFiles');
+    if (!wrap) return;
+    if (!pendingFiles.length) {
+      wrap.style.display = 'none';
+      wrap.innerHTML = '';
+    } else {
+      wrap.style.display = 'flex';
+      wrap.innerHTML = pendingFiles.map((f, i) => `
+        <div class="vp-pending-file">
+          <span class="material-symbols-outlined">movie</span>
+          <span class="vp-pending-file-name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
+          <span class="vp-pending-file-size">${fmtBytes(f.size)}</span>
+          <button type="button" class="vp-pending-file-remove" data-index="${i}" title="Remove">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>`).join('');
+    }
+    updateUploadUi();
+  }
+
+  function projectJobs(projectId) {
+    if (!projectId) return [];
+    const id = String(projectId);
+    return uploadManager.getJobs().filter(j => j.projectId === id);
+  }
+
+  // Inline progress under the upload box — only this project's uploads, so
+  // switching projects never shows another project's bar.
+  function renderInlineUploadProgress() {
+    const wrap = document.getElementById('uploadProgress');
+    if (!wrap) return;
+    const items = detail ? projectJobs(detail._id) : [];
+    if (!items.length) {
+      wrap.style.display = 'none';
+      wrap.innerHTML = '';
+      return;
+    }
+    wrap.style.display = 'flex';
+    wrap.innerHTML = items.map(job => {
+      const indeterminate = job.status === 'queued' || job.status === 'preparing' || job.status === 'finishing';
+      const label = job.kind === 'replace'
+        ? `Replacing v${job.versionNumber}`
+        : (job.versionNumber ? `v${job.versionNumber}` : 'New version');
+      let status;
+      switch (job.status) {
+        case 'queued': status = 'Waiting…'; break;
+        case 'preparing': status = 'Preparing…'; break;
+        case 'uploading': status = `${job.pct}% · ${fmtBytes(job.bytesUploaded)} / ${fmtBytes(job.bytesTotal || job.fileSize)}`; break;
+        case 'finishing': status = 'Finishing…'; break;
+        case 'done': status = 'Uploaded — processing'; break;
+        case 'error': status = job.error || 'Failed'; break;
+        default: status = '';
+      }
+      const showTrack = job.status !== 'done' && job.status !== 'error';
+      return `
+        <div class="vp-inline-job${job.status === 'done' ? ' is-done' : ''}${job.status === 'error' ? ' is-error' : ''}">
+          <span class="vp-inline-job-name" title="${escapeHtml(job.fileName)}">${escapeHtml(label)} · ${escapeHtml(job.fileName)}</span>
+          <span class="vp-inline-job-status">${escapeHtml(status)}</span>
+          ${showTrack ? `<div class="vp-progress-track${indeterminate ? ' indeterminate' : ''}"><div class="vp-progress-fill" style="width:${indeterminate ? 40 : job.pct}%"></div></div>` : ''}
+        </div>`;
+    }).join('');
+  }
+
+  // Pull fresh project data after an upload step without resetting the whole
+  // detail view (keeps the user's compose state / scroll position).
+  async function refreshDetailQuiet(projectId, { selectVersionId = null } = {}) {
+    if (!portalMounted() || !detail || String(detail._id) !== String(projectId)) return;
+    try {
+      const refreshed = await api(`/api/video-projects/${projectId}`);
+      if (!detail || String(detail._id) !== String(projectId)) return;
+      detail = refreshed;
+      const versions = detail.versions || [];
+      if (selectVersionId && versions.some(v => String(v._id) === String(selectVersionId))) {
+        currentVersionId = selectVersionId;
+      } else if (!currentVersion()) {
+        currentVersionId = versions.length ? versions[versions.length - 1]._id : null;
+      }
+      renderVersionBar();
+      if (selectVersionId) {
+        renderPlayer();
+        renderComments();
+      }
+      renderActivity();
+      if (!compareMode) updateCompareUi(); // don't reload the compare iframe mid-review
+      pollProcessingVersions();
+    } catch { /* keep the stale view */ }
+  }
+
+  const uploadHost = {
+    onChange() {
+      if (!portalMounted()) return;
+      // Also refreshes the busy state of the dropzone/button for this project.
+      updateUploadUi();
+    },
+    onJobPrepared(job) {
+      // Version placeholder now exists server-side — show it in the version menu as "uploading".
+      refreshDetailQuiet(job.projectId);
+    },
+    async onJobDone(job) {
+      if (!portalMounted()) return;
+      if (job.status === 'done') {
+        await refreshDetailQuiet(job.projectId, { selectVersionId: job.versionId });
+      } else {
+        await refreshDetailQuiet(job.projectId);
+      }
+      try { await loadProjects(); } catch { /* ignore */ }
+    },
+    openProject(projectId) {
+      if (!portalMounted()) return false;
+      if (detail && String(detail._id) === String(projectId)) return true;
+      openDetail(projectId);
+      return true;
+    }
+  };
+
+  function uploadVersion() {
+    if (!detail) return;
+    const file = pendingFiles[0];
+    if (!file) { toast('Choose or drop a video file first', 'error'); return; }
+    if (projectHasActiveVersionUpload(detail._id)) {
+      toast('A version is already uploading for this project — wait for it to finish or cancel it first', 'error');
+      return;
+    }
+    const notes = document.getElementById('versionNotes')?.value.trim() || '';
+    const notifyClient = !!document.getElementById('notifyClientCheck')?.checked;
+    clearPendingFiles();
+    const notesEl = document.getElementById('versionNotes');
+    if (notesEl) notesEl.value = '';
+    uploadManager.enqueue({
+      kind: 'version',
+      projectId: detail._id,
+      projectTitle: detail.title,
+      file,
+      notes,
+      notifyClient
+    });
+    toast('Upload started — you can move to other projects while it runs');
+  }
+
+  function dragHasFiles(e) {
+    const types = e.dataTransfer?.types;
+    if (!types) return false;
+    return Array.from(types).includes('Files');
+  }
+
+  function setupDragAndDrop() {
+    const view = document.getElementById('vpDetailView');
+    const dropzone = document.getElementById('versionDropzone');
+    const input = document.getElementById('versionFile');
+    if (!view || !dropzone || !input) return;
+
+    const pick = () => {
+      if (detail && projectHasActiveVersionUpload(detail._id)) {
+        toast('A version is already uploading for this project — wait for it to finish or cancel it first', 'error');
+        return;
+      }
+      input.click();
+    };
+    dropzone.addEventListener('click', pick);
+    dropzone.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); }
+    });
+    input.addEventListener('change', (e) => {
+      addPendingFiles(e.target.files);
+      e.target.value = '';
+    });
+
+    document.getElementById('pendingFiles')?.addEventListener('click', (e) => {
+      const btn = e.target.closest('.vp-pending-file-remove');
+      if (!btn) return;
+      removePendingFile(Number(btn.dataset.index));
+    });
+
+    const endDrag = () => {
+      dragDepth = 0;
+      view.classList.remove('is-dragging');
+    };
+
+    view.addEventListener('dragenter', (e) => {
+      if (!detail || !dragHasFiles(e)) return;
+      e.preventDefault();
+      dragDepth++;
+      view.classList.add('is-dragging');
+    });
+    view.addEventListener('dragover', (e) => {
+      if (!detail || !dragHasFiles(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+    });
+    view.addEventListener('dragleave', (e) => {
+      if (!dragHasFiles(e)) return;
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) endDrag();
+    });
+    view.addEventListener('drop', (e) => {
+      if (!dragHasFiles(e)) return;
+      e.preventDefault();
+      const files = e.dataTransfer?.files;
+      endDrag();
+      if (!detail) return;
+      addPendingFiles(files);
+    });
+    // Leaving the window entirely never fires dragleave on the view.
+    window.addEventListener('dragend', endDrag);
+    document.addEventListener('dragleave', (e) => {
+      if (e.relatedTarget === null || e.clientX <= 0 || e.clientY <= 0) endDrag();
+    });
+    // While a project is open, a drop that misses the view must not navigate the
+    // browser to the file. Guarded by portalMounted() so this never affects other pages.
+    document.addEventListener('dragover', (e) => {
+      if (portalMounted() && detail && dragHasFiles(e)) e.preventDefault();
+    });
+    document.addEventListener('drop', (e) => {
+      if (portalMounted() && detail && dragHasFiles(e)) { e.preventDefault(); endDrag(); }
+    });
   }
 
   function pickReplaceVersionFile() {
@@ -2776,51 +3400,25 @@
     input.click();
   }
 
-  async function replaceCurrentVersionFile(file) {
+  function replaceCurrentVersionFile(file) {
     if (!isAdmin || !detail || !currentVersionId || !file) return;
     const v = currentVersion();
     if (!v) return;
+    if (!isVideoFile(file)) { toast('Choose a video file', 'error'); return; }
+    const busy = projectJobs(detail._id).some(j => j.kind === 'replace' && String(j.versionId) === String(currentVersionId) && isJobActive(j));
+    if (busy) { toast(`A replace for v${v.versionNumber} is already in progress`, 'error'); return; }
 
-    const uploadBtn = document.getElementById('uploadVersionBtn');
-    if (uploadBtn) uploadBtn.disabled = true;
-    setUploadProgress(-1, `Preparing replace for v${v.versionNumber}…`);
-
-    let started = false;
-    try {
-      const prepared = await api(
-        `/api/video-projects/${detail._id}/versions/${currentVersionId}/replace/prepare`,
-        { method: 'POST', body: JSON.stringify({}) }
-      );
-      started = true;
-      await tusUploadToBunny(file, prepared.tus || {});
-
-      setUploadProgress(-1, 'Finishing replace…');
-      await api(
-        `/api/video-projects/${detail._id}/versions/${currentVersionId}/replace/complete`,
-        { method: 'POST', body: JSON.stringify({}) }
-      );
-
-      setUploadProgress(100, 'Replace complete — processing…');
-      toast(`Version ${v.versionNumber} file replaced`);
-      await openDetail(detail._id);
-      await loadProjects();
-    } catch (err) {
-      const msg = err?.message || 'Replace failed';
-      if (started) {
-        try {
-          await api(
-            `/api/video-projects/${detail._id}/versions/${currentVersionId}/replace/fail`,
-            { method: 'POST', body: JSON.stringify({}) }
-          );
-        } catch { /* best effort */ }
-      }
-      setUploadProgress(0, msg);
-      toast(msg, 'error');
-    } finally {
-      if (uploadBtn) uploadBtn.disabled = false;
-      const input = document.getElementById('replaceVersionFile');
-      if (input) input.value = '';
-    }
+    uploadManager.enqueue({
+      kind: 'replace',
+      projectId: detail._id,
+      projectTitle: detail.title,
+      versionId: currentVersionId,
+      versionNumber: v.versionNumber,
+      file
+    });
+    toast(`Replacing v${v.versionNumber} — upload started`);
+    const input = document.getElementById('replaceVersionFile');
+    if (input) input.value = '';
   }
 
   // ---- Modals ----
@@ -3170,6 +3768,7 @@
     });
 
     document.getElementById('uploadVersionBtn').addEventListener('click', uploadVersion);
+    setupDragAndDrop();
 
     document.getElementById('masterUrlInput')?.addEventListener('input', updateOpenMasterBtn);
 
@@ -3410,6 +4009,9 @@
     setupMobileMenu();
     setupListeners();
     ensurePlayerJs();
+    // Re-attach this page instance to the persistent upload manager so in-flight
+    // uploads (started before navigating away) render here and refresh the view.
+    uploadManager.setHost(uploadHost);
 
     try {
       await Promise.all([loadClients(), loadProjects()]);

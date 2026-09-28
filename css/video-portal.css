@@ -1562,9 +1562,115 @@
   flex-wrap: wrap;
 }
 .vp-upload-row input[type="file"] { flex: 1; min-width: 0; font-size: 0.78rem; color: var(--text-muted); }
+.vp-upload-row-spacer { flex: 1; }
 .vp-deliver-row input { flex: 1; min-width: 0; }
 .vp-upload-box input[type="text"] { width: 100%; box-sizing: border-box; }
-.vp-upload-progress { font-size: 0.78rem; color: var(--text-muted); }
+
+/* Drag & drop zone */
+.vp-dropzone {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1.5px dashed var(--border-default);
+  border-radius: var(--radius-md, 10px);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+  outline: none;
+}
+.vp-dropzone:hover,
+.vp-dropzone:focus-visible {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.04);
+}
+.vp-dropzone.is-disabled { opacity: 0.45; cursor: not-allowed; }
+.vp-dropzone-icon { font-size: 28px; color: var(--text-muted); flex-shrink: 0; }
+.vp-dropzone-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.vp-dropzone-text strong { font-size: 0.84rem; color: var(--text-primary); font-weight: 600; }
+.vp-dropzone-text span { font-size: 0.74rem; color: var(--text-muted); }
+.vp-dropzone-text u { text-decoration: underline; text-underline-offset: 2px; }
+
+/* Files chosen but not yet uploading */
+.vp-pending-files { display: flex; flex-direction: column; gap: 4px; }
+.vp-pending-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 10px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+  font-size: 0.78rem;
+  min-width: 0;
+}
+.vp-pending-file .material-symbols-outlined { font-size: 18px; color: var(--text-muted); flex-shrink: 0; }
+.vp-pending-file-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-primary); }
+.vp-pending-file-size { color: var(--text-muted); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.vp-pending-file-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.vp-pending-file-remove:hover { background: var(--bg-tertiary); color: var(--text-primary); }
+.vp-pending-file-remove .material-symbols-outlined { font-size: 16px; }
+
+/* Full-view drop target while dragging files over the project */
+.vp-detail-view { position: relative; }
+.vp-drop-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  left: var(--sidebar-width);
+  z-index: 60;
+  background: rgba(18, 18, 22, 0.78);
+  backdrop-filter: blur(2px);
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.vp-detail-view.is-dragging .vp-drop-overlay { display: flex; }
+.vp-drop-overlay-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 32px 44px;
+  border: 2px dashed var(--accent-red);
+  border-radius: 16px;
+  background: rgba(239, 68, 68, 0.08);
+  color: var(--text-primary);
+  text-align: center;
+}
+.vp-drop-overlay-card .material-symbols-outlined { font-size: 48px; color: var(--accent-red); }
+.vp-drop-overlay-card strong { font-size: 1.05rem; }
+.vp-drop-overlay-card span:last-child { font-size: 0.8rem; color: var(--text-secondary); }
+
+/* Inline per-project progress (mirrors the global tray, filtered to this project) */
+.vp-upload-progress { font-size: 0.78rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 6px; }
+.vp-inline-job {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-default);
+}
+.vp-inline-job-name { color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vp-inline-job-status { color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.vp-inline-job.is-error .vp-inline-job-status { color: #f87171; }
+.vp-inline-job.is-done .vp-inline-job-status { color: #2ecc71; }
+.vp-inline-job .vp-progress-track { grid-column: 1 / -1; margin-top: 4px; }
 .vp-progress-label { margin-bottom: 6px; }
 .vp-progress-track {
   height: 6px;
@@ -2102,6 +2208,8 @@
 
 @media (max-width: 768px) {
   .vp-main { margin-left: 0; }
+  .vp-drop-overlay { left: 0; }
+  .vp-drop-overlay-card { padding: 24px 28px; margin: 0 16px; }
   .video-portal-page .mobile-menu-btn { display: flex; }
 
   .vp-header {

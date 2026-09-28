@@ -104,31 +104,21 @@
           <h1 class="shotlist-title" id="eventTitle">Loading Event...</h1>
           <span class="shotlist-subtitle">Shotlist</span>
         </div>
-        <div class="shotlist-header-right" id="list-controls" style="display: none;">
-          <input type="text" id="new-list-input" placeholder="New list name..." class="list-input">
-          <button class="add-list-btn" id="add-list-btn">
-            <span class="material-symbols-outlined">add</span>
-            <span>Add List</span>
-          </button>
-        </div>
+        <div class="shotlist-header-right"></div>
       </header>
       
-      <!-- Filter Bar -->
-      <div class="shotlist-filter-bar">
+      <!-- List switcher -->
+      <div class="shotlist-filter-bar" id="listChipBar">
         <div class="filter-left">
-          <div id="list-selector-section" class="list-selector-section" style="display: none;">
-            <select id="list-selector" class="filter-select">
-              <option value="">All Lists</option>
-            </select>
-          </div>
+          <div class="list-chips" id="listChips"></div>
         </div>
         <div class="filter-right">
           <div class="progress-summary" id="progressSummary">
             <span class="material-symbols-outlined">task_alt</span>
             <span class="progress-text">0 / 0 completed</span>
+          </div>
         </div>
       </div>
-    </div>
 
       <!-- Content Area -->
       <div class="shotlist-content">
@@ -141,7 +131,11 @@
     <div id="empty-state" class="empty-state" style="display: none;">
       <span class="material-symbols-outlined empty-icon">checklist</span>
       <h3>No shot lists created</h3>
-      <p>Owners and leads can create lists to get started.</p>
+      <p id="emptyStateCopy">Owners, leads, and admins can create lists to get started.</p>
+      <button type="button" class="add-list-btn empty-new-list" id="emptyNewListBtn" style="display: none;">
+        <span class="material-symbols-outlined">add</span>
+        <span>New list</span>
+      </button>
         </div>
       </div>
     </main>

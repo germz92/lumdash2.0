@@ -1,5 +1,5 @@
 // ===== SHOTLIST FUNCTIONALITY v4.0 - EDIT_ITEMS =====
-// Added ability for owners and leads to edit existing shot list items
+// Owners, leads, and app admins can create and edit lists. Anyone on the event can check items off.
 // Click on text to enter edit mode, Save/Cancel buttons appear, keyboard shortcuts (Enter/Escape)
 
 // Use IIFE to prevent variable conflicts and create a clean scope
@@ -30,6 +30,8 @@ let currentUserRole = window.shotlistModule.currentUserRole;
 let isUserEditing = window.shotlistModule.isUserEditing;
 let isInitialized = window.shotlistModule.isInitialized;
 let selectedListId = null; // Track which list is currently selected
+let creatingList = false;
+let pendingNewListName = '';
 
 // Save list selection to sessionStorage
 function saveListSelection() {
@@ -127,9 +129,28 @@ async function initializeShotlist() {
   }
 }
 
+function readTokenRole() {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return '';
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    return String(payload.role || '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
 // Get user role for permission checking based on table data
 function getUserRole(tableData) {
   try {
+    // App admins can edit any event's shot lists, even if they are not an owner or lead.
+    if (readTokenRole() === 'admin') {
+      currentUserRole = 'admin';
+      syncToModule();
+      debugLog('User role determined', { role: 'admin' });
+      return 'admin';
+    }
+
     const userId = localStorage.getItem('userId');
     if (!userId || !tableData) {
       currentUserRole = 'viewer';
@@ -159,55 +180,47 @@ function getUserRole(tableData) {
   }
 }
 
-// Check if user can edit lists and delete items (owners and leads)
+// Create, rename, and delete lists and items: owners, leads, and app admins
 function canUserEdit() {
-  return currentUserRole === 'owner' || currentUserRole === 'lead';
+  return currentUserRole === 'owner' || currentUserRole === 'lead' || currentUserRole === 'admin';
 }
 
-// Check if user can toggle checkboxes (all authenticated users)
+// Anyone who can open the list can check items off, including app admins.
 function canUserToggleItems() {
-  return currentUserRole === 'owner' || currentUserRole === 'lead' || currentUserRole === 'viewer';
+  return currentUserRole === 'owner' || currentUserRole === 'lead' || currentUserRole === 'admin' || currentUserRole === 'viewer';
 }
 
 // Setup event listeners
 function setupEventListeners() {
   debugLog('Setting up event listeners...');
 
-  // Add new list - use event delegation to avoid issues with re-rendering
-  document.addEventListener('click', (e) => {
-    if (e.target.id === 'add-list-btn' || e.target.closest('#add-list-btn')) {
+  document.addEventListener('submit', (e) => {
+    if (e.target.id !== 'newListForm') return;
+    e.preventDefault();
+    handleAddList(e.target.querySelector('input')?.value || '');
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.target.id === 'new-list-input' && e.key === 'Escape') {
       e.preventDefault();
-      e.stopPropagation();
-      handleAddList();
+      cancelNewList();
     }
   });
-  
-  document.addEventListener('keypress', (e) => {
-    if (e.target.id === 'new-list-input' && e.key === 'Enter') {
-      e.preventDefault();
-      handleAddList();
-    }
+
+  document.addEventListener('input', (e) => {
+    if (e.target.id === 'new-list-input') pendingNewListName = e.target.value;
   });
-  
-  document.addEventListener('focus', (e) => {
-    if (e.target.id === 'new-list-input') {
-      isUserEditing = true;
-      syncToModule();
-      debugLog('User started editing list input');
-    }
-  }, true);
-  
+
+  // Clicking away commits a typed name, or closes an empty field.
   document.addEventListener('blur', (e) => {
-    if (e.target.id === 'new-list-input') {
-      setTimeout(() => {
-        isUserEditing = false;
-        syncToModule();
-        debugLog('User stopped editing list input');
-      }, 100);
-    }
+    if (e.target.id !== 'new-list-input') return;
+    const name = e.target.value;
+    setTimeout(() => {
+      if (!creatingList) return;
+      if (!String(name || '').trim()) cancelNewList();
+      else handleAddList(name);
+    }, 150);
   }, true);
-  
-  // List selector dropdown is now handled in setupListEventDelegation
 }
 
 // Setup socket listeners
@@ -264,8 +277,15 @@ function handleShotlistsUpdate(data) {
   
 // Socket update data validated
   
-  // Preserve currently selected list
+  // Preserve currently selected list. A just-created list still has a temp id
+  // until this socket payload arrives with the real Mongo id.
   const currentSelectedListId = selectedListId;
+  let tempIndex = null;
+  let tempName = null;
+  if (currentSelectedListId && String(currentSelectedListId).startsWith('temp-list-')) {
+    tempIndex = parseInt(String(currentSelectedListId).replace('temp-list-', ''), 10);
+    tempName = shotlists[tempIndex]?.name || null;
+  }
   
   // Validate and ensure IDs are preserved
   const updatedShotlists = data.shotlists.map(list => {
@@ -300,7 +320,18 @@ function handleShotlistsUpdate(data) {
   shotlists = updatedShotlists;
   
   // Restore selected list if it still exists
-  if (currentSelectedListId) {
+  if (tempIndex != null) {
+    const byIndex = shotlists[tempIndex];
+    if (byIndex && (!tempName || byIndex.name === tempName)) {
+      selectedListId = byIndex._id || `temp-list-${tempIndex}`;
+    } else {
+      const match = tempName ? shotlists.find(list => list.name === tempName) : null;
+      selectedListId = match
+        ? (match._id || `temp-list-${shotlists.indexOf(match)}`)
+        : (shotlists[0]?._id || (shotlists[0] ? 'temp-list-0' : null));
+    }
+    saveListSelection();
+  } else if (currentSelectedListId) {
     const listStillExists = shotlists.some(list => 
       (list._id && list._id === currentSelectedListId) || 
       `temp-list-${shotlists.indexOf(list)}` === currentSelectedListId
@@ -375,13 +406,44 @@ function getCurrentTableId() {
   }
 }
 
+function startNewList() {
+  if (!canUserEdit()) return;
+  creatingList = true;
+  pendingNewListName = '';
+  isUserEditing = true;
+  syncToModule();
+  renderListChips();
+  document.getElementById('new-list-input')?.focus();
+}
+
+function cancelNewList() {
+  creatingList = false;
+  pendingNewListName = '';
+  isUserEditing = false;
+  syncToModule();
+  renderListChips();
+}
+
+function findShotlist(listId) {
+  let list = shotlists.find(l => l._id === listId);
+  if (!list && String(listId || '').startsWith('temp-list-')) {
+    const tempIndex = parseInt(String(listId).replace('temp-list-', ''), 10);
+    if (!isNaN(tempIndex) && tempIndex < shotlists.length) list = shotlists[tempIndex];
+  }
+  return list || null;
+}
+
 // Handle adding new list
-async function handleAddList() {
-  const input = document.getElementById('new-list-input');
-  const listName = input.value.trim();
-  
+async function handleAddList(explicitName) {
+  const listName = String(explicitName ?? pendingNewListName ?? '').trim();
+  creatingList = false;
+  pendingNewListName = '';
+  isUserEditing = false;
+  syncToModule();
+
   if (!listName) {
     debugLog('Empty list name provided');
+    renderListChips();
     return;
   }
   
@@ -406,9 +468,7 @@ async function handleAddList() {
     // Select the newly created list
     const newListIndex = shotlists.length - 1;
     selectedListId = newList._id || `temp-list-${newListIndex}`;
-    saveListSelection(); // Save the new selection
-    
-    input.value = '';
+    saveListSelection();
     
     // Render immediately for responsive UI (optimistic update)
     renderShotlists();
@@ -419,6 +479,24 @@ async function handleAddList() {
     
   } catch (error) {
     console.error('🎯 SHOTLIST: Failed to add list:', error);
+  }
+}
+
+async function renameList(listId, newName) {
+  if (!canUserEdit()) return;
+  const name = String(newName || '').trim();
+  const list = findShotlist(listId);
+  if (!list || !name || list.name === name) {
+    renderShotlists();
+    return;
+  }
+  list.name = name;
+  syncToModule();
+  renderShotlists();
+  try {
+    await saveShotlists();
+  } catch (error) {
+    console.error('🎯 SHOTLIST: Failed to rename list:', error);
   }
 }
 
@@ -736,7 +814,7 @@ async function saveShotlists() {
     
     // Show user-friendly error message based on error type
     if (error.message.includes('403')) {
-      alert('You don\'t have permission to modify this shotlist. Only table owners can edit.');
+      alert('Only owners, leads, and admins can change lists and shots. You can still check items off.');
     } else if (error.message.includes('401')) {
       alert('Your session has expired. Please log in again.');
       window.location.href = '/login.html';
@@ -765,25 +843,20 @@ function renderShotlists() {
   
   const container = document.getElementById('lists-container');
   const emptyState = document.getElementById('empty-state');
-  const listControls = document.getElementById('list-controls');
-  const listSelectorSection = document.getElementById('list-selector-section');
   
   if (!container) {
     debugLog('Lists container not found');
     return;
   }
-  
-  // Show/hide controls based on permissions
-  if (listControls) {
-    listControls.style.display = canUserEdit() ? 'flex' : 'none';
-  }
-  
-  // Update list selector dropdown
-  updateListSelector();
-  
-  // Show/hide list selector based on whether there are lists
-  if (listSelectorSection) {
-    listSelectorSection.style.display = shotlists.length > 0 ? 'block' : 'none';
+
+  renderListChips();
+  const emptyBtn = document.getElementById('emptyNewListBtn');
+  if (emptyBtn) emptyBtn.style.display = canUserEdit() ? 'inline-flex' : 'none';
+  const emptyCopy = document.getElementById('emptyStateCopy');
+  if (emptyCopy) {
+    emptyCopy.textContent = canUserEdit()
+      ? 'Create a list, then add the shots for this event.'
+      : 'Owners, leads, and admins can create lists to get started.';
   }
   
   // Show/hide empty state
@@ -813,8 +886,6 @@ function renderShotlists() {
     // If selected list no longer exists, select the first one
     selectedListId = shotlists[0]._id || `temp-list-0`;
     saveListSelection(); // Save the fallback selection
-    const selector = document.getElementById('list-selector');
-    if (selector) selector.value = selectedListId;
     renderShotlists();
     return;
   }
@@ -882,27 +953,42 @@ function updateProgressSummary() {
   debugLog('Progress summary updated:', completedItems, '/', totalItems);
 }
 
-// Update the list selector dropdown
-function updateListSelector() {
-  const selector = document.getElementById('list-selector');
-  if (!selector) return;
-  
-  // Clear existing options except the default
-  selector.innerHTML = '<option value="">Choose a list...</option>';
-  
-  // Add options for each list
-  shotlists.forEach((list, index) => {
+function renderListChips() {
+  const wrap = document.getElementById('listChips');
+  if (!wrap) return;
+
+  const chips = shotlists.map((list, index) => {
     const listId = list._id || `temp-list-${index}`;
-    const option = document.createElement('option');
-    option.value = listId;
-    option.textContent = list.name;
-    if (listId === selectedListId) {
-      option.selected = true;
+    const items = Array.isArray(list.items) ? list.items : [];
+    const done = items.filter(item => item.completed).length;
+    const active = listId === selectedListId ? ' is-active' : '';
+    return `<button type="button" class="list-chip${active}" data-list-id="${listId}">
+      <span class="list-chip-name">${escapeHtml(list.name)}</span>
+      <span class="list-chip-count">${done}/${items.length}</span>
+    </button>`;
+  }).join('');
+
+  let creator = '';
+  if (canUserEdit()) {
+    creator = creatingList
+      ? `<form class="list-chip-form" id="newListForm">
+           <input type="text" id="new-list-input" class="list-chip-input" placeholder="List name" maxlength="80" value="${escapeHtml(pendingNewListName)}">
+         </form>`
+      : `<button type="button" class="list-chip list-chip-new" id="newListChip">
+           <span class="material-symbols-outlined">add</span>
+           <span>New list</span>
+         </button>`;
+  }
+
+  wrap.innerHTML = chips + creator;
+  if (creatingList) {
+    const input = document.getElementById('new-list-input');
+    if (input) {
+      input.focus();
+      const end = input.value.length;
+      input.setSelectionRange(end, end);
     }
-    selector.appendChild(option);
-  });
-  
-  debugLog('List selector updated with', shotlists.length, 'options');
+  }
 }
 
 // Render a single shotlist
@@ -917,7 +1003,7 @@ function renderShotlist(list, listIndex) {
   return `
     <div class="shot-list" data-list-id="${listId}" data-list-index="${listIndex}">
       <div class="list-header">
-        <h3 class="list-title">${escapeHtml(list.name)}</h3>
+        <h3 class="list-title${canEdit ? ' editable-list-title' : ''}"${canEdit ? ' title="Click to rename"' : ''}>${escapeHtml(list.name)}</h3>
         <div class="list-info">
           <span class="list-progress">${progressText}</span>
           ${canEdit ? `
@@ -936,9 +1022,10 @@ function renderShotlist(list, listIndex) {
         ${canEdit ? `
           <div class="add-shot-section">
             <div class="add-shot-input">
-              <input type="text" class="shot-input" placeholder="Add new shot..." data-list-id="${listId}" data-list-index="${listIndex}">
+              <input type="text" class="shot-input" placeholder="Add a shot" data-list-id="${listId}" data-list-index="${listIndex}">
               <button class="add-shot-btn" data-list-id="${listId}" data-list-index="${listIndex}">
                 <span class="material-symbols-outlined">add</span>
+                <span>Add</span>
               </button>
             </div>
           </div>
@@ -970,6 +1057,7 @@ function renderShotItem(item, itemIndex) {
   
   return `
     <div class="shot-item ${item.completed ? 'completed' : ''}" data-item-id="${itemId}" data-item-index="${itemIndex}">
+      ${canEdit ? `<span class="shot-drag-handle" draggable="true" title="Drag to reorder"><span class="material-symbols-outlined">drag_indicator</span></span>` : ''}
       ${canToggle ? `<input type="checkbox" class="shot-checkbox" ${item.completed ? 'checked' : ''}>` : ''}
       <div class="shot-content" ${canEdit ? 'style="cursor: pointer;"' : ''}>
         <div class="shot-title ${canEdit ? 'editable-text' : ''}" contenteditable="false" data-original-title="${escapeHtml(item.title)}">${escapeHtml(item.title)}</div>
@@ -1001,6 +1089,10 @@ function setupListEventDelegation() {
   document.removeEventListener('change', handleListChanges);
   document.removeEventListener('focus', handleListFocus, true);
   document.removeEventListener('blur', handleListBlur, true);
+  document.removeEventListener('dragstart', handleShotDragStart);
+  document.removeEventListener('dragover', handleShotDragOver);
+  document.removeEventListener('drop', handleShotDrop);
+  document.removeEventListener('dragend', handleShotDragEnd);
   
   // Add fresh delegation listeners
   document.addEventListener('click', handleListClicks);
@@ -1009,10 +1101,123 @@ function setupListEventDelegation() {
   document.addEventListener('change', handleListChanges);
   document.addEventListener('focus', handleListFocus, true);
   document.addEventListener('blur', handleListBlur, true);
+  document.addEventListener('dragstart', handleShotDragStart);
+  document.addEventListener('dragover', handleShotDragOver);
+  document.addEventListener('drop', handleShotDrop);
+  document.addEventListener('dragend', handleShotDragEnd);
+}
+
+let dragItemId = null;
+
+function itemIndexIn(items, itemId) {
+  let idx = items.findIndex(item => item._id === itemId);
+  if (idx < 0 && String(itemId || '').startsWith('temp-item-')) {
+    const tempIndex = parseInt(String(itemId).replace('temp-item-', ''), 10);
+    if (!isNaN(tempIndex) && tempIndex < items.length) idx = tempIndex;
+  }
+  return idx;
+}
+
+function clearShotDragMarkers() {
+  document.querySelectorAll('.shot-item').forEach(row => {
+    row.classList.remove('is-dragging', 'drop-before', 'drop-after');
+  });
+}
+
+function handleShotDragStart(e) {
+  const handle = e.target.closest?.('.shot-drag-handle');
+  if (!handle || !canUserEdit()) return;
+  const row = handle.closest('.shot-item');
+  if (!row) return;
+  dragItemId = row.dataset.itemId;
+  row.classList.add('is-dragging');
+  isUserEditing = true;
+  syncToModule();
+  e.dataTransfer.effectAllowed = 'move';
+  try { e.dataTransfer.setData('text/plain', dragItemId); } catch { /* ignore */ }
+}
+
+function handleShotDragOver(e) {
+  if (!dragItemId) return;
+  const row = e.target.closest?.('.shot-item');
+  if (!row || row.dataset.itemId === dragItemId) return;
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  const after = e.clientY > row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2;
+  document.querySelectorAll('.shot-item.drop-before, .shot-item.drop-after').forEach(el => {
+    el.classList.remove('drop-before', 'drop-after');
+  });
+  row.classList.add(after ? 'drop-after' : 'drop-before');
+}
+
+function handleShotDrop(e) {
+  if (!dragItemId) return;
+  const row = e.target.closest?.('.shot-item');
+  if (!row || row.dataset.itemId === dragItemId) return;
+  e.preventDefault();
+  const fromId = dragItemId;
+  const after = row.classList.contains('drop-after');
+  dragItemId = null;
+  clearShotDragMarkers();
+  isUserEditing = false;
+  syncToModule();
+  reorderShot(fromId, row.dataset.itemId, after);
+}
+
+function handleShotDragEnd() {
+  if (!dragItemId) return;
+  dragItemId = null;
+  clearShotDragMarkers();
+  isUserEditing = false;
+  syncToModule();
+}
+
+async function reorderShot(fromId, toId, after) {
+  if (!canUserEdit() || !fromId || !toId || fromId === toId) return;
+  const listEl = document.querySelector('.shot-list');
+  const list = listEl ? findShotlist(listEl.dataset.listId) : null;
+  if (!list || !Array.isArray(list.items)) return;
+
+  const from = itemIndexIn(list.items, fromId);
+  let to = itemIndexIn(list.items, toId);
+  if (from < 0 || to < 0) return;
+
+  const [moved] = list.items.splice(from, 1);
+  if (from < to) to -= 1;
+  list.items.splice(after ? to + 1 : to, 0, moved);
+  syncToModule();
+  renderShotlists();
+  try {
+    await saveShotlists();
+  } catch (error) {
+    console.error('🎯 SHOTLIST: Failed to reorder shot:', error);
+  }
 }
 
 function handleListClicks(e) {
   debugLog('Click detected on:', e.target);
+
+  if (e.target.closest('#newListChip') || e.target.closest('#emptyNewListBtn')) {
+    e.preventDefault();
+    startNewList();
+    return;
+  }
+
+  const chip = e.target.closest('.list-chip');
+  if (chip && chip.dataset.listId) {
+    e.preventDefault();
+    selectedListId = chip.dataset.listId;
+    saveListSelection();
+    renderShotlists();
+    return;
+  }
+
+  const listTitle = e.target.closest('.editable-list-title');
+  if (listTitle && !e.target.closest('.list-rename-input')) {
+    e.preventDefault();
+    enterListRenameMode(listTitle);
+    return;
+  }
   
   // List action button (3-dot menu)
   if (e.target.closest('.list-action-btn')) {
@@ -1137,6 +1342,40 @@ function handleListClicks(e) {
     }
     return;
   }
+}
+
+function enterListRenameMode(titleEl) {
+  if (!canUserEdit() || titleEl.querySelector('.list-rename-input')) return;
+  const listEl = titleEl.closest('.shot-list');
+  if (!listEl) return;
+  const current = titleEl.textContent.trim();
+  titleEl.innerHTML = `<input type="text" class="list-rename-input" maxlength="80" value="${escapeHtml(current)}">`;
+  const input = titleEl.querySelector('.list-rename-input');
+  input.focus();
+  input.select();
+  isUserEditing = true;
+  syncToModule();
+
+  let done = false;
+  const finish = (save) => {
+    if (done) return;
+    done = true;
+    isUserEditing = false;
+    syncToModule();
+    const name = input.value.trim();
+    if (save && name && name !== current) renameList(listEl.dataset.listId, name);
+    else renderShotlists();
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      finish(true);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      finish(false);
+    }
+  });
+  input.addEventListener('blur', () => finish(true));
 }
 
 // Enter edit mode for an item
@@ -1306,51 +1545,16 @@ function generateId() {
 // Escape HTML to prevent XSS
 function escapeHtml(text) {
   const div = document.createElement('div');
-  div.textContent = text;
+  div.textContent = text == null ? '' : String(text);
   return div.innerHTML;
 }
 
-// Show loading state
+// Show loading state — same ring spinner the rest of the dashboard uses.
 function showLoadingState() {
   const indicator = document.createElement('div');
-  indicator.className = 'loading-indicator';
-  indicator.innerHTML = `
-    <div class="loading-spinner">
-      <span class="material-symbols-outlined">sync</span>
-      Saving...
-    </div>
-  `;
-  indicator.style.cssText = `
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: rgba(0, 0, 0, 0.8);
-    color: white;
-    padding: 1rem 2rem;
-    border-radius: 0.5rem;
-    z-index: 10000;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  `;
-  indicator.querySelector('.material-symbols-outlined').style.cssText = `
-    animation: spin 1s linear infinite;
-  `;
-  
-  // Add spin animation
-  if (!document.getElementById('shotlist-spinner-style')) {
-    const style = document.createElement('style');
-    style.id = 'shotlist-spinner-style';
-    style.textContent = `
-      @keyframes spin {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(360deg); }
-      }
-    `;
-    document.head.appendChild(style);
-  }
-  
+  indicator.className = 'shotlist-saving';
+  indicator.setAttribute('role', 'status');
+  indicator.innerHTML = `<span class="dark-theme-spinner"></span><span>Saving</span>`;
   document.body.appendChild(indicator);
   return indicator;
 }

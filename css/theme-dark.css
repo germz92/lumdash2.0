@@ -9867,7 +9867,8 @@ img.owner-avatar {
 .shotlist-page.dark-theme .shot-list {
   background: var(--bg-secondary) !important;
   border: 1px solid var(--border-subtle) !important;
-  border-radius: var(--radius-lg);
+  border-radius: 12px;
+  box-shadow: none !important;
   overflow: hidden;
 }
 
@@ -9888,8 +9889,8 @@ img.owner-avatar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
-  background: var(--bg-tertiary);
+  padding: 16px 18px;
+  background: transparent;
   border-bottom: 1px solid var(--border-subtle);
 }
 
@@ -9907,8 +9908,14 @@ img.owner-avatar {
 }
 
 .shotlist-page.dark-theme .list-progress {
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
   color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-subtle);
 }
 
 .shotlist-page.dark-theme .list-actions {
@@ -9987,7 +9994,7 @@ img.owner-avatar {
 }
 
 .shotlist-page.dark-theme .shot-item.completed {
-  opacity: 0.6;
+  opacity: 1;
 }
 
 .shotlist-page.dark-theme .shot-item.completed .shot-title {
@@ -9996,11 +10003,37 @@ img.owner-avatar {
 }
 
 .shotlist-page.dark-theme .shot-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
   width: 18px;
   height: 18px;
-  margin-right: 14px;
-  accent-color: var(--brand-red);
+  margin: 0 14px 0 0;
+  border: 1.5px solid rgba(255, 255, 255, 0.28);
+  border-radius: 5px;
+  background: transparent;
   cursor: pointer;
+  display: grid;
+  place-content: center;
+  flex-shrink: 0;
+  transition: background var(--transition-fast), border-color var(--transition-fast);
+}
+
+.shotlist-page.dark-theme .shot-checkbox:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.shotlist-page.dark-theme .shot-checkbox:checked {
+  background: var(--brand-red);
+  border-color: var(--brand-red);
+}
+
+.shotlist-page.dark-theme .shot-checkbox:checked::after {
+  content: '';
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translate(-1px, -1px);
 }
 
 .shotlist-page.dark-theme .shot-content {
@@ -10019,7 +10052,7 @@ img.owner-avatar {
 
 .shotlist-page.dark-theme .completed-by {
   font-size: var(--font-size-xs);
-  color: var(--brand-red);
+  color: var(--text-muted);
   font-weight: var(--font-weight-medium);
 }
 
@@ -10060,9 +10093,9 @@ img.owner-avatar {
 
 /* Add Shot Section */
 .shotlist-page.dark-theme .add-shot-section {
-  padding: 14px 20px;
-  border-top: 1px solid var(--border-subtle);
-  background: var(--bg-tertiary) !important;
+  padding: 12px 18px 16px;
+  border-top: none;
+  background: transparent !important;
 }
 
 .shotlist-page.dark-theme .add-shot-section * {

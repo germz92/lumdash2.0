@@ -114,19 +114,21 @@
 
 /* Individual Shot List */
 .shot-list {
-  background: var(--md-sys-color-surface);
-  border-radius: 16px;
-  box-shadow: 0px 1px 2px rgba(0, 0, 0, 0.3), 0px 1px 3px 1px rgba(0, 0, 0, 0.15);
+  background: var(--bg-secondary, #18181c);
+  border: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
+  border-radius: 12px;
+  box-shadow: none;
   overflow: hidden;
 }
 
 .list-header {
-  background: #6B7280; /* Gray background */
-  color: white;
+  background: transparent;
+  color: inherit;
   padding: 16px 20px;
   display: flex;
   justify-content: space-between;
   align-items: center;
+  border-bottom: 1px solid var(--border-subtle, rgba(255, 255, 255, 0.08));
 }
 
 .list-title {
@@ -148,9 +150,9 @@
 .list-actions .btn-icon {
   width: 32px;
   height: 32px;
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: var(--text-tertiary, rgba(255, 255, 255, 0.45));
+  border: none;
   padding: 4px;
 }
 
@@ -180,7 +182,7 @@
 }
 
 .shot-item.completed {
-  opacity: 0.6;
+  opacity: 1;
 }
 
 .shot-item.completed .shot-title {
@@ -390,4 +392,174 @@
   .shot-actions {
     opacity: 1; /* Always show on mobile */
   }
+}
+
+/* List chips */
+.shotlist-page.dark-theme .shotlist-filter-bar .filter-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.shotlist-page.dark-theme .list-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.shotlist-page.dark-theme .list-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 240px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-default);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm, 14px);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.shotlist-page.dark-theme .list-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shotlist-page.dark-theme .list-chip-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.75;
+  flex-shrink: 0;
+}
+
+.shotlist-page.dark-theme .list-chip.is-active {
+  background: var(--brand-red);
+  border-color: var(--brand-red);
+  color: #fff;
+}
+
+.shotlist-page.dark-theme .list-chip-new {
+  border-style: dashed;
+  color: var(--text-primary);
+  background: transparent;
+}
+
+.shotlist-page.dark-theme .list-chip-new .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.shotlist-page.dark-theme .list-chip-form {
+  display: inline-flex;
+  margin: 0;
+}
+
+.shotlist-page.dark-theme .list-chip-input,
+.shotlist-page.dark-theme .list-rename-input {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--brand-red);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm, 14px);
+  font-family: inherit;
+  min-width: 160px;
+}
+
+.shotlist-page.dark-theme .list-rename-input {
+  border-radius: var(--radius-sm, 8px);
+  width: min(320px, 60vw);
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.shotlist-page.dark-theme .list-chip-input:focus,
+.shotlist-page.dark-theme .list-rename-input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--brand-red-muted, rgba(239, 68, 68, 0.25));
+}
+
+.shotlist-page.dark-theme .editable-list-title {
+  cursor: text;
+}
+
+.shotlist-page.dark-theme .empty-new-list {
+  margin-top: 16px;
+}
+
+.shotlist-page.dark-theme .add-shot-btn {
+  width: auto;
+  height: 36px;
+  padding: 0 12px;
+  gap: 4px;
+  font-size: var(--font-size-sm, 14px);
+  font-weight: 600;
+}
+
+.shotlist-page.dark-theme .add-shot-btn,
+.shotlist-page.dark-theme .add-shot-btn * {
+  color: #fff !important;
+}
+
+.shotlist-page.dark-theme .add-shot-btn .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.shotlist-page.dark-theme .shot-drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  margin-right: 6px;
+  color: var(--text-muted);
+  cursor: grab;
+  flex-shrink: 0;
+  opacity: 0.45;
+  user-select: none;
+}
+
+.shotlist-page.dark-theme .shot-item:hover .shot-drag-handle,
+.shotlist-page.dark-theme .shot-drag-handle:active {
+  opacity: 1;
+}
+
+.shotlist-page.dark-theme .shot-drag-handle:active {
+  cursor: grabbing;
+}
+
+.shotlist-page.dark-theme .shot-drag-handle .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.shotlist-page.dark-theme .shot-item.is-dragging {
+  opacity: 0.4;
+}
+
+.shotlist-page.dark-theme .shot-item.drop-before {
+  box-shadow: inset 0 2px 0 var(--brand-red);
+}
+
+.shotlist-page.dark-theme .shot-item.drop-after {
+  box-shadow: inset 0 -2px 0 var(--brand-red);
+}
+
+/* Save indicator — ring spinner, same as the rest of the dashboard */
+.shotlist-saving {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 2000;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--bg-secondary, #18181c);
+  border: 1px solid var(--border-default, rgba(255, 255, 255, 0.12));
+  border-radius: 999px;
+  color: var(--text-primary, #fff);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
 } 

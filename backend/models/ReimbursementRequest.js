@@ -36,4 +36,6 @@ const reimbursementRequestSchema = new mongoose.Schema({
   collection: 'reimbursementrequests'
 });
 
+reimbursementRequestSchema.index({ status: 1, submissionNotifiedAt: 1 });
+
 module.exports = mongoose.model('ReimbursementRequest', reimbursementRequestSchema);

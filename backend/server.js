@@ -1290,8 +1290,9 @@ async function canReviewReimbursements(user, request = null) {
 
 /**
  * Notify reviewers when a reimbursement request is submitted.
- * External app should call POST /api/reimbursements/submitted-hook after save.
- * Change stream / reconcile are fallbacks; atomic claim prevents double delivery.
+ * External app may call POST /api/reimbursements/submitted-hook after save.
+ * Change stream sends immediately when available; a 15s poll covers the rest.
+ * Atomic claim prevents double delivery.
  * @param {Object} options.force — skip duplicate check (admin resend only)
  */
 async function notifyReimbursementSubmitted(request, options = {}) {
@@ -1409,13 +1410,18 @@ async function notifyReimbursementSubmitted(request, options = {}) {
 }
 
 let reimbursementChangeStreamStarted = false;
+let reimbursementPollerStarted = false;
+let reimbursementStartupReconcileScheduled = false;
 let reimbursementReconcileInProgress = false;
 let reimbursementReconcileLastRun = 0;
 const REIMBURSE_RECONCILE_COOLDOWN_MS = 5 * 60 * 1000;
+/** How soon after a Mongo write a missed submission email still goes out. */
+const REIMBURSE_SUBMIT_POLL_MS = 15 * 1000;
 
 /**
  * Backfill notifications for submitted reimbursements that were never alerted.
- * Used on startup and when an admin opens reimbursements (debounced) — not on a timer.
+ * The poller runs this on a short interval so emails go out at submit time.
+ * Startup and the reimbursements page are extra safety nets.
  */
 async function reconcileUnnotifiedReimbursementSubmissions(options = {}) {
   const { force = false } = options;
@@ -1450,13 +1456,31 @@ async function reconcileUnnotifiedReimbursementSubmissions(options = {}) {
 
 /** One-time backfill after deploy (change stream / webhook may have missed prior submissions). */
 function scheduleReimbursementReconcileOnStartup() {
+  if (reimbursementStartupReconcileScheduled) return;
+  reimbursementStartupReconcileScheduled = true;
   setTimeout(() => reconcileUnnotifiedReimbursementSubmissions({ force: true }), 5000);
   console.log('📋 Reimbursement reconcile scheduled once on startup');
 }
 
 /**
+ * Poll for submitted reimbursements that have not been emailed yet.
+ * External apps write straight to MongoDB; this sends reviewer emails within
+ * REIMBURSE_SUBMIT_POLL_MS even when change streams and the webhook are unavailable.
+ */
+function startReimbursementSubmissionPoller() {
+  if (reimbursementPollerStarted) return;
+  reimbursementPollerStarted = true;
+  setInterval(() => {
+    reconcileUnnotifiedReimbursementSubmissions({ force: true }).catch(err =>
+      console.error('📋 Reimbursement submission poll failed:', err)
+    );
+  }, REIMBURSE_SUBMIT_POLL_MS);
+  console.log(`📋 Reimbursement submission poller every ${REIMBURSE_SUBMIT_POLL_MS / 1000}s`);
+}
+
+/**
  * Watch reimbursementrequests collection for external-app submissions.
- * Fires when status becomes 'submitted' (insert or update).
+ * Any insert/update/replace is checked; notifyReimbursementSubmitted dedupes.
  */
 function setupReimbursementChangeStream() {
   if (reimbursementChangeStreamStarted) return;
@@ -1465,10 +1489,7 @@ function setupReimbursementChangeStream() {
     const pipeline = [
       {
         $match: {
-          $or: [
-            { operationType: 'insert', 'fullDocument.status': 'submitted' },
-            { operationType: 'update', 'updateDescription.updatedFields.status': 'submitted' }
-          ]
+          operationType: { $in: ['insert', 'update', 'replace'] }
         }
       }
     ];
@@ -1480,21 +1501,27 @@ function setupReimbursementChangeStream() {
       if (!doc && change.documentKey?._id) {
         doc = await ReimbursementRequest.findById(change.documentKey._id).lean();
       }
-      if (!doc || doc.status !== 'submitted') return;
+      if (!doc || doc.status !== 'submitted' || doc.submissionNotifiedAt) return;
       console.log('📋 Reimbursement submitted (change stream):', doc._id);
       await notifyReimbursementSubmitted(doc);
     });
 
     changeStream.on('error', (err) => {
       console.error('📋 Reimbursement change stream error:', err);
+      if (!reimbursementChangeStreamStarted) return;
+      reimbursementChangeStreamStarted = false;
+      changeStream.close().catch(() => {});
+      setTimeout(() => setupReimbursementChangeStream(), 15000);
     });
 
     reimbursementChangeStreamStarted = true;
     console.log('📋 Reimbursement change stream watcher started');
   } catch (err) {
     console.warn('📋 Could not start reimbursement change stream (requires replica set):', err.message);
-    console.warn('📋 Use /api/reimbursements/submitted-hook from the submit app, or reconcile on startup / reimbursements page load');
+    console.warn('📋 Submission emails will still be sent by the poller');
+    setTimeout(() => setupReimbursementChangeStream(), 60000);
   }
+  startReimbursementSubmissionPoller();
   scheduleReimbursementReconcileOnStartup();
 }
 
@@ -3862,6 +3889,32 @@ app.put('/api/tables/:id/shotlist', authenticate, async (req, res) => {
   }
 });
 
+// True when the incoming lists match the saved ones except for item completion fields.
+function isCompletionOnlyShotlistChange(existing, incoming) {
+  const oldLists = Array.isArray(existing) ? existing : [];
+  const nextLists = Array.isArray(incoming) ? incoming : [];
+  if (oldLists.length !== nextLists.length) return false;
+
+  for (let i = 0; i < oldLists.length; i++) {
+    const oldList = oldLists[i] || {};
+    const nextList = nextLists[i] || {};
+    if (String(oldList._id || '') !== String(nextList._id || '')) return false;
+    if (String(oldList.name || '').trim() !== String(nextList.name || '').trim()) return false;
+
+    const oldItems = Array.isArray(oldList.items) ? oldList.items : [];
+    const nextItems = Array.isArray(nextList.items) ? nextList.items : [];
+    if (oldItems.length !== nextItems.length) return false;
+
+    for (let j = 0; j < oldItems.length; j++) {
+      const oldItem = oldItems[j] || {};
+      const nextItem = nextItems[j] || {};
+      if (String(oldItem._id || '') !== String(nextItem._id || '')) return false;
+      if (String(oldItem.title || '').trim() !== String(nextItem.title || '').trim()) return false;
+    }
+  }
+  return true;
+}
+
 // ✅ Save shotlists data (multiple lists)
 app.put('/api/tables/:id/shotlists', authenticate, async (req, res) => {
   const maxRetries = 3;
@@ -3886,18 +3939,23 @@ app.put('/api/tables/:id/shotlists', authenticate, async (req, res) => {
       return res.status(404).json({ error: 'Table not found' });
     }
 
-    // Check if user has permission to access
+    // Editors may change lists and items. Everyone else on the event may only check items off.
     const userId = req.user.id;
     const isOwner = table.owners && table.owners.some(ownerId => ownerId.toString() === userId);
     const isLead = table.leads && table.leads.some(leadId => leadId.toString() === userId);
-    const isShared = table.sharedWith && table.sharedWith.some(sharedId => sharedId.toString() === userId);
+    const isEditor = req.user.role === 'admin' || isOwner || isLead;
 
-    if (!isOwner && !isLead && !isShared) {
+    if (!hasEventAccess(table, req.user)) {
       console.error(`[SHOTLISTS] Unauthorized access: ${req.user.id}`);
       return res.status(403).json({ error: 'Unauthorized: No access to this table' });
     }
 
-    console.log(`[SHOTLISTS] User permissions - Owner: ${isOwner}, Lead: ${isLead}, Shared: ${isShared}`);
+    if (!isEditor && !isCompletionOnlyShotlistChange(table.shotlists, newShotlists)) {
+      console.error(`[SHOTLISTS] Non-editor tried to change list structure: ${req.user.id}`);
+      return res.status(403).json({ error: 'Only owners, leads, and admins can edit shot lists' });
+    }
+
+    console.log(`[SHOTLISTS] User permissions - Editor: ${isEditor}, Owner: ${isOwner}, Lead: ${isLead}, Admin: ${req.user.role === 'admin'}`);
 
     // Sanitize shotlists data - let mongoose handle ObjectId creation automatically
     const sanitizedShotlists = newShotlists.map(list => {
@@ -12661,7 +12719,7 @@ app.get('/api/reimbursements', authenticate, async (req, res) => {
 
     let requests = await ReimbursementRequest.find(query).sort(sortObj).lean();
 
-    // Catch missed submission alerts (debounced — max once per 5 min)
+    // Backup for the submission poller (debounced — max once per 5 min)
     reconcileUnnotifiedReimbursementSubmissions().catch(err =>
       console.error('📋 Reimbursement reconcile on list failed:', err)
     );

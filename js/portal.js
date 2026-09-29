@@ -566,7 +566,7 @@
       const downloadUrl = masterUrl || versionUrl;
       const downloadLabel = masterUrl ? 'Download final video' : 'Download latest version';
       const downloadBtn = downloadUrl
-        ? `<a class="pt-card-download" href="${escapeHtml(downloadUrl)}" target="_blank" rel="noopener" title="${downloadLabel}" aria-label="${downloadLabel}" data-download="1">&#11015;</a>`
+        ? `<a class="pt-card-download${masterUrl ? '' : ' version'}" href="${escapeHtml(downloadUrl)}" target="_blank" rel="noopener" title="${downloadLabel}" aria-label="${downloadLabel}" data-download="1">&#11015;</a>`
         : '';
       return `
         <div class="pt-card" data-id="${p._id}">
@@ -764,7 +764,7 @@
             <span class="pt-annotate-hint" id="ptAnnotateHint"></span>
           </div>` : ''}
           <div class="pt-downloads">
-            <a class="pt-download" id="ptVersionDownload" hidden target="_blank" rel="noopener">&#11015; <span id="ptVersionDownloadLabel">Download this version</span></a>
+            <a class="pt-download version" id="ptVersionDownload" hidden target="_blank" rel="noopener">&#11015; <span id="ptVersionDownloadLabel">Download this version</span></a>
             ${project.masterFileUrl ? `<a class="pt-download" href="${escapeHtml(toDirectDownloadUrl(project.masterFileUrl))}" target="_blank" rel="noopener">&#11015; Download Final Video</a>` : ''}
           </div>
           ${decisionHtml}

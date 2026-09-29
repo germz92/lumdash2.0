@@ -38,19 +38,30 @@
       <div class="vp-toolbar" id="vpToolbar">
         <div class="vp-search">
           <span class="material-symbols-outlined">search</span>
-          <input type="text" id="vpSearch" placeholder="Search projects or clients...">
+          <input type="text" id="vpSearch" placeholder="Search projects or clients" autocomplete="off">
         </div>
-        <div class="vp-status-tabs" id="vpStatusTabs">
-          <button class="vp-status-tab" data-status="all">All</button>
-          <button class="vp-status-tab active" data-status="in_review">In Review</button>
-          <button class="vp-status-tab" data-status="delivered">Delivered</button>
-          <button class="vp-status-tab" data-status="archived">Archived</button>
+        <div class="vp-status-tabs" id="vpStatusTabs" role="tablist">
+          <button type="button" class="vp-status-tab" data-status="all" role="tab">All</button>
+          <button type="button" class="vp-status-tab active" data-status="in_review" role="tab">In Review</button>
+          <button type="button" class="vp-status-tab" data-status="delivered" role="tab">Delivered</button>
+          <button type="button" class="vp-status-tab" data-status="archived" role="tab">Archived</button>
         </div>
-        <div class="vp-client-suggest" id="vpClientSuggest">
-          <span class="material-symbols-outlined">group</span>
-          <input type="text" id="vpClientFilterInput" placeholder="Filter by client…" autocomplete="off" aria-autocomplete="list" aria-controls="vpClientSuggestList" aria-expanded="false">
-          <button type="button" class="vp-client-suggest-clear" id="vpClientFilterClear" title="Clear client filter" aria-label="Clear client filter" hidden>&times;</button>
-          <div class="vp-client-suggest-list" id="vpClientSuggestList" role="listbox" hidden></div>
+        <div class="vp-client-filter" id="vpClientSuggest">
+          <button type="button" class="vp-client-trigger" id="vpClientTrigger" aria-haspopup="listbox" aria-expanded="false" aria-controls="vpClientPanel">
+            <span class="material-symbols-outlined">group</span>
+            <span class="vp-client-trigger-label" id="vpClientTriggerLabel">All clients</span>
+            <span class="material-symbols-outlined vp-client-chevron">expand_more</span>
+          </button>
+          <button type="button" class="vp-client-suggest-clear" id="vpClientFilterClear" title="Clear client filter" aria-label="Clear client filter" hidden>
+            <span class="material-symbols-outlined">close</span>
+          </button>
+          <div class="vp-client-panel" id="vpClientPanel" hidden>
+            <div class="vp-client-panel-search">
+              <span class="material-symbols-outlined">search</span>
+              <input type="text" id="vpClientFilterInput" placeholder="Find a client" autocomplete="off" aria-autocomplete="list" aria-controls="vpClientSuggestList" aria-expanded="false">
+            </div>
+            <div class="vp-client-suggest-list" id="vpClientSuggestList" role="listbox"></div>
+          </div>
         </div>
       </div>
 

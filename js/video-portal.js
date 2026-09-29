@@ -180,50 +180,66 @@
   }
 
   function syncClientFilterInput() {
-    const input = document.getElementById('vpClientFilterInput');
+    const label = document.getElementById('vpClientTriggerLabel');
     const clearBtn = document.getElementById('vpClientFilterClear');
-    if (!input) return;
+    const wrap = document.getElementById('vpClientSuggest');
+    const input = document.getElementById('vpClientFilterInput');
     if (clientFilter) {
       const c = clients.find(x => String(x._id) === String(clientFilter));
-      input.value = c ? (c.name || '') : '';
+      if (label) label.textContent = c ? (c.name || 'Client') : 'Client';
+      wrap?.classList.add('is-set');
+    } else {
+      if (label) label.textContent = 'All clients';
+      wrap?.classList.remove('is-set');
     }
     if (clearBtn) clearBtn.hidden = !clientFilter;
+    if (input && document.getElementById('vpClientPanel')?.hidden) input.value = '';
   }
 
   function matchClients(query) {
     const q = (query || '').trim().toLowerCase();
     const list = activeClients();
-    if (!q) return list.slice(0, 12);
-    return list.filter(c => (c.name || '').toLowerCase().includes(q)).slice(0, 12);
+    if (!q) return list.slice(0, 40);
+    return list.filter(c => (c.name || '').toLowerCase().includes(q)).slice(0, 40);
+  }
+
+  function setClientPanelOpen(open) {
+    const panel = document.getElementById('vpClientPanel');
+    const trigger = document.getElementById('vpClientTrigger');
+    const input = document.getElementById('vpClientFilterInput');
+    const wrap = document.getElementById('vpClientSuggest');
+    const list = document.getElementById('vpClientSuggestList');
+    if (panel) panel.hidden = !open;
+    if (list) list.hidden = !open;
+    trigger?.setAttribute('aria-expanded', open ? 'true' : 'false');
+    input?.setAttribute('aria-expanded', open ? 'true' : 'false');
+    wrap?.classList.toggle('is-open', open);
+    if (!open && list) {
+      list.innerHTML = '';
+      clientSuggestIndex = -1;
+    }
   }
 
   function hideClientSuggest() {
-    const list = document.getElementById('vpClientSuggestList');
-    const input = document.getElementById('vpClientFilterInput');
-    if (list) {
-      list.hidden = true;
-      list.innerHTML = '';
-    }
-    if (input) input.setAttribute('aria-expanded', 'false');
-    clientSuggestIndex = -1;
+    setClientPanelOpen(false);
   }
 
   function showClientSuggest(matches) {
     const list = document.getElementById('vpClientSuggestList');
     const input = document.getElementById('vpClientFilterInput');
     if (!list || !input) return;
-    if (!matches.length) {
-      list.innerHTML = '<div class="vp-client-suggest-empty">No matching clients</div>';
-      list.hidden = false;
-      input.setAttribute('aria-expanded', 'true');
-      clientSuggestIndex = -1;
-      return;
-    }
-    list.innerHTML = matches.map((c, i) =>
-      `<button type="button" class="vp-client-suggest-item" role="option" data-id="${c._id}" data-index="${i}">${escapeHtml(c.name || 'Untitled')}</button>`
-    ).join('');
-    list.hidden = false;
-    input.setAttribute('aria-expanded', 'true');
+    setClientPanelOpen(true);
+    const q = (input.value || '').trim();
+    const allRow = q
+      ? ''
+      : `<button type="button" class="vp-client-suggest-item${clientFilter ? '' : ' is-current'}" role="option" data-id="">All clients</button>`;
+    const rows = matches.length
+      ? matches.map((c, i) => {
+          const current = String(c._id) === String(clientFilter) ? ' is-current' : '';
+          return `<button type="button" class="vp-client-suggest-item${current}" role="option" data-id="${c._id}" data-index="${i}">${escapeHtml(c.name || 'Untitled')}</button>`;
+        }).join('')
+      : '<div class="vp-client-suggest-empty">No matching clients</div>';
+    list.innerHTML = allRow + rows;
     clientSuggestIndex = -1;
     list.querySelectorAll('.vp-client-suggest-item').forEach(btn => {
       btn.addEventListener('mousedown', (e) => e.preventDefault());
@@ -260,23 +276,14 @@
 
   function selectClientFilter(id, name) {
     clientFilter = id ? String(id) : '';
-    const input = document.getElementById('vpClientFilterInput');
-    const clearBtn = document.getElementById('vpClientFilterClear');
-    if (input) input.value = name || '';
-    if (clearBtn) clearBtn.hidden = !clientFilter;
+    syncClientFilterInput();
     hideClientSuggest();
     renderGrid();
   }
 
   function clearClientFilter() {
     clientFilter = '';
-    const input = document.getElementById('vpClientFilterInput');
-    const clearBtn = document.getElementById('vpClientFilterClear');
-    if (input) {
-      input.value = '';
-      input.focus();
-    }
-    if (clearBtn) clearBtn.hidden = true;
+    syncClientFilterInput();
     hideClientSuggest();
     renderGrid();
   }
@@ -285,33 +292,29 @@
     const wrap = document.getElementById('vpClientSuggest');
     const input = document.getElementById('vpClientFilterInput');
     const clearBtn = document.getElementById('vpClientFilterClear');
-    if (!wrap || !input) return;
+    const trigger = document.getElementById('vpClientTrigger');
+    if (!wrap || !input || !trigger) return;
 
-    input.addEventListener('focus', () => {
-      showClientSuggest(matchClients(input.value));
+    trigger.addEventListener('click', () => {
+      const panel = document.getElementById('vpClientPanel');
+      if (panel && !panel.hidden) {
+        hideClientSuggest();
+        return;
+      }
+      input.value = '';
+      showClientSuggest(matchClients(''));
+      input.focus();
     });
 
     input.addEventListener('input', () => {
-      // Typing after a selection unlocks until a new pick (empty = all)
-      if (clientFilter) {
-        const selected = clients.find(c => String(c._id) === String(clientFilter));
-        if (!selected || input.value !== (selected.name || '')) {
-          clientFilter = '';
-          if (clearBtn) clearBtn.hidden = true;
-          renderGrid();
-        }
-      }
-      if (!input.value.trim() && !clientFilter) {
-        showClientSuggest(matchClients(''));
-        return;
-      }
       showClientSuggest(matchClients(input.value));
     });
 
     input.addEventListener('keydown', (e) => {
+      const panel = document.getElementById('vpClientPanel');
+      const open = panel && !panel.hidden;
       const list = document.getElementById('vpClientSuggestList');
-      const open = list && !list.hidden;
-      const items = open ? [...list.querySelectorAll('.vp-client-suggest-item')] : [];
+      const items = open && list ? [...list.querySelectorAll('.vp-client-suggest-item')] : [];
       if (e.key === 'ArrowDown') {
         e.preventDefault();
         if (!open) showClientSuggest(matchClients(input.value));
@@ -328,26 +331,26 @@
         }
       } else if (e.key === 'Escape') {
         hideClientSuggest();
-        if (clientFilter) syncClientFilterInput();
       }
     });
 
-    input.addEventListener('blur', () => {
-      setTimeout(() => {
-        hideClientSuggest();
-        if (clientFilter) syncClientFilterInput();
-        else if (input.value.trim()) {
-          // No locked selection — clear partial text so filter stays "all"
-          input.value = '';
-        }
-      }, 120);
+    clearBtn?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      clearClientFilter();
     });
 
-    clearBtn?.addEventListener('click', () => clearClientFilter());
+    // Keep clicks inside the filter from reaching document listeners left
+    // behind when the portal script is loaded again during navigation.
+    wrap.addEventListener('click', (e) => e.stopPropagation());
 
-    document.addEventListener('click', (e) => {
-      if (!wrap.contains(e.target)) hideClientSuggest();
-    });
+    if (window.__vpClientOutsideClick) {
+      document.removeEventListener('click', window.__vpClientOutsideClick);
+    }
+    window.__vpClientOutsideClick = (e) => {
+      const current = document.getElementById('vpClientSuggest');
+      if (current && !current.contains(e.target)) hideClientSuggest();
+    };
+    document.addEventListener('click', window.__vpClientOutsideClick);
   }
 
   function fillProjectFolderSelect(clientId, selectedFolderId = '') {
@@ -391,7 +394,36 @@
     return items;
   }
 
+  function updateStatusCounts() {
+    let base = projects || [];
+    if (clientFilter) base = base.filter(p => (p.clientId || '').toString() === clientFilter);
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      base = base.filter(p =>
+        (p.title || '').toLowerCase().includes(q) ||
+        (p.clientName || '').toLowerCase().includes(q) ||
+        (p.category || '').toLowerCase().includes(q)
+      );
+    }
+    const counts = {
+      all: base.filter(p => p.status !== 'archived').length,
+      in_review: base.filter(p => p.status === 'in_review').length,
+      delivered: base.filter(p => p.status === 'delivered').length,
+      archived: base.filter(p => p.status === 'archived').length,
+    };
+    document.querySelectorAll('.vp-status-tab').forEach(tab => {
+      let badge = tab.querySelector('.vp-status-count');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'vp-status-count';
+        tab.appendChild(badge);
+      }
+      badge.textContent = String(counts[tab.dataset.status] ?? 0);
+    });
+  }
+
   function renderGrid() {
+    updateStatusCounts();
     const container = document.getElementById('vpContainer');
     const items = filteredProjects();
 

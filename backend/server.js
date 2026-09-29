@@ -2847,7 +2847,7 @@ function portalActivityLine(row) {
 function emailActivityLine(row) {
   const who = clipActivity(row.fromName, 80) || row.fromEmail || 'Someone';
   const subject = decodeActivityText(row.subject);
-  const snippet = decodeActivityText(row.snippet);
+  const snippet = gmailInbox.readableEmailSnippet(decodeActivityText(row.snippet));
   const text = subject ? `${who} emailed “${subject}”` : `${who} sent an email`;
   const detail = snippet && snippet !== subject ? clipActivity(snippet, 140) : '';
   return { type: 'email', text: clipActivity(text, 180), detail, at: row.sentAt };

@@ -266,6 +266,23 @@ function decodeHtml(value) {
   return text.replace(/\s+/g, ' ').trim();
 }
 
+/** Drop the quoted previous email so a Gmail snippet reads as the new message. */
+function readableEmailSnippet(value) {
+  const text = decodeHtml(value);
+  if (!text) return '';
+  const cuts = [];
+  const mark = (pattern) => {
+    const at = text.search(pattern);
+    if (at >= 0) cuts.push(at);
+  };
+  mark(/\bFrom:\s+\S.{0,160}?(?:\[mailto:|<[^>\s]+@[^>\s]+>|Sent:)/i);
+  mark(/\bOn\s+(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun|[A-Z][a-z]{2,8}\s+\d{1,2}).{0,180}?\bwrote:/i);
+  mark(/-{2,}\s*Original Message\s*-{2,}/i);
+  mark(/-{2,}\s*Forwarded message\s*-{2,}|Begin forwarded message:/i);
+  if (!cuts.length) return text;
+  return text.slice(0, Math.min(...cuts)).replace(/[\s\-–—|:]+$/g, '').trim();
+}
+
 function messageRfcId(header) {
   const raw = String(header || '').trim();
   if (!raw) return '';
@@ -606,7 +623,7 @@ async function emailsForEvent(eventId, userId) {
     type: 'email',
     actorName: decodeHtml(row.fromName) || row.fromEmail || 'Someone',
     message: decodeHtml(row.subject || ''),
-    snippet: decodeHtml(row.snippet || ''),
+    snippet: readableEmailSnippet(row.snippet || ''),
     fromEmail: row.fromEmail || '',
     projectId: '',
     projectTitle: '',
@@ -693,5 +710,6 @@ module.exports = {
   syncInbox,
   maybeSync,
   emailsForEvent,
+  readableEmailSnippet,
   appBase
 };

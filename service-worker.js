@@ -25,11 +25,7 @@ self.addEventListener("activate", (event) => {
 
 // Fetch event - don't cache anything, always use network
 self.addEventListener("fetch", (event) => {
-  // Let the browser handle all requests normally
-  // This disables any service worker caching
-  console.log("Service worker fetch event for:", event.request.url);
-  
-  // Important: Pass through the request to the network
+  // Pass every request through. This worker does not cache.
   event.respondWith(fetch(event.request));
 });
 

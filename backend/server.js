@@ -14574,7 +14574,7 @@ function projectThumbnailUrl(project, latestReadyVersion = null) {
     return `${project.customThumbnailUrl}${sep}v=${stamp}`;
   }
   if (latestReadyVersion?.bunnyVideoId && bunnyStream.isConfigured()) {
-    return bunnyStream.getThumbnailUrl(latestReadyVersion.bunnyVideoId);
+    return `/api/video-thumbnails/${encodeURIComponent(latestReadyVersion.bunnyVideoId)}`;
   }
   return null;
 }
@@ -14702,7 +14702,7 @@ function portalVersionPayload(v) {
     uploadedByName: v.uploadedByName || '',
     uploadedAt: v.uploadedAt,
     embedUrl: ready ? bunnyStream.getSignedEmbedUrl(v.bunnyVideoId) : null,
-    thumbnailUrl: ready ? bunnyStream.getThumbnailUrl(v.bunnyVideoId) : null
+    thumbnailUrl: ready ? `/api/video-thumbnails/${encodeURIComponent(v.bunnyVideoId)}` : null
   };
 }
 
@@ -16576,6 +16576,41 @@ app.post('/api/video-projects/:id/versions', authenticate, portalVideoUpload.sin
     if (!handedOff) {
       res.status(500).json({ error: err.message || 'Upload failed' });
     }
+  }
+});
+
+// Bunny blocks direct thumbnail.jpg loads (hotlink protection → 403). Fetch with their player referer.
+app.get('/api/video-thumbnails/:videoId', async (req, res) => {
+  try {
+    const videoId = String(req.params.videoId || '').trim();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(videoId)) {
+      return res.status(400).end();
+    }
+    const url = bunnyStream.isConfigured() ? bunnyStream.getThumbnailUrl(videoId) : '';
+    if (!url) return res.status(404).end();
+
+    const upstream = await fetch(url, {
+      headers: {
+        Referer: 'https://iframe.mediadelivery.net/',
+        Accept: 'image/jpeg,image/*;q=0.8'
+      }
+    });
+    if (!upstream.ok || !upstream.body) {
+      return res.status(upstream.status === 404 ? 404 : 502).end();
+    }
+    res.setHeader('Content-Type', upstream.headers.get('content-type') || 'image/jpeg');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    const { Readable } = require('stream');
+    const nodeStream = Readable.fromWeb(upstream.body);
+    nodeStream.on('error', () => {
+      if (!res.headersSent) res.status(502).end();
+      else res.destroy();
+    });
+    res.on('close', () => nodeStream.destroy());
+    nodeStream.pipe(res);
+  } catch (err) {
+    console.error('Thumbnail proxy failed:', err);
+    if (!res.headersSent) res.status(502).end();
   }
 });
 

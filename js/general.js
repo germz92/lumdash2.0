@@ -2648,6 +2648,627 @@ async function saveDarkThemeLocation(tableId) {
   }
 }
 
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+const CLIENT_ACTIVITY_ICONS = {
+  portal_opened: 'login',
+  project_viewed: 'visibility',
+  commented: 'chat',
+  replied: 'reply',
+  approved: 'check_circle',
+  changes_requested: 'rate_review',
+  email: 'mail'
+};
+
+function formatClientActivityTime(iso) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const diffMs = Date.now() - date.getTime();
+  const mins = Math.round(diffMs / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function clientActivityPhrase(item) {
+  const msg = (item.message || '').trim();
+  if (item.type === 'email') {
+    return msg ? `emailed “${msg}”` : 'sent an email';
+  }
+  if (item.type === 'commented' || item.type === 'replied') {
+    return msg ? `commented “${msg}”` : 'left a comment';
+  }
+  if (/^(Viewed|Approved|Opened|Requested)\b/.test(msg)) {
+    const phrase = msg.charAt(0).toLowerCase() + msg.slice(1);
+    if (item.type === 'project_viewed' && item.viewCount > 1) {
+      return `${phrase} · ${item.viewCount} times`;
+    }
+    return phrase;
+  }
+  return msg || 'updated the portal';
+}
+
+let clientActivityItems = [];
+let clientActivityLinked = 0;
+
+function activityMarkLabel(item, marked) {
+  if (item.type === 'email') return marked ? 'Undo review' : 'Mark reviewed';
+  return marked ? 'Undo' : 'Mark handled';
+}
+
+function activityDetailTitle(item) {
+  if (item.type === 'email') return item.message || 'Email';
+  if (item.type === 'commented' || item.type === 'replied') return 'Comment';
+  if (item.type === 'changes_requested') return 'Changes requested';
+  if (item.type === 'approved') return 'Approval';
+  if (item.type === 'portal_opened') return 'Portal opened';
+  return 'View';
+}
+
+function formatActivityWhen(iso) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit'
+  });
+}
+
+function clientActivityRow(item) {
+  const icon = CLIENT_ACTIVITY_ICONS[item.type] || 'person';
+  const who = escapeHtml(item.actorName || 'Client');
+  const message = escapeHtml(clientActivityPhrase(item));
+  const detailText = item.type === 'email' ? (item.snippet || '') : (item.projectTitle || '');
+  const hideDetail = item.type === 'email' && detailText === (item.message || '').trim();
+  const project = detailText && !hideDetail
+    ? `<div class="client-activity-project">${escapeHtml(detailText)}</div>`
+    : '';
+  const when = escapeHtml(formatClientActivityTime(item.createdAt));
+  const mark = item.markable ? `
+    <button type="button" class="client-activity-mark${item.marked ? ' is-marked' : ''}" data-item-key="${escapeHtml(item.itemKey)}" aria-pressed="${item.marked ? 'true' : 'false'}" aria-label="${escapeHtml(activityMarkLabel(item, item.marked))}">
+      <span class="material-symbols-outlined">${item.marked ? 'check_circle' : 'radio_button_unchecked'}</span>
+    </button>` : '';
+  return `
+    <div class="client-activity-row${item.marked ? ' is-marked' : ''}">
+      <button type="button" class="client-activity-item" data-item-key="${escapeHtml(item.itemKey)}">
+        <span class="material-symbols-outlined">${icon}</span>
+        <span class="client-activity-copy">
+          <span class="client-activity-line"><strong>${who}</strong> ${message}</span>
+          ${project}
+        </span>
+        <span class="client-activity-time">${when}</span>
+      </button>
+      ${mark}
+    </div>`;
+}
+
+function renderClientActivity(data) {
+  const list = document.getElementById('clientActivityList');
+  if (!list) return;
+  const items = data?.items || clientActivityItems;
+  clientActivityItems = items;
+  if (typeof data?.linkedProjects === 'number') clientActivityLinked = data.linkedProjects;
+  if (!items.length) {
+    const copy = 'No activity yet.';
+    list.innerHTML = `<div class="client-activity-empty">${copy}</div>`;
+    return;
+  }
+
+  const needsYou = items.filter(item => item.markable && !item.marked);
+  const history = items.filter(item => !item.markable || item.marked);
+  const section = (label, rows) => rows.length
+    ? `<div class="client-activity-group"><div class="client-activity-group-label">${label}</div>${rows.map(clientActivityRow).join('')}</div>`
+    : '';
+  const showSplit = needsYou.length > 0 && history.length > 0;
+  list.innerHTML = showSplit
+    ? `${section('Needs you', needsYou)}${section('History', history)}`
+    : (needsYou.length ? section('Needs you', needsYou) : history.map(clientActivityRow).join(''));
+
+  list.querySelectorAll('.client-activity-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const item = clientActivityItems.find(row => row.itemKey === btn.dataset.itemKey);
+      if (item) openActivityDetail(item);
+    });
+  });
+  list.querySelectorAll('.client-activity-mark').forEach(btn => {
+    btn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      toggleActivityMark(btn.dataset.itemKey);
+    });
+  });
+}
+
+function closeActivityDetail() {
+  const modal = document.getElementById('activityDetailModal');
+  if (modal) modal.remove();
+}
+
+function activityDetailBody(item) {
+  const when = formatActivityWhen(item.createdAt);
+  const who = item.actorName || 'Someone';
+  const rows = [];
+  const add = (label, value) => {
+    if (!value) return;
+    rows.push(`<div><span class="activity-detail-label">${escapeHtml(label)}</span><span>${escapeHtml(value)}</span></div>`);
+  };
+  if (item.type === 'email') {
+    add('From', item.fromEmail ? `${who} · ${item.fromEmail}` : who);
+    add('When', when);
+  } else {
+    add('Who', item.actorEmail ? `${who} · ${item.actorEmail}` : who);
+    add('Cut', item.projectTitle || '');
+    add('When', when);
+    if (item.type === 'project_viewed' && item.viewCount > 1) add('Opens', String(item.viewCount));
+  }
+  const quote = item.type === 'email' ? (item.snippet || '') : (item.message || '');
+  const quoteHtml = quote
+    ? `<p class="activity-detail-quote">${escapeHtml(quote)}</p>`
+    : '';
+  const note = item.type === 'email'
+    ? '<p class="activity-detail-note">This thread is from your inbox. A contact on this event is on the message, and it was sent in the months around the event.</p>'
+    : '';
+  return `${rows.length ? `<div class="activity-detail-meta">${rows.join('')}</div>` : ''}${quoteHtml}${note}`;
+}
+
+function renderActivityDetail(item) {
+  closeActivityDetail();
+  const modal = document.createElement('div');
+  modal.id = 'activityDetailModal';
+  modal.className = 'dark-modal activity-detail show';
+  modal.dataset.itemKey = item.itemKey;
+  modal.innerHTML = `
+    <div class="dark-modal-content" role="dialog" aria-modal="true" aria-labelledby="activityDetailTitle">
+      <div class="modal-header-dark">
+        <h3 id="activityDetailTitle">${escapeHtml(activityDetailTitle(item))}</h3>
+        <button type="button" class="modal-close-btn" id="activityDetailClose" aria-label="Close">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body-dark">
+        ${activityDetailBody(item)}
+        <div class="activity-detail-actions" id="activityDetailActions"></div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) closeActivityDetail();
+  });
+  modal.querySelector('#activityDetailClose').addEventListener('click', closeActivityDetail);
+
+  const actions = modal.querySelector('#activityDetailActions');
+  const gmailHref = typeof item.href === 'string' && item.href.startsWith('https://mail.google.com/') ? item.href : '';
+  if (gmailHref) {
+    const openMail = document.createElement('button');
+    openMail.type = 'button';
+    openMail.className = 'gmail-guide-primary';
+    openMail.textContent = 'Open in Gmail';
+    openMail.addEventListener('click', () => window.open(gmailHref, '_blank', 'noopener'));
+    actions.appendChild(openMail);
+  }
+  if (item.projectId) {
+    const openCut = document.createElement('button');
+    openCut.type = 'button';
+    openCut.className = gmailHref ? 'gmail-guide-ghost' : 'gmail-guide-primary';
+    openCut.textContent = 'Open the cut';
+    openCut.addEventListener('click', () => {
+      closeActivityDetail();
+      location.hash = `#video-portal?projectId=${encodeURIComponent(item.projectId)}`;
+    });
+    actions.appendChild(openCut);
+  }
+  if (item.markable) {
+    const markBtn = document.createElement('button');
+    markBtn.type = 'button';
+    markBtn.className = 'gmail-guide-ghost';
+    markBtn.id = 'activityMarkBtn';
+    markBtn.textContent = activityMarkLabel(item, item.marked);
+    markBtn.addEventListener('click', () => toggleActivityMark(item.itemKey));
+    actions.appendChild(markBtn);
+  }
+
+  const onKey = (event) => {
+    if (event.key === 'Escape') {
+      closeActivityDetail();
+      document.removeEventListener('keydown', onKey);
+    }
+  };
+  document.addEventListener('keydown', onKey);
+}
+
+function openActivityDetail(item) {
+  renderActivityDetail(item);
+}
+
+async function toggleActivityMark(itemKey) {
+  const item = clientActivityItems.find(row => row.itemKey === itemKey);
+  if (!item || !item.markable) return;
+  const tableId = new URLSearchParams((location.hash.split('?')[1] || '')).get('id');
+  if (!tableId) return;
+  const next = !item.marked;
+  item.marked = next;
+  renderClientActivity({ items: clientActivityItems, linkedProjects: clientActivityLinked });
+  const modal = document.getElementById('activityDetailModal');
+  if (modal && modal.dataset.itemKey === itemKey) renderActivityDetail(item);
+  try {
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/client-activity/mark`, {
+      method: 'POST',
+      headers: {
+        Authorization: window.token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ itemKey, marked: next })
+    });
+    if (!res.ok) throw new Error('Could not update this activity');
+  } catch (err) {
+    item.marked = !next;
+    renderClientActivity({ items: clientActivityItems, linkedProjects: clientActivityLinked });
+    if (document.getElementById('activityDetailModal')?.dataset.itemKey === itemKey) renderActivityDetail(item);
+    alert(err.message || 'Could not update this activity');
+  }
+}
+
+let activitySyncTimer = null;
+let activitySyncTries = 0;
+
+function scheduleActivityRefresh(tableId) {
+  if (activitySyncTimer) clearTimeout(activitySyncTimer);
+  activitySyncTries += 1;
+  if (activitySyncTries > 12) return;
+  activitySyncTimer = setTimeout(() => {
+    const page = (location.hash.replace('#', '') || '').split('?')[0];
+    const id = new URLSearchParams((location.hash.split('?')[1] || '')).get('id');
+    if (page !== 'general' || id !== String(tableId)) return;
+    if (document.getElementById('activityDetailModal')) {
+      activitySyncTries -= 1;
+      scheduleActivityRefresh(tableId);
+      return;
+    }
+    loadClientActivity(tableId);
+  }, 4000);
+}
+
+function loadClientActivity(tableId) {
+  const list = document.getElementById('clientActivityList');
+  if (!list || !tableId) return;
+  fetch(`${API_BASE}/api/tables/${tableId}/client-activity`, {
+    headers: { Authorization: window.token }
+  })
+    .then(res => {
+      if (!res.ok) throw new Error('Failed to load client activity');
+      return res.json();
+    })
+    .then(data => {
+      renderClientActivity(data);
+      if (data.gmailSyncing) scheduleActivityRefresh(tableId);
+      else activitySyncTries = 0;
+      const modal = document.getElementById('activityDetailModal');
+      if (!modal) return;
+      const item = clientActivityItems.find(row => row.itemKey === modal.dataset.itemKey);
+      if (item) renderActivityDetail(item);
+      else closeActivityDetail();
+    })
+    .catch(err => {
+      console.error(err);
+      list.innerHTML = '<div class="client-activity-empty">Client activity couldn’t be loaded.</div>';
+    });
+}
+
+function gmailReturnPath() {
+  const params = new URLSearchParams(location.search);
+  params.delete('gmail');
+  params.delete('reason');
+  const qs = params.toString();
+  return `${location.pathname}${qs ? `?${qs}` : ''}${location.hash || '#general'}`;
+}
+
+function closeGmailGuide() {
+  const modal = document.getElementById('gmailGuideModal');
+  if (modal) modal.remove();
+}
+
+function consumeGmailReturn() {
+  const params = new URLSearchParams(location.search);
+  const flag = params.get('gmail');
+  if (!flag) return null;
+  const reason = params.get('reason') || '';
+  params.delete('gmail');
+  params.delete('reason');
+  const qs = params.toString();
+  history.replaceState(null, '', `${location.pathname}${qs ? `?${qs}` : ''}${location.hash}`);
+  return { flag, reason };
+}
+
+async function fetchGmailStatus() {
+  const res = await fetch(`${API_BASE}/api/gmail/status`, {
+    headers: { Authorization: window.token }
+  });
+  if (!res.ok) throw new Error('Could not load Gmail status');
+  return res.json();
+}
+
+function updateGmailButton(status) {
+  const btn = document.getElementById('connectGmailBtn');
+  const label = btn?.querySelector('.client-activity-gmail-label');
+  if (!label) return;
+  label.textContent = status?.connected && status.email
+    ? `Your Gmail · ${status.email}`
+    : 'Connect Gmail inbox';
+}
+
+function renderGmailGuide(status, notice) {
+  closeGmailGuide();
+  const statusLine = status.connected
+    ? `Connected as ${status.email || 'your Gmail'}. Threads from this inbox show in Client activity for you.`
+    : (status.configured
+      ? 'Sign in with the Google account you use for client mail. Only you will see the threads it files.'
+      : 'The server does not have a Google client yet. Finish the setup below, then come back to this button.');
+  const noticeLine = notice?.reason
+    || (notice?.flag === 'error' ? 'Gmail could not be connected.' : '')
+    || (notice?.flag === 'connected' ? 'Your inbox is connected.' : '');
+  const errorExtra = status.lastError && status.connected ? status.lastError : '';
+  const redirectUris = (status.redirectUris && status.redirectUris.length)
+    ? status.redirectUris
+    : [status.redirectUri].filter(Boolean);
+  const redirectRows = redirectUris.map(uri => `
+              <div class="gmail-guide-code">
+                <code>${escapeHtml(uri)}</code>
+                <button type="button" class="gmail-guide-copy" data-copy="${escapeHtml(uri)}">Copy</button>
+              </div>`).join('');
+  const steps = status.configured ? `
+          <li class="${status.connected ? '' : 'is-current'}">
+            <span class="gmail-guide-num">1</span>
+            <div>
+              <strong>Sign in with your Google account</strong>
+              Press Connect and approve read-only access. A thread shows on an event when a contact’s address is on it and the message falls in the months around that event.
+            </div>
+          </li>
+          <li>
+            <span class="gmail-guide-num">2</span>
+            <div>
+              <strong>Only you see this mail</strong>
+              Another person connects their own Gmail from this button. They see their inbox. Replies stay in Gmail.
+            </div>
+          </li>
+          <li>
+            <span class="gmail-guide-num">3</span>
+            <div>
+              <strong>Add every redirect URI in Google Cloud</strong>
+              The OAuth client needs each address below. Live connect fails until the beta URI is listed. Keep the consent screen Internal.
+              ${redirectRows}
+            </div>
+          </li>` : `
+          <li class="is-current">
+            <span class="gmail-guide-num">1</span>
+            <div>
+              <strong>Create a Google client</strong>
+              In Google Cloud, turn on the Gmail API. If this is Google Workspace, set the consent screen to Internal. Create an OAuth client of type Web application and add every redirect URI below.
+              ${redirectRows}
+            </div>
+          </li>
+          <li>
+            <span class="gmail-guide-num">2</span>
+            <div>
+              <strong>Add it to LumDash</strong>
+              On the server, set GOOGLE_GMAIL_CLIENT_ID and GOOGLE_GMAIL_CLIENT_SECRET, then restart. Each person then connects their own Gmail from this button.
+            </div>
+          </li>`;
+
+  const modal = document.createElement('div');
+  modal.id = 'gmailGuideModal';
+  modal.className = 'dark-modal gmail-guide show';
+  modal.innerHTML = `
+    <div class="dark-modal-content" role="dialog" aria-modal="true" aria-labelledby="gmailGuideTitle">
+      <div class="modal-header-dark">
+        <h3 id="gmailGuideTitle">Connect your Gmail</h3>
+        <button type="button" class="modal-close-btn" id="gmailGuideClose" aria-label="Close">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>
+      <div class="modal-body-dark">
+        <p class="gmail-guide-lead">This connects your Gmail once. Threads then show on each event they belong to, and only on your Client activity. Someone else connects their own account from this same button.</p>
+        <p class="gmail-guide-status${notice?.flag === 'error' || errorExtra ? ' is-error' : ''}">${escapeHtml(noticeLine || errorExtra || statusLine)}</p>
+        <ol class="gmail-guide-steps">
+          ${steps}
+        </ol>
+        <div class="gmail-guide-actions" id="gmailGuideActions"></div>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) closeGmailGuide();
+  });
+  modal.querySelector('#gmailGuideClose').addEventListener('click', closeGmailGuide);
+  modal.querySelectorAll('.gmail-guide-copy').forEach(copyBtn => {
+    copyBtn.addEventListener('click', async () => {
+    const value = copyBtn.dataset.copy || '';
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const input = document.createElement('textarea');
+        input.value = value;
+        input.setAttribute('readonly', '');
+        input.style.position = 'fixed';
+        input.style.left = '-9999px';
+        document.body.appendChild(input);
+        input.select();
+        const ok = document.execCommand('copy');
+        input.remove();
+        if (!ok) throw new Error('copy failed');
+      }
+      copyBtn.textContent = 'Copied';
+    } catch {
+      const code = copyBtn.parentElement?.querySelector('code');
+      if (code) {
+        const range = document.createRange();
+        range.selectNodeContents(code);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+      }
+      copyBtn.textContent = 'Selected';
+    }
+    });
+  });
+
+  const actions = modal.querySelector('#gmailGuideActions');
+  if (status.connected) {
+    const syncBtn = document.createElement('button');
+    syncBtn.type = 'button';
+    syncBtn.className = 'gmail-guide-ghost';
+    syncBtn.textContent = 'Check for new mail';
+    syncBtn.addEventListener('click', () => checkGmailNow(syncBtn));
+    const disconnectBtn = document.createElement('button');
+    disconnectBtn.type = 'button';
+    disconnectBtn.className = 'gmail-guide-ghost';
+    disconnectBtn.textContent = 'Disconnect';
+    disconnectBtn.addEventListener('click', () => disconnectGmail(disconnectBtn));
+    actions.append(syncBtn, disconnectBtn);
+  } else {
+    const connectBtn = document.createElement('button');
+    connectBtn.type = 'button';
+    connectBtn.className = 'gmail-guide-primary';
+    connectBtn.textContent = 'Connect your Gmail';
+    connectBtn.disabled = !status.configured;
+    connectBtn.addEventListener('click', () => startGmailConnect(connectBtn));
+    actions.appendChild(connectBtn);
+  }
+
+  const onKey = (event) => {
+    if (event.key === 'Escape') {
+      closeGmailGuide();
+      document.removeEventListener('keydown', onKey);
+    }
+  };
+  document.addEventListener('keydown', onKey);
+}
+
+async function openGmailGuide(notice) {
+  const btn = document.getElementById('connectGmailBtn');
+  try {
+    const status = await fetchGmailStatus();
+    updateGmailButton(status);
+    renderGmailGuide(status, notice);
+  } catch (err) {
+    console.error(err);
+    if (btn) btn.textContent = 'Connect Gmail inbox';
+    alert('The Gmail guide could not be opened.');
+  }
+}
+
+async function startGmailConnect(button) {
+  button.disabled = true;
+  try {
+    const res = await fetch(`${API_BASE}/api/gmail/connect/start`, {
+      method: 'POST',
+      headers: {
+        Authorization: window.token,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ returnTo: gmailReturnPath() })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.url) throw new Error(data.error || 'Could not start the Google sign-in');
+    window.location.href = data.url;
+  } catch (err) {
+    button.disabled = false;
+    alert(err.message || 'Could not start the Google sign-in');
+  }
+}
+
+async function checkGmailNow(button) {
+  button.disabled = true;
+  try {
+    const res = await fetch(`${API_BASE}/api/gmail/sync`, {
+      method: 'POST',
+      headers: { Authorization: window.token }
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Could not check the inbox');
+    const id = new URLSearchParams((location.hash.split('?')[1] || '')).get('id');
+    if (id) loadClientActivity(id);
+    const status = await fetchGmailStatus();
+    updateGmailButton(status);
+    renderGmailGuide(status, { flag: 'connected', reason: data.synced ? `Filed ${data.synced} matching thread${data.synced === 1 ? '' : 's'}.` : 'No new matching threads.' });
+  } catch (err) {
+    button.disabled = false;
+    alert(err.message || 'Could not check the inbox');
+  }
+}
+
+async function disconnectGmail(button) {
+  if (!confirm('Disconnect your Gmail? Your threads leave Client activity until you connect it again.')) return;
+  button.disabled = true;
+  try {
+    const res = await fetch(`${API_BASE}/api/gmail/disconnect`, {
+      method: 'POST',
+      headers: { Authorization: window.token }
+    });
+    if (!res.ok) throw new Error('Could not disconnect Gmail');
+    const id = new URLSearchParams((location.hash.split('?')[1] || '')).get('id');
+    if (id) loadClientActivity(id);
+    const status = await fetchGmailStatus();
+    updateGmailButton(status);
+    renderGmailGuide(status);
+  } catch (err) {
+    button.disabled = false;
+    alert(err.message || 'Could not disconnect Gmail');
+  }
+}
+
+function watchClientActivity(tableId) {
+  if (window.__clientActivityPoll) clearInterval(window.__clientActivityPoll);
+  window.__clientActivityPoll = setInterval(() => {
+    const page = (location.hash.replace('#', '') || '').split('?')[0];
+    const id = new URLSearchParams((location.hash.split('?')[1] || '')).get('id');
+    if (page !== 'general' || id !== tableId) {
+      clearInterval(window.__clientActivityPoll);
+      window.__clientActivityPoll = null;
+      return;
+    }
+    if (document.getElementById('activityDetailModal')) return;
+    loadClientActivity(tableId);
+  }, 2 * 60 * 1000);
+}
+
+function setupGmailInbox() {
+  const btn = document.getElementById('connectGmailBtn');
+  if (btn && !btn._listenerAttached) {
+    btn._listenerAttached = true;
+    btn.addEventListener('click', () => openGmailGuide());
+  }
+  if (!window.__gmailGuideHashBound) {
+    window.__gmailGuideHashBound = true;
+    window.addEventListener('hashchange', () => {
+      const page = (location.hash.replace('#', '') || '').split('?')[0];
+      if (page !== 'general') {
+        closeGmailGuide();
+        closeActivityDetail();
+      }
+    });
+  }
+  const notice = consumeGmailReturn();
+  fetchGmailStatus()
+    .then(status => {
+      updateGmailButton(status);
+      if (notice) renderGmailGuide(status, notice);
+    })
+    .catch(err => console.error(err));
+}
+
 function initPageDarkTheme(id) {
   if (!id || !window.token) return;
   
@@ -3339,6 +3960,20 @@ function initPage(id) {
   console.log('[GENERAL] initPage called with id:', id);
   
   if (!id || !window.token) return;
+
+  const shareEventBtn = document.getElementById('shareEventBtn');
+  if (shareEventBtn && !shareEventBtn._listenerAttached) {
+    shareEventBtn._listenerAttached = true;
+    shareEventBtn.addEventListener('click', () => {
+      if (window.ShareModal && typeof window.ShareModal.open === 'function') {
+        window.ShareModal.open(id);
+      }
+    });
+  }
+
+  loadClientActivity(id);
+  watchClientActivity(id);
+  setupGmailInbox(id);
   
   // Check if dark theme and use dark theme functions
   if (isDarkTheme()) {

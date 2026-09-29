@@ -1550,6 +1550,8 @@ const Client = require('./models/Client');
 const VideoProject = require('./models/VideoProject');
 const VideoComment = require('./models/VideoComment');
 const VideoPortalActivity = require('./models/VideoPortalActivity');
+const ActivityMark = require('./models/ActivityMark');
+const gmailInbox = require('./lib/gmailInbox');
 
 
 
@@ -2722,6 +2724,205 @@ app.get('/api/tables/:id', authenticate, async (req, res) => {
     return res.status(403).json({ error: 'Not authorized' });
   }
   res.json(table);
+});
+
+const CLIENT_ACTIVITY_MARKABLE = new Set(['email', 'commented', 'replied', 'changes_requested']);
+
+function withClientActivityKey(item) {
+  const actor = String(item.actorName || '').trim().toLowerCase();
+  let itemKey;
+  if (item.type === 'email') itemKey = `email:${item.id}`;
+  else if (item.type === 'project_viewed' || item.type === 'portal_opened') itemKey = `view:${item.projectId}:${actor}`;
+  else itemKey = `activity:${item.id}`;
+  return {
+    ...item,
+    itemKey: itemKey.slice(0, 300),
+    markable: CLIENT_ACTIVITY_MARKABLE.has(item.type),
+    marked: false
+  };
+}
+
+async function applyActivityMarks(userId, items) {
+  const keyed = items.map(withClientActivityKey);
+  const keys = keyed.map(item => item.itemKey);
+  if (!keys.length) return keyed;
+  const marks = await ActivityMark.find({ userId, itemKey: { $in: keys } }).select('itemKey').lean();
+  const marked = new Set(marks.map(mark => mark.itemKey));
+  keyed.forEach(item => { item.marked = marked.has(item.itemKey); });
+  return keyed;
+}
+
+// Client touches on this event: portal views, comments, and approvals.
+app.get('/api/tables/:id/client-activity', authenticate, async (req, res) => {
+  try {
+    if (!req.params.id || req.params.id === 'null') {
+      return res.status(400).json({ error: 'Invalid table ID' });
+    }
+    const table = await Table.findById(req.params.id).select('_id owners leads sharedWith rows');
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+    if (!hasEventReadAccess(table, req.user)) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+
+    const ppItems = await PostProductionItem.find({ eventId: table._id }).select('_id').lean();
+    const ppIds = ppItems.map(item => item._id);
+    const projectQuery = [{ eventId: table._id }];
+    if (ppIds.length) projectQuery.push({ postProductionItemId: { $in: ppIds } });
+
+    const projects = await VideoProject.find({ $or: projectQuery }).select('_id title').lean();
+    let gmailSyncing = false;
+    let emailItems = [];
+    try {
+      gmailSyncing = await gmailInbox.maybeSync(req.user.id);
+      emailItems = await gmailInbox.emailsForEvent(table._id, req.user.id);
+    } catch (gmailErr) {
+      console.error('Gmail activity lookup failed:', gmailErr.message);
+    }
+    if (!projects.length) {
+      const items = await applyActivityMarks(req.user.id, emailItems.slice(0, 30));
+      return res.json({ linkedProjects: 0, items, gmailSyncing });
+    }
+
+    const titleById = new Map(projects.map(p => [p._id.toString(), p.title || '']));
+    const activity = await VideoPortalActivity.find({
+      projectId: { $in: projects.map(p => p._id) },
+      actorType: 'client'
+    }).sort({ createdAt: -1 }).limit(200).lean();
+
+    const toItem = (row, viewCount = 1) => ({
+      id: row._id,
+      type: row.type,
+      actorName: row.actorName || 'Client',
+      actorEmail: row.actorEmail || '',
+      message: row.message || '',
+      projectId: row.projectId,
+      projectTitle: titleById.get(String(row.projectId)) || '',
+      createdAt: row.createdAt,
+      viewCount
+    });
+
+    // Repeat opens of the same cut are one line. Comments and approvals stay separate.
+    const viewGroups = new Map();
+    const items = [];
+    for (const row of activity) {
+      if (row.type === 'project_viewed') {
+        const key = `${row.actorName || ''}|${row.projectId}`;
+        const existing = viewGroups.get(key);
+        if (existing) existing.viewCount += 1;
+        else {
+          const item = toItem(row, 1);
+          viewGroups.set(key, item);
+          items.push(item);
+        }
+      } else {
+        items.push(toItem(row));
+      }
+    }
+
+    const merged = [...items, ...emailItems].sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
+    res.json({
+      linkedProjects: projects.length,
+      gmailSyncing,
+      items: await applyActivityMarks(req.user.id, merged.slice(0, 30))
+    });
+  } catch (err) {
+    console.error('Error loading client activity:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+app.post('/api/tables/:id/client-activity/mark', authenticate, async (req, res) => {
+  try {
+    if (!req.params.id || req.params.id === 'null') {
+      return res.status(400).json({ error: 'Invalid table ID' });
+    }
+    const itemKey = String(req.body?.itemKey || '').trim();
+    if (!/^(email|view|activity):/.test(itemKey) || itemKey.length > 300) {
+      return res.status(400).json({ error: 'Invalid activity' });
+    }
+    if (typeof req.body?.marked !== 'boolean') {
+      return res.status(400).json({ error: 'marked must be true or false' });
+    }
+    const table = await Table.findById(req.params.id).select('_id owners leads sharedWith rows');
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+    if (!hasEventReadAccess(table, req.user)) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    if (req.body.marked) {
+      await ActivityMark.updateOne(
+        { userId: req.user.id, itemKey },
+        { $set: { eventId: table._id, markedAt: new Date() } },
+        { upsert: true }
+      );
+    } else {
+      await ActivityMark.deleteOne({ userId: req.user.id, itemKey });
+    }
+    res.json({ itemKey, marked: req.body.marked });
+  } catch (err) {
+    console.error('Error marking client activity:', err);
+    res.status(500).json({ error: 'Could not update this activity' });
+  }
+});
+
+app.get('/api/gmail/status', authenticate, async (req, res) => {
+  try {
+    res.json(await gmailInbox.statusFor(req.user, req));
+  } catch (err) {
+    console.error('Gmail status:', err);
+    res.status(500).json({ error: 'Could not load Gmail status' });
+  }
+});
+
+app.post('/api/gmail/connect/start', authenticate, (req, res) => {
+  try {
+    const code = gmailInbox.beginConnect(req.user, req.body?.returnTo);
+    res.json({ url: `${gmailInbox.appBase(req)}/api/gmail/connect?code=${code}` });
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message || 'Could not start Gmail connect' });
+  }
+});
+
+app.get('/api/gmail/connect', (req, res) => {
+  try {
+    const url = gmailInbox.googleAuthUrl(req, String(req.query.code || ''));
+    res.set('Referrer-Policy', 'no-referrer');
+    res.redirect(url);
+  } catch (err) {
+    res.status(err.status || 400).send(err.message || 'Could not connect Gmail');
+  }
+});
+
+app.get('/api/gmail/callback', async (req, res) => {
+  try {
+    const next = await gmailInbox.finishCallback(req);
+    res.set('Referrer-Policy', 'no-referrer');
+    res.redirect(next);
+  } catch (err) {
+    console.error('Gmail callback:', err);
+    res.redirect('/dashboard.html?gmail=error&reason=Gmail%20could%20not%20be%20connected#general');
+  }
+});
+
+app.post('/api/gmail/sync', authenticate, async (req, res) => {
+  try {
+    const result = await gmailInbox.syncInbox(req.user.id);
+    res.json(result);
+  } catch (err) {
+    console.error('Gmail sync:', err);
+    res.status(500).json({ error: err.message || 'Could not check the inbox' });
+  }
+});
+
+app.post('/api/gmail/disconnect', authenticate, async (req, res) => {
+  try {
+    await gmailInbox.disconnect(req.user.id);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Gmail disconnect:', err);
+    res.status(500).json({ error: 'Could not disconnect Gmail' });
+  }
 });
 
 // --- TOGGLE BADGE NOT-REQUIRED STATUS ---
@@ -15496,9 +15697,10 @@ app.put('/api/video-projects/:id', authenticate, async (req, res) => {
       if (ppId === null || ppId === '') {
         project.postProductionItemId = null;
       } else {
-        const item = await PostProductionItem.findById(ppId).select('_id item project');
+        const item = await PostProductionItem.findById(ppId).select('_id item project eventId');
         if (!item) return res.status(400).json({ error: 'Post-production item not found' });
         project.postProductionItemId = item._id;
+        if (item.eventId) project.eventId = item.eventId;
         await logPortalActivity({
           projectId: project._id,
           clientId: project.clientId,

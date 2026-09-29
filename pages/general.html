@@ -157,6 +157,24 @@
               </div>
             </div>
           </div>
+
+          <div class="general-card client-activity-card collapsible-card" id="clientActivityCard" data-card-id="clientActivity">
+            <div class="card-header" onclick="window.toggleCardCollapse(this.parentElement)">
+              <h2>Client activity</h2>
+              <div class="card-header-actions">
+                <span class="material-symbols-outlined collapse-icon">expand_more</span>
+              </div>
+            </div>
+            <div class="card-content" id="clientActivityList">
+              <div class="client-activity-empty">Loading…</div>
+            </div>
+            <div class="client-activity-footer">
+              <button type="button" class="client-activity-gmail-btn" id="connectGmailBtn">
+                <span class="material-symbols-outlined">mail</span>
+                <span class="client-activity-gmail-label">Connect Gmail inbox</span>
+              </button>
+            </div>
+          </div>
           
           <!-- Point of Contacts Card -->
           <div class="general-card collapsible-card" id="pointOfContactsCard" data-card-id="pointOfContacts">
@@ -214,7 +232,7 @@
         
         <!-- Sidebar Column -->
         <div class="general-sidebar-column">
-          
+
           <!-- Combined Event Info Widget -->
           <div class="general-card info-card collapsible-card" id="eventInfoCard" data-card-id="eventInfo">
             <div class="card-header" onclick="window.toggleCardCollapse(this.parentElement)">

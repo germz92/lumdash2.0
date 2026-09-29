@@ -5218,6 +5218,7 @@ img.owner-avatar {
 /* General Main Content */
 .general-main {
   flex: 1;
+  min-width: 0;
   margin-left: var(--sidebar-width);
   display: flex;
   flex-direction: column;
@@ -5231,7 +5232,7 @@ img.owner-avatar {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 24px 32px;
+  padding: 24px max(32px, calc((100% - 1600px) / 2 + 32px));
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border-subtle);
   flex-wrap: wrap;
@@ -5382,25 +5383,32 @@ img.owner-avatar {
 /* Content Grid - Two Column Layout */
 .general-content-grid {
   display: grid;
-  grid-template-columns: 1fr 380px;
+  grid-template-columns: minmax(0, 1fr) 380px;
   gap: 24px;
   padding: 24px 32px;
-  max-width: 1600px;
+  width: min(100%, 1600px);
+  max-width: 100%;
+  margin-inline: auto;
+  align-self: center;
   flex: 1;
   overflow-y: auto;
+  min-width: 0;
   min-height: 0;
+  box-sizing: border-box;
 }
 
 .general-main-column {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  min-width: 0;
 }
 
 .general-sidebar-column {
   display: flex;
   flex-direction: column;
   gap: 24px;
+  min-width: 0;
 }
 
 /* General Cards */
@@ -5449,7 +5457,8 @@ img.owner-avatar {
 }
 
 .collapsible-card .card-content,
-.collapsible-card .weather-forecast {
+.collapsible-card .weather-forecast,
+.collapsible-card .client-activity-footer {
   max-height: 2000px;
   overflow: hidden;
   transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.2s ease;
@@ -5457,7 +5466,8 @@ img.owner-avatar {
 }
 
 .collapsible-card.collapsed .card-content,
-.collapsible-card.collapsed .weather-forecast {
+.collapsible-card.collapsed .weather-forecast,
+.collapsible-card.collapsed .client-activity-footer {
   max-height: 0;
   padding-top: 0;
   padding-bottom: 0;
@@ -5623,6 +5633,7 @@ img.owner-avatar {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  min-width: 0;
 }
 
 .info-label {
@@ -5635,6 +5646,7 @@ img.owner-avatar {
 .info-value {
   font-weight: var(--font-weight-semibold);
   color: var(--text-primary);
+  overflow-wrap: anywhere;
 }
 
 .info-location {
@@ -6796,6 +6808,448 @@ img.owner-avatar {
 }
 
 /* Weather Card */
+.client-activity-card:not(.collapsed) .card-content {
+  padding: 8px;
+  max-height: 560px;
+  overflow-y: scroll;
+  scrollbar-gutter: stable;
+  scrollbar-color: var(--border-strong, #5a5a5a) transparent;
+  scrollbar-width: thin;
+}
+
+.client-activity-card .card-content::-webkit-scrollbar {
+  width: 10px;
+}
+
+.client-activity-card .card-content::-webkit-scrollbar-thumb {
+  background: var(--border-strong, #5a5a5a);
+  border-radius: 999px;
+}
+
+.client-activity-card .card-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.client-activity-empty {
+  padding: 16px 12px;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.client-activity-group-label {
+  padding: 10px 8px 2px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.client-activity-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.client-activity-row.is-marked .client-activity-item {
+  opacity: 0.55;
+}
+
+.client-activity-mark {
+  flex-shrink: 0;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  margin: 6px 0 0;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-muted);
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: pointer;
+}
+
+.client-activity-mark:hover,
+.client-activity-mark.is-marked {
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-primary);
+}
+
+.client-activity-mark.is-marked {
+  color: #3dd68c;
+}
+
+.client-activity-mark .material-symbols-outlined {
+  font-size: 18px;
+}
+
+.client-activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  flex: 1;
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  height: auto;
+  margin: 0;
+  padding: 10px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.client-activity-item:hover {
+  background: var(--bg-tertiary);
+  box-shadow: none;
+  color: var(--text-primary);
+}
+
+.client-activity-item .material-symbols-outlined {
+  flex-shrink: 0;
+  margin-top: 1px;
+  font-size: 18px;
+  color: var(--text-muted);
+}
+
+.client-activity-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.client-activity-line {
+  display: block;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.client-activity-line strong {
+  font-weight: 600;
+}
+
+.client-activity-project {
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.client-activity-time {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.client-activity-footer {
+  padding: 4px 8px 10px;
+}
+
+.client-activity-gmail-btn {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  height: auto;
+  margin: 0;
+  padding: 10px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.3;
+  text-transform: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.client-activity-gmail-btn:hover {
+  background: var(--bg-tertiary);
+  box-shadow: none;
+  color: var(--text-primary);
+}
+
+.client-activity-gmail-btn .material-symbols-outlined {
+  flex-shrink: 0;
+  font-size: 18px;
+  color: var(--text-muted);
+}
+
+.client-activity-gmail-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.gmail-guide-actions .gmail-guide-lead {
+  margin-right: auto;
+}
+
+.gmail-guide .dark-modal-content {
+  max-width: 520px;
+}
+
+.gmail-guide .modal-body-dark {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.gmail-guide-lead,
+.gmail-guide-status {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.gmail-guide-status {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.gmail-guide-status.is-error {
+  color: #ffb4b4;
+}
+
+.gmail-guide-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.gmail-guide-steps li {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 10px;
+  color: var(--text-secondary);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.gmail-guide-steps li.is-current strong {
+  color: var(--text-primary);
+}
+
+.gmail-guide-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.gmail-guide-steps strong {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.gmail-guide-code {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+}
+
+.gmail-guide-code code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.75rem;
+  color: var(--text-primary);
+}
+
+.gmail-guide button {
+  min-width: 0;
+  height: auto;
+  box-shadow: none;
+  letter-spacing: 0;
+  text-transform: none;
+  font-family: inherit;
+}
+
+.gmail-guide-copy,
+.gmail-guide-ghost,
+.gmail-guide-primary {
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.gmail-guide-copy {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.gmail-guide-copy:hover,
+.gmail-guide-ghost:hover {
+  background: var(--bg-hover);
+  box-shadow: none;
+  color: var(--text-primary);
+}
+
+.gmail-guide-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.gmail-guide-primary,
+.gmail-guide-ghost {
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.gmail-guide-primary {
+  border: none;
+  background: var(--brand-red, #CC0007);
+  color: #fff;
+}
+
+.gmail-guide-primary:hover {
+  background: var(--brand-red-dark, #A30005);
+  box-shadow: none;
+  color: #fff;
+}
+
+.gmail-guide-primary:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.gmail-guide-ghost {
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.gmail-guide .modal-close-btn,
+.activity-detail .modal-close-btn {
+  min-width: 36px;
+}
+
+.activity-detail .dark-modal-content {
+  max-width: 680px;
+}
+
+.activity-detail .modal-header-dark h3 {
+  overflow-wrap: anywhere;
+}
+
+.activity-detail .modal-body-dark {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.activity-detail button {
+  min-width: 0;
+  height: auto;
+  box-shadow: none;
+  letter-spacing: 0;
+  text-transform: none;
+  font-family: inherit;
+}
+
+.activity-detail-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.activity-detail-meta div {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 10px;
+}
+
+.activity-detail-label {
+  color: var(--text-muted);
+}
+
+.activity-detail-quote {
+  margin: 0;
+  padding: 16px 18px;
+  border-radius: 8px;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-size: 1rem;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.activity-detail-note {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.activity-detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.activity-detail-actions .gmail-guide-primary,
+.activity-detail-actions .gmail-guide-ghost {
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .weather-card .card-header {
   display: flex;
   justify-content: space-between;
@@ -6993,7 +7447,7 @@ img.owner-avatar {
 /* Responsive Design for General Page */
 @media (max-width: 1200px) {
   .general-content-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
   
   .general-sidebar-column {

@@ -28,7 +28,7 @@
 .exec-header {
   display: flex;
   align-items: center;
-  padding: 16px 24px;
+  padding: 16px max(24px, calc((100% - 1600px) / 2 + 32px));
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-secondary);
   flex-shrink: 0;
@@ -123,7 +123,11 @@
   grid-template-columns: repeat(2, 1fr);
   gap: 20px;
   align-content: start;
+  width: min(100%, 1600px);
   max-width: 1600px;
+  margin-inline: auto;
+  align-self: center;
+  box-sizing: border-box;
 }
 
 /* Section cards */

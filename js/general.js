@@ -2853,6 +2853,35 @@ function formatActivityWhen(iso) {
   });
 }
 
+function isAndroidDevice() {
+  return /Android/i.test(navigator.userAgent || '');
+}
+
+function isIosDevice() {
+  const ua = navigator.userAgent || '';
+  if (/iPad|iPhone|iPod/.test(ua) && !window.MSStream) return true;
+  return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+}
+
+function gmailAppHref(httpsUrl) {
+  const body = String(httpsUrl).replace(/^https?:\/\//, '').replace(/#/g, '%23');
+  const fallback = encodeURIComponent(httpsUrl);
+  return `intent://${body}#Intent;scheme=https;package=com.google.android.gm;S.browser_fallback_url=${fallback};end`;
+}
+
+function openGmailMessage(httpsUrl) {
+  if (!httpsUrl) return;
+  if (isAndroidDevice()) {
+    window.location.href = gmailAppHref(httpsUrl);
+    return;
+  }
+  if (isIosDevice()) {
+    window.location.href = httpsUrl;
+    return;
+  }
+  window.open(httpsUrl, '_blank', 'noopener');
+}
+
 function clientActivityRow(item) {
   const icon = CLIENT_ACTIVITY_ICONS[item.type] || 'person';
   const who = escapeHtml(item.actorName || 'Client');
@@ -2906,7 +2935,15 @@ function renderClientActivity(data) {
   list.querySelectorAll('.client-activity-item').forEach(btn => {
     btn.addEventListener('click', () => {
       const item = clientActivityItems.find(row => row.itemKey === btn.dataset.itemKey);
-      if (item) openActivityDetail(item);
+      if (!item) return;
+      const gmailHref = item.type === 'email' && typeof item.href === 'string' && item.href.startsWith('https://mail.google.com/')
+        ? item.href
+        : '';
+      if (gmailHref && (isAndroidDevice() || isIosDevice())) {
+        openGmailMessage(gmailHref);
+        return;
+      }
+      openActivityDetail(item);
     });
   });
   list.querySelectorAll('.client-activity-mark').forEach(btn => {
@@ -2982,7 +3019,7 @@ function renderActivityDetail(item) {
     openMail.type = 'button';
     openMail.className = 'gmail-guide-primary';
     openMail.textContent = 'Open this message';
-    openMail.addEventListener('click', () => window.open(gmailHref, '_blank', 'noopener'));
+    openMail.addEventListener('click', () => openGmailMessage(gmailHref));
     actions.appendChild(openMail);
   }
   if (item.projectId) {

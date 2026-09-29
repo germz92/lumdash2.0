@@ -2579,6 +2579,17 @@ function externalContact(body, company) {
   };
 }
 
+function splitCityState(value) {
+  const text = String(value || '').trim().replace(/[.\s]+$/, '');
+  const match = text.match(/^(.+?),\s*([A-Za-z]{2}|[A-Za-z][A-Za-z .'-]{2,})$/);
+  if (!match) return null;
+  const city = match[1].trim();
+  let state = match[2].trim().replace(/\.+$/, '');
+  if (!city || !state) return null;
+  if (state.length === 2) state = state.toUpperCase();
+  return { city, state };
+}
+
 function externalLocation(body) {
   const nested = body.venue && typeof body.venue === 'object' ? body.venue : {};
   const name = externalText(nested.name || body.location || body.venueName || body.locationName, 160);
@@ -2665,6 +2676,17 @@ app.post('/api/events/external-create', authenticate, async (req, res) => {
     }
     
     const companyValue = externalText(company || companyName, 160);
+    const venueBody = req.body.venue && typeof req.body.venue === 'object' ? req.body.venue : {};
+    let cityValue = externalText(city || venueBody.city, 80);
+    let stateValue = externalText(state || venueBody.state, 40);
+    const locationValue = externalText(typeof location === 'string' ? location : (location && location.name) || venueBody.name, 160);
+    if (!cityValue && !stateValue) {
+      const parsedPlace = splitCityState(locationValue);
+      if (parsedPlace) {
+        cityValue = parsedPlace.city;
+        stateValue = parsedPlace.state;
+      }
+    }
     const contractUrl = externalUrl(req.body.contractUrl, req.body.contractLink, req.body.contract);
     const invoiceUrl = externalUrl(req.body.invoiceUrl, req.body.invoiceLink, req.body.invoice);
     const contact = externalContact(req.body, companyValue);
@@ -2686,11 +2708,11 @@ app.post('/api/events/external-create', authenticate, async (req, res) => {
       general: {
         start: startDate || '',
         end: endDate || '',
-        city: city || '',
-        state: state || '',
+        city: cityValue,
+        state: stateValue,
         client: client || '',
         company: companyValue,
-        location: location || '',
+        location: locationValue,
         summary: summaryValue,
         budget: budgetValue,
         attendees: Number.isFinite(attendeeValue) && attendeeValue > 0 ? attendeeValue : undefined,

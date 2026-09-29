@@ -125,9 +125,10 @@ function renderDarkThemeHeader(table) {
   // Location Header
   const locationEl = document.getElementById('eventLocationHeader');
   if (locationEl) {
-    const city = general.city || '';
-    const state = general.state || '';
-    locationEl.textContent = city && state ? `${city}, ${state}` : (general.location || 'Location TBD');
+    const place = eventInfoPlace(general);
+    locationEl.textContent = place.placeholder
+      ? 'Location TBD'
+      : [place.city, place.state].filter(Boolean).join(', ');
   }
   
   // Status Badge
@@ -170,8 +171,44 @@ function renderDarkThemeSummary(table) {
   
   const cityEl = document.getElementById('summaryCity');
   const stateEl = document.getElementById('summaryState');
-  if (cityEl) cityEl.textContent = general.city || 'City';
-  if (stateEl) stateEl.textContent = general.state || 'State';
+  const place = eventInfoPlace(general);
+  const sep = cityEl?.parentElement?.querySelector('.info-separator');
+  if (cityEl) cityEl.textContent = place.placeholder ? 'City' : (place.city || '');
+  if (stateEl) {
+    stateEl.textContent = place.placeholder ? 'State' : (place.state || '');
+    stateEl.style.display = place.placeholder || place.state ? '' : 'none';
+  }
+  if (sep) sep.style.display = (place.placeholder || (place.city && place.state)) ? '' : 'none';
+}
+
+function splitCityState(value) {
+  const text = String(value || '').trim().replace(/[.\s]+$/, '');
+  const match = text.match(/^(.+?),\s*([A-Za-z]{2}|[A-Za-z][A-Za-z .'-]{2,})$/);
+  if (!match) return null;
+  const city = match[1].trim();
+  let state = match[2].trim().replace(/\.+$/, '');
+  if (!city || !state) return null;
+  if (state.length === 2) state = state.toUpperCase();
+  return { city, state };
+}
+
+function eventInfoPlace(general) {
+  const city = String(general?.city || '').trim();
+  const state = String(general?.state || '').trim();
+  if (city || state) return { city, state, placeholder: false };
+  const raw = String(general?.location || '').trim();
+  const parsed = splitCityState(raw);
+  if (parsed) return { ...parsed, placeholder: false };
+  const card = (general?.locations || []).find(loc => String(loc?.name || '').trim() || String(loc?.address || '').trim());
+  if (card) {
+    const name = String(card.name || '').trim();
+    const parsedName = splitCityState(name);
+    if (parsedName && !String(card.address || '').trim()) return { ...parsedName, placeholder: false };
+    const text = name || String(card.address || '').trim();
+    if (text) return { city: text, state: '', placeholder: false };
+  }
+  if (raw) return { city: raw, state: '', placeholder: false };
+  return { city: '', state: '', placeholder: true };
 }
 
 function renderDarkThemeStats(table) {
@@ -2161,7 +2198,7 @@ function switchToInfoEditMode(tableId) {
     input.type = 'text';
     input.id = 'editInfoCity';
     input.className = 'inline-edit-input';
-    input.value = general.city || '';
+    input.value = eventInfoPlace(general).placeholder ? '' : eventInfoPlace(general).city;
     input.placeholder = 'City';
     cityEl.replaceWith(input);
   }
@@ -2173,7 +2210,7 @@ function switchToInfoEditMode(tableId) {
     input.type = 'text';
     input.id = 'editInfoState';
     input.className = 'inline-edit-input';
-    input.value = general.state || '';
+    input.value = eventInfoPlace(general).placeholder ? '' : eventInfoPlace(general).state;
     input.placeholder = 'State';
     stateEl.replaceWith(input);
   }
@@ -2341,7 +2378,6 @@ async function saveInfoEdit(tableId) {
   const stateValue = document.getElementById('editInfoState')?.value || '';
   const startValue = document.getElementById('editInfoStart')?.value || '';
   const endValue = document.getElementById('editInfoEnd')?.value || '';
-  const budgetValue = document.getElementById('editInfoBudget')?.value || '';
   const attendeesValue = document.getElementById('editInfoAttendees')?.value || '';
   
   try {
@@ -2355,7 +2391,7 @@ async function saveInfoEdit(tableId) {
         state: stateValue,
         start: startValue,
         end: endValue,
-        budget: budgetValue,
+        budget: currentTableData?.general?.budget || '',
         attendees: attendeesValue
       }
     };
@@ -3102,6 +3138,97 @@ function scheduleActivityRefresh(tableId) {
     }
     loadClientActivity(tableId);
   }, 4000);
+}
+
+function pendingTaskDue(dueDate) {
+  if (!dueDate) return { text: '', className: '' };
+  let dateStr = dueDate;
+  if (typeof dueDate === 'string' && dueDate.includes('T')) dateStr = dueDate.split('T')[0];
+  const [year, month, day] = String(dateStr).split('-').map(Number);
+  if (!year || !month || !day) return { text: '', className: '' };
+  const date = new Date(year, month - 1, day);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  date.setHours(0, 0, 0, 0);
+  const diffDays = Math.round((date - today) / 86400000);
+  if (diffDays < 0) {
+    const daysAgo = Math.abs(diffDays);
+    return { text: daysAgo === 1 ? 'Yesterday' : `${daysAgo} days ago`, className: 'is-overdue' };
+  }
+  if (diffDays === 0) return { text: 'Today', className: 'is-soon' };
+  if (diffDays === 1) return { text: 'Tomorrow', className: 'is-soon' };
+  if (diffDays <= 3) return { text: `In ${diffDays} days`, className: 'is-soon' };
+  return { text: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), className: '' };
+}
+
+function loadPendingTasks(eventId) {
+  const list = document.getElementById('pendingTasksList');
+  const countEl = document.getElementById('pendingTasksCount');
+  const openBtn = document.getElementById('openTodosBtn');
+  if (!list || !eventId) return;
+
+  const openTodos = () => {
+    if (typeof window.navigate === 'function') window.navigate('todos', eventId);
+    else location.hash = `#todos?id=${encodeURIComponent(eventId)}`;
+  };
+  if (openBtn && !openBtn.dataset.bound) {
+    openBtn.dataset.bound = '1';
+    openBtn.addEventListener('click', openTodos);
+  }
+
+  fetch(`${API_BASE}/api/tables/${eventId}/todos`, {
+    headers: { Authorization: window.token }
+  })
+    .then(res => res.ok ? res.json() : Promise.reject(new Error('Failed to load tasks')))
+    .then(data => {
+      const pending = (data.todos || [])
+        .filter(todo => todo.status === 'todo' || todo.status === 'in-progress')
+        .sort((a, b) => {
+          const dueA = pendingTaskDue(a.dueDate);
+          const dueB = pendingTaskDue(b.dueDate);
+          const rank = (due) => due.className === 'is-overdue' ? 0 : (due.text ? 1 : 2);
+          const byRank = rank(dueA) - rank(dueB);
+          if (byRank) return byRank;
+          if (a.dueDate && b.dueDate) {
+            const diff = new Date(a.dueDate) - new Date(b.dueDate);
+            if (diff) return diff;
+          }
+          return String(a.task || '').localeCompare(String(b.task || ''));
+        });
+
+      if (countEl) {
+        countEl.textContent = String(pending.length);
+        countEl.hidden = pending.length === 0;
+      }
+      if (!pending.length) {
+        list.innerHTML = '<div class="pending-tasks-empty">No pending tasks.</div>';
+        return;
+      }
+
+      list.innerHTML = pending.map(todo => {
+        const due = pendingTaskDue(todo.dueDate);
+        const status = todo.status === 'in-progress' ? 'In progress' : 'To do';
+        const owner = todo.owner && todo.owner.fullName ? todo.owner.fullName : '';
+        const dueHtml = due.text ? `<span class="${due.className}">${escapeHtml(due.text)}</span>` : '';
+        const meta = [owner, status].map(part => escapeHtml(part)).filter(Boolean).join(' · ');
+        const metaHtml = [meta, dueHtml].filter(Boolean).join(' · ');
+        return `<button type="button" class="pending-task-row">
+          <span class="pending-task-dot ${todo.status === 'in-progress' ? 'in-progress' : 'todo'}"></span>
+          <span class="pending-task-copy">
+            <span class="pending-task-name">${escapeHtml(todo.task || 'Untitled')}</span>
+            <span class="pending-task-meta">${metaHtml}</span>
+          </span>
+        </button>`;
+      }).join('');
+      list.querySelectorAll('.pending-task-row').forEach(btn => {
+        btn.addEventListener('click', openTodos);
+      });
+    })
+    .catch(err => {
+      console.error('Error loading pending tasks:', err);
+      if (countEl) countEl.hidden = true;
+      list.innerHTML = '<div class="pending-tasks-empty">Couldn’t load tasks.</div>';
+    });
 }
 
 function loadClientActivity(tableId) {
@@ -4137,6 +4264,7 @@ function initPage(id) {
   }
 
   loadClientActivity(id);
+  loadPendingTasks(id);
   watchClientActivity(id);
   setupGmailInbox(id);
   

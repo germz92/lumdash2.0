@@ -233,6 +233,21 @@
         <!-- Sidebar Column -->
         <div class="general-sidebar-column">
 
+          <div class="general-card pending-tasks-card collapsible-card" id="pendingTasksCard" data-card-id="pendingTasks">
+            <div class="card-header" onclick="window.toggleCardCollapse(this.parentElement)">
+              <h2>Pending tasks <span class="pending-tasks-count" id="pendingTasksCount" hidden>0</span></h2>
+              <div class="card-header-actions">
+                <button type="button" class="card-edit-btn" id="openTodosBtn" title="Open to-dos" onclick="event.stopPropagation()">
+                  <span class="material-symbols-outlined">open_in_new</span>
+                </button>
+                <span class="material-symbols-outlined collapse-icon">expand_more</span>
+              </div>
+            </div>
+            <div class="card-content" id="pendingTasksList">
+              <div class="pending-tasks-empty">Loading…</div>
+            </div>
+          </div>
+
           <!-- Combined Event Info Widget -->
           <div class="general-card info-card collapsible-card" id="eventInfoCard" data-card-id="eventInfo">
             <div class="card-header" onclick="window.toggleCardCollapse(this.parentElement)">
@@ -277,13 +292,6 @@
                     <span class="info-arrow">→</span>
                     <span class="info-value" id="statEndDate">Mar 5, 2026</span>
                   </div>
-                </div>
-              </div>
-              <div class="info-row">
-                <span class="material-symbols-outlined">attach_money</span>
-                <div class="info-text">
-                  <span class="info-label">Budget</span>
-                  <span class="info-value" id="statBudget">$48,000</span>
                 </div>
               </div>
               <div class="info-row">

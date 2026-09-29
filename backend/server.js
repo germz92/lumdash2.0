@@ -12427,15 +12427,27 @@ app.get('/api/post-production', authenticate, async (req, res) => {
       }).select('_id title status postProductionItemId').lean();
       const portalByPp = {};
       portalProjects.forEach(p => {
-        if (p.postProductionItemId) portalByPp[p.postProductionItemId.toString()] = p;
+        const key = p.postProductionItemId && p.postProductionItemId.toString();
+        if (!key) return;
+        if (!portalByPp[key]) portalByPp[key] = [];
+        portalByPp[key].push({
+          _id: p._id,
+          title: p.title || '',
+          status: p.status || ''
+        });
+      });
+      Object.values(portalByPp).forEach(list => {
+        list.sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }));
       });
       rows = rows.map(r => {
-        const linked = portalByPp[r._id.toString()];
+        const linked = portalByPp[r._id.toString()] || [];
+        const first = linked[0];
         return {
           ...r,
-          portalProjectId: linked?._id || null,
-          portalProjectTitle: linked?.title || '',
-          portalProjectStatus: linked?.status || ''
+          portalProjects: linked,
+          portalProjectId: first?._id || null,
+          portalProjectTitle: first?.title || '',
+          portalProjectStatus: first?.status || ''
         };
       });
     }
@@ -13150,46 +13162,47 @@ app.delete('/api/post-production/:id', authenticate, async (req, res) => {
   }
 });
 
-// Link / unlink a Video Portal project to this post-production item
+// Link or unlink one Video Portal project. A row can keep several.
 app.put('/api/post-production/:id/portal-project', authenticate, async (req, res) => {
   try {
     const item = await PostProductionItem.findById(req.params.id).select('_id item project archived');
     if (!item || item.archived) return res.status(404).json({ error: 'Item not found' });
 
     const rawId = req.body.videoProjectId;
-    // Unlink
+    // Clear every project on this row
     if (rawId === null || rawId === '' || rawId === undefined) {
       await VideoProject.updateMany(
         { postProductionItemId: item._id },
         { $set: { postProductionItemId: null } }
       );
-      return res.json({
-        portalProjectId: null,
-        portalProjectTitle: '',
-        portalProjectStatus: ''
-      });
+      return res.json({ portalProjects: [] });
     }
 
     const project = await VideoProject.findById(rawId);
     if (!project) return res.status(404).json({ error: 'Video portal project not found' });
 
-    // One PP item ↔ one portal project
-    await VideoProject.updateMany(
-      {
-        $or: [
-          { postProductionItemId: item._id },
-          { _id: project._id }
-        ]
-      },
-      { $set: { postProductionItemId: null } }
-    );
-    project.postProductionItemId = item._id;
-    await project.save();
+    if (req.body.linked === false) {
+      if (project.postProductionItemId && String(project.postProductionItemId) === String(item._id)) {
+        project.postProductionItemId = null;
+        await project.save();
+      }
+    } else {
+      // A portal project belongs to one post-production row. Other projects on this row stay linked.
+      project.postProductionItemId = item._id;
+      await project.save();
+    }
+
+    const portalProjects = await VideoProject.find({ postProductionItemId: item._id })
+      .select('_id title status')
+      .sort({ title: 1 })
+      .lean();
 
     res.json({
-      portalProjectId: project._id,
-      portalProjectTitle: project.title || '',
-      portalProjectStatus: project.status || ''
+      portalProjects: portalProjects.map(p => ({
+        _id: p._id,
+        title: p.title || '',
+        status: p.status || ''
+      }))
     });
   } catch (err) {
     console.error('Error linking portal project to post-production:', err);

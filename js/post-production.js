@@ -474,16 +474,45 @@
     return getRowVersions(row)[0] || null;
   }
 
+  function portalProjectsOf(row) {
+    if (Array.isArray(row?.portalProjects)) return row.portalProjects;
+    if (row?.portalProjectId) {
+      return [{
+        _id: row.portalProjectId,
+        title: row.portalProjectTitle || '',
+        status: row.portalProjectStatus || ''
+      }];
+    }
+    return [];
+  }
+
+  function syncPortalFields(row) {
+    const list = portalProjectsOf(row);
+    row.portalProjects = list;
+    const first = list[0] || null;
+    row.portalProjectId = first?._id || null;
+    row.portalProjectTitle = first?.title || '';
+    row.portalProjectStatus = first?.status || '';
+  }
+
   function portalButton(row) {
     if (row._id === DRAFT_ID) return '<span class="pp-version-empty" aria-hidden="true">—</span>';
-    if (row.portalProjectId) {
-      const title = row.portalProjectTitle || 'Video portal project';
-      return `<div class="pp-version-cell-inner"><button type="button" class="pp-version-btn has-link" data-portal-open="${esc(row.portalProjectId)}" data-portal-item="${esc(row._id)}" title="Open “${esc(title)}” in Video Portal&#10;Long-press to change or unlink" aria-label="Open portal project">
+    const linked = portalProjectsOf(row);
+    if (!linked.length) {
+      return `<div class="pp-version-cell-inner"><button type="button" class="pp-version-btn" data-portal-link="${esc(row._id)}" title="Link a Video Portal project" aria-label="Link Video Portal project">
+        <span class="material-symbols-outlined">add_link</span>
+      </button></div>`;
+    }
+    if (linked.length === 1) {
+      const title = linked[0].title || 'Video portal project';
+      return `<div class="pp-version-cell-inner"><button type="button" class="pp-version-btn has-link" data-portal-open="${esc(linked[0]._id)}" data-portal-item="${esc(row._id)}" title="Open “${esc(title)}” in Video Portal&#10;Long-press to add or remove" aria-label="Open portal project">
         <span class="material-symbols-outlined">play_circle</span>
       </button></div>`;
     }
-    return `<div class="pp-version-cell-inner"><button type="button" class="pp-version-btn" data-portal-link="${esc(row._id)}" title="Link a Video Portal project" aria-label="Link Video Portal project">
-      <span class="material-symbols-outlined">add_link</span>
+    const names = linked.map(p => p.title || 'Untitled').join(', ');
+    return `<div class="pp-version-cell-inner"><button type="button" class="pp-version-btn has-link" data-portal-link="${esc(row._id)}" title="${esc(names)}" aria-label="${linked.length} portal projects">
+      <span class="material-symbols-outlined">play_circle</span>
+      <span class="pp-version-count">${linked.length}</span>
     </button></div>`;
   }
 
@@ -1386,7 +1415,49 @@
     }
   }
 
-  async function showPortalLinkMenu(anchor, itemId) {
+  function portalStatusLabel(status) {
+    return String(status || '').replace(/_/g, ' ');
+  }
+
+  function portalOptionRow(project, linked) {
+    const id = String(project._id);
+    const status = portalStatusLabel(project.status);
+    const client = project.clientName || '';
+    const meta = [client, status].filter(Boolean).join(' · ');
+    const title = project.title || 'Untitled';
+    if (linked) {
+      return `<div class="pp-portal-row" data-portal-row="${esc(id)}" data-portal-kind="linked">
+        <button type="button" class="pp-version-item-main is-linked" data-portal-open-id="${esc(id)}" title="Open in Video Portal">
+          <span class="pp-version-item-name">${esc(title)}</span>
+          <span class="pp-version-item-meta">${esc(meta)}</span>
+        </button>
+        <button type="button" class="pp-portal-icon" data-portal-remove="${esc(id)}" title="Unlink" aria-label="Unlink ${esc(title)}">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </div>`;
+    }
+    return `<div class="pp-portal-row" data-portal-row="${esc(id)}" data-portal-kind="add">
+      <button type="button" class="pp-version-item-main" data-portal-pick="${esc(id)}">
+        <span class="pp-version-item-name">${esc(title)}</span>
+        <span class="pp-version-item-meta">${esc(meta)}</span>
+      </button>
+    </div>`;
+  }
+
+  function applyPortalFilter(menu) {
+    const filter = menu.querySelector('[data-portal-filter]');
+    const q = (filter?.value || '').trim().toLowerCase();
+    menu.querySelectorAll('[data-portal-row]').forEach(row => {
+      row.style.display = !q || row.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+    menu.querySelectorAll('[data-portal-section]').forEach(header => {
+      const kind = header.dataset.portalSection;
+      const any = [...menu.querySelectorAll(`[data-portal-kind="${kind}"]`)].some(el => el.style.display !== 'none');
+      header.style.display = any ? '' : 'none';
+    });
+  }
+
+  async function showPortalLinkMenu(anchor, itemId, { query = '' } = {}) {
     const menu = document.getElementById('ppVersionMenu');
     if (!menu) return;
     const row = items.find(i => i._id === itemId);
@@ -1404,55 +1475,68 @@
       return;
     }
 
-    const linkedId = row.portalProjectId ? String(row.portalProjectId) : '';
-    const options = projects
-      .filter(p => p.status !== 'archived')
-      .map(p => {
-        const id = String(p._id);
-        const selected = linkedId && id === linkedId ? ' style="outline:1px solid var(--accent-red, #CC0007);"' : '';
-        return `<button type="button" class="pp-version-item-main" data-portal-pick="${esc(id)}"${selected}>
-          <span class="pp-version-item-name">${esc(p.title || 'Untitled')}</span>
-          <span class="pp-version-item-meta">${esc(p.clientName || '')}${p.status ? ` · ${esc(p.status)}` : ''}</span>
-        </button>`;
-      }).join('');
+    const linked = portalProjectsOf(row);
+    const linkedIds = new Set(linked.map(p => String(p._id)));
+    const byId = new Map(projects.map(p => [String(p._id), p]));
+    const linkedRows = linked
+      .map(p => byId.get(String(p._id)) || p)
+      .sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base' }));
+    const rest = projects
+      .filter(p => p.status !== 'archived' && !linkedIds.has(String(p._id)))
+      .sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), undefined, { sensitivity: 'base' }));
+
+    const linkedHtml = linkedRows.map(p => portalOptionRow(p, true)).join('');
+    const restHtml = rest.map(p => portalOptionRow(p, false)).join('');
+    const sections = linkedRows.length
+      ? `<div class="pp-portal-section" data-portal-section="linked">Linked</div>${linkedHtml}<div class="pp-portal-section" data-portal-section="add">Add a project</div>${restHtml}`
+      : (restHtml || '<p class="pp-version-history-empty">No video portal projects yet.</p>');
 
     menu.innerHTML = `
       <div class="pp-version-menu-inner">
-        <div class="pp-version-menu-header">${linkedId ? 'Change portal project' : 'Link portal project'}</div>
-        <input type="search" class="pp-version-input" data-portal-filter placeholder="Search projects…" autocomplete="off">
-        <div class="pp-portal-options" style="max-height:240px;overflow:auto;display:flex;flex-direction:column;gap:4px;margin-top:8px;">
-          ${options || '<p class="pp-version-history-empty">No video portal projects yet.</p>'}
-        </div>
-        ${linkedId ? `<button type="button" class="pp-version-save" data-portal-unlink style="margin-top:10px;background:transparent;color:var(--text-muted);border:1px solid var(--border-default);">Unlink portal</button>` : ''}
+        <div class="pp-version-menu-header">${linkedRows.length ? 'Portal projects' : 'Link portal project'}</div>
+        <input type="search" class="pp-version-input" data-portal-filter placeholder="Search projects…" autocomplete="off" value="${esc(query)}">
+        <div class="pp-portal-options">${sections}</div>
       </div>`;
 
     positionFloatingMenu(menu, anchor);
     const filter = menu.querySelector('[data-portal-filter]');
-    filter?.addEventListener('input', () => {
-      const q = filter.value.trim().toLowerCase();
-      menu.querySelectorAll('[data-portal-pick]').forEach(btn => {
-        btn.style.display = !q || btn.textContent.toLowerCase().includes(q) ? '' : 'none';
-      });
-    });
+    filter?.addEventListener('input', () => applyPortalFilter(menu));
+    if (query) applyPortalFilter(menu);
     filter?.focus();
+    if (filter && query) {
+      const end = filter.value.length;
+      filter.setSelectionRange(end, end);
+    }
   }
 
-  async function setPortalLink(itemId, videoProjectId) {
+  async function setPortalLink(itemId, videoProjectId, linked) {
+    const menu = document.getElementById('ppVersionMenu');
+    const query = menu?.querySelector('[data-portal-filter]')?.value || '';
+    const scroll = menu?.querySelector('.pp-portal-options')?.scrollTop || 0;
     const res = await fetch(`${API_BASE}/api/post-production/${itemId}/portal-project`, {
       method: 'PUT',
       headers: authHeaders(),
-      body: JSON.stringify({ videoProjectId })
+      body: JSON.stringify({ videoProjectId, linked })
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || 'Failed to update portal link');
-    const row = items.find(i => i._id === itemId);
-    if (row) {
-      row.portalProjectId = data.portalProjectId || null;
-      row.portalProjectTitle = data.portalProjectTitle || '';
-      row.portalProjectStatus = data.portalProjectStatus || '';
-    }
-    hideVersionMenu();
+    const movedId = String(videoProjectId || '');
+    items.forEach(row => {
+      if (!Array.isArray(row.portalProjects)) row.portalProjects = portalProjectsOf(row);
+      if (String(row._id) === String(itemId)) {
+        row.portalProjects = Array.isArray(data.portalProjects) ? data.portalProjects : [];
+      } else if (linked && movedId) {
+        row.portalProjects = row.portalProjects.filter(p => String(p._id) !== movedId);
+      }
+      syncPortalFields(row);
+    });
     renderLists();
+    const anchor = document.querySelector(`[data-portal-item="${itemId}"], [data-portal-link="${itemId}"]`);
+    if (anchor) {
+      await showPortalLinkMenu(anchor, itemId, { query });
+      const box = document.querySelector('#ppVersionMenu .pp-portal-options');
+      if (box) box.scrollTop = scroll;
+    }
   }
 
   function refreshVersionMenuIfOpen() {
@@ -2441,21 +2525,28 @@
         removeVersionFromMenu(removeBtn.dataset.versionRemove);
         return;
       }
-      const pick = e.target.closest('[data-portal-pick]');
-      if (pick && versionMenuTarget?.itemId) {
+      const remove = e.target.closest('[data-portal-remove]');
+      if (remove && versionMenuTarget?.itemId) {
         e.preventDefault();
         try {
-          await setPortalLink(versionMenuTarget.itemId, pick.dataset.portalPick);
+          await setPortalLink(versionMenuTarget.itemId, remove.dataset.portalRemove, false);
         } catch (err) {
           alert(err.message);
         }
         return;
       }
-      const unlink = e.target.closest('[data-portal-unlink]');
-      if (unlink && versionMenuTarget?.itemId) {
+      const openPick = e.target.closest('[data-portal-open-id]');
+      if (openPick) {
+        e.preventDefault();
+        hideVersionMenu();
+        openPortalProject(openPick.dataset.portalOpenId);
+        return;
+      }
+      const pick = e.target.closest('[data-portal-pick]');
+      if (pick && versionMenuTarget?.itemId) {
         e.preventDefault();
         try {
-          await setPortalLink(versionMenuTarget.itemId, null);
+          await setPortalLink(versionMenuTarget.itemId, pick.dataset.portalPick, true);
         } catch (err) {
           alert(err.message);
         }

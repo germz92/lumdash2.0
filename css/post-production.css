@@ -2348,6 +2348,119 @@ html[data-theme="light"] .post-production-page input[type="date"]::-webkit-calen
   color: inherit;
 }
 
+.pp-portal-options {
+  max-height: 240px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  min-width: 0;
+}
+
+button.pp-version-item-main {
+  flex: 0 0 auto;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  min-height: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  background-color: transparent;
+  color: inherit;
+  box-shadow: none;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: inherit;
+  font-weight: 400;
+  line-height: 1.3;
+  text-align: left;
+  justify-content: flex-start;
+  align-items: stretch;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+button.pp-version-item-main:hover,
+button.pp-version-item-main:active {
+  background: var(--bg-hover);
+  background-color: var(--bg-hover);
+  color: inherit;
+  box-shadow: none;
+}
+
+button.pp-version-item-main.is-linked {
+  background: var(--bg-hover);
+  background-color: var(--bg-hover);
+  box-shadow: inset 2px 0 0 var(--brand-red, #CC0007);
+}
+
+.pp-portal-options .pp-version-item-name,
+.pp-portal-options .pp-version-item-meta {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pp-portal-section {
+  margin: 8px 2px 2px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+.pp-portal-row {
+  display: flex;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pp-portal-row .pp-version-item-main {
+  flex: 1 1 auto;
+  width: auto;
+}
+
+button.pp-portal-icon {
+  flex: 0 0 auto;
+  align-self: center;
+  width: 28px;
+  height: 28px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  background-color: transparent;
+  color: var(--text-muted);
+  box-shadow: none;
+  text-transform: none;
+  letter-spacing: normal;
+  cursor: pointer;
+}
+
+button.pp-portal-icon:hover,
+button.pp-portal-icon:active {
+  background: var(--bg-hover);
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+  box-shadow: none;
+}
+
+button.pp-portal-icon .material-symbols-outlined {
+  font-size: 18px;
+}
+
 .pp-version-item-name {
   font-size: 0.85rem;
   font-weight: 600;

@@ -95,6 +95,13 @@
     return cachedPlayerDuration > 0 ? cachedPlayerDuration : 0;
   }
 
+  function assetUrl(url) {
+    const raw = String(url || '').trim();
+    if (!raw) return '';
+    if (/^https?:\/\//i.test(raw)) return raw;
+    return `${API_BASE}${raw.startsWith('/') ? raw : `/${raw}`}`;
+  }
+
   function portalFileUrl(path) {
     if (!path) return '';
     const absolute = /^https?:\/\//i.test(path) ? path : `${API_BASE}${path}`;
@@ -537,8 +544,9 @@
     const hasActiveFilters = !!(gallerySearch.trim() || galleryStatusFilter !== 'all' || galleryFolderFilter);
 
     const card = (p, { hideFolderMeta = false } = {}) => {
-      const thumb = p.thumbnailUrl
-        ? `<img src="${escapeHtml(p.thumbnailUrl)}" alt="" loading="lazy">`
+      const thumbSrc = assetUrl(p.thumbnailUrl);
+      const thumb = thumbSrc
+        ? `<img src="${escapeHtml(thumbSrc)}" alt="" loading="lazy">`
         : (p.latestVersionStatus === 'processing' ? 'Processing…' : 'No preview yet');
       const decision = p.reviewDecision?.status || 'none';
       let tag;

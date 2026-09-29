@@ -3,6 +3,12 @@
 
   const API_BASE = window.API_BASE || '';
   function getToken() { return `Bearer ${localStorage.getItem('token')}`; }
+  function assetUrl(url) {
+    const raw = String(url || '').trim();
+    if (!raw) return '';
+    if (/^https?:\/\//i.test(raw)) return raw;
+    return `${API_BASE}${raw.startsWith('/') ? raw : `/${raw}`}`;
+  }
 
   const STATUS_LABELS = { in_review: 'In Review', delivered: 'Delivered', archived: 'Archived' };
   const NEW_CLIENT_OPTION = '__new_client__';
@@ -504,8 +510,9 @@
     }
 
     container.innerHTML = `<div class="vp-grid">${items.map(p => {
-      const thumb = (p.thumbnailUrl || p.latestVersion?.thumbnailUrl)
-        ? `<img src="${escapeHtml(p.thumbnailUrl || p.latestVersion.thumbnailUrl)}" alt="" loading="lazy">`
+      const thumbSrc = assetUrl(p.thumbnailUrl || p.latestVersion?.thumbnailUrl);
+      const thumb = thumbSrc
+        ? `<img src="${escapeHtml(thumbSrc)}" alt="" loading="lazy">`
         : `<span class="material-symbols-outlined">movie</span>`;
       const versionTag = p.latestVersion ? `<span class="vp-card-version-tag">v${p.latestVersion.versionNumber}</span>` : '';
       const commentTag = p.openCommentCount > 0
@@ -1860,7 +1867,7 @@
     const preview = document.getElementById('thumbPreview');
     const clearBtn = document.getElementById('thumbClearBtn');
     if (!preview) return;
-    const url = detail?.thumbnailUrl || detail?.customThumbnailUrl || '';
+    const url = assetUrl(detail?.thumbnailUrl || detail?.customThumbnailUrl || '');
     if (url) {
       preview.innerHTML = `<img src="${escapeHtml(url)}" alt="Thumbnail">`;
       if (clearBtn) clearBtn.style.display = detail?.customThumbnailUrl ? 'inline-flex' : 'none';

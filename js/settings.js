@@ -35,6 +35,7 @@
       if (!invitesLoaded) loadInvites().catch(err => console.error(err));
       if (!usersAdminReady) initUsersAdmin().catch(err => console.error(err));
     }
+    if (sectionId === 'contacts') loadSavedContacts().catch(err => console.error(err));
   }
 
   function setupSectionNav() {
@@ -199,7 +200,7 @@
     const fromStorage = sessionStorage.getItem('settingsSection');
     sessionStorage.removeItem('settingsSection');
     const section = fromStorage === 'invites' ? 'users' : fromStorage;
-    if (section && ['notifications', 'users'].includes(section)) {
+    if (section && ['notifications', 'users', 'contacts'].includes(section)) {
       if (section === 'users') {
         if (isAdmin()) switchSection(section);
       } else {
@@ -395,10 +396,149 @@
     window.addEventListener('lumdash-theme-change', syncActive);
   }
 
+  let savedContacts = [];
+  let editingSavedContactId = '';
+
+  function setContactsStatus(text, type = '') {
+    const el = document.getElementById('settingsContactsStatus');
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'settings-save-status' + (type ? ` ${type}` : '');
+  }
+
+  function savedContactPayload() {
+    return {
+      name: document.getElementById('savedContactName')?.value.trim() || '',
+      role: document.getElementById('savedContactRole')?.value.trim() || '',
+      company: document.getElementById('savedContactCompany')?.value.trim() || '',
+      phone: document.getElementById('savedContactPhone')?.value.trim() || '',
+      email: document.getElementById('savedContactEmail')?.value.trim() || ''
+    };
+  }
+
+  function resetSavedContactForm() {
+    editingSavedContactId = '';
+    document.getElementById('settingsContactForm')?.reset();
+    const submit = document.getElementById('savedContactSubmit');
+    const cancel = document.getElementById('savedContactCancel');
+    if (submit) submit.textContent = 'Add contact';
+    if (cancel) cancel.hidden = true;
+  }
+
+  function renderSavedContacts() {
+    const list = document.getElementById('settingsContactsList');
+    if (!list) return;
+    const q = document.getElementById('savedContactFilter')?.value.trim().toLowerCase() || '';
+    const rows = savedContacts.filter(contact => {
+      if (!q) return true;
+      return [contact.name, contact.email, contact.company, contact.role, contact.phone]
+        .some(value => String(value || '').toLowerCase().includes(q));
+    });
+    if (!rows.length) {
+      list.innerHTML = '<p class="settings-contacts-empty">No saved contacts yet.</p>';
+      return;
+    }
+    list.innerHTML = rows.map(contact => `
+      <article class="settings-contact-card">
+        <div>
+          <h3>${esc(contact.name)}</h3>
+          <p>${esc([contact.role, contact.company].filter(Boolean).join(' · '))}</p>
+          <p>${esc([contact.email, contact.phone].filter(Boolean).join(' · '))}</p>
+        </div>
+        <div class="settings-contact-card-actions">
+          <button type="button" class="settings-link-btn" data-edit-contact="${esc(contact._id)}">Edit</button>
+          <button type="button" class="settings-link-btn settings-link-danger" data-delete-contact="${esc(contact._id)}">Delete</button>
+        </div>
+      </article>`).join('');
+  }
+
+  async function loadSavedContacts() {
+    const list = document.getElementById('settingsContactsList');
+    if (list && !savedContacts.length) {
+      list.innerHTML = '<div class="settings-loading"><span class="material-symbols-outlined spinning">sync</span> Loading contacts…</div>';
+    }
+    const res = await fetch(`${API_BASE}/api/saved-contacts`, { headers: authHeaders() });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Failed to load contacts');
+    savedContacts = data.contacts || [];
+    renderSavedContacts();
+  }
+
+  function setupSavedContacts() {
+    const form = document.getElementById('settingsContactForm');
+    const list = document.getElementById('settingsContactsList');
+    const filter = document.getElementById('savedContactFilter');
+    if (!form || form.dataset.ready) return;
+    form.dataset.ready = '1';
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const payload = savedContactPayload();
+      if (!payload.name) return;
+      const editing = !!editingSavedContactId;
+      try {
+        setContactsStatus(editing ? 'Saving…' : 'Adding…');
+        const res = await fetch(
+          editing ? `${API_BASE}/api/saved-contacts/${editingSavedContactId}` : `${API_BASE}/api/saved-contacts`,
+          {
+            method: editing ? 'PUT' : 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify(payload)
+          }
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Could not save contact');
+        resetSavedContactForm();
+        setContactsStatus(editing ? 'Contact updated' : 'Contact added', 'saved');
+        await loadSavedContacts();
+      } catch (err) {
+        setContactsStatus(err.message || 'Could not save contact', 'error');
+      }
+    });
+    document.getElementById('savedContactCancel')?.addEventListener('click', resetSavedContactForm);
+    filter?.addEventListener('input', renderSavedContacts);
+    list?.addEventListener('click', async (event) => {
+      const editId = event.target.closest('[data-edit-contact]')?.dataset.editContact;
+      const deleteId = event.target.closest('[data-delete-contact]')?.dataset.deleteContact;
+      if (editId) {
+        const contact = savedContacts.find(row => String(row._id) === editId);
+        if (!contact) return;
+        editingSavedContactId = editId;
+        document.getElementById('savedContactName').value = contact.name || '';
+        document.getElementById('savedContactRole').value = contact.role || '';
+        document.getElementById('savedContactCompany').value = contact.company || '';
+        document.getElementById('savedContactPhone').value = contact.phone || '';
+        document.getElementById('savedContactEmail').value = contact.email || '';
+        const submit = document.getElementById('savedContactSubmit');
+        const cancel = document.getElementById('savedContactCancel');
+        if (submit) submit.textContent = 'Save changes';
+        if (cancel) cancel.hidden = false;
+        form.scrollIntoView({ block: 'nearest' });
+      }
+      if (deleteId) {
+        const contact = savedContacts.find(row => String(row._id) === deleteId);
+        if (!confirm(`Delete ${contact?.name || 'this contact'} from saved contacts? Events that already use them stay as they are.`)) return;
+        try {
+          const res = await fetch(`${API_BASE}/api/saved-contacts/${deleteId}`, {
+            method: 'DELETE',
+            headers: authHeaders()
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || 'Could not delete contact');
+          if (editingSavedContactId === deleteId) resetSavedContactForm();
+          setContactsStatus('Contact deleted', 'saved');
+          await loadSavedContacts();
+        } catch (err) {
+          setContactsStatus(err.message || 'Could not delete contact', 'error');
+        }
+      }
+    });
+  }
+
   window.initPage = async function() {
     try {
       await initDashboardSidebar();
       setupThemeControls();
+      setupSavedContacts();
       await loadSettings();
     } catch (err) {
       console.error(err);

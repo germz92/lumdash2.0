@@ -9,7 +9,7 @@ const Table = require('../models/Table');
 
 const SCOPE = 'https://www.googleapis.com/auth/gmail.readonly';
 const SYNC_INTERVAL_MS = 2 * 60 * 1000;
-const SYNC_VERSION = 4;
+const SYNC_VERSION = 5;
 const PER_EVENT_MESSAGES = 8;
 const pendingConnects = new Map();
 const syncing = new Map();
@@ -266,6 +266,31 @@ function decodeHtml(value) {
   return text.replace(/\s+/g, ' ').trim();
 }
 
+function messageRfcId(header) {
+  const raw = String(header || '').trim();
+  if (!raw) return '';
+  const wrapped = raw.match(/<([^<>\s]+)>/);
+  const id = (wrapped ? wrapped[1] : raw).trim();
+  if (!id || id.length > 998 || /\s/.test(id)) return '';
+  return id;
+}
+
+function messageHref(row, mailbox) {
+  const rfc = String(row.rfc822Id || '').trim();
+  const gmailId = String(row.gmailId || '').trim();
+  const auth = mailbox ? `?authuser=${mailbox}` : '';
+  const base = `https://mail.google.com/mail/u/0/${auth}`;
+  // Same shape as a Gmail message you already have open:
+  // #search/rfc822msgid%3A<id>/<message id>
+  // The id after the slash is what opens the message instead of leaving the results list.
+  if (rfc) {
+    const query = `rfc822msgid%3A${encodeURIComponent(rfc)}`;
+    return gmailId ? `${base}#search/${query}/${gmailId}` : `${base}#search/${query}`;
+  }
+  if (gmailId) return `${base}#all/${gmailId}`;
+  return '';
+}
+
 function headerMap(payload) {
   const map = {};
   for (const header of payload?.headers || []) {
@@ -450,7 +475,7 @@ async function fetchMessages(token, targets) {
     const part = await Promise.all(chunk.map(async (id) => {
       const url = new URL(`https://gmail.googleapis.com/gmail/v1/users/me/messages/${id}`);
       url.searchParams.set('format', 'metadata');
-      ['From', 'To', 'Cc', 'Subject', 'Date'].forEach(name => url.searchParams.append('metadataHeaders', name));
+      ['From', 'To', 'Cc', 'Subject', 'Date', 'Message-ID'].forEach(name => url.searchParams.append('metadataHeaders', name));
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (!res.ok) return null;
       return res.json();
@@ -498,6 +523,7 @@ async function runSync(userId) {
       parsed.push({
         gmailId: message.id,
         threadId: message.threadId || '',
+        rfc822Id: messageRfcId(headers['message-id']),
         fromEmail: from.email,
         fromName: decodeHtml(from.name),
         subject: decodeHtml(headers.subject || ''),
@@ -525,6 +551,7 @@ async function runSync(userId) {
           $set: {
             userId,
             threadId: row.threadId,
+            rfc822Id: row.rfc822Id,
             fromEmail: row.fromEmail,
             fromName: row.fromName,
             subject: row.subject,
@@ -584,9 +611,7 @@ async function emailsForEvent(eventId, userId) {
     projectId: '',
     projectTitle: '',
     createdAt: row.sentAt || row.createdAt,
-    href: row.threadId
-      ? `https://mail.google.com/mail/?authuser=${mailbox}#all/${row.threadId}`
-      : ''
+    href: messageHref(row, mailbox)
   }));
 }
 

@@ -1828,6 +1828,101 @@ img.owner-avatar {
   display: inline;
 }
 
+.event-activity-cell {
+  max-width: 280px;
+}
+
+.event-last-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.event-last-activity-text,
+.event-last-activity-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event-last-activity-text {
+  font-size: 0.82rem;
+  color: var(--text-primary);
+}
+
+.event-last-activity-detail,
+.event-last-activity-time,
+.event-last-activity-empty {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.event-last-activity:hover .event-last-activity-text {
+  color: var(--text-primary);
+  text-decoration: underline;
+}
+
+.saved-contact-picker {
+  position: relative;
+}
+
+.saved-contact-results {
+  position: absolute;
+  z-index: 5;
+  left: 0;
+  right: 0;
+  top: calc(100% - 8px);
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--surface-modal, var(--bg-secondary));
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.28));
+}
+
+.saved-contact-option,
+.saved-contact-empty {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.35;
+  text-align: left;
+  text-transform: none;
+  min-width: 0;
+  height: auto;
+  cursor: pointer;
+}
+
+.saved-contact-option small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.saved-contact-option:hover {
+  background: var(--bg-tertiary);
+  box-shadow: none;
+  color: var(--text-primary);
+}
+
+.saved-contact-empty {
+  cursor: default;
+  color: var(--text-muted);
+}
+
 /* Crew Avatars Cell */
 .crew-avatars {
   display: flex;
@@ -2906,8 +3001,8 @@ img.owner-avatar {
     display: none; /* Hide Client column */
   }
 
-  .events-table th:nth-child(6),
-  .events-table td:nth-child(6) {
+  .events-table th:nth-child(7),
+  .events-table td:nth-child(7) {
     display: none; /* Hide Tasks column */
   }
 

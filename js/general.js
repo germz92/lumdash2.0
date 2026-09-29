@@ -685,6 +685,7 @@ function showContactModal() {
   if (modal) {
     modal.classList.add('show');
     document.body.style.overflow = 'hidden';
+    loadSavedContactDirectory();
   }
 }
 
@@ -717,6 +718,112 @@ function hideLocationModal() {
 // Track which item is being edited (-1 = adding new)
 let editingContactIndex = -1;
 let editingLocationIndex = -1;
+let savedContactDirectory = [];
+let pickedSavedContactId = '';
+let savedContactPickerReady = false;
+
+function escapeSavedContact(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function setupSavedContactPicker() {
+  if (savedContactPickerReady) return;
+  const input = document.getElementById('savedContactSearch');
+  const results = document.getElementById('savedContactResults');
+  if (!input || !results) return;
+  savedContactPickerReady = true;
+  input.addEventListener('input', () => renderSavedContactResults(input.value));
+  input.addEventListener('focus', () => renderSavedContactResults(input.value));
+  document.addEventListener('click', (event) => {
+    if (!event.target.closest('.saved-contact-picker')) results.hidden = true;
+  });
+}
+
+async function loadSavedContactDirectory() {
+  setupSavedContactPicker();
+  try {
+    const res = await fetch(`${API_BASE}/api/saved-contacts`, {
+      headers: { Authorization: window.token }
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    savedContactDirectory = Array.isArray(data.contacts) ? data.contacts : [];
+  } catch (err) {
+    console.error('Saved contacts:', err);
+  }
+}
+
+function renderSavedContactResults(query) {
+  const results = document.getElementById('savedContactResults');
+  if (!results) return;
+  const q = String(query || '').trim().toLowerCase();
+  const matches = savedContactDirectory.filter(contact => {
+    if (!q) return true;
+    return [contact.name, contact.email, contact.company, contact.role]
+      .some(value => String(value || '').toLowerCase().includes(q));
+  }).slice(0, 8);
+  if (!matches.length) {
+    results.innerHTML = '<div class="saved-contact-empty">No saved contacts match.</div>';
+    results.hidden = false;
+    return;
+  }
+  results.innerHTML = matches.map(contact => `
+    <button type="button" class="saved-contact-option" data-saved-contact-id="${escapeSavedContact(contact._id)}">
+      ${escapeSavedContact(contact.name)}
+      <small>${escapeSavedContact([contact.role, contact.company, contact.email].filter(Boolean).join(' · '))}</small>
+    </button>`).join('');
+  results.hidden = false;
+  results.querySelectorAll('.saved-contact-option').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const contact = savedContactDirectory.find(row => String(row._id) === btn.dataset.savedContactId);
+      if (contact) applySavedContact(contact);
+    });
+  });
+}
+
+function applySavedContact(contact) {
+  pickedSavedContactId = contact._id || '';
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.value = value || '';
+  };
+  set('contactName', contact.name);
+  set('contactRole', contact.role);
+  set('contactCompany', contact.company);
+  set('contactPhone', contact.phone);
+  set('contactEmail', contact.email);
+  const saveLater = document.getElementById('contactSaveForLater');
+  if (saveLater) saveLater.checked = true;
+  const search = document.getElementById('savedContactSearch');
+  if (search) search.value = contact.name || '';
+  const results = document.getElementById('savedContactResults');
+  if (results) results.hidden = true;
+}
+
+async function saveContactToDirectory(contactData) {
+  const res = await fetch(`${API_BASE}/api/saved-contacts`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: window.token
+    },
+    body: JSON.stringify({
+      id: pickedSavedContactId || '',
+      name: contactData.name,
+      role: contactData.role,
+      company: contactData.company,
+      phone: contactData.number,
+      email: contactData.email
+    })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Could not save this contact for other events');
+  return data.contact;
+}
 
 function openEditContactModal(index) {
   editingContactIndex = index;
@@ -731,6 +838,11 @@ function openEditContactModal(index) {
   document.getElementById('contactEmail').value = contact.email || '';
   const isMainEl = document.getElementById('contactIsMain');
   if (isMainEl) isMainEl.checked = !!contact.isMain;
+  const saveLater = document.getElementById('contactSaveForLater');
+  if (saveLater) saveLater.checked = false;
+  pickedSavedContactId = '';
+  const search = document.getElementById('savedContactSearch');
+  if (search) search.value = '';
   
   // Update modal title and button
   const modalTitle = document.querySelector('#addContactModal .modal-header-dark h3');
@@ -874,6 +986,13 @@ function resetContactModal() {
   if (companyEl) companyEl.value = '';
   const isMainEl = document.getElementById('contactIsMain');
   if (isMainEl) isMainEl.checked = false;
+  const saveLater = document.getElementById('contactSaveForLater');
+  if (saveLater) saveLater.checked = true;
+  pickedSavedContactId = '';
+  const search = document.getElementById('savedContactSearch');
+  if (search) search.value = '';
+  const results = document.getElementById('savedContactResults');
+  if (results) results.hidden = true;
 
   const modalTitle = document.querySelector('#addContactModal .modal-header-dark h3');
   const saveBtn = document.getElementById('saveContactBtn');
@@ -2528,6 +2647,15 @@ async function saveDarkThemeContact(tableId) {
       isMain: isMainChecked
     };
 
+    if (document.getElementById('contactSaveForLater')?.checked) {
+      if (!contactData.name.trim()) throw new Error('Name is required');
+      try {
+        await saveContactToDirectory(contactData);
+      } catch (directoryErr) {
+        alert(directoryErr.message || 'Could not save this contact for other events');
+      }
+    }
+
     let contacts = [...(currentTableData?.general?.contacts || [])];
 
     if (isMainChecked) {
@@ -2816,7 +2944,7 @@ function activityDetailBody(item) {
     ? `<p class="activity-detail-quote">${escapeHtml(quote)}</p>`
     : '';
   const note = item.type === 'email'
-    ? '<p class="activity-detail-note">This thread is from your inbox. A contact on this event is on the message, and it was sent in the months around the event.</p>'
+    ? '<p class="activity-detail-note">Opens this message in Gmail. A contact on this event is on it, and it was sent in the months around the event.</p>'
     : '';
   return `${rows.length ? `<div class="activity-detail-meta">${rows.join('')}</div>` : ''}${quoteHtml}${note}`;
 }
@@ -2853,7 +2981,7 @@ function renderActivityDetail(item) {
     const openMail = document.createElement('button');
     openMail.type = 'button';
     openMail.className = 'gmail-guide-primary';
-    openMail.textContent = 'Open in Gmail';
+    openMail.textContent = 'Open this message';
     openMail.addEventListener('click', () => window.open(gmailHref, '_blank', 'noopener'));
     actions.appendChild(openMail);
   }

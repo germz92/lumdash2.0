@@ -23,6 +23,10 @@
             <span class="material-symbols-outlined">group</span>
             User management
           </button>
+          <button type="button" class="settings-nav-item" data-section="contacts">
+            <span class="material-symbols-outlined">contacts</span>
+            Contacts
+          </button>
           <button type="button" class="settings-nav-item" data-section="appearance">
             <span class="material-symbols-outlined">palette</span>
             Appearance
@@ -49,6 +53,51 @@
                 Loading preferences…
               </div>
             </div>
+          </section>
+
+          <section class="settings-section" id="settingsSectionContacts" data-section="contacts">
+            <div class="settings-section-header">
+              <div>
+                <h2>Contacts</h2>
+                <p class="settings-section-desc">People saved here can be added to any event from the contact form.</p>
+              </div>
+              <span class="settings-save-status" id="settingsContactsStatus" aria-live="polite"></span>
+            </div>
+            <form class="settings-contact-form" id="settingsContactForm">
+              <div class="settings-invite-fields">
+                <label>
+                  <span>Name</span>
+                  <input type="text" id="savedContactName" required placeholder="Name">
+                </label>
+                <label>
+                  <span>Role</span>
+                  <input type="text" id="savedContactRole" placeholder="Event director">
+                </label>
+                <label>
+                  <span>Company</span>
+                  <input type="text" id="savedContactCompany" placeholder="Company">
+                </label>
+                <label>
+                  <span>Phone</span>
+                  <input type="tel" id="savedContactPhone" placeholder="Phone">
+                </label>
+                <label>
+                  <span>Email</span>
+                  <input type="email" id="savedContactEmail" placeholder="name@company.com">
+                </label>
+              </div>
+              <div class="settings-contact-actions">
+                <button type="submit" class="settings-btn-primary" id="savedContactSubmit">Add contact</button>
+                <button type="button" class="settings-link-btn" id="savedContactCancel" hidden>Cancel</button>
+              </div>
+            </form>
+            <div class="settings-users-toolbar">
+              <div class="settings-users-search">
+                <span class="material-symbols-outlined">search</span>
+                <input type="text" id="savedContactFilter" placeholder="Search contacts…">
+              </div>
+            </div>
+            <div id="settingsContactsList" class="settings-contacts-list"></div>
           </section>
 
           <section class="settings-section" id="settingsSectionUsers" data-section="users">

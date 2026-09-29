@@ -1551,6 +1551,8 @@ const VideoProject = require('./models/VideoProject');
 const VideoComment = require('./models/VideoComment');
 const VideoPortalActivity = require('./models/VideoPortalActivity');
 const ActivityMark = require('./models/ActivityMark');
+const GmailMessage = require('./models/GmailMessage');
+const SavedContact = require('./models/SavedContact');
 const gmailInbox = require('./lib/gmailInbox');
 
 
@@ -2711,6 +2713,147 @@ app.get('/api/tables', authenticate, async (req, res) => {
   }
 });
 
+function decodeActivityText(value) {
+  let text = String(value || '');
+  for (let pass = 0; pass < 2; pass += 1) {
+    const next = text
+      .replace(/&#(\d+);/g, (_, n) => {
+        const code = Number(n);
+        return Number.isFinite(code) ? String.fromCodePoint(code) : '';
+      })
+      .replace(/&#x([0-9a-f]+);/gi, (_, n) => {
+        const code = parseInt(n, 16);
+        return Number.isFinite(code) ? String.fromCodePoint(code) : '';
+      })
+      .replace(/&quot;/gi, '"')
+      .replace(/&apos;/gi, "'")
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      .replace(/&amp;/gi, '&');
+    if (next === text) break;
+    text = next;
+  }
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+function clipActivity(value, max) {
+  const text = decodeActivityText(value);
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function portalActivityLine(row) {
+  const who = clipActivity(row.actorName, 80) || 'Client';
+  const message = decodeActivityText(row.message);
+  let text = message ? `${who} · ${message}` : who;
+  if (row.type === 'commented' || row.type === 'replied') {
+    text = message ? `${who} commented “${message}”` : `${who} left a comment`;
+  } else if (row.type === 'approved') {
+    text = message ? `${who} approved ${message}` : `${who} approved a cut`;
+  } else if (row.type === 'changes_requested') {
+    text = message ? `${who} requested changes “${message}”` : `${who} requested changes`;
+  } else if (row.type === 'project_viewed' || row.type === 'portal_opened') {
+    text = message ? `${who} ${message.charAt(0).toLowerCase()}${message.slice(1)}` : `${who} opened a cut`;
+  }
+  return { type: row.type || 'activity', text: clipActivity(text, 180), detail: '', at: row.createdAt };
+}
+
+function emailActivityLine(row) {
+  const who = clipActivity(row.fromName, 80) || row.fromEmail || 'Someone';
+  const subject = decodeActivityText(row.subject);
+  const snippet = decodeActivityText(row.snippet);
+  const text = subject ? `${who} emailed “${subject}”` : `${who} sent an email`;
+  const detail = snippet && snippet !== subject ? clipActivity(snippet, 140) : '';
+  return { type: 'email', text: clipActivity(text, 180), detail, at: row.sentAt };
+}
+
+function newerActivity(current, next) {
+  if (!next?.at) return current;
+  if (!current?.at) return next;
+  return new Date(next.at) >= new Date(current.at) ? next : current;
+}
+
+async function accessibleEventIds(user) {
+  if (user.role === 'admin' || user.role === 'planner') {
+    const tables = await Table.find({}).select('_id').lean();
+    return tables.map(table => table._id);
+  }
+  const tables = await Table.find({
+    $or: [
+      { owners: user.id },
+      { sharedWith: user.id },
+      { leads: user.id },
+      { 'rows.userId': user.id }
+    ]
+  }).select('_id').lean();
+  return tables.map(table => table._id);
+}
+
+app.get('/api/tables/client-activity/latest', authenticate, async (req, res) => {
+  try {
+    const eventIds = await accessibleEventIds(req.user);
+    const byEvent = {};
+    if (!eventIds.length) return res.json({ byEvent });
+
+    const ppItems = await PostProductionItem.find({ eventId: { $in: eventIds } }).select('_id eventId').lean();
+    const ppEvent = new Map(ppItems.map(item => [String(item._id), String(item.eventId)]));
+    const projectQuery = [{ eventId: { $in: eventIds } }];
+    if (ppItems.length) projectQuery.push({ postProductionItemId: { $in: ppItems.map(item => item._id) } });
+    const projects = await VideoProject.find({ $or: projectQuery })
+      .select('_id eventId postProductionItemId')
+      .lean();
+    const eventByProject = new Map();
+    for (const project of projects) {
+      const eventId = (project.eventId && String(project.eventId))
+        || (project.postProductionItemId && ppEvent.get(String(project.postProductionItemId)))
+        || '';
+      if (eventId) eventByProject.set(String(project._id), eventId);
+    }
+    if (projects.length) {
+      const rows = await VideoPortalActivity.aggregate([
+        { $match: { projectId: { $in: projects.map(project => project._id) }, actorType: 'client' } },
+        { $sort: { createdAt: -1 } },
+        { $group: {
+          _id: '$projectId',
+          actorName: { $first: '$actorName' },
+          type: { $first: '$type' },
+          message: { $first: '$message' },
+          createdAt: { $first: '$createdAt' }
+        } }
+      ]);
+      for (const row of rows) {
+        const eventId = eventByProject.get(String(row._id));
+        if (!eventId) continue;
+        byEvent[eventId] = newerActivity(byEvent[eventId], portalActivityLine(row));
+      }
+    }
+
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+    const emails = await GmailMessage.aggregate([
+      { $match: { userId, eventIds: { $in: eventIds } } },
+      { $unwind: '$eventIds' },
+      { $match: { eventIds: { $in: eventIds } } },
+      { $sort: { sentAt: -1 } },
+      { $group: {
+        _id: '$eventIds',
+        fromName: { $first: '$fromName' },
+        fromEmail: { $first: '$fromEmail' },
+        subject: { $first: '$subject' },
+        snippet: { $first: '$snippet' },
+        sentAt: { $first: '$sentAt' }
+      } }
+    ]);
+    for (const row of emails) {
+      const eventId = String(row._id);
+      byEvent[eventId] = newerActivity(byEvent[eventId], emailActivityLine(row));
+    }
+
+    res.json({ byEvent });
+  } catch (error) {
+    console.error('Error fetching latest client activity:', error);
+    res.status(500).json({ error: 'Failed to fetch latest activity' });
+  }
+});
+
 app.get('/api/tables/:id', authenticate, async (req, res) => {
   if (!req.params.id || req.params.id === "null") {
     return res.status(400).json({ error: "Invalid table ID" });
@@ -2724,6 +2867,87 @@ app.get('/api/tables/:id', authenticate, async (req, res) => {
     return res.status(403).json({ error: 'Not authorized' });
   }
   res.json(table);
+});
+
+function cleanSavedContact(body) {
+  return {
+    name: String(body?.name || '').trim().slice(0, 120),
+    role: String(body?.role || '').trim().slice(0, 120),
+    company: String(body?.company || '').trim().slice(0, 160),
+    phone: String(body?.phone || body?.number || '').trim().slice(0, 40),
+    email: String(body?.email || '').trim().toLowerCase().slice(0, 160)
+  };
+}
+
+function escapeContactSearch(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+app.get('/api/saved-contacts', authenticate, async (req, res) => {
+  try {
+    const q = String(req.query.q || '').trim();
+    const filter = {};
+    if (q) {
+      const pattern = new RegExp(escapeContactSearch(q), 'i');
+      filter.$or = [{ name: pattern }, { email: pattern }, { company: pattern }, { role: pattern }];
+    }
+    const contacts = await SavedContact.find(filter).sort({ name: 1 }).limit(500).lean();
+    res.json({ contacts });
+  } catch (error) {
+    console.error('Error listing saved contacts:', error);
+    res.status(500).json({ error: 'Failed to load contacts' });
+  }
+});
+
+app.post('/api/saved-contacts', authenticate, async (req, res) => {
+  try {
+    const data = cleanSavedContact(req.body);
+    if (!data.name) return res.status(400).json({ error: 'Name is required' });
+    let contact = null;
+    const id = String(req.body?.id || '').trim();
+    if (id && mongoose.Types.ObjectId.isValid(id)) {
+      contact = await SavedContact.findById(id);
+    }
+    if (!contact && data.email) {
+      contact = await SavedContact.findOne({ email: data.email });
+    }
+    if (contact) {
+      Object.assign(contact, data);
+      await contact.save();
+    } else {
+      contact = await SavedContact.create(data);
+    }
+    res.json({ contact });
+  } catch (error) {
+    if (error.code === 11000) return res.status(400).json({ error: 'A contact with that email already exists' });
+    console.error('Error saving contact:', error);
+    res.status(500).json({ error: 'Failed to save contact' });
+  }
+});
+
+app.put('/api/saved-contacts/:id', authenticate, async (req, res) => {
+  try {
+    const data = cleanSavedContact(req.body);
+    if (!data.name) return res.status(400).json({ error: 'Name is required' });
+    const contact = await SavedContact.findByIdAndUpdate(req.params.id, data, { new: true, runValidators: true });
+    if (!contact) return res.status(404).json({ error: 'Contact not found' });
+    res.json({ contact });
+  } catch (error) {
+    if (error.code === 11000) return res.status(400).json({ error: 'A contact with that email already exists' });
+    console.error('Error updating contact:', error);
+    res.status(500).json({ error: 'Failed to update contact' });
+  }
+});
+
+app.delete('/api/saved-contacts/:id', authenticate, async (req, res) => {
+  try {
+    const contact = await SavedContact.findByIdAndDelete(req.params.id);
+    if (!contact) return res.status(404).json({ error: 'Contact not found' });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Error deleting contact:', error);
+    res.status(500).json({ error: 'Failed to delete contact' });
+  }
 });
 
 const CLIENT_ACTIVITY_MARKABLE = new Set(['email', 'commented', 'replied', 'changes_requested']);

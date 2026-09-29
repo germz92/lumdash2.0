@@ -422,6 +422,11 @@
       </button>
     </div>
     <div class="modal-body-dark">
+      <div class="form-group-dark saved-contact-picker">
+        <label for="savedContactSearch">Saved contacts</label>
+        <input type="text" id="savedContactSearch" placeholder="Search a saved contact to fill this form" autocomplete="off">
+        <div id="savedContactResults" class="saved-contact-results" hidden></div>
+      </div>
       <div class="form-group-dark">
         <label for="contactName">Name</label>
         <input type="text" id="contactName" placeholder="Enter name" autocomplete="off">
@@ -446,6 +451,11 @@
         <input type="checkbox" id="contactIsMain">
         <span class="checkbox-label">Mark as Main</span>
         <span class="checkbox-hint">This contact will appear as the Client Point of Contact on the Executive Summary</span>
+      </label>
+      <label class="checkbox-dark" for="contactSaveForLater">
+        <input type="checkbox" id="contactSaveForLater" checked>
+        <span class="checkbox-label">Save for other events</span>
+        <span class="checkbox-hint">They can be added again from the list above, and edited in Settings.</span>
       </label>
     </div>
     <div class="modal-footer-dark">

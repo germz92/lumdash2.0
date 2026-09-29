@@ -5,6 +5,7 @@ const gmailMessageSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   gmailId: { type: String, required: true },
   threadId: { type: String, default: '' },
+  rfc822Id: { type: String, default: '' },
   fromEmail: { type: String, default: '', lowercase: true },
   fromName: { type: String, default: '' },
   subject: { type: String, default: '' },

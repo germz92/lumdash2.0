@@ -1091,6 +1091,59 @@ async function fetchEventsWithGear() {
   }
 }
 
+async function fetchLatestActivity() {
+  try {
+    const res = await fetch(`${API_BASE}/api/tables/client-activity/latest`, {
+      headers: { Authorization: token }
+    });
+    if (!res.ok) return {};
+    const data = await res.json();
+    return data.byEvent || {};
+  } catch (error) {
+    console.error('Error fetching latest activity:', error);
+    return {};
+  }
+}
+
+function escapeEventHtml(value) {
+  return String(value || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function formatActivityAge(iso) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const mins = Math.round((Date.now() - date.getTime()) / 60000);
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function lastActivityCell(table) {
+  const activity = table.lastActivity;
+  if (!activity?.text) {
+    return '<td class="event-activity-cell"><span class="event-last-activity-empty">—</span></td>';
+  }
+  const detail = activity.detail
+    ? `<span class="event-last-activity-detail">${escapeEventHtml(activity.detail)}</span>`
+    : '';
+  const when = formatActivityAge(activity.at);
+  return `<td class="event-activity-cell">
+    <a class="event-last-activity" href="#" onclick="window.navigate('general', '${table._id}'); return false;">
+      <span class="event-last-activity-text">${escapeEventHtml(activity.text)}</span>
+      ${detail}
+      ${when ? `<span class="event-last-activity-time">${escapeEventHtml(when)}</span>` : ''}
+    </a>
+  </td>`;
+}
+
 function companyClientCellHtml(general) {
   const company = (general?.company || '').trim();
   const client = (general?.client || '').trim();
@@ -1221,6 +1274,7 @@ function renderEventRowDark(table, index, userId) {
     <td>
       <span class="event-date">${dateStr}</span>
     </td>
+    ${lastActivityCell(table)}
     <td>
       <div class="crew-avatars">
         ${renderCrewAvatarsDark(crewMembers, crewCount, table._id, unassignedCount)}
@@ -1574,6 +1628,7 @@ function generateSkeletonRows(count) {
         </td>
         <td><div class="skeleton" style="width: 120px; height: 16px;"></div></td>
         <td><div class="skeleton" style="width: 140px; height: 16px;"></div></td>
+        <td><div class="skeleton" style="width: 180px; height: 16px;"></div></td>
         <td>
           <div style="display: flex;">
             <div class="skeleton" style="width: 32px; height: 32px; border-radius: 50%;"></div>
@@ -1642,9 +1697,10 @@ async function loadTables(forceRefresh = false) {
   }
 
   // Always fetch passenger counts to ensure they're up to date
-  const [passengerCounts, pendingFlightCounts] = await Promise.all([
+  const [passengerCounts, pendingFlightCounts, latestActivity] = await Promise.all([
     fetchFlightCounts(),
-    fetchPendingFlightCounts()
+    fetchPendingFlightCounts(),
+    fetchLatestActivity()
   ]);
   tables.forEach(table => {
     const eventTitle = table.title || 'Untitled Event';
@@ -1656,6 +1712,7 @@ async function loadTables(forceRefresh = false) {
     table.pendingFlightId = pendingFlightCounts.firstIdByEvent[tableId]
       || pendingFlightCounts.firstIdByEvent[`name:${eventTitle}`]
       || '';
+    table.lastActivity = latestActivity[tableId] || null;
   });
   
   // Check which events have schedule content
@@ -1757,7 +1814,8 @@ async function loadTables(forceRefresh = false) {
       const city = (table.general?.city || '').toLowerCase();
       const state = (table.general?.state || '').toLowerCase();
       const location = (table.general?.location || '').toLowerCase();
-      return title.includes(q) || company.includes(q) || client.includes(q) || city.includes(q) || state.includes(q) || location.includes(q);
+      const activity = `${table.lastActivity?.text || ''} ${table.lastActivity?.detail || ''}`.toLowerCase();
+      return title.includes(q) || company.includes(q) || client.includes(q) || city.includes(q) || state.includes(q) || location.includes(q) || activity.includes(q);
     });
   }
 
@@ -1871,7 +1929,7 @@ async function loadTables(forceRefresh = false) {
         const liveHeaderRow = document.createElement('tr');
         liveHeaderRow.className = 'live-section-header-row';
         liveHeaderRow.innerHTML = `
-          <td colspan="8">
+          <td colspan="9">
             <div class="live-section-header">
               <span class="live-pulse-dot"></span>
               <span class="live-section-title">Live Events</span>
@@ -1893,7 +1951,7 @@ async function loadTables(forceRefresh = false) {
           const dividerRow = document.createElement('tr');
           dividerRow.className = 'live-section-divider-row';
           dividerRow.innerHTML = `
-            <td colspan="8">
+            <td colspan="9">
               <div class="live-section-divider">
                 <span class="divider-label">Upcoming Events</span>
               </div>

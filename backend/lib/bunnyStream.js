@@ -266,6 +266,16 @@ function getMp4Url(videoId, height = 720) {
   return `https://${cdnHostname}/${videoId}/play_${height}p.mp4`;
 }
 
+/** Highest transcoded MP4 Bunny has for this video (falls back to 720p). */
+function getBestMp4Url(videoId, info) {
+  const heights = String(info?.availableResolutions || '')
+    .split(',')
+    .map(part => parseInt(part, 10))
+    .filter(n => n > 0)
+    .sort((a, b) => b - a);
+  return getMp4Url(videoId, heights[0] || 720);
+}
+
 /**
  * Extract an exact JPEG frame at timeSeconds from the Bunny MP4 fallback.
  * Uses ffmpeg-static + Referer (CDN hotlink protection). Falls back to seek sprites.
@@ -392,6 +402,7 @@ module.exports = {
   fetchSeekSprite,
   extractFrameAtTime,
   getMp4Url,
+  getBestMp4Url,
   setThumbnail,
   setThumbnailFromUrl
 };

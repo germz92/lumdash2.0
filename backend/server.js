@@ -2547,6 +2547,59 @@ app.post('/api/tables', authenticate, async (req, res) => {
   res.json(table);
 });
 
+function externalText(value, max = 300) {
+  return String(value ?? '').trim().slice(0, max);
+}
+
+function externalUrl(...values) {
+  const raw = values.map(value => externalText(value, 2000)).find(Boolean) || '';
+  if (!/^https?:\/\//i.test(raw)) return '';
+  return raw;
+}
+
+function externalStatus(value, allowed) {
+  const text = externalText(value, 40);
+  return allowed.includes(text) ? text : '';
+}
+
+function externalContact(body, company) {
+  const nested = body.contact && typeof body.contact === 'object' ? body.contact : {};
+  const name = externalText(nested.name || body.clientContact || body.contactName || body.client, 120);
+  const email = externalText(nested.email || body.clientEmail || body.contactEmail || body.email, 200).toLowerCase();
+  const phone = externalText(nested.phone || nested.number || body.clientPhone || body.contactPhone || body.phone, 40);
+  const role = externalText(nested.role || body.clientRole || body.contactRole, 120);
+  if (!name && !email && !phone) return null;
+  return {
+    name: name || email,
+    number: phone,
+    email,
+    role,
+    company: externalText(nested.company || company, 160),
+    isMain: true
+  };
+}
+
+function externalLocation(body) {
+  const nested = body.venue && typeof body.venue === 'object' ? body.venue : {};
+  const name = externalText(nested.name || body.location || body.venueName || body.locationName, 160);
+  const street = externalText(nested.address || body.address || body.locationAddress, 300);
+  const city = externalText(body.city, 80);
+  const state = externalText(body.state, 40);
+  const cityLine = [city, state].filter(Boolean).join(', ');
+  const address = [street, cityLine].filter(Boolean).join(', ');
+  if (!name && !street) return null;
+  return {
+    name: name || street,
+    address,
+    event: externalText(nested.event || body.locationEvent || body.locationPurpose, 160)
+  };
+}
+
+function externalServices(value) {
+  const list = Array.isArray(value) ? value : String(value || '').split(/\n|,/).map(item => item.trim());
+  return list.map(item => externalText(item, 160)).filter(Boolean).slice(0, 30);
+}
+
 // ===========================================
 // EXTERNAL EVENT CREATION API
 // Allows external apps (like Invoice App) to create events in LumDash
@@ -2554,7 +2607,7 @@ app.post('/api/tables', authenticate, async (req, res) => {
 // ===========================================
 app.post('/api/events/external-create', authenticate, async (req, res) => {
   try {
-    const { 
+    const {
       name,           // Required: Event name
       startDate,      // Optional: Start date (YYYY-MM-DD or ISO format)
       endDate,        // Optional: End date (YYYY-MM-DD or ISO format)
@@ -2564,6 +2617,15 @@ app.post('/api/events/external-create', authenticate, async (req, res) => {
       company,        // Optional: Company name
       companyName,    // Optional alias used by LumQuote
       location,       // Optional: Location/venue name
+      summary,
+      notes,
+      description,
+      attendees,
+      attendeeCount,
+      budget,
+      quoteTotal,
+      total,
+      services,
       externalSource, // Required: Source app identifier (e.g., 'invoice-app')
       externalId      // Optional: ID from source app for linking/dedup
     } = req.body;
@@ -2602,6 +2664,16 @@ app.post('/api/events/external-create', authenticate, async (req, res) => {
       }
     }
     
+    const companyValue = externalText(company || companyName, 160);
+    const contractUrl = externalUrl(req.body.contractUrl, req.body.contractLink, req.body.contract);
+    const invoiceUrl = externalUrl(req.body.invoiceUrl, req.body.invoiceLink, req.body.invoice);
+    const contact = externalContact(req.body, companyValue);
+    const venue = externalLocation(req.body);
+    const summaryValue = externalText(summary || notes || description, 4000);
+    const budgetValue = externalText(budget || quoteTotal || total, 40);
+    const attendeeValue = Number(attendees ?? attendeeCount);
+    const serviceList = externalServices(services);
+
     // Create the event
     const newTable = new Table({
       title: name.trim(),
@@ -2617,11 +2689,26 @@ app.post('/api/events/external-create', authenticate, async (req, res) => {
         city: city || '',
         state: state || '',
         client: client || '',
-        company: company || companyName || '',
-        location: location || ''
+        company: companyValue,
+        location: location || '',
+        summary: summaryValue,
+        budget: budgetValue,
+        attendees: Number.isFinite(attendeeValue) && attendeeValue > 0 ? attendeeValue : undefined,
+        contractUrl,
+        invoiceUrl,
+        contacts: contact ? [contact] : [],
+        locations: venue ? [venue] : []
       },
       executiveSummary: {
-        company: company || companyName || ''
+        company: companyValue,
+        clientContact: contact?.name || '',
+        email: contact?.email || '',
+        phone: contact?.number || '',
+        contractLink: contractUrl,
+        invoiceLink: invoiceUrl,
+        signed: externalStatus(req.body.signed, ['Yes', 'No', 'Needs Revision']),
+        paid: externalStatus(req.body.paid, ['Yes', 'No', 'Retainer Paid', 'Needs Revision']),
+        services: serviceList
       },
       gear: {
         lists: {
@@ -14685,6 +14772,17 @@ function portalMasterDownloadUrl(project) {
   return project.masterFileUrl || '';
 }
 
+function portalVersionDownloadPath(token, project, version) {
+  if (!project?.allowVersionDownload) return '';
+  if (!version || version.videoStatus !== 'ready' || !version.bunnyVideoId) return '';
+  return `/api/portal/${encodeURIComponent(token)}/projects/${project._id}/versions/${version._id}/download`;
+}
+
+function safeVersionDownloadName(title, versionNumber) {
+  const base = String(title || 'video').replace(/[^\w.\- ]+/g, '').trim().slice(0, 80) || 'video';
+  return `${base}-v${versionNumber || 1}.mp4`;
+}
+
 async function resolvePortalMentions(ids) {
   const unique = [...new Set((Array.isArray(ids) ? ids : []).map(id => String(id || '').trim()).filter(Boolean))].slice(0, 20);
   if (!unique.length) return [];
@@ -14789,7 +14887,7 @@ function clientHasPortalPin(client) {
 
 function verifyPortalUnlockHeader(req, client) {
   if (!clientHasPortalPin(client)) return true;
-  const unlock = String(req.headers['x-portal-unlock'] || '').trim();
+  const unlock = String(req.headers['x-portal-unlock'] || req.query.unlock || '').trim();
   if (!unlock || !process.env.JWT_SECRET) return false;
   try {
     const payload = jwt.verify(unlock, process.env.JWT_SECRET);
@@ -15893,6 +15991,9 @@ app.put('/api/video-projects/:id', authenticate, async (req, res) => {
     if (req.body.allowClientDownload !== undefined) {
       project.allowClientDownload = !!req.body.allowClientDownload;
     }
+    if (req.body.allowVersionDownload !== undefined) {
+      project.allowVersionDownload = !!req.body.allowVersionDownload;
+    }
 
     if (req.body.feedbackDueAt !== undefined) {
       const raw = req.body.feedbackDueAt;
@@ -16712,6 +16813,8 @@ app.get('/api/portal/:token', async (req, res) => {
           deliveredAt: p.deliveredAt,
           masterFileUrl: portalMasterDownloadUrl(p),
           allowClientDownload: p.allowClientDownload !== false,
+          allowVersionDownload: !!p.allowVersionDownload,
+          versionDownloadUrl: portalVersionDownloadPath(req.params.token, p, latestReady),
           versionCount: versions.length,
           latestVersionNumber: latest ? latest.versionNumber : 0,
           latestVersionStatus: latest ? latest.videoStatus : null,
@@ -16765,13 +16868,70 @@ app.get('/api/portal/:token/projects/:projectId', async (req, res) => {
       deliveredAt: project.deliveredAt,
       masterFileUrl: portalMasterDownloadUrl(project),
       allowClientDownload: project.allowClientDownload !== false,
+      allowVersionDownload: !!project.allowVersionDownload,
       branding: portalBrandingPayload(client),
-      versions: (project.versions || []).map(portalVersionPayload),
+      versions: (project.versions || []).map(v => ({
+        ...portalVersionPayload(v),
+        downloadUrl: portalVersionDownloadPath(req.params.token, project, v)
+      })),
       comments: comments.map(portalCommentPayload)
     });
   } catch (err) {
     console.error('Error loading portal project:', err);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// Client download of a review version (independent of the delivered master link)
+app.get('/api/portal/:token/projects/:projectId/versions/:versionId/download', async (req, res) => {
+  try {
+    const resolved = await resolvePortalToken(req.params.token);
+    if (!resolved) return res.status(404).json({ error: 'This portal link is no longer valid. Please contact us for a new one.' });
+    const { client } = resolved;
+
+    if (!verifyPortalUnlockHeader(req, client)) {
+      return res.status(403).json(portalPinRequiredResponse(client));
+    }
+
+    const project = await VideoProject.findOne({ _id: req.params.projectId, clientId: client._id }).lean();
+    if (!project || project.status === 'archived') return res.status(404).json({ error: 'Project not found' });
+    if (!projectVisibleToPortal(project, resolved)) return res.status(404).json({ error: 'Project not found' });
+    if (!project.allowVersionDownload) return res.status(403).json({ error: 'Downloads are not enabled for this video' });
+
+    const version = (project.versions || []).find(v => String(v._id) === String(req.params.versionId));
+    if (!version || version.videoStatus !== 'ready' || !version.bunnyVideoId) {
+      return res.status(404).json({ error: 'This version is not ready to download yet' });
+    }
+    if (!bunnyStream.isConfigured()) return res.status(503).json({ error: 'Video downloads are not configured' });
+
+    const info = await bunnyStream.getVideo(version.bunnyVideoId);
+    const mp4Url = bunnyStream.getBestMp4Url(version.bunnyVideoId, info);
+    if (!mp4Url) return res.status(503).json({ error: 'Video downloads are not configured' });
+
+    const upstream = await fetch(mp4Url, {
+      headers: { Referer: 'https://iframe.mediadelivery.net/' }
+    });
+    if (!upstream.ok || !upstream.body) {
+      return res.status(502).json({ error: 'This version is not available to download yet' });
+    }
+
+    const filename = safeVersionDownloadName(project.title, version.versionNumber);
+    res.setHeader('Content-Type', upstream.headers.get('content-type') || 'video/mp4');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    const length = upstream.headers.get('content-length');
+    if (length) res.setHeader('Content-Length', length);
+
+    const { Readable } = require('stream');
+    const nodeStream = Readable.fromWeb(upstream.body);
+    nodeStream.on('error', () => {
+      if (!res.headersSent) res.status(502).end();
+      else res.destroy();
+    });
+    res.on('close', () => nodeStream.destroy());
+    nodeStream.pipe(res);
+  } catch (err) {
+    console.error('Error downloading portal version:', err);
+    if (!res.headersSent) res.status(500).json({ error: 'Server error' });
   }
 });
 

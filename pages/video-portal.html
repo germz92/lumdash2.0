@@ -218,6 +218,12 @@
                 <input type="checkbox" id="allowDownloadCheck" checked>
                 Allow client to download / open the master link
               </label>
+              <label class="vp-check vp-check-stack">
+                <input type="checkbox" id="allowVersionDownloadCheck">
+                <span>Allow client to download review versions
+                  <span class="vp-check-hint">Each uploaded version, even before a master link is added</span>
+                </span>
+              </label>
             </div>
 
             <div class="vp-thumb-box">
@@ -349,12 +355,20 @@
         <form id="newProjectForm">
           <label class="vp-label">Client</label>
           <select id="projClient" required></select>
+          <div class="vp-inline-create" id="projNewClientRow" hidden>
+            <input type="text" id="projNewClientName" placeholder="New client name" maxlength="120" autocomplete="off">
+            <button type="button" class="vp-btn secondary small" id="projNewClientBtn">Add</button>
+          </div>
           <label class="vp-label">Title</label>
           <input type="text" id="projTitle" placeholder="e.g. Highlight Reel — APM 2026" required>
           <label class="vp-label">Folder <span class="vp-label-hint">(optional — groups the client gallery)</span></label>
           <select id="projFolder">
             <option value="">No folder</option>
           </select>
+          <div class="vp-inline-create" id="projNewFolderRow" hidden>
+            <input type="text" id="projNewFolderName" placeholder="New folder name" maxlength="120" autocomplete="off">
+            <button type="button" class="vp-btn secondary small" id="projNewFolderBtn">Add</button>
+          </div>
           <div id="projAccessWrap" class="vp-access-picker" hidden>
             <label class="vp-label">Who can see this</label>
             <div class="vp-access-chips" id="projAccessList"></div>

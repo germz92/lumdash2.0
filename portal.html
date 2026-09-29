@@ -359,11 +359,18 @@
       box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(110, 185, 255, 0.45);
     }
 
+    .pt-downloads {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .pt-downloads:not(:has(a:not([hidden]))) { display: none; }
     .pt-download {
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      margin-top: 14px;
+      margin-top: 0;
       padding: 11px 20px;
       background: #1f7a3d;
       color: #fff;
@@ -372,6 +379,7 @@
       font-size: 0.88rem;
       text-decoration: none;
     }
+    .pt-download[hidden] { display: none; }
 
     .pt-howto {
       margin-top: 10px;

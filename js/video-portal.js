@@ -5,6 +5,8 @@
   function getToken() { return `Bearer ${localStorage.getItem('token')}`; }
 
   const STATUS_LABELS = { in_review: 'In Review', delivered: 'Delivered', archived: 'Archived' };
+  const NEW_CLIENT_OPTION = '__new_client__';
+  const NEW_FOLDER_OPTION = '__new_folder__';
   const DECISION_LABELS = { none: 'Awaiting approval', approved: 'Approved' };
 
   let clients = [];
@@ -168,10 +170,11 @@
     syncClientFilterInput();
     if (projSel) {
       const prev = projSel.value;
-      projSel.innerHTML = `<option value="" disabled selected>Select a client…</option>${options}`;
-      if (prev && clients.some(c => c._id === prev && !c.archived)) projSel.value = prev;
-      fillProjectFolderSelect(projSel.value);
-      fillProjectAccessPicker(projSel.value);
+      projSel.innerHTML = `<option value="" disabled ${prev ? '' : 'selected'}>Select a client…</option><option value="${NEW_CLIENT_OPTION}">+ Create new client</option>${options}`;
+      if (prev === NEW_CLIENT_OPTION) projSel.value = NEW_CLIENT_OPTION;
+      else if (prev && clients.some(c => c._id === prev && !c.archived)) projSel.value = prev;
+      fillProjectFolderSelect(projSel.value === NEW_CLIENT_OPTION ? '' : projSel.value);
+      fillProjectAccessPicker(projSel.value === NEW_CLIENT_OPTION ? '' : projSel.value);
     }
   }
 
@@ -358,9 +361,73 @@
     if (!sel) return;
     const client = clients.find(c => c._id === clientId);
     const folders = client ? sortedClientFolders(client) : [];
-    sel.innerHTML = `<option value="">No folder</option>` +
+    sel.innerHTML = `<option value="">No folder</option><option value="${NEW_FOLDER_OPTION}">+ Create new folder</option>` +
       folders.map(f => `<option value="${f._id}">${escapeHtml(f.name)}</option>`).join('');
-    if (selectedFolderId) sel.value = selectedFolderId;
+    if (selectedFolderId && selectedFolderId !== NEW_FOLDER_OPTION) sel.value = selectedFolderId;
+  }
+
+  function setInlineCreateRow(rowId, open) {
+    const row = document.getElementById(rowId);
+    if (row) row.hidden = !open;
+  }
+
+  async function createClientFromProjectForm() {
+    const input = document.getElementById('projNewClientName');
+    const name = input?.value.trim();
+    if (!name) {
+      input?.focus();
+      return;
+    }
+    const created = await api('/api/portal-clients', { method: 'POST', body: JSON.stringify({ name }) });
+    input.value = '';
+    setInlineCreateRow('projNewClientRow', false);
+    await loadClients();
+    const sel = document.getElementById('projClient');
+    if (sel) sel.value = created._id;
+    fillProjectFolderSelect(created._id);
+    fillProjectAccessPicker(created._id);
+    toast('Client added');
+  }
+
+  async function createFolderFromProjectForm() {
+    const clientId = document.getElementById('projClient')?.value;
+    if (!clientId || clientId === NEW_CLIENT_OPTION) {
+      toast('Select a client first', 'error');
+      return;
+    }
+    const input = document.getElementById('projNewFolderName');
+    const name = input?.value.trim();
+    if (!name) {
+      input?.focus();
+      return;
+    }
+    const client = clients.find(c => String(c._id) === String(clientId));
+    const existing = sortedClientFolders(client).find(f => (f.name || '').toLowerCase() === name.toLowerCase());
+    if (existing) {
+      input.value = '';
+      setInlineCreateRow('projNewFolderRow', false);
+      fillProjectFolderSelect(clientId, existing._id);
+      return;
+    }
+    const folders = sortedClientFolders(client).map((f, i) => ({
+      _id: f._id,
+      name: f.name,
+      sortOrder: i
+    }));
+    folders.push({ name, sortOrder: folders.length });
+    const updated = await api(`/api/portal-clients/${clientId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ folders })
+    });
+    const created = (updated.folders || []).find(f => (f.name || '').toLowerCase() === name.toLowerCase());
+    input.value = '';
+    setInlineCreateRow('projNewFolderRow', false);
+    await loadClients();
+    const sel = document.getElementById('projClient');
+    if (sel) sel.value = clientId;
+    fillProjectFolderSelect(clientId, created?._id || '');
+    fillProjectAccessPicker(clientId);
+    toast('Folder added');
   }
 
   function fillDetailFolderSelect() {
@@ -1642,6 +1709,8 @@
     updateOpenMasterBtn();
     const allowDl = document.getElementById('allowDownloadCheck');
     if (allowDl) allowDl.checked = detail.allowClientDownload !== false;
+    const allowVersions = document.getElementById('allowVersionDownloadCheck');
+    if (allowVersions) allowVersions.checked = detail.allowVersionDownload === true;
     document.getElementById('deliverStatus').innerHTML = detail.status === 'delivered'
       ? `<span class="delivered">Delivered ${fmtDate(detail.deliveredAt)}</span>${detail.deliveredByName ? ` by ${escapeHtml(detail.deliveredByName)}` : ''}`
       : 'Not delivered yet — attach the master link and mark delivered when the client approves.';
@@ -3652,12 +3721,10 @@
     });
 
     document.getElementById('newProjectBtn').addEventListener('click', () => {
-      if (clients.filter(c => !c.archived).length === 0) {
-        toast('Add a client first (Clients button)', 'error');
-        return;
-      }
       const clientId = document.getElementById('projClient')?.value;
-      fillProjectAccessPicker(clientId);
+      setInlineCreateRow('projNewClientRow', clientId === NEW_CLIENT_OPTION);
+      setInlineCreateRow('projNewFolderRow', document.getElementById('projFolder')?.value === NEW_FOLDER_OPTION);
+      fillProjectAccessPicker(clientId === NEW_CLIENT_OPTION ? '' : clientId);
       showModal('projectModal');
     });
 
@@ -3665,7 +3732,16 @@
       e.preventDefault();
       try {
         const clientId = document.getElementById('projClient').value;
-        const folderId = document.getElementById('projFolder').value || null;
+        const folderValue = document.getElementById('projFolder').value;
+        if (!clientId || clientId === NEW_CLIENT_OPTION) {
+          toast('Select a client, or create one', 'error');
+          return;
+        }
+        if (folderValue === NEW_FOLDER_OPTION) {
+          toast('Add the folder, or choose No folder', 'error');
+          return;
+        }
+        const folderId = folderValue || null;
         const client = clients.find(c => String(c._id) === String(clientId));
         const people = client ? activePeople(client) : [];
         const previewOnly = document.getElementById('projPreviewOnly')?.checked;
@@ -3685,6 +3761,8 @@
           })
         });
         document.getElementById('newProjectForm').reset();
+        setInlineCreateRow('projNewClientRow', false);
+        setInlineCreateRow('projNewFolderRow', false);
         fillProjectFolderSelect('');
         fillProjectAccessPicker('');
         hideModal('projectModal');
@@ -3694,8 +3772,52 @@
     });
 
     document.getElementById('projClient').addEventListener('change', (e) => {
+      const creating = e.target.value === NEW_CLIENT_OPTION;
+      setInlineCreateRow('projNewClientRow', creating);
+      setInlineCreateRow('projNewFolderRow', false);
+      if (creating) {
+        document.getElementById('projNewClientName')?.focus();
+        fillProjectFolderSelect('');
+        fillProjectAccessPicker('');
+        return;
+      }
       fillProjectFolderSelect(e.target.value);
       fillProjectAccessPicker(e.target.value);
+    });
+
+    document.getElementById('projFolder').addEventListener('change', (e) => {
+      if (e.target.value !== NEW_FOLDER_OPTION) {
+        setInlineCreateRow('projNewFolderRow', false);
+        return;
+      }
+      const clientId = document.getElementById('projClient')?.value;
+      if (!clientId || clientId === NEW_CLIENT_OPTION) {
+        toast('Select a client first', 'error');
+        e.target.value = '';
+        setInlineCreateRow('projNewFolderRow', false);
+        return;
+      }
+      setInlineCreateRow('projNewFolderRow', true);
+      document.getElementById('projNewFolderName')?.focus();
+    });
+
+    document.getElementById('projNewClientBtn')?.addEventListener('click', async () => {
+      try { await createClientFromProjectForm(); }
+      catch (err) { toast(err.message, 'error'); }
+    });
+    document.getElementById('projNewFolderBtn')?.addEventListener('click', async () => {
+      try { await createFolderFromProjectForm(); }
+      catch (err) { toast(err.message, 'error'); }
+    });
+    document.getElementById('projNewClientName')?.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      document.getElementById('projNewClientBtn')?.click();
+    });
+    document.getElementById('projNewFolderName')?.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      document.getElementById('projNewFolderBtn')?.click();
     });
 
     document.getElementById('detailFolderSelect').addEventListener('change', async (e) => {
@@ -3837,6 +3959,18 @@
         });
         detail.allowClientDownload = !!e.target.checked;
         toast(e.target.checked ? 'Client can download master' : 'Client download hidden');
+      } catch (err) { toast(err.message, 'error'); }
+    });
+
+    document.getElementById('allowVersionDownloadCheck')?.addEventListener('change', async (e) => {
+      if (!detail) return;
+      try {
+        await api(`/api/video-projects/${detail._id}`, {
+          method: 'PUT',
+          body: JSON.stringify({ allowVersionDownload: !!e.target.checked })
+        });
+        detail.allowVersionDownload = !!e.target.checked;
+        toast(e.target.checked ? 'Clients can download versions' : 'Version downloads hidden');
       } catch (err) { toast(err.message, 'error'); }
     });
 

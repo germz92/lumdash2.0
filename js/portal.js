@@ -95,6 +95,15 @@
     return cachedPlayerDuration > 0 ? cachedPlayerDuration : 0;
   }
 
+  function portalFileUrl(path) {
+    if (!path) return '';
+    const absolute = /^https?:\/\//i.test(path) ? path : `${API_BASE}${path}`;
+    const unlock = getUnlockToken();
+    if (!unlock) return absolute;
+    const join = absolute.includes('?') ? '&' : '?';
+    return `${absolute}${join}unlock=${encodeURIComponent(unlock)}`;
+  }
+
   function toDirectDownloadUrl(url) {
     if (!url) return '';
     try {
@@ -542,11 +551,14 @@
       const due = (p.status === 'in_review' && decision !== 'approved' && p.feedbackDueAt)
         ? `<div class="pt-due-pill">Feedback due ${fmtDate(p.feedbackDueAt)}</div>`
         : '';
-      const downloadUrl = (p.status === 'delivered' && p.masterFileUrl)
+      const masterUrl = (p.status === 'delivered' && p.masterFileUrl)
         ? toDirectDownloadUrl(p.masterFileUrl)
         : '';
+      const versionUrl = p.versionDownloadUrl ? portalFileUrl(p.versionDownloadUrl) : '';
+      const downloadUrl = masterUrl || versionUrl;
+      const downloadLabel = masterUrl ? 'Download final video' : 'Download latest version';
       const downloadBtn = downloadUrl
-        ? `<a class="pt-card-download" href="${escapeHtml(downloadUrl)}" target="_blank" rel="noopener" title="Download final video" aria-label="Download final video" data-download="1">&#11015;</a>`
+        ? `<a class="pt-card-download" href="${escapeHtml(downloadUrl)}" target="_blank" rel="noopener" title="${downloadLabel}" aria-label="${downloadLabel}" data-download="1">&#11015;</a>`
         : '';
       return `
         <div class="pt-card" data-id="${p._id}">
@@ -657,6 +669,22 @@
     return (project?.versions || []).find(v => v._id === currentVersionId) || null;
   }
 
+  function updateVersionDownload() {
+    const link = document.getElementById('ptVersionDownload');
+    if (!link) return;
+    const version = currentVersion();
+    const href = version?.downloadUrl ? portalFileUrl(version.downloadUrl) : '';
+    if (!href) {
+      link.hidden = true;
+      link.removeAttribute('href');
+      return;
+    }
+    link.hidden = false;
+    link.href = href;
+    const label = document.getElementById('ptVersionDownloadLabel');
+    if (label) label.textContent = `Download version ${version.versionNumber || ''}`.trim();
+  }
+
   function authorPayload() {
     return portalData.shared ? { authorName: reviewerName } : {};
   }
@@ -727,7 +755,10 @@
             <button type="button" class="pt-tool-btn" id="ptClearDrawBtn" title="Clear drawing">&#10005;</button>
             <span class="pt-annotate-hint" id="ptAnnotateHint"></span>
           </div>` : ''}
-          ${project.masterFileUrl ? `<a class="pt-download" href="${escapeHtml(toDirectDownloadUrl(project.masterFileUrl))}" target="_blank" rel="noopener">&#11015; Download Final Video</a>` : ''}
+          <div class="pt-downloads">
+            <a class="pt-download" id="ptVersionDownload" hidden target="_blank" rel="noopener">&#11015; <span id="ptVersionDownloadLabel">Download this version</span></a>
+            ${project.masterFileUrl ? `<a class="pt-download" href="${escapeHtml(toDirectDownloadUrl(project.masterFileUrl))}" target="_blank" rel="noopener">&#11015; Download Final Video</a>` : ''}
+          </div>
           ${decisionHtml}
           ${project.status === 'in_review' && !isApproved ? `
           <div class="pt-howto">Pause where you want a change, then send. Time follows the playhead — tap it to remove, or add an end time for a range.</div>` : ''}
@@ -756,10 +787,12 @@
       composeTimecodeAttached = true;
       composeTimecode = 0;
       updateTcLabel();
+      updateVersionDownload();
       renderPlayer();
       renderComments();
     });
     if (currentVersionId) document.getElementById('ptVersionSelect').value = currentVersionId;
+    updateVersionDownload();
 
     document.getElementById('ptCompareBtn')?.addEventListener('click', () => {
       compareMode = !compareMode;

@@ -86,6 +86,8 @@ const videoProjectSchema = new mongoose.Schema({
   masterFileUrl: { type: String, default: '' },
   // When false, master link is hidden from the client portal even if delivered
   allowClientDownload: { type: Boolean, default: true },
+  // When true, clients can download review versions even before a master link exists
+  allowVersionDownload: { type: Boolean, default: false },
   deliveredAt: { type: Date, default: null },
   deliveredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   deliveredByName: { type: String, default: '' },

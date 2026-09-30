@@ -17514,6 +17514,34 @@ button.pending-task-row:active {
   line-height: 1.5;
 }
 
+.confirm-modal.has-verify p {
+  margin-bottom: 16px;
+}
+
+.confirm-modal-verify {
+  text-align: left;
+  margin-bottom: 20px;
+}
+
+.confirm-modal-verify label {
+  display: block;
+  font-size: var(--font-size-sm);
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  text-align: center;
+}
+
+.confirm-modal-verify strong {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+}
+
+.confirm-modal-verify input {
+  width: 100%;
+  box-sizing: border-box;
+  text-align: center;
+}
+
 .confirm-modal-actions {
   display: flex;
   gap: 12px;
@@ -17526,6 +17554,17 @@ button.pending-task-row:active {
   flex: 1;
   max-width: 140px;
   padding: 12px 20px;
+}
+
+.confirm-modal-actions .btn-danger:disabled,
+.confirm-modal-actions .btn-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.confirm-modal-actions .btn-danger:disabled:hover,
+.confirm-modal-actions .btn-primary:disabled:hover {
+  background: transparent;
 }
 
 @media (max-width: 480px) {

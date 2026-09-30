@@ -353,6 +353,10 @@ function showConfirm(title, message, options = {}) {
     const modalMessage = document.getElementById('confirmModalMessage');
     const confirmBtn = document.getElementById('confirmModalConfirm');
     const cancelBtn = document.getElementById('confirmModalCancel');
+    const verifyWrap = document.getElementById('confirmModalVerify');
+    const verifyLabel = document.getElementById('confirmModalVerifyLabel');
+    const verifyInput = document.getElementById('confirmModalInput');
+    const requiredWord = String(options.requireText || '').trim();
     
     if (!modal) {
       // Fallback to native confirm if modal not found
@@ -380,6 +384,34 @@ function showConfirm(title, message, options = {}) {
     
     // Set button style
     confirmBtn.className = options.type === 'info' ? 'btn-primary' : 'btn-danger';
+
+    const wordMatches = () => {
+      if (!requiredWord || !verifyInput) return true;
+      return verifyInput.value.trim().toLowerCase() === requiredWord.toLowerCase();
+    };
+
+    if (verifyWrap && verifyInput) {
+      if (requiredWord) {
+        verifyWrap.hidden = false;
+        modal.classList.add('has-verify');
+        verifyInput.value = '';
+        verifyInput.placeholder = requiredWord;
+        if (verifyLabel) {
+          verifyLabel.textContent = '';
+          verifyLabel.append('Type ');
+          const wordEl = document.createElement('strong');
+          wordEl.textContent = requiredWord;
+          verifyLabel.appendChild(wordEl);
+          verifyLabel.append(' to confirm');
+        }
+        confirmBtn.disabled = true;
+      } else {
+        verifyWrap.hidden = true;
+        modal.classList.remove('has-verify');
+        verifyInput.value = '';
+        confirmBtn.disabled = false;
+      }
+    }
     
     // Show modal
     modal.classList.add('show');
@@ -387,6 +419,7 @@ function showConfirm(title, message, options = {}) {
     
     // Setup handlers
     const handleConfirm = () => {
+      if (!wordMatches()) return;
       cleanup();
       resolve(true);
     };
@@ -402,18 +435,41 @@ function showConfirm(title, message, options = {}) {
         resolve(false);
       }
     };
+
+    const handleVerifyInput = () => {
+      confirmBtn.disabled = !wordMatches();
+    };
+
+    const handleVerifyKey = (e) => {
+      if (e.key === 'Enter' && wordMatches()) {
+        e.preventDefault();
+        handleConfirm();
+      }
+    };
     
     const cleanup = () => {
-      modal.classList.remove('show');
+      modal.classList.remove('show', 'has-verify');
       document.body.style.overflow = '';
+      confirmBtn.disabled = false;
+      if (verifyWrap) verifyWrap.hidden = true;
+      if (verifyInput) verifyInput.value = '';
       confirmBtn.removeEventListener('click', handleConfirm);
       cancelBtn.removeEventListener('click', handleCancel);
       modal.removeEventListener('click', handleBackdrop);
+      if (verifyInput) {
+        verifyInput.removeEventListener('input', handleVerifyInput);
+        verifyInput.removeEventListener('keydown', handleVerifyKey);
+      }
     };
     
     confirmBtn.addEventListener('click', handleConfirm);
     cancelBtn.addEventListener('click', handleCancel);
     modal.addEventListener('click', handleBackdrop);
+    if (requiredWord && verifyInput) {
+      verifyInput.addEventListener('input', handleVerifyInput);
+      verifyInput.addEventListener('keydown', handleVerifyKey);
+      setTimeout(() => verifyInput.focus(), 50);
+    }
   });
 }
 
@@ -1574,7 +1630,7 @@ function renderEventRowDark(table, index, userId) {
       const confirmed = await showConfirm(
         'Delete Event',
         'Are you sure you want to delete this event? This will also release all gear items reserved for this event.',
-        { confirmText: 'Delete', type: 'danger' }
+        { confirmText: 'Delete', type: 'danger', requireText: 'delete' }
       );
       if (confirmed) {
         try {
@@ -2239,7 +2295,7 @@ function renderEventCard(table, container, userId) {
     const confirmed = await showConfirm(
       'Delete Event',
       'Are you sure you want to delete this event? This will also release all gear items reserved for this event back to inventory.',
-      { confirmText: 'Delete', type: 'danger' }
+      { confirmText: 'Delete', type: 'danger', requireText: 'delete' }
     );
     if (confirmed) {
       try {

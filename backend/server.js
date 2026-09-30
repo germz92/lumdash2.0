@@ -2590,20 +2590,33 @@ function splitCityState(value) {
   return { city, state };
 }
 
-function externalLocation(body) {
-  const nested = body.venue && typeof body.venue === 'object' ? body.venue : {};
-  const name = externalText(nested.name || body.location || body.venueName || body.locationName, 160);
-  const street = externalText(nested.address || body.address || body.locationAddress, 300);
-  const city = externalText(body.city, 80);
-  const state = externalText(body.state, 40);
+function externalPlace(body) {
+  const venue = body.venue && typeof body.venue === 'object' ? body.venue : {};
+  const locationObj = body.location && typeof body.location === 'object' ? body.location : {};
+  const locationText = typeof body.location === 'string' ? body.location : '';
+  let city = externalText(body.city || body.locationCity || venue.city || locationObj.city, 80);
+  let state = externalText(body.state || body.locationState || venue.state || locationObj.state, 40);
+  const street = externalText(venue.address || locationObj.address || body.address || body.locationAddress, 300);
+  const name = externalText(
+    venue.name || locationObj.name || body.venueName || body.locationName || locationText,
+    160
+  );
+  if (!city && !state) {
+    const parsed = splitCityState(name) || splitCityState(street);
+    if (parsed) {
+      city = parsed.city;
+      state = parsed.state;
+    }
+  }
   const cityLine = [city, state].filter(Boolean).join(', ');
   const address = [street, cityLine].filter(Boolean).join(', ');
-  if (!name && !street) return null;
-  return {
-    name: name || street,
-    address,
-    event: externalText(nested.event || body.locationEvent || body.locationPurpose, 160)
-  };
+  const cardName = name || cityLine;
+  const card = cardName ? {
+    name: cardName,
+    address: address || cityLine,
+    event: externalText(venue.event || locationObj.event || body.locationEvent || body.locationPurpose, 160)
+  } : null;
+  return { city, state, location: name || cityLine, card };
 }
 
 function externalServices(value) {
@@ -2664,6 +2677,30 @@ app.post('/api/events/external-create', authenticate, async (req, res) => {
       });
       
       if (existing) {
+        const place = externalPlace(req.body);
+        const general = existing.general || {};
+        let filled = false;
+        if (!externalText(general.city) && place.city) {
+          general.city = place.city;
+          filled = true;
+        }
+        if (!externalText(general.state) && place.state) {
+          general.state = place.state;
+          filled = true;
+        }
+        if (!externalText(general.location) && place.location) {
+          general.location = place.location;
+          filled = true;
+        }
+        if (place.card && !(general.locations || []).length) {
+          general.locations = [place.card];
+          filled = true;
+        }
+        if (filled) {
+          existing.general = general;
+          existing.markModified('general');
+          await existing.save();
+        }
         console.log(`External event already exists: ${existing.title} (${existing._id}) from ${externalSource}:${externalId}`);
         return res.json({ 
           success: true, 
@@ -2676,21 +2713,14 @@ app.post('/api/events/external-create', authenticate, async (req, res) => {
     }
     
     const companyValue = externalText(company || companyName, 160);
-    const venueBody = req.body.venue && typeof req.body.venue === 'object' ? req.body.venue : {};
-    let cityValue = externalText(city || venueBody.city, 80);
-    let stateValue = externalText(state || venueBody.state, 40);
-    const locationValue = externalText(typeof location === 'string' ? location : (location && location.name) || venueBody.name, 160);
-    if (!cityValue && !stateValue) {
-      const parsedPlace = splitCityState(locationValue);
-      if (parsedPlace) {
-        cityValue = parsedPlace.city;
-        stateValue = parsedPlace.state;
-      }
-    }
+    const place = externalPlace(req.body);
+    const cityValue = place.city;
+    const stateValue = place.state;
+    const locationValue = place.location;
     const contractUrl = externalUrl(req.body.contractUrl, req.body.contractLink, req.body.contract);
     const invoiceUrl = externalUrl(req.body.invoiceUrl, req.body.invoiceLink, req.body.invoice);
     const contact = externalContact(req.body, companyValue);
-    const venue = externalLocation(req.body);
+    const venue = place.card;
     const summaryValue = externalText(summary || notes || description, 4000);
     const budgetValue = externalText(budget || quoteTotal || total, 40);
     const attendeeValue = Number(attendees ?? attendeeCount);

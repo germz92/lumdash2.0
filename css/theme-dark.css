@@ -17507,6 +17507,15 @@ button.pending-task-row:active {
   margin: 0 0 8px;
 }
 
+.confirm-modal-detail {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-semibold);
+  color: var(--text-primary);
+  margin: 0 0 8px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
 .confirm-modal p {
   font-size: var(--font-size-base);
   color: var(--text-secondary);

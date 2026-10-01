@@ -343,6 +343,12 @@ function showToast(message, type = 'info', duration = 4000) {
 
 let confirmResolve = null;
 
+function firstWordOfTitle(title) {
+  const word = String(title || '').trim().split(/\s+/)[0] || '';
+  const cleaned = word.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '');
+  return cleaned || word || 'event';
+}
+
 function showConfirm(title, message, options = {}) {
   return new Promise((resolve) => {
     confirmResolve = resolve;
@@ -353,10 +359,12 @@ function showConfirm(title, message, options = {}) {
     const modalMessage = document.getElementById('confirmModalMessage');
     const confirmBtn = document.getElementById('confirmModalConfirm');
     const cancelBtn = document.getElementById('confirmModalCancel');
+    const modalDetail = document.getElementById('confirmModalDetail');
     const verifyWrap = document.getElementById('confirmModalVerify');
     const verifyLabel = document.getElementById('confirmModalVerifyLabel');
     const verifyInput = document.getElementById('confirmModalInput');
     const requiredWord = String(options.requireText || '').trim();
+    const detailText = String(options.detail || '').trim();
     
     if (!modal) {
       // Fallback to native confirm if modal not found
@@ -367,6 +375,10 @@ function showConfirm(title, message, options = {}) {
     // Set content
     modalTitle.textContent = title || 'Confirm Action';
     modalMessage.textContent = message || 'Are you sure you want to proceed?';
+    if (modalDetail) {
+      modalDetail.textContent = detailText;
+      modalDetail.hidden = !detailText;
+    }
     
     // Set icon type
     const iconType = options.type || 'danger';
@@ -451,6 +463,10 @@ function showConfirm(title, message, options = {}) {
       modal.classList.remove('show', 'has-verify');
       document.body.style.overflow = '';
       confirmBtn.disabled = false;
+      if (modalDetail) {
+        modalDetail.hidden = true;
+        modalDetail.textContent = '';
+      }
       if (verifyWrap) verifyWrap.hidden = true;
       if (verifyInput) verifyInput.value = '';
       confirmBtn.removeEventListener('click', handleConfirm);
@@ -1627,10 +1643,11 @@ function renderEventRowDark(table, index, userId) {
     deleteBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
       menu.classList.remove('show');
+      const eventTitle = table.title || 'Untitled Event';
       const confirmed = await showConfirm(
         'Delete Event',
         'Are you sure you want to delete this event? This will also release all gear items reserved for this event.',
-        { confirmText: 'Delete', type: 'danger', requireText: 'delete' }
+        { confirmText: 'Delete', type: 'danger', requireText: firstWordOfTitle(eventTitle), detail: eventTitle }
       );
       if (confirmed) {
         try {
@@ -2292,10 +2309,11 @@ function renderEventCard(table, container, userId) {
   deleteMenuItem.onclick = async (e) => {
     e.stopPropagation();
     menuDropdown.classList.remove('show');
+    const eventTitle = table.title || 'Untitled Event';
     const confirmed = await showConfirm(
       'Delete Event',
       'Are you sure you want to delete this event? This will also release all gear items reserved for this event back to inventory.',
-      { confirmText: 'Delete', type: 'danger', requireText: 'delete' }
+      { confirmText: 'Delete', type: 'danger', requireText: firstWordOfTitle(eventTitle), detail: eventTitle }
     );
     if (confirmed) {
       try {

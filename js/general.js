@@ -179,6 +179,61 @@ function renderDarkThemeSummary(table) {
     stateEl.style.display = place.placeholder || place.state ? '' : 'none';
   }
   if (sep) sep.style.display = (place.placeholder || (place.city && place.state)) ? '' : 'none';
+
+  renderAccessDetails(table);
+}
+
+function accessText(value) {
+  return String(value || '').trim();
+}
+
+function getLiveGalleryLink(general) {
+  return accessText(general?.liveGallery) || accessText(general?.galleryUrl);
+}
+
+function setAccessField(valueId, copyId, value) {
+  const valueEl = document.getElementById(valueId);
+  const copyBtn = document.getElementById(copyId);
+  const text = accessText(value);
+  if (valueEl) {
+    valueEl.textContent = text || 'Not set';
+    valueEl.classList.toggle('is-empty', !text);
+  }
+  if (copyBtn) {
+    copyBtn.hidden = !text;
+    copyBtn.dataset.copy = text;
+  }
+}
+
+function renderAccessDetails(table) {
+  const general = table?.general || {};
+  setAccessField('wifiNetworkValue', 'copyWifiNetwork', general.wifiNetwork);
+  setAccessField('wifiPasswordValue', 'copyWifiPassword', general.wifiPassword);
+  setAccessField('galleryPasscodeValue', 'copyGalleryPasscode', general.loveGalleryPasscode);
+
+  const link = getLiveGalleryLink(general);
+  const linkEl = document.getElementById('liveGalleryValue');
+  const copyLink = document.getElementById('copyLiveGallery');
+  if (linkEl) {
+    linkEl.classList.toggle('is-empty', !link);
+    linkEl.replaceChildren();
+    if (link) {
+      const href = /^https?:\/\//i.test(link) ? link : `https://${link}`;
+      const anchor = document.createElement('a');
+      anchor.className = 'info-link';
+      anchor.href = href;
+      anchor.target = '_blank';
+      anchor.rel = 'noopener noreferrer';
+      anchor.textContent = link;
+      linkEl.appendChild(anchor);
+    } else {
+      linkEl.textContent = 'Not set';
+    }
+  }
+  if (copyLink) {
+    copyLink.hidden = !link;
+    copyLink.dataset.copy = link;
+  }
 }
 
 function splitCityState(value) {
@@ -1064,7 +1119,7 @@ function openGalleryModal() {
   console.log('[Gallery] Opening gallery modal');
   const urlInput = document.getElementById('galleryUrlInput');
   if (urlInput) {
-    urlInput.value = currentTableData?.general?.galleryUrl || '';
+    urlInput.value = getLiveGalleryLink(currentTableData?.general);
   }
   
   // Show the modal
@@ -1111,6 +1166,7 @@ async function saveGalleryUrl(tableId) {
       body: JSON.stringify({
         general: {
           ...currentTableData?.general,
+          liveGallery: galleryUrl,
           galleryUrl: galleryUrl
         }
       })
@@ -1120,7 +1176,9 @@ async function saveGalleryUrl(tableId) {
     
     // Update local data
     if (currentTableData && currentTableData.general) {
+      currentTableData.general.liveGallery = galleryUrl;
       currentTableData.general.galleryUrl = galleryUrl;
+      renderAccessDetails(currentTableData);
     }
     
     hideGalleryModal();
@@ -1143,11 +1201,12 @@ async function saveGalleryUrl(tableId) {
 // Handle gallery button click (for inline onclick handler)
 function handleGalleryClick() {
   console.log('[Gallery] handleGalleryClick called');
-  const galleryUrl = currentTableData?.general?.galleryUrl;
+  const galleryUrl = getLiveGalleryLink(currentTableData?.general);
   
-  if (galleryUrl && galleryUrl.trim()) {
+  if (galleryUrl) {
     console.log('[Gallery] Opening URL:', galleryUrl);
-    window.open(galleryUrl, '_blank');
+    const href = /^https?:\/\//i.test(galleryUrl) ? galleryUrl : `https://${galleryUrl}`;
+    window.open(href, '_blank');
   } else if (isOwner || isAdmin()) {
     console.log('[Gallery] Opening modal to set URL');
     openGalleryModal();
@@ -1725,15 +1784,16 @@ function initDarkThemeEventListeners(tableId) {
   if (openGalleryBtn && !openGalleryBtn._listenerAttached) {
     openGalleryBtn._listenerAttached = true;
     openGalleryBtn.addEventListener('click', (e) => {
-      console.log('[Gallery] Button clicked, currentTableData:', currentTableData?.general?.galleryUrl);
+      console.log('[Gallery] Button clicked, currentTableData:', getLiveGalleryLink(currentTableData?.general));
       console.log('[Gallery] isOwner:', isOwner, 'isAdmin:', isAdmin());
       
-      const galleryUrl = currentTableData?.general?.galleryUrl;
+      const galleryUrl = getLiveGalleryLink(currentTableData?.general);
       
-      if (galleryUrl && galleryUrl.trim()) {
-        // Open the gallery URL in a new tab
-        console.log('[Gallery] Opening URL:', galleryUrl);
-        window.open(galleryUrl, '_blank');
+      if (galleryUrl) {
+        // Open the live gallery link in a new tab
+        const href = /^https?:\/\//i.test(galleryUrl) ? galleryUrl : `https://${galleryUrl}`;
+        console.log('[Gallery] Opening URL:', href);
+        window.open(href, '_blank');
       } else if (isOwner || isAdmin()) {
         // No URL set and user is owner/admin - show modal to set it
         console.log('[Gallery] Opening modal to set URL');
@@ -1753,6 +1813,41 @@ function initDarkThemeEventListeners(tableId) {
     });
   }
   
+  const infoCard = document.getElementById('eventInfoCard');
+  if (infoCard && !infoCard._copyListenerAttached) {
+    infoCard._copyListenerAttached = true;
+    infoCard.addEventListener('click', async (e) => {
+      const copyBtn = e.target.closest('.info-copy-btn');
+      if (!copyBtn || copyBtn.hidden) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const value = copyBtn.dataset.copy || '';
+      if (!value) return;
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(value);
+        } else {
+          const input = document.createElement('textarea');
+          input.value = value;
+          input.setAttribute('readonly', '');
+          input.style.position = 'fixed';
+          input.style.left = '-9999px';
+          document.body.appendChild(input);
+          input.select();
+          document.execCommand('copy');
+          input.remove();
+        }
+        const icon = copyBtn.querySelector('.material-symbols-outlined');
+        if (icon) {
+          icon.textContent = 'check';
+          setTimeout(() => { icon.textContent = 'content_copy'; }, 1200);
+        }
+      } catch (err) {
+        console.error('Copy failed:', err);
+      }
+    });
+  }
+
   // Save Gallery URL Button
   const saveGalleryBtn = document.getElementById('saveGalleryBtn');
   if (saveGalleryBtn && !saveGalleryBtn._listenerAttached) {

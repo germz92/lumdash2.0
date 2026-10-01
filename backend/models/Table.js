@@ -97,6 +97,10 @@ const tableSchema = new mongoose.Schema({
     budget: String,
     summary: { type: String, default: "" },
     galleryUrl: { type: String, default: "" },
+    wifiNetwork: { type: String, default: "" },
+    wifiPassword: { type: String, default: "" },
+    liveGallery: { type: String, default: "" },
+    loveGalleryPasscode: { type: String, default: "" },
     contractUrl: { type: String, default: "" },
     invoiceUrl: { type: String, default: "" },
     contacts: [

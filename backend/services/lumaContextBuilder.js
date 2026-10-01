@@ -200,7 +200,11 @@ function redactGeneral(general, canSeeAdminData) {
     company: copy.company || null,
     attendees: copy.attendees ?? null,
     summary: copy.summary || null,
-    galleryUrl: copy.galleryUrl || null,
+    galleryUrl: copy.liveGallery || copy.galleryUrl || null,
+    wifiNetwork: copy.wifiNetwork || null,
+    wifiPassword: copy.wifiPassword || null,
+    liveGallery: copy.liveGallery || null,
+    loveGalleryPasscode: copy.loveGalleryPasscode || null,
     contacts: (copy.contacts || []).map(c => ({
       name: c.name,
       role: c.role,

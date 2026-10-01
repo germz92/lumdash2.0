@@ -5858,6 +5858,59 @@ button.pending-task-row:active {
   overflow-wrap: anywhere;
 }
 
+.info-value.is-empty {
+  color: var(--text-tertiary);
+  font-weight: var(--font-weight-medium);
+}
+
+.info-value-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.info-value-row .info-value {
+  min-width: 0;
+}
+
+.info-link {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-semibold);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.info-link:hover {
+  text-decoration: underline;
+}
+
+.info-copy-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+}
+
+.info-copy-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.info-copy-btn .material-symbols-outlined {
+  font-size: 16px;
+  margin-top: 0;
+  color: inherit;
+}
+
 .info-location {
   display: flex;
   flex-direction: row;

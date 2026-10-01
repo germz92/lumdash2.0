@@ -301,6 +301,54 @@
                   <span class="info-value" id="statAttendees">2,500</span>
                 </div>
               </div>
+              <div class="info-row">
+                <span class="material-symbols-outlined">wifi</span>
+                <div class="info-text">
+                  <span class="info-label">Wi-Fi network</span>
+                  <div class="info-value-row">
+                    <span class="info-value is-empty" id="wifiNetworkValue">Not set</span>
+                    <button type="button" class="info-copy-btn" id="copyWifiNetwork" hidden title="Copy network">
+                      <span class="material-symbols-outlined">content_copy</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="info-row">
+                <span class="material-symbols-outlined">key</span>
+                <div class="info-text">
+                  <span class="info-label">Wi-Fi password</span>
+                  <div class="info-value-row">
+                    <span class="info-value is-empty" id="wifiPasswordValue">Not set</span>
+                    <button type="button" class="info-copy-btn" id="copyWifiPassword" hidden title="Copy password">
+                      <span class="material-symbols-outlined">content_copy</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="info-row">
+                <span class="material-symbols-outlined">photo_library</span>
+                <div class="info-text">
+                  <span class="info-label">Live gallery</span>
+                  <div class="info-value-row">
+                    <span class="info-value is-empty" id="liveGalleryValue">Not set</span>
+                    <button type="button" class="info-copy-btn" id="copyLiveGallery" hidden title="Copy gallery link">
+                      <span class="material-symbols-outlined">content_copy</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="info-row">
+                <span class="material-symbols-outlined">pin</span>
+                <div class="info-text">
+                  <span class="info-label">Gallery passcode</span>
+                  <div class="info-value-row">
+                    <span class="info-value is-empty" id="galleryPasscodeValue">Not set</span>
+                    <button type="button" class="info-copy-btn" id="copyGalleryPasscode" hidden title="Copy passcode">
+                      <span class="material-symbols-outlined">content_copy</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
               
               <!-- Contract Button (Owner/Admin only) -->
               <div class="info-row contract-row" id="contractRow" style="display: none;">
@@ -514,9 +562,9 @@
     </div>
     <div class="modal-body-dark">
       <div class="form-group-dark">
-        <label for="galleryUrlInput">Gallery URL</label>
+        <label for="galleryUrlInput">Live gallery link</label>
         <input type="url" id="galleryUrlInput" placeholder="https://example.com/gallery" class="form-input-dark">
-        <span class="form-hint">Enter the external URL for the LumTags gallery</span>
+        <span class="form-hint">Saved as the event live gallery link</span>
       </div>
     </div>
     <div class="modal-footer-dark">

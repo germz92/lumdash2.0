@@ -1510,6 +1510,11 @@
   gap: 24px;
   align-items: start;
 }
+.vp-detail-player-col {
+  container-type: inline-size;
+  container-name: player;
+  min-width: 0;
+}
 
 .vp-version-bar {
   display: flex;
@@ -1723,6 +1728,14 @@
   display: flex;
   flex-direction: column;
 }
+@container player (min-width: 680px) {
+  .vp-project-tools {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    column-gap: 28px;
+    align-items: start;
+  }
+}
 .vp-upload-box, .vp-deliver-box, .vp-thumb-box, .vp-review-box, .vp-activity-box {
   margin-top: 0;
   padding: 14px 0;
@@ -1757,21 +1770,23 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
-.vp-upload-row input[type="text"] { flex: 1; min-width: 160px; }
+.vp-upload-row input[type="text"] { flex: 1 1 120px; min-width: 0; max-width: 240px; width: auto; }
 .vp-upload-row input[type="file"] { flex: 1; min-width: 0; font-size: 0.78rem; color: var(--text-muted); }
 .vp-upload-row-spacer { flex: 1; }
-.vp-deliver-row input { flex: 1; min-width: 0; }
-.vp-upload-box input[type="text"] { width: 100%; box-sizing: border-box; }
-.vp-upload-row input[type="text"] { flex: 1; min-width: 140px; width: auto; }
+.vp-deliver-row input { flex: 1 1 140px; min-width: 0; max-width: 100%; }
+.vp-upload-box input[type="text"] { box-sizing: border-box; }
 
 /* Drag & drop zone */
 .vp-dropzone {
   display: flex;
   align-items: center;
+  align-self: flex-start;
   gap: 10px;
-  padding: 10px 12px;
+  width: max-content;
+  max-width: 220px;
+  padding: 8px 12px;
   border: 1.5px dashed var(--border-default);
   border-radius: var(--radius-md, 10px);
   background: rgba(255, 255, 255, 0.02);
@@ -1926,7 +1941,7 @@
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   position: relative;
 }
 .vp-field-label {
@@ -1948,6 +1963,12 @@
   font-family: inherit;
   outline: none;
   min-width: 180px;
+}
+.vp-review-row .vp-field-label { flex: 0 1 auto; min-width: 0; }
+.vp-review-row .vp-field-label input {
+  width: 132px;
+  min-width: 0;
+  max-width: 100%;
 }
 .vp-pp-results {
   position: absolute;
@@ -2554,11 +2575,15 @@
     min-height: 44px;
   }
 
-  .vp-dropzone { min-height: 56px; }
+  .vp-project-tools { display: flex; }
+  .vp-dropzone { min-height: 56px; width: 100%; max-width: none; align-self: stretch; }
+  .vp-upload-row input[type="text"],
+  .vp-deliver-row input { max-width: none; }
   .vp-upload-row,
   .vp-deliver-row,
   .vp-review-row {
     align-items: stretch;
+    flex-wrap: wrap;
   }
   .vp-upload-row input[type="text"],
   .vp-deliver-row input,

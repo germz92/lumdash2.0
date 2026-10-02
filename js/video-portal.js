@@ -771,16 +771,70 @@
     wireProjectAccessPicker();
   }
 
+  function detailAccessPeople() {
+    if (!detail) return [];
+    return (detail.clientContacts || activePeople(clients.find(c => String(c._id) === String(detail.clientId)) || {})).filter(c => !c.revokedAt);
+  }
+
+  function accessSummary(people, selectedIds) {
+    const selected = new Set((selectedIds || []).map(String));
+    const names = people.filter(p => selected.has(String(p._id))).map(personLabel);
+    if (!people.length) return 'No people';
+    if (!names.length) return 'No one';
+    if (names.length === people.length) return 'Everyone';
+    if (names.length === 1) return names[0];
+    return `${names.length} people`;
+  }
+
+  function updateDetailAccessLabel() {
+    const label = document.getElementById('detailAccessLabel');
+    const list = document.getElementById('detailAccessList');
+    if (!label || !list) return;
+    label.textContent = accessSummary(detailAccessPeople(), selectedAccessIds(list));
+  }
+
+  function setDetailAccessOpen(open) {
+    const dropdown = document.getElementById('detailAccessDropdown');
+    const trigger = document.getElementById('detailAccessTrigger');
+    const menu = document.getElementById('detailAccessList');
+    if (!dropdown || !trigger || !menu) return;
+    menu.hidden = !open;
+    trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+    dropdown.classList.toggle('is-open', open);
+  }
+
+  function wireDetailAccessDropdown() {
+    const dropdown = document.getElementById('detailAccessDropdown');
+    const trigger = document.getElementById('detailAccessTrigger');
+    if (!dropdown || !trigger || dropdown.dataset.wired) return;
+    dropdown.dataset.wired = '1';
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const open = trigger.getAttribute('aria-expanded') !== 'true';
+      closeCustomSelects();
+      setDetailAccessOpen(open);
+    });
+    document.addEventListener('click', (e) => {
+      if (dropdown.contains(e.target)) return;
+      setDetailAccessOpen(false);
+    });
+  }
+
   function fillDetailAccessList() {
     const list = document.getElementById('detailAccessList');
     if (!list || !detail) return;
-    const people = (detail.clientContacts || activePeople(clients.find(c => String(c._id) === String(detail.clientId)) || {})).filter(c => !c.revokedAt);
+    const people = detailAccessPeople();
     renderAccessChips(list, people, detail.viewerIds || [], {
       emptyText: 'Add people on the client to share this video on their links.'
     });
     list.querySelectorAll('input[type="checkbox"]').forEach(input => {
-      input.addEventListener('change', saveDetailAccess);
+      input.addEventListener('change', () => {
+        updateDetailAccessLabel();
+        saveDetailAccess();
+      });
     });
+    updateDetailAccessLabel();
+    wireDetailAccessDropdown();
   }
 
   async function saveDetailAccess() {
@@ -2168,7 +2222,7 @@
       hint.textContent = busy ? 'Uploading. You can open another project while this finishes.' : '';
     }
     if (notes) {
-      notes.placeholder = 'Note for the client';
+      notes.placeholder = 'Email notes';
     }
     renderInlineUploadProgress();
   }
@@ -4197,6 +4251,97 @@
     }
   }
 
+  function closeCustomSelects() {
+    document.querySelectorAll('.vp-custom-select.is-open').forEach(wrap => {
+      wrap.classList.remove('is-open');
+      const menu = wrap.querySelector('.vp-select-menu');
+      const btn = wrap.querySelector('.vp-select-trigger');
+      if (menu) menu.hidden = true;
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    });
+  }
+
+  function mountCustomSelect(select) {
+    if (!select || select.dataset.vpCustom) return;
+    select.dataset.vpCustom = '1';
+    const wrap = document.createElement('div');
+    wrap.className = 'vp-custom-select';
+    select.parentNode.insertBefore(wrap, select);
+    wrap.appendChild(select);
+
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'vp-select-trigger';
+    trigger.setAttribute('aria-haspopup', 'listbox');
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.innerHTML = '<span class="vp-select-label"></span><span class="material-symbols-outlined">expand_more</span>';
+
+    const menu = document.createElement('div');
+    menu.className = 'vp-select-menu';
+    menu.hidden = true;
+    menu.setAttribute('role', 'listbox');
+    wrap.appendChild(trigger);
+    wrap.appendChild(menu);
+
+    const labelEl = trigger.querySelector('.vp-select-label');
+
+    function renderMenu() {
+      const current = select.value;
+      const chosen = [...select.options].find(opt => opt.value === current) || select.options[0];
+      labelEl.textContent = chosen ? chosen.textContent : '';
+      menu.replaceChildren();
+      [...select.options].forEach(opt => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'vp-select-option' + (opt.value === current ? ' is-current' : '');
+        item.setAttribute('role', 'option');
+        item.textContent = opt.textContent;
+        item.disabled = !!opt.disabled;
+        if (opt.value === current) item.setAttribute('aria-selected', 'true');
+        item.addEventListener('click', () => {
+          if (opt.disabled) return;
+          if (select.value !== opt.value) {
+            select.value = opt.value;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+          }
+          renderMenu();
+          closeCustomSelects();
+        });
+        menu.appendChild(item);
+      });
+    }
+
+    new MutationObserver(renderMenu).observe(select, { childList: true, subtree: true });
+    select.addEventListener('change', renderMenu);
+    trigger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const willOpen = menu.hidden;
+      closeCustomSelects();
+      setDetailAccessOpen(false);
+      if (!willOpen) return;
+      menu.hidden = false;
+      trigger.setAttribute('aria-expanded', 'true');
+      wrap.classList.add('is-open');
+    });
+    menu.addEventListener('click', (e) => e.stopPropagation());
+    renderMenu();
+  }
+
+  function mountCustomSelects() {
+    document.querySelectorAll('.video-portal-page select').forEach(mountCustomSelect);
+    if (document.body.dataset.vpSelectClose) return;
+    document.body.dataset.vpSelectClose = '1';
+    document.addEventListener('click', (e) => {
+      if (e.target.closest('.vp-custom-select')) return;
+      closeCustomSelects();
+    });
+    document.addEventListener('keydown', (e) => {
+      if (e.key !== 'Escape') return;
+      closeCustomSelects();
+      setDetailAccessOpen(false);
+    });
+  }
+
   // ---- Init ----
   window.initPage = async function() {
     const payload = readTokenPayload();
@@ -4215,6 +4360,7 @@
 
     setupMobileMenu();
     setupListeners();
+    mountCustomSelects();
     ensurePlayerJs();
     // Re-attach this page instance to the persistent upload manager so in-flight
     // uploads (started before navigating away) render here and refresh the view.

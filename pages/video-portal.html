@@ -102,7 +102,13 @@
             </div>
             <div class="vp-detail-access" id="detailAccessWrap">
               <span class="vp-detail-access-label">Access</span>
-              <div class="vp-access-chips" id="detailAccessList"></div>
+              <div class="vp-access-dropdown" id="detailAccessDropdown">
+                <button type="button" class="vp-select-trigger vp-access-trigger" id="detailAccessTrigger" aria-haspopup="listbox" aria-expanded="false">
+                  <span id="detailAccessLabel">No one</span>
+                  <span class="material-symbols-outlined">expand_more</span>
+                </button>
+                <div class="vp-access-chips vp-access-menu vp-select-menu" id="detailAccessList" hidden></div>
+              </div>
             </div>
           </div>
           <div class="vp-detail-header-actions">
@@ -189,7 +195,7 @@
               </div>
               <div class="vp-pending-files" id="pendingFiles" style="display:none;"></div>
               <div class="vp-upload-row">
-                <input type="text" id="versionNotes" placeholder="Note for the client">
+                <input type="text" id="versionNotes" placeholder="Email notes">
                 <label class="vp-check"><input type="checkbox" id="notifyClientCheck" checked> Email</label>
                 <button class="vp-btn primary small" id="uploadVersionBtn" disabled>
                   <span class="material-symbols-outlined">upload</span>

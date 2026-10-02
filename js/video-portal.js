@@ -28,6 +28,7 @@
   // Detail modal state
   let detail = null;            // current project detail payload
   let currentVersionId = null;  // selected version in the player
+  let versionNotesEditingId = null;
   let player = null;            // player.js instance for the Bunny iframe
   let composeTimecode = null;   // seconds for the next comment, or null when detached
   let composeTimecodeEnd = null;
@@ -1698,6 +1699,7 @@
     syncProjectInUrl(detail._id, { push: !alreadyOnProject });
     const versions = detail.versions || [];
     currentVersionId = versions.length ? versions[versions.length - 1]._id : null;
+    versionNotesEditingId = null;
     composeTimecodeAttached = true;
     composePickingEnd = false;
     composeTimecode = 0;
@@ -1714,14 +1716,12 @@
     document.getElementById('deleteProjectBtn').style.display = isAdmin ? 'inline-flex' : 'none';
     document.getElementById('masterUrlInput').value = detail.masterFileUrl || '';
     updateOpenMasterBtn();
-    const allowDl = document.getElementById('allowDownloadCheck');
-    if (allowDl) allowDl.checked = detail.allowClientDownload !== false;
     const allowVersions = document.getElementById('allowVersionDownloadCheck');
     if (allowVersions) allowVersions.checked = detail.allowVersionDownload === true;
     document.getElementById('deliverStatus').innerHTML = detail.status === 'delivered'
-      ? `<span class="delivered">Delivered ${fmtDate(detail.deliveredAt)}</span>${detail.deliveredByName ? ` by ${escapeHtml(detail.deliveredByName)}` : ''}`
-      : 'Not delivered yet — attach the master link and mark delivered when the client approves.';
-    document.getElementById('deliverBtn').textContent = detail.status === 'delivered' ? 'Update Link' : 'Mark Delivered';
+      ? `<span class="delivered">Delivered ${fmtDate(detail.deliveredAt)}</span>${detail.deliveredByName ? ` · ${escapeHtml(detail.deliveredByName)}` : ''}`
+      : 'Not delivered';
+    document.getElementById('deliverBtn').textContent = detail.status === 'delivered' ? 'Update link' : 'Mark delivered';
 
     compareMode = false;
     compareVersionId = null;
@@ -1886,9 +1886,9 @@
     if (status === 'approved') {
       el.textContent = `Approved by ${d.decidedByName || 'client'}${d.versionNumber ? ` (v${d.versionNumber})` : ''} · ${fmtDate(d.decidedAt)}`;
     } else if (detail.feedbackDueAt) {
-      el.textContent = `Awaiting client approval · feedback due ${fmtDate(detail.feedbackDueAt)}`;
+      el.textContent = `Waiting · due ${fmtDate(detail.feedbackDueAt)}`;
     } else {
-      el.textContent = 'Awaiting client approval';
+      el.textContent = 'Waiting on the client';
     }
   }
 
@@ -2034,7 +2034,59 @@
     if (menuWrap) menuWrap.style.display = (isAdmin && v) ? 'block' : 'none';
     closeVersionMenu();
 
+    renderVersionNotes();
     updateUploadUi();
+  }
+
+  function renderVersionNotes() {
+    const panel = document.getElementById('versionNotesPanel');
+    const editor = document.getElementById('versionNotesEditor');
+    const saveBtn = document.getElementById('saveVersionNotesBtn');
+    if (!panel || !editor) return;
+    const v = currentVersion();
+    if (!v || (!isAdmin && !String(v.notes || '').trim())) {
+      panel.hidden = true;
+      versionNotesEditingId = null;
+      return;
+    }
+    panel.hidden = false;
+    editor.readOnly = !isAdmin;
+    if (String(versionNotesEditingId) !== String(v._id)) {
+      versionNotesEditingId = v._id;
+      editor.value = v.notes || '';
+    }
+    if (saveBtn) {
+      saveBtn.hidden = !isAdmin;
+      saveBtn.disabled = !isAdmin || editor.value.trim() === String(v.notes || '').trim();
+    }
+  }
+
+  async function saveVersionNotes() {
+    if (!isAdmin || !detail || !currentVersionId) return;
+    const editor = document.getElementById('versionNotesEditor');
+    const saveBtn = document.getElementById('saveVersionNotesBtn');
+    const v = currentVersion();
+    if (!editor || !v) return;
+    const notes = editor.value.trim();
+    if (saveBtn) saveBtn.disabled = true;
+    try {
+      const result = await api(`/api/video-projects/${detail._id}/versions/${currentVersionId}/notes`, {
+        method: 'PUT',
+        body: JSON.stringify({ notes })
+      });
+      v.notes = result.notes ?? notes;
+      editor.value = v.notes;
+      if (saveBtn) saveBtn.disabled = true;
+      try {
+        const refreshed = await api(`/api/video-projects/${detail._id}`);
+        detail.activity = refreshed.activity;
+        renderActivity();
+      } catch { /* notes are saved even if the activity list doesn't refresh */ }
+      toast(notes ? 'Version notes saved — clients can see them' : 'Version notes cleared');
+    } catch (err) {
+      if (saveBtn) saveBtn.disabled = false;
+      toast(err.message, 'error');
+    }
   }
 
   function closeVersionMenu() {
@@ -2105,26 +2157,18 @@
     const notes = document.getElementById('versionNotes');
     const dropzone = document.getElementById('versionDropzone');
     if (label) {
-      label.textContent = hasVersion ? `Upload new version (v${nextNum})` : 'Upload first version';
+      label.textContent = hasVersion ? `New version · v${nextNum}` : 'First version';
     }
     if (btn) btn.disabled = !hasPending || busy;
     if (dropzone) dropzone.classList.toggle('is-disabled', busy);
     if (btnLabel) {
-      btnLabel.textContent = hasVersion ? `Upload v${nextNum}` : 'Upload version';
+      btnLabel.textContent = hasVersion ? `Upload v${nextNum}` : 'Upload';
     }
     if (hint) {
-      if (busy) {
-        hint.textContent = 'A version is uploading for this project. You can open other projects and start their uploads in the meantime.';
-      } else if (hasVersion) {
-        hint.textContent = `Adds a new cut as v${nextNum}. The current version stays in the version menu for compare.`;
-      } else {
-        hint.textContent = 'Upload the first review cut for this project.';
-      }
+      hint.textContent = busy ? 'Uploading. You can open another project while this finishes.' : '';
     }
     if (notes) {
-      notes.placeholder = hasVersion
-        ? `What changed in v${nextNum}? (goes in the client email)`
-        : 'What should the client know about this cut? (goes in the client email)';
+      notes.placeholder = 'Note for the client';
     }
     renderInlineUploadProgress();
   }
@@ -3844,6 +3888,9 @@
       }
     });
 
+    document.getElementById('versionNotesEditor')?.addEventListener('input', renderVersionNotes);
+    document.getElementById('saveVersionNotesBtn')?.addEventListener('click', saveVersionNotes);
+
     document.getElementById('versionSelect').addEventListener('change', (e) => {
       currentVersionId = e.target.value;
       composeTimecodeEnd = null;
@@ -3945,27 +3992,14 @@
     document.getElementById('deliverBtn').addEventListener('click', async () => {
       if (!detail) return;
       const masterFileUrl = document.getElementById('masterUrlInput').value.trim();
-      const allowClientDownload = !!document.getElementById('allowDownloadCheck')?.checked;
       try {
         await api(`/api/video-projects/${detail._id}`, {
           method: 'PUT',
-          body: JSON.stringify({ status: 'delivered', masterFileUrl, allowClientDownload })
+          body: JSON.stringify({ status: 'delivered', masterFileUrl, allowClientDownload: true })
         });
         toast('Marked delivered');
         await loadProjects();
         openDetail(detail._id);
-      } catch (err) { toast(err.message, 'error'); }
-    });
-
-    document.getElementById('allowDownloadCheck')?.addEventListener('change', async (e) => {
-      if (!detail) return;
-      try {
-        await api(`/api/video-projects/${detail._id}`, {
-          method: 'PUT',
-          body: JSON.stringify({ allowClientDownload: !!e.target.checked })
-        });
-        detail.allowClientDownload = !!e.target.checked;
-        toast(e.target.checked ? 'Client can download master' : 'Client download hidden');
       } catch (err) { toast(err.message, 'error'); }
     });
 

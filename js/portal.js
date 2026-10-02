@@ -578,6 +578,7 @@
           <div class="pt-card-body">
             <div class="pt-card-title">${escapeHtml(p.title)}</div>
             <div class="pt-card-meta">${meta}</div>
+            ${p.latestVersionNotes ? `<div class="pt-card-note">${escapeHtml(p.latestVersionNotes)}</div>` : ''}
             ${due}
           </div>
         </div>`;
@@ -747,7 +748,6 @@
         <div class="pt-player-col">
           <div class="pt-version-bar">
             <select id="ptVersionSelect">${versionOptions || '<option>No versions yet</option>'}</select>
-            <span class="pt-version-note" id="ptVersionNote"></span>
             ${versions.length >= 2 ? `<button type="button" class="pt-compare-btn" id="ptCompareBtn">${compareMode ? 'Exit compare' : 'Compare'}</button>` : ''}
           </div>
           <div class="pt-player-stack ${compareMode ? 'compare-on' : ''}" id="ptPlayerStack">
@@ -767,6 +767,10 @@
             <button type="button" class="pt-tool-btn" id="ptClearDrawBtn" title="Clear drawing">&#10005;</button>
             <span class="pt-annotate-hint" id="ptAnnotateHint"></span>
           </div>` : ''}
+          <div class="pt-version-note" id="ptVersionNote" hidden>
+            <div class="pt-version-note-label">From the team</div>
+            <div id="ptVersionNoteText"></div>
+          </div>
           <div class="pt-downloads">
             <a class="pt-download version" id="ptVersionDownload" hidden target="_blank" rel="noopener">${downloadIcon()} <span id="ptVersionDownloadLabel">Download this version</span></a>
             ${project.masterFileUrl ? `<a class="pt-download" href="${escapeHtml(toDirectDownloadUrl(project.masterFileUrl))}" target="_blank" rel="noopener">${downloadIcon()} Download Final Video</a>` : ''}
@@ -870,10 +874,10 @@
     if (annotate) { annotate.destroy(); annotate = null; }
 
     const note = document.getElementById('ptVersionNote');
-    if (note) {
-      if (v && v.notes) note.textContent = v.notes;
-      else note.textContent = '';
-    }
+    const noteText = document.getElementById('ptVersionNoteText');
+    const noteBody = String(v?.notes || '').trim();
+    if (note) note.hidden = !noteBody;
+    if (noteText) noteText.textContent = noteBody;
 
     if (!v) {
       wrap.innerHTML = '<div class="pt-player-placeholder">No video available yet — check back soon.</div>';

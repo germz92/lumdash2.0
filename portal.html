@@ -233,6 +233,16 @@
     .pt-card-body { padding: 12px 14px; }
     .pt-card-title { font-weight: 600; font-size: 0.92rem; margin-bottom: 3px; }
     .pt-card-meta { font-size: 0.75rem; color: #9a9ba1; }
+    .pt-card-note {
+      margin-top: 6px;
+      font-size: 0.78rem;
+      line-height: 1.4;
+      color: #c8c8cc;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
 
     /* Project view */
     .pt-back {
@@ -279,7 +289,26 @@
       font-family: inherit;
       outline: none;
     }
-    .pt-version-note { font-size: 0.78rem; color: #9a9ba1; }
+    .pt-version-note {
+      margin: 12px 0;
+      padding: 12px 14px;
+      background: #1a1b1e;
+      border: 1px solid #2a2b2f;
+      border-radius: 10px;
+      color: #e8e8ea;
+      font-size: 0.9rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+    .pt-version-note[hidden] { display: none; }
+    .pt-version-note-label {
+      margin-bottom: 4px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #9a9ba1;
+    }
 
     .pt-player-wrap {
       position: relative;

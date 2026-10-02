@@ -14833,7 +14833,6 @@ function sanitizeAnnotation(raw) {
 
 function portalMasterDownloadUrl(project) {
   if (project.status !== 'delivered') return '';
-  if (project.allowClientDownload === false) return '';
   return project.masterFileUrl || '';
 }
 
@@ -16387,6 +16386,41 @@ async function notifyClientsNewVersion({ project, versionNumber, notes, notifyCl
   }
 }
 
+// Admins and project managers can edit the note clients see on a version.
+app.put('/api/video-projects/:id/versions/:versionId/notes', authenticate, async (req, res) => {
+  try {
+    if (!isPortalAdmin(req.user)) {
+      return res.status(403).json({ error: 'Only admins and project managers can edit version notes' });
+    }
+    const project = await VideoProject.findById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+    const version = project.versions.id(req.params.versionId);
+    if (!version) return res.status(404).json({ error: 'Version not found' });
+
+    const notes = String(req.body.notes || '').trim().slice(0, 2000);
+    version.notes = notes;
+    await project.save();
+
+    await logPortalActivity({
+      projectId: project._id,
+      clientId: project.clientId,
+      type: 'version_notes',
+      actorType: 'team',
+      actorId: req.user.id,
+      actorName: req.user.fullName || req.user.email || '',
+      message: notes
+        ? `Updated notes on version ${version.versionNumber}`
+        : `Cleared notes on version ${version.versionNumber}`,
+      metadata: { versionId: version._id.toString(), versionNumber: version.versionNumber }
+    });
+
+    res.json({ success: true, notes, versionId: version._id });
+  } catch (err) {
+    console.error('Error saving version notes:', err);
+    res.status(500).json({ error: err.message || 'Failed to save version notes' });
+  }
+});
+
 // Prepare a version for direct browser → Bunny TUS upload (no file through Render).
 app.post('/api/video-projects/:id/versions/prepare', authenticate, async (req, res) => {
   try {
@@ -16918,6 +16952,7 @@ app.get('/api/portal/:token', async (req, res) => {
           versionCount: versions.length,
           latestVersionNumber: latest ? latest.versionNumber : 0,
           latestVersionStatus: latest ? latest.videoStatus : null,
+          latestVersionNotes: latest && latest.notes ? String(latest.notes).trim() : '',
           thumbnailUrl: projectThumbnailUrl(p, latestReady),
           updatedAt: p.updatedAt
         };

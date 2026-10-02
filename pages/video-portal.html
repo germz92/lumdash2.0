@@ -165,25 +165,35 @@
               <button type="button" class="vp-tool-btn" id="annotateClearBtn" title="Clear drawing">&#10005;</button>
               <span class="vp-annotate-hint" id="annotateHint"></span>
             </div>
+            <div class="vp-version-notes" id="versionNotesPanel" hidden>
+              <div class="vp-version-notes-head">
+                <label for="versionNotesEditor">Version notes</label>
+                <span>Clients see this on this version</span>
+              </div>
+              <textarea id="versionNotesEditor" rows="3" maxlength="2000" placeholder="What should the client know about this version?"></textarea>
+              <div class="vp-version-notes-row">
+                <button type="button" class="vp-btn secondary small" id="saveVersionNotesBtn" disabled>Save notes</button>
+              </div>
+            </div>
 
+            <div class="vp-project-tools">
             <div class="vp-upload-box" id="uploadBox">
-              <div class="vp-thumb-label" id="uploadBoxLabel">Upload version</div>
+              <div class="vp-thumb-label" id="uploadBoxLabel">New version</div>
               <div class="vp-dropzone" id="versionDropzone" tabindex="0" role="button" aria-label="Choose or drop a video file">
                 <input type="file" id="versionFile" accept="video/*" hidden>
                 <span class="material-symbols-outlined vp-dropzone-icon">cloud_upload</span>
                 <div class="vp-dropzone-text">
-                  <strong>Drag &amp; drop the video file here</strong>
-                  <span>or <u>browse</u> — one video per version</span>
+                  <strong>Drop a video</strong>
+                  <span>or <u>browse</u></span>
                 </div>
               </div>
               <div class="vp-pending-files" id="pendingFiles" style="display:none;"></div>
-              <input type="text" id="versionNotes" placeholder="What changed in this cut? (goes in the client email)">
               <div class="vp-upload-row">
-                <label class="vp-check"><input type="checkbox" id="notifyClientCheck" checked> Email client</label>
-                <span class="vp-upload-row-spacer"></span>
+                <input type="text" id="versionNotes" placeholder="Note for the client">
+                <label class="vp-check"><input type="checkbox" id="notifyClientCheck" checked> Email</label>
                 <button class="vp-btn primary small" id="uploadVersionBtn" disabled>
                   <span class="material-symbols-outlined">upload</span>
-                  <span id="uploadVersionBtnLabel">Upload version</span>
+                  <span id="uploadVersionBtnLabel">Upload</span>
                 </button>
               </div>
               <div class="vp-upload-hint" id="uploadBoxHint"></div>
@@ -191,43 +201,44 @@
             </div>
 
             <div class="vp-review-box">
-              <div class="vp-review-status" id="reviewDecisionStatus">Awaiting client approval</div>
+              <div class="vp-tool-head">
+                <span class="vp-thumb-label">Review</span>
+                <span class="vp-review-status" id="reviewDecisionStatus">Awaiting approval</span>
+              </div>
               <div class="vp-review-row">
-                <label class="vp-field-label">Feedback due
+                <label class="vp-field-label">Due
                   <input type="date" id="feedbackDueInput">
                 </label>
-                <button class="vp-btn secondary small" id="saveDueBtn">Save due date</button>
-                <button class="vp-btn secondary small" id="notifyClientsBtn" title="Email all contacts the latest version is ready">
+                <button class="vp-btn secondary small" id="saveDueBtn">Save</button>
+                <button class="vp-btn secondary small" id="notifyClientsBtn" title="Email assigned people that the latest version is ready">
                   <span class="material-symbols-outlined">campaign</span>
-                  <span>Notify clients</span>
+                  <span>Notify</span>
                 </button>
               </div>
             </div>
 
             <div class="vp-deliver-box">
-              <div class="vp-deliver-status" id="deliverStatus"></div>
+              <div class="vp-tool-head">
+                <span class="vp-thumb-label">Delivery</span>
+                <span class="vp-deliver-status" id="deliverStatus"></span>
+              </div>
               <div class="vp-deliver-row">
-                <input type="url" id="masterUrlInput" placeholder="Master file link (Google Drive)">
+                <input type="url" id="masterUrlInput" placeholder="Master file link">
                 <button type="button" class="vp-btn secondary small" id="openMasterBtn" style="display:none;" title="Download the delivered master file">
                   <span class="material-symbols-outlined">download</span>
-                  <span>Download</span>
                 </button>
-                <button class="vp-btn success small" id="deliverBtn">Mark Delivered</button>
+                <button class="vp-btn success small" id="deliverBtn">Mark delivered</button>
               </div>
-              <label class="vp-check">
-                <input type="checkbox" id="allowDownloadCheck" checked>
-                Allow client to download / open the master link
-              </label>
-              <label class="vp-check vp-check-stack">
-                <input type="checkbox" id="allowVersionDownloadCheck">
-                <span>Allow client to download review versions
-                  <span class="vp-check-hint">Each uploaded version, even before a master link is added</span>
-                </span>
-              </label>
+              <div class="vp-check-row">
+                <label class="vp-check" title="Let clients download each review version before a master link exists">
+                  <input type="checkbox" id="allowVersionDownloadCheck">
+                  Allow version downloads
+                </label>
+              </div>
             </div>
 
             <div class="vp-thumb-box">
-              <div class="vp-thumb-label">Custom thumbnail</div>
+              <div class="vp-thumb-label">Cover</div>
               <div class="vp-thumb-row">
                 <div class="vp-thumb-preview" id="thumbPreview">
                   <span class="material-symbols-outlined">image</span>
@@ -237,17 +248,17 @@
                   <div class="vp-thumb-btn-row">
                     <button type="button" class="vp-btn secondary small" id="thumbFromFrameBtn" title="Pause on the frame you want, then click">
                       <span class="material-symbols-outlined">photo_camera</span>
-                      <span>Use current frame</span>
+                      <span>Current frame</span>
                     </button>
                     <button type="button" class="vp-btn secondary small" id="thumbPickBtn">
                       <span class="material-symbols-outlined">upload</span>
-                      <span>Upload image</span>
+                      <span>Upload</span>
                     </button>
                     <button type="button" class="vp-btn secondary small" id="thumbClearBtn" style="display:none;">Remove</button>
                   </div>
-                  <div class="vp-thumb-hint">Shown on the gallery card. Pause the player and use the current frame, or upload a JPG/PNG.</div>
                 </div>
               </div>
+            </div>
             </div>
           </div>
 

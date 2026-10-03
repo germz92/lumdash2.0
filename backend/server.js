@@ -15319,18 +15319,37 @@ app.get('/api/portal-clients', authenticate, async (req, res) => {
       if (dirty) await c.save();
     }
     const counts = await VideoProject.aggregate([
-      { $group: { _id: { clientId: '$clientId', status: '$status' }, n: { $sum: 1 } } }
+      {
+        $group: {
+          _id: {
+            clientId: '$clientId',
+            bucket: {
+              $cond: [
+                {
+                  $and: [
+                    { $eq: ['$status', 'in_review'] },
+                    { $eq: ['$reviewDecision.status', 'approved'] }
+                  ]
+                },
+                'approved',
+                '$status'
+              ]
+            }
+          },
+          n: { $sum: 1 }
+        }
+      }
     ]);
     const countMap = {};
     counts.forEach(c => {
       const id = c._id.clientId.toString();
-      countMap[id] = countMap[id] || { total: 0, in_review: 0, delivered: 0, archived: 0 };
-      countMap[id][c._id.status] = c.n;
+      countMap[id] = countMap[id] || { total: 0, in_review: 0, approved: 0, delivered: 0, archived: 0 };
+      countMap[id][c._id.bucket] = c.n;
       countMap[id].total += c.n;
     });
     res.json(clients.map(c => ({
       ...sanitizePortalClient(c),
-      projectCounts: countMap[c._id.toString()] || { total: 0, in_review: 0, delivered: 0, archived: 0 }
+      projectCounts: countMap[c._id.toString()] || { total: 0, in_review: 0, approved: 0, delivered: 0, archived: 0 }
     })));
   } catch (err) {
     console.error('Error listing portal clients:', err);
@@ -17290,6 +17309,50 @@ app.post('/api/video-projects/:id/notify-clients', authenticate, async (req, res
   } catch (err) {
     console.error('Error notifying portal clients:', err);
     res.status(500).json({ error: 'Failed to notify clients' });
+  }
+});
+
+// Clear an accidental client approval so the cut is in review again
+app.post('/api/video-projects/:id/decision/reset', authenticate, async (req, res) => {
+  try {
+    if (!isPortalAdmin(req.user)) {
+      return res.status(403).json({ error: 'Only admins and project managers can clear an approval' });
+    }
+    const project = await VideoProject.findById(req.params.id);
+    if (!project) return res.status(404).json({ error: 'Project not found' });
+
+    const prev = project.reviewDecision || {};
+    if (!prev.status || prev.status === 'none') {
+      return res.json({ success: true, reviewDecision: project.reviewDecision || { status: 'none' } });
+    }
+
+    const who = prev.decidedByName || 'the client';
+    const ver = prev.versionNumber ? ` on v${prev.versionNumber}` : '';
+    project.reviewDecision = {
+      status: 'none',
+      note: '',
+      versionId: null,
+      versionNumber: null,
+      decidedByName: '',
+      decidedByEmail: '',
+      decidedAt: null
+    };
+    await project.save();
+
+    await logPortalActivity({
+      projectId: project._id,
+      clientId: project.clientId,
+      type: 'approval_cleared',
+      actorType: 'team',
+      actorId: req.user.id,
+      actorName: req.user.fullName || req.user.email || '',
+      message: `Cleared approval from ${who}${ver}`
+    });
+
+    res.json({ success: true, reviewDecision: project.reviewDecision });
+  } catch (err) {
+    console.error('Error clearing portal approval:', err);
+    res.status(500).json({ error: 'Failed to clear approval' });
   }
 });
 

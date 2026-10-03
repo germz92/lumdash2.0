@@ -18,6 +18,9 @@
   let clients = [];
   let projects = [];
   let statusFilter = 'in_review';
+  let gridPage = 1;
+  const GRID_PAGE_SIZE = 12;
+  const COUNTED_STATUS_TABS = new Set(['in_review', 'approved']);
   let clientFilter = '';
   let clientSuggestIndex = -1;
   let searchQuery = '';
@@ -271,6 +274,7 @@
 
   function setStatusFilter(status) {
     statusFilter = status || 'all';
+    gridPage = 1;
     document.querySelectorAll('.vp-status-tab').forEach(tab => {
       tab.classList.toggle('active', tab.dataset.status === statusFilter);
     });
@@ -286,6 +290,7 @@
 
   function selectClientFilter(id, name) {
     clientFilter = id ? String(id) : '';
+    gridPage = 1;
     syncClientFilterInput();
     hideClientSuggest();
     renderGrid();
@@ -293,6 +298,7 @@
 
   function clearClientFilter() {
     clientFilter = '';
+    gridPage = 1;
     syncClientFilterInput();
     hideClientSuggest();
     renderGrid();
@@ -452,9 +458,15 @@
   }
 
   // ---- Project grid ----
+  function isApprovedCut(p) {
+    return p?.status === 'in_review' && p?.reviewDecision?.status === 'approved';
+  }
+
   function filteredProjects() {
     let items = projects;
-    if (statusFilter !== 'all') items = items.filter(p => p.status === statusFilter);
+    if (statusFilter === 'in_review') items = items.filter(p => p.status === 'in_review' && !isApprovedCut(p));
+    else if (statusFilter === 'approved') items = items.filter(isApprovedCut);
+    else if (statusFilter !== 'all') items = items.filter(p => p.status === statusFilter);
     else items = items.filter(p => p.status !== 'archived');
     if (clientFilter) items = items.filter(p => (p.clientId || '').toString() === clientFilter);
     if (searchQuery.trim()) {
@@ -481,12 +493,18 @@
     }
     const counts = {
       all: base.filter(p => p.status !== 'archived').length,
-      in_review: base.filter(p => p.status === 'in_review').length,
+      in_review: base.filter(p => p.status === 'in_review' && !isApprovedCut(p)).length,
+      approved: base.filter(isApprovedCut).length,
       delivered: base.filter(p => p.status === 'delivered').length,
       archived: base.filter(p => p.status === 'archived').length,
     };
     document.querySelectorAll('.vp-status-tab').forEach(tab => {
-      let badge = tab.querySelector('.vp-status-count');
+      const existing = tab.querySelector('.vp-status-count');
+      if (!COUNTED_STATUS_TABS.has(tab.dataset.status)) {
+        if (existing) existing.remove();
+        return;
+      }
+      let badge = existing;
       if (!badge) {
         badge = document.createElement('span');
         badge.className = 'vp-status-count';
@@ -494,6 +512,54 @@
       }
       badge.textContent = String(counts[tab.dataset.status] ?? 0);
     });
+  }
+
+  function gridPageList(current, total) {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    const pages = [1];
+    let start = Math.max(2, current - 1);
+    let end = Math.min(total - 1, current + 1);
+    if (current <= 3) {
+      start = 2;
+      end = 4;
+    } else if (current >= total - 2) {
+      start = total - 3;
+      end = total - 1;
+    }
+    if (start > 2) pages.push('…');
+    for (let i = start; i <= end; i += 1) pages.push(i);
+    if (end < total - 1) pages.push('…');
+    pages.push(total);
+    return pages;
+  }
+
+  function gridFooterHtml(total, page, totalPages) {
+    const from = (page - 1) * GRID_PAGE_SIZE + 1;
+    const to = Math.min(total, page * GRID_PAGE_SIZE);
+    const countLabel = totalPages === 1
+      ? `${total} video${total === 1 ? '' : 's'}`
+      : `Showing ${from}–${to} of ${total}`;
+    const pages = totalPages > 1
+      ? `<div class="vp-grid-pages">${gridPageList(page, totalPages).map(entry => {
+          if (entry === '…') return '<span class="vp-grid-ellipsis">…</span>';
+          const current = entry === page ? ' is-current' : '';
+          return `<button type="button" class="vp-grid-page${current}" data-grid-page="${entry}"${current ? ' aria-current="page"' : ''}>${entry}</button>`;
+        }).join('')}</div>`
+      : '';
+    const prevDisabled = page <= 1 ? ' disabled' : '';
+    const nextDisabled = page >= totalPages ? ' disabled' : '';
+    const nav = totalPages > 1
+      ? `<div class="vp-grid-nav">
+          <button type="button" class="vp-grid-page" data-grid-page="${page - 1}"${prevDisabled} aria-label="Previous page">
+            <span class="material-symbols-outlined">chevron_left</span>
+          </button>
+          ${pages}
+          <button type="button" class="vp-grid-page" data-grid-page="${page + 1}"${nextDisabled} aria-label="Next page">
+            <span class="material-symbols-outlined">chevron_right</span>
+          </button>
+        </div>`
+      : '';
+    return `<div class="vp-grid-footer"><span class="vp-grid-count">${countLabel}</span>${nav}</div>`;
   }
 
   function renderGrid() {
@@ -510,7 +576,12 @@
       return;
     }
 
-    container.innerHTML = `<div class="vp-grid">${items.map(p => {
+    const totalPages = Math.max(1, Math.ceil(items.length / GRID_PAGE_SIZE));
+    if (gridPage > totalPages) gridPage = totalPages;
+    if (gridPage < 1) gridPage = 1;
+    const pageItems = items.slice((gridPage - 1) * GRID_PAGE_SIZE, gridPage * GRID_PAGE_SIZE);
+
+    container.innerHTML = `<div class="vp-grid">${pageItems.map(p => {
       const thumbSrc = assetUrl(p.thumbnailUrl || p.latestVersion?.thumbnailUrl);
       const thumb = thumbSrc
         ? `<img src="${escapeHtml(thumbSrc)}" alt="" loading="lazy">`
@@ -541,10 +612,20 @@
               : `<div class="vp-card-access">Company preview only</div>`}
           </div>
         </div>`;
-    }).join('')}</div>`;
+    }).join('')}</div>${gridFooterHtml(items.length, gridPage, totalPages)}`;
 
     container.querySelectorAll('.vp-card').forEach(card => {
       card.addEventListener('click', () => openDetail(card.dataset.id));
+    });
+    container.querySelectorAll('[data-grid-page]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (btn.disabled) return;
+        const next = Number(btn.dataset.gridPage);
+        if (!next || next === gridPage) return;
+        gridPage = next;
+        renderGrid();
+        container.scrollTop = 0;
+      });
     });
   }
 
@@ -886,6 +967,7 @@
       const branding = c.branding || {};
       const counts = c.projectCounts || {};
       const inReview = counts.in_review || 0;
+      const approved = counts.approved || 0;
       const delivered = counts.delivered || 0;
       const total = counts.total || 0;
       const name = branding.displayName || c.name || 'Client';
@@ -904,6 +986,7 @@
 
       const stats = [];
       if (inReview) stats.push(`<span class="vp-client-stat review">${inReview} in review</span>`);
+      if (approved) stats.push(`<span class="vp-client-stat">${approved} approved</span>`);
       if (delivered) stats.push(`<span class="vp-client-stat delivered">${delivered} delivered</span>`);
       if (!stats.length && total) stats.push(`<span class="vp-client-stat">${total} project${total !== 1 ? 's' : ''}</span>`);
       if (!total) stats.push(`<span class="vp-client-stat">No projects yet</span>`);
@@ -1939,11 +2022,15 @@
     el.className = `vp-review-status ${status}`;
     if (status === 'approved') {
       el.textContent = `Approved by ${d.decidedByName || 'client'}${d.versionNumber ? ` (v${d.versionNumber})` : ''} · ${fmtDate(d.decidedAt)}`;
+    } else if (status === 'changes_requested') {
+      el.textContent = `Changes requested${d.decidedByName ? ` by ${d.decidedByName}` : ''}${d.versionNumber ? ` (v${d.versionNumber})` : ''}`;
     } else if (detail.feedbackDueAt) {
       el.textContent = `Waiting · due ${fmtDate(detail.feedbackDueAt)}`;
     } else {
       el.textContent = 'Waiting on the client';
     }
+    const clearBtn = document.getElementById('clearApprovalBtn');
+    if (clearBtn) clearBtn.style.display = (isAdmin && status !== 'none') ? 'inline' : 'none';
   }
 
   function renderActivity() {
@@ -3799,6 +3886,7 @@
 
     document.getElementById('vpSearch').addEventListener('input', (e) => {
       searchQuery = e.target.value;
+      gridPage = 1;
       renderGrid();
     });
 
@@ -4096,6 +4184,32 @@
         await loadProjects();
         toast(raw ? 'Due date saved' : 'Due date cleared');
       } catch (err) { toast(err.message, 'error'); }
+    });
+
+    document.getElementById('clearApprovalBtn')?.addEventListener('click', async () => {
+      if (!detail || !isAdmin) return;
+      const d = detail.reviewDecision || {};
+      if (!d.status || d.status === 'none') return;
+      const who = d.decidedByName || 'the client';
+      if (!confirm(`Clear the approval from ${who} and put this video back in review?`)) return;
+      const btn = document.getElementById('clearApprovalBtn');
+      if (btn) btn.disabled = true;
+      try {
+        const result = await api(`/api/video-projects/${detail._id}/decision/reset`, { method: 'POST' });
+        detail.reviewDecision = result.reviewDecision || { status: 'none' };
+        const card = projects.find(p => String(p._id) === String(detail._id));
+        if (card) card.reviewDecision = detail.reviewDecision;
+        renderReviewDecision();
+        renderGrid();
+        const refreshed = await api(`/api/video-projects/${detail._id}`);
+        detail.activity = refreshed.activity;
+        renderActivity();
+        toast('Approval cleared');
+      } catch (err) {
+        toast(err.message, 'error');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
     });
 
     document.getElementById('notifyClientsBtn').addEventListener('click', async () => {

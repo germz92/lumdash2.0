@@ -39,7 +39,7 @@
 
   // Gallery toolbar state (persists across re-renders)
   let gallerySearch = '';
-  let galleryStatusFilter = 'all'; // all | in_review | delivered
+  let galleryStatusFilter = 'all'; // all | in_review | approved | delivered
   let galleryFolderFilter = '';    // '' | folderId | __other__
   let gallerySort = 'newest';      // newest | oldest | title_asc | title_desc | due_soon
 
@@ -416,7 +416,9 @@
     let items = [...(portalData.projects || [])];
 
     if (galleryStatusFilter === 'in_review') {
-      items = items.filter(p => p.status === 'in_review');
+      items = items.filter(p => p.status === 'in_review' && p.reviewDecision?.status !== 'approved');
+    } else if (galleryStatusFilter === 'approved') {
+      items = items.filter(p => p.status === 'in_review' && p.reviewDecision?.status === 'approved');
     } else if (galleryStatusFilter === 'delivered') {
       items = items.filter(p => p.status === 'delivered');
     }
@@ -479,6 +481,7 @@
         <select id="ptGalleryStatus" aria-label="Filter by status">
           <option value="all"${galleryStatusFilter === 'all' ? ' selected' : ''}>All statuses</option>
           <option value="in_review"${galleryStatusFilter === 'in_review' ? ' selected' : ''}>In Review</option>
+          <option value="approved"${galleryStatusFilter === 'approved' ? ' selected' : ''}>Approved</option>
           <option value="delivered"${galleryStatusFilter === 'delivered' ? ' selected' : ''}>Delivered</option>
         </select>
         ${showFolderFilter ? `
@@ -541,7 +544,8 @@
     updateHeader();
 
     const filtered = filteredGalleryProjects();
-    const inReview = filtered.filter(p => p.status === 'in_review');
+    const inReview = filtered.filter(p => p.status === 'in_review' && p.reviewDecision?.status !== 'approved');
+    const approved = filtered.filter(p => p.status === 'in_review' && p.reviewDecision?.status === 'approved');
     const delivered = filtered.filter(p => p.status === 'delivered');
     const useFolderChrome = (portalData.folders || []).length > 0 ||
       portalData.projects.some(p => (p.category || '').trim());
@@ -619,6 +623,11 @@
         'In Review',
         'These cuts are waiting on your feedback — open one and leave comments right on the video.',
         inReview
+      );
+      html += renderSection(
+        'Approved',
+        'These cuts are approved. A new version will bring them back for review.',
+        approved
       );
       html += renderSection(
         'Delivered',

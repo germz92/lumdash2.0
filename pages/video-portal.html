@@ -43,6 +43,7 @@
         <div class="vp-status-tabs" id="vpStatusTabs" role="tablist">
           <button type="button" class="vp-status-tab" data-status="all" role="tab">All</button>
           <button type="button" class="vp-status-tab active" data-status="in_review" role="tab">In Review</button>
+          <button type="button" class="vp-status-tab" data-status="approved" role="tab">Approved</button>
           <button type="button" class="vp-status-tab" data-status="delivered" role="tab">Delivered</button>
           <button type="button" class="vp-status-tab" data-status="archived" role="tab">Archived</button>
         </div>
@@ -209,7 +210,10 @@
             <div class="vp-review-box">
               <div class="vp-tool-head">
                 <span class="vp-thumb-label">Review</span>
-                <span class="vp-review-status" id="reviewDecisionStatus">Awaiting approval</span>
+                <div class="vp-review-status-wrap">
+                  <span class="vp-review-status" id="reviewDecisionStatus">Awaiting approval</span>
+                  <button type="button" class="vp-undo-approval" id="clearApprovalBtn" style="display:none;" title="Clear an accidental approval and put this video back in review">Undo approval</button>
+                </div>
               </div>
               <div class="vp-review-row">
                 <label class="vp-field-label">Due

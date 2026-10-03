@@ -17,6 +17,7 @@ const videoPortalActivitySchema = new mongoose.Schema({
       'commented',
       'replied',
       'approved',
+      'approval_cleared',
       'changes_requested',
       'version_uploaded',
       'version_replaced',

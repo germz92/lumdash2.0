@@ -755,12 +755,14 @@
       </div>
       <div class="pt-project-layout">
         <div class="pt-player-col">
-          <div class="pt-version-bar">
-            <select id="ptVersionSelect">${versionOptions || '<option>No versions yet</option>'}</select>
-            ${versions.length >= 2 ? `<button type="button" class="pt-compare-btn" id="ptCompareBtn">${compareMode ? 'Exit compare' : 'Compare'}</button>` : ''}
-          </div>
           <div class="pt-player-stack ${compareMode ? 'compare-on' : ''}" id="ptPlayerStack">
-            <div class="pt-player-wrap" id="ptPlayerWrap"></div>
+            <div class="pt-version-col">
+              <div class="pt-version-bar">
+                <select id="ptVersionSelect">${versionOptions || '<option>No versions yet</option>'}</select>
+                ${versions.length >= 2 ? `<button type="button" class="pt-compare-btn" id="ptCompareBtn">${compareMode ? 'Exit compare' : 'Compare'}</button>` : ''}
+              </div>
+              <div class="pt-player-wrap" id="ptPlayerWrap"></div>
+            </div>
             <div class="pt-compare-pane" id="ptComparePane" style="display:${compareMode ? 'block' : 'none'};">
               <div class="pt-version-bar">
                 <select id="ptCompareSelect"></select>

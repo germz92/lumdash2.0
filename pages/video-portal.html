@@ -129,33 +129,35 @@
 
         <div class="vp-detail-body">
           <div class="vp-detail-player-col">
-            <div class="vp-version-bar">
-              <select id="versionSelect"></select>
-              <span class="vp-version-status" id="versionStatus"></span>
-              <button type="button" class="vp-btn secondary small" id="compareToggleBtn" title="Compare two versions" style="display:none;">
-                <span class="material-symbols-outlined">compare</span>
-                <span>Compare</span>
-              </button>
-              <div class="vp-version-menu" id="versionMenuWrap" style="display:none;">
-                <button type="button" class="vp-icon-btn" id="versionMenuBtn" title="Version options" aria-haspopup="true" aria-expanded="false">
-                  <span class="material-symbols-outlined">more_vert</span>
-                </button>
-                <div class="vp-version-dropdown" id="versionMenuDropdown" hidden>
-                  <button type="button" class="vp-version-dropdown-item" id="replaceVersionBtn">
-                    <span class="material-symbols-outlined">upload</span>
-                    Replace file
-                  </button>
-                  <button type="button" class="vp-version-dropdown-item danger" id="deleteVersionBtn">
-                    <span class="material-symbols-outlined">delete</span>
-                    Delete version
-                  </button>
-                </div>
-              </div>
-            </div>
             <input type="file" id="replaceVersionFile" accept="video/*" hidden>
             <div class="vp-player-stack" id="playerStack">
-              <div class="vp-player-wrap" id="playerWrap">
-                <div class="vp-player-placeholder" id="playerPlaceholder">No video uploaded yet</div>
+              <div class="vp-player-col">
+                <div class="vp-version-bar">
+                  <select id="versionSelect"></select>
+                  <span class="vp-version-status" id="versionStatus"></span>
+                  <button type="button" class="vp-btn secondary small" id="compareToggleBtn" title="Compare two versions" style="display:none;">
+                    <span class="material-symbols-outlined">compare</span>
+                    <span>Compare</span>
+                  </button>
+                  <div class="vp-version-menu" id="versionMenuWrap" style="display:none;">
+                    <button type="button" class="vp-icon-btn" id="versionMenuBtn" title="Version options" aria-haspopup="true" aria-expanded="false">
+                      <span class="material-symbols-outlined">more_vert</span>
+                    </button>
+                    <div class="vp-version-dropdown" id="versionMenuDropdown" hidden>
+                      <button type="button" class="vp-version-dropdown-item" id="replaceVersionBtn">
+                        <span class="material-symbols-outlined">upload</span>
+                        Replace file
+                      </button>
+                      <button type="button" class="vp-version-dropdown-item danger" id="deleteVersionBtn">
+                        <span class="material-symbols-outlined">delete</span>
+                        Delete version
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div class="vp-player-wrap" id="playerWrap">
+                  <div class="vp-player-placeholder" id="playerPlaceholder">No video uploaded yet</div>
+                </div>
               </div>
               <div class="vp-compare-pane" id="comparePane" style="display:none;">
                 <div class="vp-version-bar">
@@ -281,6 +283,11 @@
               <label class="vp-check" id="hideResolvedWrap"><input type="checkbox" id="hideResolvedCheck"> Hide resolved</label>
             </div>
             <div class="vp-side-panel" id="commentsSidePanel">
+              <div class="vp-comment-version" id="commentVersionWrap">
+                <select id="commentVersionSelect" aria-label="Which version's comments to show">
+                  <option value="match">Match video</option>
+                </select>
+              </div>
               <div class="vp-comments-list" id="commentsList"></div>
               <div class="vp-comment-compose">
                 <div class="vp-mention-wrap">

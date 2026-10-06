@@ -31,6 +31,7 @@
   // Detail modal state
   let detail = null;            // current project detail payload
   let currentVersionId = null;  // selected version in the player
+  let commentVersionFilter = 'match'; // 'match' follows the player, or a version id
   let versionNotesEditingId = null;
   let player = null;            // player.js instance for the Bunny iframe
   let composeTimecode = null;   // seconds for the next comment, or null when detached
@@ -1836,6 +1837,7 @@
     syncProjectInUrl(detail._id, { push: !alreadyOnProject });
     const versions = detail.versions || [];
     currentVersionId = versions.length ? versions[versions.length - 1]._id : null;
+    commentVersionFilter = 'match';
     versionNotesEditingId = null;
     composeTimecodeAttached = true;
     composePickingEnd = false;
@@ -2177,6 +2179,29 @@
 
     renderVersionNotes();
     updateUploadUi();
+    renderCommentVersionSelect();
+  }
+
+  function renderCommentVersionSelect() {
+    const sel = document.getElementById('commentVersionSelect');
+    const wrap = document.getElementById('commentVersionWrap');
+    if (!sel) return;
+    const versions = [...(detail?.versions || [])].reverse();
+    if (wrap) wrap.hidden = versions.length === 0;
+    const stillThere = commentVersionFilter === 'match'
+      || versions.some(v => String(v._id) === String(commentVersionFilter));
+    if (!stillThere) commentVersionFilter = 'match';
+    sel.innerHTML = `<option value="match">Match video</option>` +
+      versions.map(v => `<option value="${v._id}">v${v.versionNumber} comments</option>`).join('');
+    sel.value = commentVersionFilter;
+  }
+
+  function activeCommentVersionId() {
+    if (commentVersionFilter !== 'match') {
+      const chosen = (detail?.versions || []).find(v => String(v._id) === String(commentVersionFilter));
+      if (chosen) return chosen._id;
+    }
+    return currentVersionId;
   }
 
   function renderVersionNotes() {
@@ -2711,7 +2736,8 @@
 
   // ---- Comments ----
   function commentsForCurrentVersion() {
-    let items = (detail?.comments || []).filter(c => c.versionId === currentVersionId);
+    const versionId = activeCommentVersionId();
+    let items = (detail?.comments || []).filter(c => String(c.versionId) === String(versionId));
     if (hideResolved) items = items.filter(c => !c.resolved);
     items = [...items].sort((a, b) => {
       const ta = a.timecodeSeconds == null ? Number.MAX_SAFE_INTEGER : a.timecodeSeconds;
@@ -2728,7 +2754,9 @@
     renderCommentMarkers();
 
     if (items.length === 0) {
-      list.innerHTML = '<div class="vp-empty" style="padding:30px 10px;">No comments on this version.</div>';
+      const chosen = (detail?.versions || []).find(v => String(v._id) === String(activeCommentVersionId()));
+      const label = chosen ? `v${chosen.versionNumber}` : 'this version';
+      list.innerHTML = `<div class="vp-empty" style="padding:30px 10px;">No comments on ${label}.</div>`;
       return;
     }
 
@@ -4033,6 +4061,11 @@
     document.getElementById('versionNotesEditor')?.addEventListener('input', renderVersionNotes);
     document.getElementById('saveVersionNotesBtn')?.addEventListener('click', saveVersionNotes);
 
+    document.getElementById('commentVersionSelect')?.addEventListener('change', (e) => {
+      commentVersionFilter = e.target.value || 'match';
+      renderComments();
+    });
+
     document.getElementById('versionSelect').addEventListener('change', (e) => {
       currentVersionId = e.target.value;
       composeTimecodeEnd = null;
@@ -4114,6 +4147,10 @@
         detail.comments.push(comment);
         resetCompose();
         renderComments();
+        if (String(activeCommentVersionId()) !== String(currentVersionId)) {
+          const playing = currentVersion();
+          toast(playing ? `Comment saved on v${playing.versionNumber}` : 'Comment saved');
+        }
       } catch (err) { toast(err.message, 'error'); }
     });
 

@@ -3656,6 +3656,29 @@ function setupGmailInbox() {
     .catch(err => console.error(err));
 }
 
+function blankDocumentUrl(value) {
+  return !String(value || '').trim();
+}
+
+async function fillLumquoteDocumentLinks(table) {
+  if (!table || table.externalSource !== 'lumquote' || !table.externalId) return;
+  if (!table.general) table.general = {};
+  const needsContract = blankDocumentUrl(table.general.contractUrl);
+  const needsInvoice = blankDocumentUrl(table.general.invoiceUrl);
+  if (!needsContract && !needsInvoice) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/tables/${table._id}/lumquote-links`, {
+      headers: { Authorization: window.token }
+    });
+    if (!res.ok) return;
+    const links = await res.json();
+    if (needsContract && links.contractUrl) table.general.contractUrl = links.contractUrl;
+    if (needsInvoice && links.invoiceUrl) table.general.invoiceUrl = links.invoiceUrl;
+  } catch (err) {
+    console.error('LumQuote document links:', err);
+  }
+}
+
 function initPageDarkTheme(id) {
   if (!id || !window.token) return;
   
@@ -3663,12 +3686,9 @@ function initPageDarkTheme(id) {
     headers: { Authorization: window.token }
   })
     .then(res => res.json())
-    .then(table => {
+    .then(async table => {
       currentTableData = table;
-      console.log('[General] currentTableData set:', currentTableData);
-      console.log('[General] general object:', table.general);
-      console.log('[General] contractUrl:', table.general?.contractUrl);
-      console.log('[General] invoiceUrl:', table.general?.invoiceUrl);
+      await fillLumquoteDocumentLinks(currentTableData);
       const general = table.general || {};
       
       // Render all sections
@@ -5007,5 +5027,25 @@ function initializeClock() {
   } else {
     console.warn('[CLOCK] Clock button not found in initializeClock');
   }
+}
+
+function onGeneralLumquoteTabVisible() {
+  if (document.visibilityState !== 'visible') return;
+  if (typeof window.refreshGeneralLumquoteLinks === 'function') {
+    window.refreshGeneralLumquoteLinks();
+  }
+}
+
+window.refreshGeneralLumquoteLinks = function refreshGeneralLumquoteLinks() {
+  const page = (location.hash.replace('#', '') || '').split('?')[0];
+  if (page !== 'general' || !currentTableData) return;
+  fillLumquoteDocumentLinks(currentTableData);
+};
+window.cleanupGeneralPage = function cleanupGeneralPage() {
+  window.refreshGeneralLumquoteLinks = null;
+};
+if (!window._lumquoteGeneralLinksVisibility) {
+  window._lumquoteGeneralLinksVisibility = true;
+  document.addEventListener('visibilitychange', onGeneralLumquoteTabVisible);
 }
 })();

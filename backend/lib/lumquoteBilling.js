@@ -76,8 +76,64 @@ async function fetchLumquoteBillingByProject(externalIds) {
   return byProject;
 }
 
+const LUMQUOTE_ORIGIN = String(process.env.LUMQUOTE_BASE_URL || 'https://lumquote.com').replace(/\/$/, '');
+
+function documentTime(doc) {
+  const time = new Date(doc?.updatedAt || doc?.createdAt || 0).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
+
+function lumquoteDocumentUrl(kind, publicToken) {
+  const token = String(publicToken || '').trim();
+  if (!/^[a-f0-9]{16,}$/i.test(token)) return '';
+  const path = kind === 'contract' ? 'sign' : 'invoice';
+  return `${LUMQUOTE_ORIGIN}/${path}/${token}`;
+}
+
+function pickContractLink(contracts) {
+  let best = null;
+  let bestRank = 0;
+  for (const contract of contracts) {
+    if (!contract.publicToken) continue;
+    const rank = CONTRACT_RANK[String(contract.status || '').toLowerCase()] || 0;
+    if (!best || rank > bestRank || (rank === bestRank && documentTime(contract) > documentTime(best))) {
+      best = contract;
+      bestRank = rank;
+    }
+  }
+  return best ? lumquoteDocumentUrl('contract', best.publicToken) : '';
+}
+
+function pickInvoiceLink(invoices) {
+  let best = null;
+  for (const invoice of invoices) {
+    if (String(invoice.status || '').toLowerCase() === 'void') continue;
+    if (!invoice.publicToken) continue;
+    if (!best || documentTime(invoice) > documentTime(best)) best = invoice;
+  }
+  return best ? lumquoteDocumentUrl('invoice', best.publicToken) : '';
+}
+
+async function fetchLumquoteLinks(externalId) {
+  const empty = { contractUrl: '', invoiceUrl: '' };
+  const objectId = toProjectObjectId(externalId);
+  if (!objectId) return empty;
+
+  const db = mongoose.connection.getClient().db('LumetryMedia');
+  const filter = { project: objectId };
+  const [contracts, invoices] = await Promise.all([
+    db.collection('contracts').find(filter, { projection: { status: 1, publicToken: 1, updatedAt: 1, createdAt: 1 } }).toArray(),
+    db.collection('invoices').find(filter, { projection: { status: 1, publicToken: 1, updatedAt: 1, createdAt: 1 } }).toArray()
+  ]);
+  return {
+    contractUrl: pickContractLink(contracts),
+    invoiceUrl: pickInvoiceLink(invoices)
+  };
+}
+
 module.exports = {
   fetchLumquoteBillingByProject,
+  fetchLumquoteLinks,
   toProjectObjectId,
   emptyLumquoteSummary
 };

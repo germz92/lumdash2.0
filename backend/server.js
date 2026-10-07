@@ -3032,6 +3032,36 @@ app.get('/api/tables/lumquote-billing', authenticate, async (req, res) => {
   }
 });
 
+app.get('/api/tables/:id/lumquote-links', authenticate, async (req, res) => {
+  try {
+    if (!req.params.id || req.params.id === 'null') {
+      return res.status(400).json({ error: 'Invalid table ID' });
+    }
+    const table = await Table.findById(req.params.id).select('externalSource externalId owners leads sharedWith rows');
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+    if (!hasEventReadAccess(table, req.user)) {
+      return res.status(403).json({ error: 'Not authorized' });
+    }
+    if (table.externalSource !== 'lumquote' || !table.externalId) {
+      return res.json({ contractUrl: '', invoiceUrl: '' });
+    }
+    const { fetchLumquoteLinks } = require('./lib/lumquoteBilling');
+    const links = await fetchLumquoteLinks(table.externalId);
+    res.json(links);
+  } catch (error) {
+    console.error('Error reading LumQuote document links:', error);
+    const denied = error && (
+      error.code === 13 ||
+      error.codeName === 'Unauthorized' ||
+      /not authorized/i.test(error.message || '')
+    );
+    if (denied) {
+      return res.status(403).json({ error: 'The database user cannot read LumetryMedia.' });
+    }
+    res.status(500).json({ error: 'Failed to read LumQuote document links' });
+  }
+});
+
 app.get('/api/tables/:id', authenticate, async (req, res) => {
   if (!req.params.id || req.params.id === "null") {
     return res.status(400).json({ error: "Invalid table ID" });

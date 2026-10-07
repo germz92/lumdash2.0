@@ -3002,18 +3002,11 @@ app.get('/api/tables/client-activity/latest', authenticate, async (req, res) => 
 // Live LumQuote contract/invoice status. Read from LumetryMedia; never stored on the event.
 app.get('/api/tables/lumquote-billing', authenticate, async (req, res) => {
   try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Only admins can view LumQuote contract and invoice status.' });
+    }
     const { fetchLumquoteBillingByProject, toProjectObjectId, emptyLumquoteSummary } = require('./lib/lumquoteBilling');
-    const isPrivileged = req.user.role === 'admin' || req.user.role === 'planner';
-    const access = isPrivileged ? {} : {
-      $or: [
-        { owners: req.user.id },
-        { sharedWith: req.user.id },
-        { leads: req.user.id },
-        { 'rows.userId': req.user.id }
-      ]
-    };
     const tables = await Table.find({
-      ...access,
       externalSource: 'lumquote',
       externalId: { $exists: true, $nin: [null, ''] }
     }).select('_id externalId').lean();

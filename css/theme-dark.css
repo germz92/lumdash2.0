@@ -3068,8 +3068,8 @@ html[data-theme="light"] .contract-chip-signed {
     display: none; /* Hide Client column */
   }
 
-  .events-table th:nth-child(9),
-  .events-table td:nth-child(9) {
+  .events-table th.tasks-col-header,
+  .events-table td.event-tasks-cell {
     display: none; /* Hide Tasks column */
   }
 

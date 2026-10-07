@@ -35,6 +35,21 @@ function getUserIdFromToken() {
   return payload.id;
 }
 
+function isEventsAdmin() {
+  try {
+    const raw = localStorage.getItem('token');
+    if (!raw) return false;
+    const payload = JSON.parse(atob(raw.split('.')[1]));
+    return payload.role === 'admin';
+  } catch (err) {
+    return false;
+  }
+}
+
+function eventsTableColspan() {
+  return isEventsAdmin() ? 11 : 9;
+}
+
 // ========================================
 // BADGE NOT-REQUIRED HELPERS
 // ========================================
@@ -1418,14 +1433,13 @@ function renderEventRowDark(table, index, userId) {
       <span class="event-date">${dateStr}</span>
     </td>
     ${lastActivityCell(table)}
-    ${contractCellHtml(table)}
-    ${invoicesCellHtml(table)}
+    ${isEventsAdmin() ? `${contractCellHtml(table)}${invoicesCellHtml(table)}` : ''}
     <td>
       <div class="crew-avatars">
         ${renderCrewAvatarsDark(crewMembers, crewCount, table._id, unassignedCount)}
       </div>
     </td>
-    <td>
+    <td class="event-tasks-cell">
       <div class="task-status-badge ${taskStatus.class}" onclick="event.stopPropagation(); navigateToTodos('${table._id}')" style="cursor: pointer;" title="View tasks">
         <span class="material-symbols-outlined">${taskStatus.icon}</span>
         <span class="task-status-label">${taskStatus.label}</span>
@@ -1775,8 +1789,8 @@ function generateSkeletonRows(count) {
         <td><div class="skeleton" style="width: 120px; height: 16px;"></div></td>
         <td><div class="skeleton" style="width: 140px; height: 16px;"></div></td>
         <td><div class="skeleton" style="width: 180px; height: 16px;"></div></td>
-        <td><div class="skeleton" style="width: 64px; height: 22px; border-radius: 12px;"></div></td>
-        <td><div class="skeleton" style="width: 120px; height: 16px;"></div></td>
+        ${isEventsAdmin() ? `<td><div class="skeleton" style="width: 64px; height: 22px; border-radius: 12px;"></div></td>
+        <td><div class="skeleton" style="width: 120px; height: 16px;"></div></td>` : ''}
         <td>
           <div style="display: flex;">
             <div class="skeleton" style="width: 32px; height: 32px; border-radius: 50%;"></div>
@@ -1849,7 +1863,7 @@ async function loadTables(forceRefresh = false) {
     fetchHotelBookingCounts(),
     fetchPendingHotelCounts(),
     fetchLatestActivity(),
-    freshTables && Array.isArray(tables) ? fetchLumquoteBillingMap() : Promise.resolve(null)
+    freshTables && Array.isArray(tables) && isEventsAdmin() ? fetchLumquoteBillingMap() : Promise.resolve(null)
   ]);
   if (lumquoteBilling && Array.isArray(tables)) applyLumquoteBilling(tables, lumquoteBilling);
   if (freshTables) {
@@ -2093,7 +2107,7 @@ async function loadTables(forceRefresh = false) {
         const liveHeaderRow = document.createElement('tr');
         liveHeaderRow.className = 'live-section-header-row';
         liveHeaderRow.innerHTML = `
-          <td colspan="11">
+          <td colspan="${eventsTableColspan()}">
             <div class="live-section-header">
               <span class="live-pulse-dot"></span>
               <span class="live-section-title">Live Events</span>
@@ -2115,7 +2129,7 @@ async function loadTables(forceRefresh = false) {
           const dividerRow = document.createElement('tr');
           dividerRow.className = 'live-section-divider-row';
           dividerRow.innerHTML = `
-            <td colspan="11">
+            <td colspan="${eventsTableColspan()}">
               <div class="live-section-divider">
                 <span class="divider-label">Upcoming Events</span>
               </div>
@@ -3462,6 +3476,10 @@ window.initPage = function(id) {
       loadTables();
     });
     searchInput._listenerAttached = true;
+  }
+
+  if (!isEventsAdmin()) {
+    document.querySelectorAll('.events-table .lumquote-admin-col').forEach(el => el.remove());
   }
 
   // Load tables
@@ -4849,7 +4867,7 @@ async function fetchLumquoteBillingMap() {
 }
 
 async function refreshLumquoteBillingColumns() {
-  if (!document.getElementById('eventsTableBody')) return;
+  if (!isEventsAdmin() || !document.getElementById('eventsTableBody')) return;
   const billing = await fetchLumquoteBillingMap();
   if (!billing) return;
   if (Array.isArray(cachedTables)) applyLumquoteBilling(cachedTables, billing);

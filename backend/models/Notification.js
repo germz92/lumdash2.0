@@ -18,6 +18,8 @@ const notificationSchema = new mongoose.Schema({
       'task_updated',            // A task assigned to you was updated
       'flight_request',          // New flight request (for planners)
       'flight_booked',           // Your flight request was booked
+      'hotel_request',           // New hotel request (for planners)
+      'hotel_booked',            // Your hotel request was booked
       'owner_request',           // Planner requests owner rights
       'owner_request_approved',  // Owner approved the request
       'owner_request_denied',    // Owner denied the request

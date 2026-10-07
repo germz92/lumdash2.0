@@ -354,6 +354,7 @@ const tableSchema = new mongoose.Schema({
       imported: { type: Boolean, default: false }
     }],
     accommodation: [{
+      sourceKey: { type: String, default: '' },
       sourceIndex: { type: Number, default: null },
       name: { type: String, default: '' },
       checkIn: { type: String, default: '' },

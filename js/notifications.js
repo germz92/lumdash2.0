@@ -21,6 +21,8 @@
     task_updated:           { icon: 'edit_note',        color: '#8b5cf6' },
     flight_request:         { icon: 'flight',           color: '#f59e0b' },
     flight_booked:          { icon: 'flight_takeoff',   color: '#22c55e' },
+    hotel_request:          { icon: 'hotel',            color: '#f59e0b' },
+    hotel_booked:           { icon: 'hotel',            color: '#22c55e' },
     owner_request:          { icon: 'admin_panel_settings', color: '#ef4444' },
     owner_request_approved: { icon: 'check_circle',     color: '#22c55e' },
     owner_request_denied:   { icon: 'cancel',           color: '#ef4444' },
@@ -281,6 +283,7 @@
   // Standalone pages that live outside the SPA router (full HTML documents)
   const STANDALONE_PAGES = {
     'flights':          '/pages/flights.html',
+    'hotels':           '/pages/hotels.html',
     'crew-planner':     '/pages/crew-planner.html',
     'crew-calendar':    '/pages/crew-calendar.html',
     'event-calendar':   '/pages/event-calendar.html',

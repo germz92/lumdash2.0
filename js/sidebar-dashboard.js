@@ -32,6 +32,7 @@
     if (path.includes('crew-planner')) return 'crew-planner';
     if (path.includes('crew-calendar')) return 'crew-calendar';
     if (path.includes('flights')) return 'flights';
+    if (path.includes('hotels')) return 'hotels';
     if (path.includes('admin-timesheets')) return 'admin-timesheets';
     
     return 'events';
@@ -766,6 +767,7 @@
     if (!token) {
       setSidebarDotVisible('ppSidebarDot', false);
       setSidebarDotVisible('flightsSidebarDot', false);
+      setSidebarDotVisible('hotelsSidebarDot', false);
       setSidebarDotVisible('reimbursementsSidebarDot', false);
       return;
     }
@@ -776,12 +778,14 @@
       if (!res.ok) {
         setSidebarDotVisible('ppSidebarDot', false);
         setSidebarDotVisible('flightsSidebarDot', false);
+        setSidebarDotVisible('hotelsSidebarDot', false);
         setSidebarDotVisible('reimbursementsSidebarDot', false);
         return;
       }
       const data = await res.json();
       setSidebarDotVisible('ppSidebarDot', !!data.postProduction);
       setSidebarDotVisible('flightsSidebarDot', !!data.flights);
+      setSidebarDotVisible('hotelsSidebarDot', !!data.hotels);
       setSidebarDotVisible('reimbursementsSidebarDot', !!data.reimbursements);
     } catch (err) {
       console.error('Dashboard sidebar indicators:', err);
@@ -794,6 +798,7 @@
     const dotMap = {
       'post-production': 'ppSidebarDot',
       flights: 'flightsSidebarDot',
+      hotels: 'hotelsSidebarDot',
       reimbursements: 'reimbursementsSidebarDot'
     };
     try {

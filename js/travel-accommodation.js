@@ -417,12 +417,16 @@ window.initPage = undefined;
 
         // Check if this is a flight management entry (read-only)
         const isFromFlightManagement = item._fromFlightManagement === true;
+        const isFromHotelManagement = item._fromHotelManagement === true;
         if (isFromFlightManagement) {
           row.classList.add('flight-management-row');
         }
+        if (isFromHotelManagement) {
+          row.classList.add('hotel-management-row');
+        }
 
-        // Flight management entries are always read-only
-        if (!isEditMode || isFromFlightManagement) {
+        // Flight and hotel management entries are always read-only
+        if (!isEditMode || isFromFlightManagement || isFromHotelManagement) {
           console.log('Showing readonly view', isFromFlightManagement ? '(from Flight Management)' : '');
           if (tableId === 'travelTable') {
             // Add flight icon indicator for flight management entries
@@ -440,12 +444,16 @@ window.initPage = undefined;
               ${isEditMode ? '<td class="action"></td>' : ''}
             `;
           } else {
+            const hotelIcon = isFromHotelManagement
+              ? '<span class="material-symbols-outlined flight-mgmt-icon" title="From Hotel Management">hotel</span>'
+              : '';
             row.innerHTML = `
               <td class="date"><span class="readonly-span">${formatDateReadable(item.checkin)}</span></td>
               <td class="date"><span class="readonly-span">${formatDateReadable(item.checkout)}</span></td>
-              <td class="text"><span class="readonly-span">${item.name || ''}</span></td>
+              <td class="text"><span class="readonly-span">${hotelIcon}${item.name || ''}</span></td>
               <td class="text">${createLocationLink(item.hotel)}</td>
               <td class="text"><span class="readonly-span">${item.ref || ''}</span></td>
+              ${isEditMode ? '<td class="action"></td>' : ''}
             `;
           }
         } else {
@@ -510,7 +518,7 @@ window.initPage = undefined;
       if (!table) return [];
       return Array.from(table)
         // Skip flight management rows - they are read-only and managed separately
-        .filter(row => !row.classList.contains('flight-management-row'))
+        .filter(row => !row.classList.contains('flight-management-row') && !row.classList.contains('hotel-management-row'))
         .map(row => {
         // Get all inputs/textareas, but exclude the dropdown search input
         const allInputs = row.querySelectorAll('input, textarea');
@@ -628,6 +636,7 @@ window.initPage = undefined;
     let travelData = [];
     let accommodationData = [];
     let flightManagementData = []; // Booked flights from Flight Management
+    let hotelManagementData = []; // Booked stays from Hotel Management
 
     /**
      * Transform a booked flight from Flight Management to travel table format
@@ -662,6 +671,50 @@ window.initPage = undefined;
     /**
      * Fetch booked flights for this event from Flight Management (by eventId)
      */
+    function transformHotelToAccommodationRow(hotel, guest) {
+      const details = hotel.bookedDetails || {};
+      const hotelName = details.hotelName || hotel.preferredHotel || '';
+      return {
+        checkin: hotel.checkInDate ? String(hotel.checkInDate).split('T')[0] : '',
+        checkout: hotel.checkOutDate ? String(hotel.checkOutDate).split('T')[0] : '',
+        name: guest.name || '',
+        hotel: hotel.status === 'cancelled' && hotelName ? `${hotelName} (Cancelled)` : hotelName,
+        ref: details.confirmationCode || '',
+        _fromHotelManagement: true,
+        _hotelId: hotel._id
+      };
+    }
+
+    async function loadHotelManagementData(eventId) {
+      if (!eventId) return [];
+      try {
+        const res = await fetch(`${API_BASE}/api/hotels/booked?eventId=${encodeURIComponent(eventId)}`, {
+          headers: { Authorization: token }
+        });
+        if (!res.ok) return [];
+        const hotels = await res.json();
+        const rows = [];
+        hotels.forEach(hotel => {
+          const guests = hotel.guests && hotel.guests.length ? hotel.guests : [{ name: '' }];
+          guests.forEach(guest => rows.push(transformHotelToAccommodationRow(hotel, guest)));
+        });
+        return rows;
+      } catch (error) {
+        console.log('Could not load hotel management data:', error);
+        return [];
+      }
+    }
+
+    function combinedAccommodation() {
+      return [...hotelManagementData, ...accommodationData].sort((a, b) => {
+        const dateA = a.checkin || '9999-99-99';
+        const dateB = b.checkin || '9999-99-99';
+        if (dateA < dateB) return -1;
+        if (dateA > dateB) return 1;
+        return 0;
+      });
+    }
+
     async function loadFlightManagementData(eventId) {
       if (!eventId) return [];
       
@@ -717,10 +770,14 @@ window.initPage = undefined;
       travelData = data.travel || [];
       accommodationData = data.accommodation || [];
       
-      // Also fetch booked flights from Flight Management for this event (by eventId)
+      // Also fetch booked flights and hotels for this event
       if (tableId) {
-        flightManagementData = await loadFlightManagementData(tableId);
+        [flightManagementData, hotelManagementData] = await Promise.all([
+          loadFlightManagementData(tableId),
+          loadHotelManagementData(tableId)
+        ]);
         console.log('Loaded flight management data:', flightManagementData.length, 'rows');
+        console.log('Loaded hotel management data:', hotelManagementData.length, 'rows');
       }
       
       // Combine manual travel data with flight management data
@@ -734,7 +791,7 @@ window.initPage = undefined;
       });
       
       populateTable('travelTable', combinedTravelData);
-      populateTable('accommodationTable', accommodationData);
+      populateTable('accommodationTable', combinedAccommodation());
     }
     
     function filterTables() {
@@ -748,7 +805,7 @@ window.initPage = undefined;
         return 0;
       });
       populateTable('travelTable', combinedTravelData);
-      populateTable('accommodationTable', accommodationData);
+      populateTable('accommodationTable', combinedAccommodation());
     }
 
     async function saveTravelData() {

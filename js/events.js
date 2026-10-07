@@ -60,11 +60,11 @@ function getBadgeTitle(badgeType, conditionMet, badgesNotRequired, count, pendin
   const l = labels[badgeType] || {};
   if (notRequired) return l.notRequired || 'Not required';
   let title = conditionMet ? (l.active || '') : (l.inactive || '');
-  if (badgeType === 'flight' && pendingCount > 0) {
+  if ((badgeType === 'flight' || badgeType === 'hotel') && pendingCount > 0) {
     const pendingLabel = `${pendingCount} pending request${pendingCount !== 1 ? 's' : ''}`;
     title = title ? `${title} · ${pendingLabel}` : pendingLabel;
   }
-  if (badgeType === 'hotel' && !conditionMet && badgesRequested?.hotel) {
+  if (badgeType === 'hotel' && !conditionMet && !(pendingCount > 0) && badgesRequested?.hotel) {
     title = 'Hotels requested';
   }
   return title;
@@ -1117,6 +1117,77 @@ function handleFlightBadgeClick(eventId, flightCount, pendingCount, pendingFligh
 }
 window.handleFlightBadgeClick = handleFlightBadgeClick;
 
+async function fetchHotelBookingCounts() {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_BASE}/api/hotels/booked`, {
+      headers: { Authorization: token, 'Content-Type': 'application/json' }
+    });
+    if (!response.ok) return { byId: {}, byName: {} };
+    const hotels = await response.json();
+    const byId = {};
+    const byName = {};
+    (Array.isArray(hotels) ? hotels : []).forEach(hotel => {
+      if (hotel.status === 'cancelled') return;
+      const guests = Array.isArray(hotel.guests) && hotel.guests.length ? hotel.guests.length : 1;
+      const id = hotel.eventId?._id || hotel.eventId;
+      if (id) byId[String(id)] = (byId[String(id)] || 0) + guests;
+      const name = (hotel.eventId?.title || hotel.eventName || '').trim();
+      if (name) byName[name] = (byName[name] || 0) + guests;
+    });
+    return { byId, byName };
+  } catch (error) {
+    console.error('Error fetching hotel booking counts:', error);
+    return { byId: {}, byName: {} };
+  }
+}
+
+async function fetchPendingHotelCounts() {
+  try {
+    const token = localStorage.getItem('token');
+    const response = await fetch(`${API_BASE}/api/hotels/pending`, {
+      headers: { Authorization: token, 'Content-Type': 'application/json' }
+    });
+    if (!response.ok) return { byId: {}, byName: {}, firstIdByEvent: {} };
+    const hotels = await response.json();
+    const byId = {};
+    const byName = {};
+    const firstIdByEvent = {};
+    (Array.isArray(hotels) ? hotels : []).forEach(hotel => {
+      const id = hotel.eventId?._id || hotel.eventId;
+      if (id) {
+        const key = String(id);
+        byId[key] = (byId[key] || 0) + 1;
+        if (!firstIdByEvent[key] && hotel._id) firstIdByEvent[key] = String(hotel._id);
+      }
+      const name = (hotel.eventId?.title || hotel.eventName || '').trim();
+      if (name) {
+        byName[name] = (byName[name] || 0) + 1;
+        if (!firstIdByEvent[`name:${name}`] && hotel._id) firstIdByEvent[`name:${name}`] = String(hotel._id);
+      }
+    });
+    return { byId, byName, firstIdByEvent };
+  } catch (error) {
+    console.error('Error fetching pending hotel counts:', error);
+    return { byId: {}, byName: {}, firstIdByEvent: {} };
+  }
+}
+
+function handleHotelBadgeClick(eventId, hotelCount, pendingCount, pendingHotelId) {
+  if (!(Number(hotelCount) > 0) && Number(pendingCount) > 0) {
+    const url = pendingHotelId
+      ? `/pages/hotels.html?hotelId=${encodeURIComponent(pendingHotelId)}`
+      : `/pages/hotels.html?eventId=${encodeURIComponent(eventId)}`;
+    window.location.href = url;
+    return false;
+  }
+  if (typeof window.navigate === 'function') {
+    window.navigate('travel-accommodation', eventId);
+  }
+  return false;
+}
+window.handleHotelBadgeClick = handleHotelBadgeClick;
+
 /**
  * Check which events have schedule content
  * Returns object with eventId as key and boolean as value
@@ -1298,7 +1369,7 @@ function renderEventRowDark(table, index, userId) {
               ${table.flightCount > 0 && !table.badgesNotRequired?.flight ? `<span class="flight-count">${table.flightCount}</span>` : ''}
               ${flightPendingDotHtml(table.pendingFlightCount, table.badgesNotRequired)}
             </span>
-          <span class="hotel-badge badge-longpress ${getBadgeClass('hotel', table.hotelCount > 0, table.badgesNotRequired)}${table.badgesRequested?.hotel && !(table.hotelCount > 0) && !table.badgesNotRequired?.hotel ? ' has-requested' : ''}" data-event-id="${table._id}" data-badge-type="hotel" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.hotel)}" data-requested="${!!(table.badgesRequested && table.badgesRequested.hotel)}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" title="${getBadgeTitle('hotel', table.hotelCount > 0, table.badgesNotRequired, table.hotelCount, 0, table.badgesRequested)}">
+          <span class="hotel-badge badge-longpress ${getBadgeClass('hotel', table.hotelCount > 0, table.badgesNotRequired)}${table.pendingHotelCount > 0 && !table.badgesNotRequired?.hotel ? ' has-pending' : ''}${table.badgesRequested?.hotel && !(table.hotelCount > 0) && !table.badgesNotRequired?.hotel && !(table.pendingHotelCount > 0) ? ' has-requested' : ''}" data-event-id="${table._id}" data-badge-type="hotel" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.hotel)}" data-requested="${!!(table.badgesRequested && table.badgesRequested.hotel)}" onclick="event.stopPropagation(); handleHotelBadgeClick('${table._id}', ${table.hotelCount || 0}, ${table.pendingHotelCount || 0}, '${table.pendingHotelId || ''}'); return false;" title="${getBadgeTitle('hotel', table.hotelCount > 0, table.badgesNotRequired, table.hotelCount, table.pendingHotelCount || 0, table.badgesRequested)}">
               <span class="material-symbols-outlined">hotel</span>
               ${table.hotelCount > 0 && !table.badgesNotRequired?.hotel ? `<span class="hotel-count">${table.hotelCount}</span>` : ''}
               ${hotelRequestedDotHtml(table)}
@@ -1323,7 +1394,7 @@ function renderEventRowDark(table, index, userId) {
               ${table.flightCount > 0 && !table.badgesNotRequired?.flight ? `<span class="flight-count">${table.flightCount}</span>` : ''}
               ${flightPendingDotHtml(table.pendingFlightCount, table.badgesNotRequired)}
             </span>
-          <span class="hotel-badge badge-longpress ${getBadgeClass('hotel', table.hotelCount > 0, table.badgesNotRequired)}${table.badgesRequested?.hotel && !(table.hotelCount > 0) && !table.badgesNotRequired?.hotel ? ' has-requested' : ''}" data-event-id="${table._id}" data-badge-type="hotel" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.hotel)}" data-requested="${!!(table.badgesRequested && table.badgesRequested.hotel)}" onclick="event.stopPropagation(); window.navigate('travel-accommodation', '${table._id}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'hotel', ${!!(table.badgesNotRequired && table.badgesNotRequired.hotel)}, ${!!(table.badgesRequested && table.badgesRequested.hotel)});" title="${getBadgeTitle('hotel', table.hotelCount > 0, table.badgesNotRequired, table.hotelCount, 0, table.badgesRequested)}">
+          <span class="hotel-badge badge-longpress ${getBadgeClass('hotel', table.hotelCount > 0, table.badgesNotRequired)}${table.pendingHotelCount > 0 && !table.badgesNotRequired?.hotel ? ' has-pending' : ''}${table.badgesRequested?.hotel && !(table.hotelCount > 0) && !table.badgesNotRequired?.hotel && !(table.pendingHotelCount > 0) ? ' has-requested' : ''}" data-event-id="${table._id}" data-badge-type="hotel" data-not-required="${!!(table.badgesNotRequired && table.badgesNotRequired.hotel)}" data-requested="${!!(table.badgesRequested && table.badgesRequested.hotel)}" onclick="event.stopPropagation(); handleHotelBadgeClick('${table._id}', ${table.hotelCount || 0}, ${table.pendingHotelCount || 0}, '${table.pendingHotelId || ''}'); return false;" oncontextmenu="event.preventDefault(); event.stopPropagation(); showBadgeContextMenu(event, '${table._id}', 'hotel', ${!!(table.badgesNotRequired && table.badgesNotRequired.hotel)}, ${!!(table.badgesRequested && table.badgesRequested.hotel)});" title="${getBadgeTitle('hotel', table.hotelCount > 0, table.badgesNotRequired, table.hotelCount, table.pendingHotelCount || 0, table.badgesRequested)}">
               <span class="material-symbols-outlined">hotel</span>
               ${table.hotelCount > 0 && !table.badgesNotRequired?.hotel ? `<span class="hotel-count">${table.hotelCount}</span>` : ''}
               ${hotelRequestedDotHtml(table)}
@@ -1770,9 +1841,11 @@ async function loadTables(forceRefresh = false) {
   }
 
   // Always fetch passenger counts to ensure they're up to date
-  const [passengerCounts, pendingFlightCounts, latestActivity] = await Promise.all([
+  const [passengerCounts, pendingFlightCounts, hotelBookingCounts, pendingHotelCounts, latestActivity] = await Promise.all([
     fetchFlightCounts(),
     fetchPendingFlightCounts(),
+    fetchHotelBookingCounts(),
+    fetchPendingHotelCounts(),
     fetchLatestActivity()
   ]);
   tables.forEach(table => {
@@ -1811,10 +1884,20 @@ async function loadTables(forceRefresh = false) {
     table.shareCount = leadsCount + sharedWithCount;
   });
   
-  // Calculate hotel count for each table (accommodation entries with hotel info)
+  // Manual accommodation rows plus booked Hotel Management stays
   tables.forEach(table => {
     const accommodations = Array.isArray(table.accommodation) ? table.accommodation : [];
-    table.hotelCount = accommodations.filter(a => a.hotel && a.hotel.trim()).length;
+    const manualCount = accommodations.filter(a => a.hotel && a.hotel.trim()).length;
+    const tableId = table._id?.toString?.() || String(table._id);
+    const eventTitle = table.title || 'Untitled Event';
+    const managedCount = hotelBookingCounts.byId[tableId] || hotelBookingCounts.byName[eventTitle] || 0;
+    table.hotelCount = manualCount + managedCount;
+    table.pendingHotelCount = pendingHotelCounts.byId[tableId]
+      || pendingHotelCounts.byName[eventTitle]
+      || 0;
+    table.pendingHotelId = pendingHotelCounts.firstIdByEvent[tableId]
+      || pendingHotelCounts.firstIdByEvent[`name:${eventTitle}`]
+      || '';
   });
   
   // Hide loading

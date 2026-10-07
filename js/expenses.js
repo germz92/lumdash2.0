@@ -192,7 +192,9 @@
         ${expenseTd('Check Out', expenseCell('checkOut', row.checkOut, row, accEditable))}
         ${expenseTd('Hotel', expenseCell('hotel', row.hotel, row, accEditable))}
         ${expenseTd('REF Number', expenseCell('refNumber', row.refNumber, row, accEditable))}
-        ${expenseTd('Cost', expenseCell('cost', row.cost, row, accEditable), 'expenses-td-amount')}
+        ${row.sourceKey
+          ? expenseTd('Cost', `<span class="expenses-readonly expenses-amount" data-field="cost">${escAttr(fmtCurrency(row.cost))}</span>`, 'expenses-td-amount')
+          : expenseTd('Cost', expenseCell('cost', row.cost, row, accEditable), 'expenses-td-amount')}
         ${expenseTd('Notes', expenseCell('notes', row.notes, row, accEditable))}
         ${actionCellHtml(row)}
       </tr>

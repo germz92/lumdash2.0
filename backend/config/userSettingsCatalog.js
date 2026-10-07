@@ -96,6 +96,28 @@ const NOTIFICATION_SECTION = {
       ]
     },
     {
+      id: 'hotels',
+      title: 'Hotels',
+      items: [
+        {
+          key: 'hotel_request',
+          label: 'New hotel request',
+          description: 'When a new hotel request is submitted (planners & admins).',
+          roles: ['planner', 'admin'],
+          defaults: { toast: true, email: false },
+          channels: { toast: true, email: false }
+        },
+        {
+          key: 'hotel_booked',
+          label: 'Hotel booked',
+          description: 'When your hotel request has been booked.',
+          roles: ALL_ROLES,
+          defaults: { toast: true, email: false },
+          channels: { toast: true, email: false }
+        }
+      ]
+    },
+    {
       id: 'reimbursements',
       title: 'Reimbursements',
       items: [

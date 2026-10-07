@@ -1537,6 +1537,12 @@ const Cart = require('./models/Cart');
 const FolderLog = require('./models/FolderLog');
 const ManualReservation = require('./models/ManualReservation');
 const FlightRequest = require('./models/FlightRequest');
+const {
+  registerHotelRoutes,
+  buildHotelExpenseRows,
+  syncHotelEventNames,
+  countPendingHotelsSince
+} = require('./hotelManagement');
 const Passenger = require('./models/Passenger');
 const Notification = require('./models/Notification');
 const ReimbursementRequest = require('./models/ReimbursementRequest');
@@ -4654,8 +4660,12 @@ app.put('/api/tables/:id/general', authenticate, async (req, res) => {
       if (result.modifiedCount > 0) {
         console.log(`✈️ Synced eventName on ${result.modifiedCount} flight(s) for renamed event "${oldTitle}" → "${title}"`);
       }
+      const hotelResult = await syncHotelEventNames(table._id, title);
+      if (hotelResult.modifiedCount > 0) {
+        console.log(`🏨 Synced eventName on ${hotelResult.modifiedCount} hotel request(s) for renamed event "${oldTitle}" → "${title}"`);
+      }
     } catch (syncErr) {
-      console.error('Failed to sync flight eventNames after event rename:', syncErr);
+      console.error('Failed to sync flight/hotel eventNames after event rename:', syncErr);
     }
   }
   
@@ -5117,17 +5127,22 @@ async function buildExpensesFromSources(table) {
     costsByRef
   );
 
-  const accommodation = (table.accommodation || []).map((a, i) => ({
-    sourceIndex: i,
-    name: a.name || '',
-    checkIn: a.checkin || '',
-    checkOut: a.checkout || '',
-    hotel: a.hotel || '',
-    refNumber: a.ref || '',
-    cost: 0,
-    notes: '',
-    imported: true
-  }));
+  const hotelExpenseRows = await buildHotelExpenseRows(table);
+  const accommodation = [
+    ...hotelExpenseRows,
+    ...(table.accommodation || []).map((a, i) => ({
+      sourceKey: '',
+      sourceIndex: i,
+      name: a.name || '',
+      checkIn: a.checkin || '',
+      checkOut: a.checkout || '',
+      hotel: a.hotel || '',
+      refNumber: a.ref || '',
+      cost: 0,
+      notes: '',
+      imported: true
+    }))
+  ];
 
   const reimbursements = await getApprovedReimbursementsForEvent(table);
 
@@ -5231,12 +5246,21 @@ async function mergeExpensesWithSources(table, existing) {
     };
   });
 
-  const prevAcc = {};
+  const prevAccByKey = {};
+  const prevAccByIndex = {};
   (prev.accommodation || []).forEach(a => {
-    if (a.sourceIndex != null) prevAcc[a.sourceIndex] = a;
+    if (a.sourceKey) prevAccByKey[a.sourceKey] = a;
+    if (a.sourceIndex != null && a.sourceIndex !== '') prevAccByIndex[a.sourceIndex] = a;
   });
   fresh.accommodation = fresh.accommodation.map(a => {
-    const old = prevAcc[a.sourceIndex];
+    if (a.sourceKey) {
+      const old = prevAccByKey[a.sourceKey];
+      return {
+        ...a,
+        notes: old && old.notes != null ? old.notes : (a.notes || '')
+      };
+    }
+    const old = prevAccByIndex[a.sourceIndex];
     if (!old) return a;
     return {
       ...a,
@@ -5281,7 +5305,8 @@ function normalizeExpensesPayload(body) {
       imported: !!f.imported
     }))),
     accommodation: (body.accommodation || []).map(a => ({
-      sourceIndex: a.sourceIndex != null ? Number(a.sourceIndex) : null,
+      sourceKey: str(a.sourceKey),
+      sourceIndex: a.sourceIndex != null && a.sourceIndex !== '' ? Number(a.sourceIndex) : null,
       name: str(a.name),
       checkIn: str(a.checkIn),
       checkOut: str(a.checkOut),
@@ -11172,6 +11197,16 @@ app.patch('/api/flights/:id/reject-change', authenticate, async (req, res) => {
   }
 });
 
+registerHotelRoutes(app, {
+  authenticate,
+  hasPlannerAccess,
+  Table,
+  User,
+  notifyDataChange,
+  createNotification,
+  createNotificationBulk
+});
+
 // ========= END FLIGHT MANAGEMENT API =========
 
 // ========= TIMESHEETS API =========
@@ -12373,6 +12408,13 @@ async function getFlightsSidebarIndicator(user) {
   return { hasNew: count > 0 };
 }
 
+async function getHotelsSidebarIndicator(user) {
+  if (!hasPlannerAccess(user)) return { hasNew: false };
+  const visitedAt = await getDashboardNavVisitedAt(user.id, 'hotels');
+  const count = await countPendingHotelsSince(visitedAt);
+  return { hasNew: count > 0 };
+}
+
 async function getReimbursementsSidebarIndicator(user) {
   if (!(await userCanReviewAnyReimbursement(user))) return { hasNew: false };
   const visitedAt = await getDashboardNavVisitedAt(user.id, 'reimbursements');
@@ -12386,14 +12428,16 @@ async function getReimbursementsSidebarIndicator(user) {
 
 app.get('/api/dashboard/sidebar-indicators', authenticate, async (req, res) => {
   try {
-    const [postProduction, flights, reimbursements] = await Promise.all([
+    const [postProduction, flights, hotels, reimbursements] = await Promise.all([
       getPostProductionSidebarIndicator(req.user),
       getFlightsSidebarIndicator(req.user),
+      getHotelsSidebarIndicator(req.user),
       getReimbursementsSidebarIndicator(req.user)
     ]);
     res.json({
       postProduction: !!postProduction.hasNew,
       flights: !!flights.hasNew,
+      hotels: !!hotels.hasNew,
       reimbursements: !!reimbursements.hasNew
     });
   } catch (err) {
@@ -12416,6 +12460,14 @@ app.post('/api/dashboard/sidebar-visited', authenticate, async (req, res) => {
       }
       await markDashboardNavVisited(req.user.id, 'flights');
       const indicator = await getFlightsSidebarIndicator(req.user);
+      return res.json({ page, hasNew: !!indicator.hasNew });
+    }
+    if (page === 'hotels') {
+      if (!hasPlannerAccess(req.user)) {
+        return res.status(403).json({ error: 'Access denied' });
+      }
+      await markDashboardNavVisited(req.user.id, 'hotels');
+      const indicator = await getHotelsSidebarIndicator(req.user);
       return res.json({ page, hasNew: !!indicator.hasNew });
     }
     if (page === 'reimbursements') {

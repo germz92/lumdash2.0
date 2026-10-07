@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#121216">
+    <script src="../js/theme-early.js?v=2.0.0"></script>
+    <title>Hotel Management - LumDash</title>
+    <link rel="icon" href="../assets/favicon.png" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
+    <link rel="stylesheet" href="../css/general.css">
+    <link rel="stylesheet" href="../css/theme-tokens.css?v=2.0.0">
+    <link rel="stylesheet" href="../css/theme-dark.css?v=2.0.0">
+    <link rel="stylesheet" href="../css/theme-light.css?v=2.0.0">
+    <link rel="stylesheet" href="../css/hotels.css">
+    <link rel="stylesheet" href="../css/chat.css">
+    <script src="../js/theme.js?v=2.0.0"></script>
+    <script src="../js/config.js"></script>
+    <script src="../js/api.js"></script>
+    <script src="../js/sidebar-dashboard.js"></script>
+</head>
+<body class="hotels-dark">
+    <div id="sidebarContainer"></div>
+
+    <main class="main-content">
+      <div class="page-header">
+        <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu">
+          <span class="material-symbols-outlined">menu</span>
+        </button>
+        <div class="page-header-left">
+          <h1>
+            <span class="material-symbols-outlined">hotel</span>
+            Hotel Management
+          </h1>
+        </div>
+        <div class="page-header-right">
+          <button class="btn-manage-passengers" id="manageGuestsBtn">
+            <span class="material-symbols-outlined">group</span>
+            Manage Guests
+          </button>
+          <button class="btn-create-request" id="createRequestBtn">
+            <span class="material-symbols-outlined">add</span>
+            Create Request
+          </button>
+        </div>
+      </div>
+
+      <section class="flights-section">
+        <div class="section-header">
+          <h2>Pending Requests</h2>
+          <span class="section-count" id="pendingCount">0 Requests</span>
+        </div>
+        <div class="flights-toolbar">
+          <div class="search-box">
+            <span class="material-symbols-outlined">search</span>
+            <input type="text" id="pendingSearch" placeholder="Search requests...">
+          </div>
+          <div class="toolbar-filters">
+            <select id="pendingFilter" class="toolbar-select">
+              <option value="all">All</option>
+              <option value="upcoming" selected>Upcoming</option>
+              <option value="past">Past</option>
+            </select>
+            <select id="pendingSort" class="toolbar-select">
+              <option value="soonest" selected>Soonest First</option>
+              <option value="latest">Latest First</option>
+            </select>
+            <div class="view-toggle">
+              <button class="view-toggle-btn active" data-view="cards" id="pendingCardsViewBtn" title="Card view">
+                <span class="material-symbols-outlined">grid_view</span>
+              </button>
+              <button class="view-toggle-btn" data-view="table" id="pendingTableViewBtn" title="Table view">
+                <span class="material-symbols-outlined">table_rows</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="flights-grid" id="pendingRequestsGrid"></div>
+        <div class="flights-table-container" id="pendingRequestsTable" style="display: none;"></div>
+        <div class="empty-state" id="pendingEmptyState" style="display: none;">
+          <span class="material-symbols-outlined">pending_actions</span>
+          <p>No pending requests</p>
+        </div>
+      </section>
+
+      <section class="flights-section">
+        <div class="section-header">
+          <div class="section-header-left">
+            <h2>Booked Stays</h2>
+            <span class="section-count" id="bookedCount">0 Stays</span>
+          </div>
+          <button class="btn-create-booking" id="createBookingBtn">
+            <span class="material-symbols-outlined">hotel</span>
+            Create Booking
+          </button>
+        </div>
+        <div class="flights-toolbar">
+          <div class="search-box">
+            <span class="material-symbols-outlined">search</span>
+            <input type="text" id="bookedSearch" placeholder="Search stays...">
+          </div>
+          <div class="toolbar-filters">
+            <select id="bookedFilter" class="toolbar-select">
+              <option value="all">All</option>
+              <option value="upcoming" selected>Upcoming</option>
+              <option value="past">Past</option>
+            </select>
+            <select id="bookedSort" class="toolbar-select">
+              <option value="soonest" selected>Soonest First</option>
+              <option value="latest">Latest First</option>
+            </select>
+            <div class="view-toggle">
+              <button class="view-toggle-btn active" data-view="cards" id="bookedCardsViewBtn" title="Card view">
+                <span class="material-symbols-outlined">grid_view</span>
+              </button>
+              <button class="view-toggle-btn" data-view="table" id="bookedTableViewBtn" title="Table view">
+                <span class="material-symbols-outlined">table_rows</span>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="flights-grid" id="bookedHotelsGrid"></div>
+        <div class="flights-table-container" id="bookedHotelsTable" style="display: none;"></div>
+        <div class="empty-state" id="bookedEmptyState" style="display: none;">
+          <span class="material-symbols-outlined">hotel</span>
+          <p>No booked stays</p>
+        </div>
+      </section>
+    </main>
+
+    <div class="dark-modal" id="createRequestModal">
+      <div class="dark-modal-content create-request-modal">
+        <div class="modal-header">
+          <h2>Create Request</h2>
+          <button class="modal-close-btn" id="closeCreateModal" type="button">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="createRequestForm">
+            <div class="form-group">
+              <label>Event Name</label>
+              <input type="text" id="eventName" placeholder="Search events..." autocomplete="off">
+              <div class="event-suggestions" id="eventSuggestions"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>City *</label>
+                <input type="text" id="requestCity" placeholder="e.g., Austin" required>
+              </div>
+              <div class="form-group">
+                <label>State</label>
+                <input type="text" id="requestState" placeholder="e.g., TX">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Area / Near</label>
+                <input type="text" id="requestArea" placeholder="Neighborhood or venue">
+              </div>
+              <div class="form-group">
+                <label>Preferred Hotel</label>
+                <input type="text" id="requestPreferredHotel" placeholder="Optional">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Check-In *</label>
+                <input type="date" id="requestCheckIn" required>
+              </div>
+              <div class="form-group">
+                <label>Check-Out *</label>
+                <input type="date" id="requestCheckOut" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Room Preference</label>
+              <div class="select-wrapper">
+                <select id="requestRoomPreference">
+                  <option value="any">Any</option>
+                  <option value="king">King</option>
+                  <option value="queen">Queen</option>
+                  <option value="double">Double</option>
+                  <option value="two_beds">Two beds</option>
+                  <option value="suite">Suite</option>
+                  <option value="connecting">Connecting rooms</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-section">
+              <label class="section-label">Guests</label>
+              <div class="passenger-select-row">
+                <div class="select-wrapper passenger-select">
+                  <select id="guestSelect"><option value="">Select guest...</option></select>
+                </div>
+                <button type="button" class="btn-add-passenger" id="addGuestBtn">
+                  <span class="material-symbols-outlined">add</span>
+                  Add Guest
+                </button>
+              </div>
+              <div class="selected-passengers" id="selectedGuests"></div>
+            </div>
+            <div class="form-group">
+              <label>Notes</label>
+              <textarea id="createNotes" rows="2" placeholder="Late arrival, accessibility, rewards number..."></textarea>
+            </div>
+            <div class="modal-actions">
+              <button type="submit" class="btn-submit">Submit Request</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="dark-modal" id="createBookingModal">
+      <div class="dark-modal-content create-booking-modal">
+        <div class="modal-header">
+          <h2>Create Booking</h2>
+          <button class="modal-close-btn" id="closeCreateBookingModal" type="button">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="createBookingForm">
+            <div class="form-group">
+              <label>Event Name</label>
+              <input type="text" id="bookingEventName" placeholder="Search events..." autocomplete="off">
+              <div class="event-suggestions" id="bookingEventSuggestions"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>City *</label>
+                <input type="text" id="bookingCity" required>
+              </div>
+              <div class="form-group">
+                <label>State</label>
+                <input type="text" id="bookingState">
+              </div>
+            </div>
+            <div class="form-section-header">
+              <span class="material-symbols-outlined">confirmation_number</span>
+              <h3>Booking Information</h3>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Hotel Name *</label>
+                <input type="text" id="bookingHotelName" required>
+              </div>
+              <div class="form-group">
+                <label>Confirmation Number *</label>
+                <input type="text" id="bookingConfirmationNumber" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Address</label>
+              <input type="text" id="bookingAddress" placeholder="Street, city">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Check-In *</label>
+                <input type="date" id="bookingCheckIn" required>
+              </div>
+              <div class="form-group">
+                <label>Check-In Time</label>
+                <input type="time" id="bookingCheckInTime">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Check-Out *</label>
+                <input type="date" id="bookingCheckOut" required>
+              </div>
+              <div class="form-group">
+                <label>Check-Out Time</label>
+                <input type="time" id="bookingCheckOutTime">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Room Type</label>
+                <input type="text" id="bookingRoomType" placeholder="e.g., King, 2 Queens">
+              </div>
+              <div class="form-group">
+                <label>Rooms</label>
+                <input type="number" id="bookingRooms" min="1" value="1">
+              </div>
+            </div>
+            <div class="form-section">
+              <label class="section-label">Guests *</label>
+              <div class="passenger-select-row">
+                <div class="select-wrapper passenger-select">
+                  <select id="bookingGuestSelect"><option value="">Select guest...</option></select>
+                </div>
+                <button type="button" class="btn-add-passenger" id="bookingAddGuestBtn">
+                  <span class="material-symbols-outlined">add</span>
+                  Add Guest
+                </button>
+              </div>
+              <div class="selected-passengers" id="bookingSelectedGuests"></div>
+            </div>
+            <div class="form-group">
+              <label>Total Hotel Cost</label>
+              <input type="text" id="bookingCost" inputmode="decimal" placeholder="0.00" autocomplete="off">
+            </div>
+            <div class="form-group">
+              <label>Notes</label>
+              <textarea id="bookingNotes" rows="2"></textarea>
+            </div>
+            <div class="modal-actions">
+              <button type="button" class="btn-cancel" id="cancelCreateBookingBtn">Cancel</button>
+              <button type="submit" class="btn-submit">Create Booking</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="dark-modal" id="viewRequestModal">
+      <div class="dark-modal-content view-request-modal">
+        <div class="modal-header">
+          <h2>View Request</h2>
+          <button class="modal-close-btn" id="closeViewModal" type="button">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="viewRequestForm">
+            <div class="form-group">
+              <label>Event Name</label>
+              <input type="text" id="viewEventName" placeholder="Search events..." autocomplete="off">
+              <div class="event-suggestions" id="viewEventSuggestions"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>City</label>
+                <input type="text" id="viewCity">
+              </div>
+              <div class="form-group">
+                <label>State</label>
+                <input type="text" id="viewState">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Area / Near</label>
+                <input type="text" id="viewArea">
+              </div>
+              <div class="form-group">
+                <label>Preferred Hotel</label>
+                <input type="text" id="viewPreferredHotel">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Check-In</label>
+                <input type="date" id="viewCheckIn">
+              </div>
+              <div class="form-group">
+                <label>Check-Out</label>
+                <input type="date" id="viewCheckOut">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Room Preference</label>
+              <div class="select-wrapper">
+                <select id="viewRoomPreference">
+                  <option value="any">Any</option>
+                  <option value="king">King</option>
+                  <option value="queen">Queen</option>
+                  <option value="double">Double</option>
+                  <option value="two_beds">Two beds</option>
+                  <option value="suite">Suite</option>
+                  <option value="connecting">Connecting rooms</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-section">
+              <label class="section-label">Guests</label>
+              <div class="passenger-select-row">
+                <div class="select-wrapper passenger-select">
+                  <select id="viewGuestSelect"><option value="">Select guest to add...</option></select>
+                </div>
+              </div>
+              <div class="selected-passengers" id="viewSelectedGuests"></div>
+            </div>
+            <div class="form-group">
+              <label>Notes</label>
+              <textarea id="viewNotes" rows="2"></textarea>
+            </div>
+            <div class="request-meta-info" id="viewRequestCreatedBy"></div>
+            <div class="modal-actions">
+              <button type="button" class="btn-cancel" id="cancelViewBtn">Cancel</button>
+              <button type="submit" class="btn-save">Save Changes</button>
+            </div>
+            <div class="booking-section" id="bookingSection" style="display: none;">
+              <div class="booking-section-header">
+                <h3>Booking Details</h3>
+                <button type="button" class="btn-close-booking" id="closeBookingSection">
+                  <span class="material-symbols-outlined">close</span>
+                </button>
+              </div>
+              <div class="booking-form">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Hotel Name *</label>
+                    <input type="text" id="confirmHotelName">
+                  </div>
+                  <div class="form-group">
+                    <label>Confirmation Number *</label>
+                    <input type="text" id="confirmConfirmation">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>Address</label>
+                  <input type="text" id="confirmAddress">
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Room Type</label>
+                    <input type="text" id="confirmRoomType">
+                  </div>
+                  <div class="form-group">
+                    <label>Rooms</label>
+                    <input type="number" id="confirmRooms" min="1" value="1">
+                  </div>
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>Check-In Time</label>
+                    <input type="time" id="confirmCheckInTime">
+                  </div>
+                  <div class="form-group">
+                    <label>Check-Out Time</label>
+                    <input type="time" id="confirmCheckOutTime">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label>Total Hotel Cost</label>
+                  <input type="text" id="confirmCost" inputmode="decimal" placeholder="0.00">
+                </div>
+                <div class="booking-actions">
+                  <button type="button" class="btn-cancel" id="cancelBookingBtn">Cancel</button>
+                  <button type="button" class="btn-confirm-booking" id="confirmBookingBtn">Confirm Booking</button>
+                </div>
+              </div>
+            </div>
+          </form>
+          <div class="modal-footer-actions">
+            <button type="button" class="btn-book-flight" id="bookStayBtn">
+              <span class="material-symbols-outlined">hotel</span>
+              Book Stay
+            </button>
+            <button type="button" class="btn-delete-request" id="deleteRequestBtn">
+              <span class="material-symbols-outlined">delete</span>
+              Delete Request
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dark-modal" id="editBookedModal">
+      <div class="dark-modal-content edit-booked-modal">
+        <div class="modal-header">
+          <h2>Edit Booked Stay</h2>
+          <button class="modal-close-btn" id="closeEditBookedModal" type="button">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="editBookedForm">
+            <div class="form-group">
+              <label>Event Name</label>
+              <input type="text" id="editBookedEventName" placeholder="Search events..." autocomplete="off">
+              <div class="event-suggestions" id="editBookedEventSuggestions"></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>City</label>
+                <input type="text" id="editCity">
+              </div>
+              <div class="form-group">
+                <label>State</label>
+                <input type="text" id="editState">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Hotel Name</label>
+                <input type="text" id="editHotelName">
+              </div>
+              <div class="form-group">
+                <label>Confirmation Number</label>
+                <input type="text" id="editConfirmation">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Address</label>
+              <input type="text" id="editAddress">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Check-In</label>
+                <input type="date" id="editCheckIn">
+              </div>
+              <div class="form-group">
+                <label>Check-In Time</label>
+                <input type="time" id="editCheckInTime">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Check-Out</label>
+                <input type="date" id="editCheckOut">
+              </div>
+              <div class="form-group">
+                <label>Check-Out Time</label>
+                <input type="time" id="editCheckOutTime">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Room Type</label>
+                <input type="text" id="editRoomType">
+              </div>
+              <div class="form-group">
+                <label>Rooms</label>
+                <input type="number" id="editRooms" min="1" value="1">
+              </div>
+            </div>
+            <div class="form-section">
+              <label class="section-label">Guests</label>
+              <div class="passenger-select-row">
+                <div class="select-wrapper passenger-select">
+                  <select id="editGuestSelect"><option value="">Select guest to add...</option></select>
+                </div>
+              </div>
+              <div class="selected-passengers" id="editSelectedGuests"></div>
+            </div>
+            <div class="form-group">
+              <label>Total Hotel Cost</label>
+              <input type="text" id="editCost" inputmode="decimal" placeholder="0.00">
+            </div>
+            <div class="form-group">
+              <label>Notes</label>
+              <textarea id="editNotes" rows="2"></textarea>
+            </div>
+            <div class="request-meta-info" id="editBookedByInfo"></div>
+            <div class="modal-actions">
+              <button type="button" class="btn-cancel" id="cancelEditBookedBtn">Cancel</button>
+              <button type="submit" class="btn-save">Save Changes</button>
+            </div>
+          </form>
+          <div class="modal-footer-actions edit-booked-footer">
+            <button type="button" class="btn-delete-request" id="deleteBookedBtn">
+              <span class="material-symbols-outlined">delete</span>
+              Delete Stay
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dark-modal" id="addGuestModal">
+      <div class="dark-modal-content add-passenger-modal">
+        <div class="modal-header">
+          <h2>Add Guest</h2>
+          <button class="modal-close-btn" id="closeAddGuestModal" type="button">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="addGuestForm">
+            <div class="form-row">
+              <div class="form-group">
+                <label>First Name *</label>
+                <input type="text" id="newGuestFirst" required>
+              </div>
+              <div class="form-group">
+                <label>Last Name *</label>
+                <input type="text" id="newGuestLast" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Link to User Account (Optional)</label>
+              <div class="select-wrapper">
+                <select id="newGuestUserId"><option value="">No linked user</option></select>
+              </div>
+            </div>
+            <div class="modal-actions">
+              <button type="button" class="btn-cancel" id="cancelAddGuestBtn">Cancel</button>
+              <button type="submit" class="btn-save">Add Guest</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="dark-modal" id="manageGuestsModal">
+      <div class="dark-modal-content manage-passengers-modal">
+        <div class="modal-header">
+          <h2>Manage Guests</h2>
+          <button class="modal-close-btn" id="closeManageGuestsModal" type="button">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="passengers-toolbar">
+            <div class="search-box">
+              <span class="material-symbols-outlined">search</span>
+              <input type="text" id="guestSearchInput" placeholder="Search guests...">
+            </div>
+            <button class="btn-add-new-passenger" id="addGuestFromManageBtn" type="button">
+              <span class="material-symbols-outlined">person_add</span>
+              Add Guest
+            </button>
+          </div>
+          <div class="passengers-table-container">
+            <table class="passengers-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Linked User</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="guestsTableBody"></tbody>
+            </table>
+            <div class="passengers-empty-state" id="guestsEmptyState" style="display: none;">
+              <span class="material-symbols-outlined">group_off</span>
+              <p>No guests found</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="dark-modal" id="bookingConfirmedModal">
+      <div class="dark-modal-content booking-confirmed-modal">
+        <div class="modal-header success-header">
+          <div class="success-icon">
+            <span class="material-symbols-outlined">check_circle</span>
+          </div>
+          <h2>Booking Confirmed</h2>
+          <button class="modal-close-btn" id="closeBookingConfirmedModal" type="button">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <p class="reminder-text">Please remember to send confirmations to:</p>
+          <div class="passenger-emails-list" id="guestEmailsList"></div>
+          <div class="no-emails-message" id="noEmailsMessage" style="display: none;">
+            <span class="material-symbols-outlined">info</span>
+            <p>No email addresses found for these guests.</p>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-primary" id="closeBookingConfirmedBtn" type="button">Done</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="dark-modal" id="requestChangeModal">
+      <div class="dark-modal-content request-change-modal">
+        <div class="modal-header">
+          <h2>
+            <span class="material-symbols-outlined">edit_calendar</span>
+            Request Stay Change
+          </h2>
+          <button class="modal-close-btn" id="closeRequestChangeModal" type="button">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="change-current-booking">
+            <div class="change-section-label">
+              <span class="material-symbols-outlined">info</span>
+              Current Booking
+            </div>
+            <div class="change-booking-summary" id="changeCurrentSummary"></div>
+          </div>
+          <div class="change-divider">
+            <span class="material-symbols-outlined">arrow_downward</span>
+            <span>Requested Changes</span>
+          </div>
+          <form id="requestChangeForm">
+            <div class="form-group">
+              <label>What needs to change?</label>
+              <div class="change-checkboxes">
+                <label class="change-checkbox-option">
+                  <input type="checkbox" name="changeField" value="checkInDate">
+                  <span class="change-checkbox-label">Check-In Date</span>
+                </label>
+                <label class="change-checkbox-option">
+                  <input type="checkbox" name="changeField" value="checkOutDate">
+                  <span class="change-checkbox-label">Check-Out Date</span>
+                </label>
+                <label class="change-checkbox-option">
+                  <input type="checkbox" name="changeField" value="roomPreference">
+                  <span class="change-checkbox-label">Room Preference</span>
+                </label>
+                <label class="change-checkbox-option">
+                  <input type="checkbox" name="changeField" value="preferredHotel">
+                  <span class="change-checkbox-label">Preferred Hotel</span>
+                </label>
+                <div class="change-checkbox-divider"></div>
+                <label class="change-checkbox-option cancel-flight-option">
+                  <input type="checkbox" name="changeField" value="cancelStay" id="changeCancelStayCheckbox">
+                  <span class="change-checkbox-label">Request to Cancel Stay</span>
+                </label>
+              </div>
+            </div>
+            <div class="change-field-group" id="changeCheckInGroup" style="display: none;">
+              <label>New Check-In</label>
+              <input type="date" id="changeCheckIn">
+            </div>
+            <div class="change-field-group" id="changeCheckOutGroup" style="display: none;">
+              <label>New Check-Out</label>
+              <input type="date" id="changeCheckOut">
+            </div>
+            <div class="change-field-group" id="changeRoomGroup" style="display: none;">
+              <label>New Room Preference</label>
+              <div class="select-wrapper">
+                <select id="changeRoomPreference">
+                  <option value="any">Any</option>
+                  <option value="king">King</option>
+                  <option value="queen">Queen</option>
+                  <option value="double">Double</option>
+                  <option value="two_beds">Two beds</option>
+                  <option value="suite">Suite</option>
+                  <option value="connecting">Connecting rooms</option>
+                </select>
+              </div>
+            </div>
+            <div class="change-field-group" id="changeHotelGroup" style="display: none;">
+              <label>New Preferred Hotel</label>
+              <input type="text" id="changePreferredHotel">
+            </div>
+            <div class="form-group">
+              <label>Reason</label>
+              <textarea id="changeReason" rows="2" placeholder="Why does this stay need to change?"></textarea>
+            </div>
+            <div class="modal-actions">
+              <button type="button" class="btn-cancel" id="cancelRequestChangeBtn">Cancel</button>
+              <button type="submit" class="btn-submit">Submit Change Request</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <div class="dark-modal" id="approveChangeModal">
+      <div class="dark-modal-content create-booking-modal">
+        <div class="modal-header">
+          <h2>Approve Change</h2>
+          <button class="modal-close-btn" id="closeApproveChangeModal" type="button">
+            <span class="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          <form id="approveChangeForm">
+            <div id="approveChangeSummary"></div>
+            <div id="approveBookingFields">
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Hotel Name</label>
+                  <input type="text" id="approveHotelName">
+                </div>
+                <div class="form-group">
+                  <label>Confirmation Number</label>
+                  <input type="text" id="approveConfirmation">
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Address</label>
+                <input type="text" id="approveAddress">
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Room Type</label>
+                  <input type="text" id="approveRoomType">
+                </div>
+                <div class="form-group">
+                  <label>Rooms</label>
+                  <input type="number" id="approveRooms" min="1" value="1">
+                </div>
+              </div>
+              <div class="form-row">
+                <div class="form-group">
+                  <label>Check-In Time</label>
+                  <input type="time" id="approveCheckInTime">
+                </div>
+                <div class="form-group">
+                  <label>Check-Out Time</label>
+                  <input type="time" id="approveCheckOutTime">
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Total Hotel Cost</label>
+                <input type="text" id="approveCost" inputmode="decimal" placeholder="0.00">
+              </div>
+            </div>
+            <div class="modal-actions">
+              <button type="button" class="btn-cancel" id="cancelApproveChangeBtn">Cancel</button>
+              <button type="submit" class="btn-submit btn-approve-submit">
+                <span class="material-symbols-outlined">check_circle</span>
+                Approve & Update Booking
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <script src="../js/hotels.js"></script>
+    <script src="../js/chat.js"></script>
+    <script>
+      document.addEventListener('DOMContentLoaded', async function() {
+        if (typeof window.initGlobalChat === 'function') {
+          setTimeout(() => window.initGlobalChat(), 500);
+        }
+        const token = localStorage.getItem('token');
+        if (!token) {
+          window.location.href = '/index.html';
+          return;
+        }
+        try {
+          const payload = JSON.parse(atob(token.split('.')[1]));
+          if (payload.role !== 'admin' && payload.role !== 'planner') {
+            alert('Access denied. Planner or Admin privileges required.');
+            window.location.href = '/dashboard.html#events';
+            return;
+          }
+        } catch (e) {
+          window.location.href = '/index.html';
+          return;
+        }
+        const sidebarContainer = document.getElementById('sidebarContainer');
+        if (sidebarContainer && window.injectDashboardSidebar) {
+          await window.injectDashboardSidebar(sidebarContainer, {
+            position: 'replace',
+            activePage: 'hotels'
+          });
+        } else if (window.initDashboardSidebar) {
+          window.initDashboardSidebar();
+        }
+        if (typeof window.markSidebarPageVisited === 'function') {
+          window.markSidebarPageVisited('hotels');
+        }
+      });
+    </script>
+</body>
+</html>

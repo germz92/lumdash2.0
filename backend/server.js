@@ -2999,6 +2999,46 @@ app.get('/api/tables/client-activity/latest', authenticate, async (req, res) => 
   }
 });
 
+// Live LumQuote contract/invoice status. Read from LumetryMedia; never stored on the event.
+app.get('/api/tables/lumquote-billing', authenticate, async (req, res) => {
+  try {
+    const { fetchLumquoteBillingByProject, toProjectObjectId, emptyLumquoteSummary } = require('./lib/lumquoteBilling');
+    const isPrivileged = req.user.role === 'admin' || req.user.role === 'planner';
+    const access = isPrivileged ? {} : {
+      $or: [
+        { owners: req.user.id },
+        { sharedWith: req.user.id },
+        { leads: req.user.id },
+        { 'rows.userId': req.user.id }
+      ]
+    };
+    const tables = await Table.find({
+      ...access,
+      externalSource: 'lumquote',
+      externalId: { $exists: true, $nin: [null, ''] }
+    }).select('_id externalId').lean();
+
+    const byProject = await fetchLumquoteBillingByProject(tables.map(table => table.externalId));
+    const byEvent = {};
+    for (const table of tables) {
+      const projectId = toProjectObjectId(table.externalId);
+      byEvent[String(table._id)] = (projectId && byProject.get(String(projectId))) || emptyLumquoteSummary();
+    }
+    res.json({ byEvent });
+  } catch (error) {
+    console.error('Error reading LumetryMedia contracts/invoices:', error);
+    const denied = error && (
+      error.code === 13 ||
+      error.codeName === 'Unauthorized' ||
+      /not authorized/i.test(error.message || '')
+    );
+    if (denied) {
+      return res.status(403).json({ error: 'The database user cannot read LumetryMedia.' });
+    }
+    res.status(500).json({ error: 'Failed to read LumQuote contracts and invoices' });
+  }
+});
+
 app.get('/api/tables/:id', authenticate, async (req, res) => {
   if (!req.params.id || req.params.id === "null") {
     return res.status(400).json({ error: "Invalid table ID" });

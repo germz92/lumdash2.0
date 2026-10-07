@@ -1418,6 +1418,8 @@ function renderEventRowDark(table, index, userId) {
       <span class="event-date">${dateStr}</span>
     </td>
     ${lastActivityCell(table)}
+    ${contractCellHtml(table)}
+    ${invoicesCellHtml(table)}
     <td>
       <div class="crew-avatars">
         ${renderCrewAvatarsDark(crewMembers, crewCount, table._id, unassignedCount)}
@@ -1773,6 +1775,8 @@ function generateSkeletonRows(count) {
         <td><div class="skeleton" style="width: 120px; height: 16px;"></div></td>
         <td><div class="skeleton" style="width: 140px; height: 16px;"></div></td>
         <td><div class="skeleton" style="width: 180px; height: 16px;"></div></td>
+        <td><div class="skeleton" style="width: 64px; height: 22px; border-radius: 12px;"></div></td>
+        <td><div class="skeleton" style="width: 120px; height: 16px;"></div></td>
         <td>
           <div style="display: flex;">
             <div class="skeleton" style="width: 32px; height: 32px; border-radius: 50%;"></div>
@@ -1806,6 +1810,7 @@ async function loadTables(forceRefresh = false) {
   }
   
   let tables;
+  let freshTables = false;
   const now = Date.now();
   
   // Use cache if available and not expired
@@ -1816,10 +1821,7 @@ async function loadTables(forceRefresh = false) {
     headers: { Authorization: token }
   });
     tables = await res.json();
-    
-    // Update cache
-    cachedTables = tables;
-    cacheTimestamp = now;
+    freshTables = true;
   }
   
   // Fetch users with profile photos for crew avatars
@@ -1841,13 +1843,19 @@ async function loadTables(forceRefresh = false) {
   }
 
   // Always fetch passenger counts to ensure they're up to date
-  const [passengerCounts, pendingFlightCounts, hotelBookingCounts, pendingHotelCounts, latestActivity] = await Promise.all([
+  const [passengerCounts, pendingFlightCounts, hotelBookingCounts, pendingHotelCounts, latestActivity, lumquoteBilling] = await Promise.all([
     fetchFlightCounts(),
     fetchPendingFlightCounts(),
     fetchHotelBookingCounts(),
     fetchPendingHotelCounts(),
-    fetchLatestActivity()
+    fetchLatestActivity(),
+    freshTables && Array.isArray(tables) ? fetchLumquoteBillingMap() : Promise.resolve(null)
   ]);
+  if (lumquoteBilling && Array.isArray(tables)) applyLumquoteBilling(tables, lumquoteBilling);
+  if (freshTables) {
+    cachedTables = tables;
+    cacheTimestamp = now;
+  }
   tables.forEach(table => {
     const eventTitle = table.title || 'Untitled Event';
     const tableId = table._id?.toString?.() || String(table._id);
@@ -2085,7 +2093,7 @@ async function loadTables(forceRefresh = false) {
         const liveHeaderRow = document.createElement('tr');
         liveHeaderRow.className = 'live-section-header-row';
         liveHeaderRow.innerHTML = `
-          <td colspan="9">
+          <td colspan="11">
             <div class="live-section-header">
               <span class="live-pulse-dot"></span>
               <span class="live-section-title">Live Events</span>
@@ -2107,7 +2115,7 @@ async function loadTables(forceRefresh = false) {
           const dividerRow = document.createElement('tr');
           dividerRow.className = 'live-section-divider-row';
           dividerRow.innerHTML = `
-            <td colspan="9">
+            <td colspan="11">
               <div class="live-section-divider">
                 <span class="divider-label">Upcoming Events</span>
               </div>
@@ -4768,6 +4776,108 @@ function updateClientFilterDisplay() {
       headerFilters.appendChild(badge);
     }
   }
+}
+
+function formatUsd(amount, withCents) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: withCents ? 2 : 0,
+    maximumFractionDigits: withCents ? 2 : 0
+  }).format(Number(amount) || 0);
+}
+
+function contractCellHtml(table) {
+  const billing = table.lumquoteBilling;
+  if (!billing) {
+    return '<td class="event-contract-cell"><span class="event-lumquote-empty">—</span></td>';
+  }
+  const status = ['none', 'draft', 'sent', 'signed'].includes(billing.contractStatus)
+    ? billing.contractStatus
+    : 'none';
+  const labels = { none: 'None', draft: 'Draft', sent: 'Sent', signed: 'Signed' };
+  return `<td class="event-contract-cell"><span class="contract-chip contract-chip-${status}">${labels[status]}</span></td>`;
+}
+
+function invoicesCellHtml(table) {
+  const billing = table.lumquoteBilling;
+  if (!billing) {
+    return '<td class="event-invoices-cell"><span class="event-lumquote-empty">—</span></td>';
+  }
+  const count = Number(billing.invoiceCount) || 0;
+  const totalInvoiced = Number(billing.totalInvoiced) || 0;
+  const totalPaid = Number(billing.totalPaid) || 0;
+  if (totalInvoiced > 0) {
+    const percent = Math.min(100, Math.round(totalPaid / totalInvoiced * 100));
+    const title = `${formatUsd(totalPaid, true)} of ${formatUsd(totalInvoiced, true)} paid`;
+    return `<td class="event-invoices-cell">
+      <div class="invoice-progress" title="${escapeEventHtml(title)}">
+        <div class="invoice-progress-track" aria-hidden="true"><div class="invoice-progress-fill" style="width:${percent}%"></div></div>
+        <span class="invoice-progress-label">${formatUsd(totalPaid, false)} / ${formatUsd(totalInvoiced, false)}</span>
+      </div>
+    </td>`;
+  }
+  if (count > 0) {
+    const label = count === 1 ? '1 draft' : `${count} drafts`;
+    return `<td class="event-invoices-cell"><span class="invoice-draft-count">${label}</span></td>`;
+  }
+  return '<td class="event-invoices-cell"><span class="event-lumquote-empty">—</span></td>';
+}
+
+function applyLumquoteBilling(tables, byEvent) {
+  tables.forEach(table => {
+    const tableId = table._id?.toString?.() || String(table._id);
+    table.lumquoteBilling = Object.prototype.hasOwnProperty.call(byEvent, tableId) ? byEvent[tableId] : null;
+  });
+}
+
+async function fetchLumquoteBillingMap() {
+  try {
+    const res = await fetch(`${API_BASE}/api/tables/lumquote-billing`, {
+      headers: { Authorization: token }
+    });
+    if (!res.ok) {
+      console.error('LumQuote billing unavailable', res.status);
+      return null;
+    }
+    const data = await res.json();
+    return data.byEvent || {};
+  } catch (error) {
+    console.error('Error fetching LumQuote billing:', error);
+    return null;
+  }
+}
+
+async function refreshLumquoteBillingColumns() {
+  if (!document.getElementById('eventsTableBody')) return;
+  const billing = await fetchLumquoteBillingMap();
+  if (!billing) return;
+  if (Array.isArray(cachedTables)) applyLumquoteBilling(cachedTables, billing);
+  document.querySelectorAll('#eventsTableBody tr.event-row').forEach(row => {
+    const id = row.dataset.eventId;
+    if (!id || !Object.prototype.hasOwnProperty.call(billing, id)) return;
+    const table = { lumquoteBilling: billing[id] };
+    const contractCell = row.querySelector('.event-contract-cell');
+    const invoiceCell = row.querySelector('.event-invoices-cell');
+    if (contractCell) contractCell.outerHTML = contractCellHtml(table);
+    if (invoiceCell) invoiceCell.outerHTML = invoicesCellHtml(table);
+  });
+}
+
+function onLumquoteTabVisible() {
+  if (document.visibilityState !== 'visible') return;
+  if (typeof window.refreshLumquoteBillingColumns === 'function') {
+    window.refreshLumquoteBillingColumns();
+  }
+}
+
+window.refreshLumquoteBillingColumns = refreshLumquoteBillingColumns;
+window.cleanupEventsPage = function cleanupEventsPage() {
+  window.refreshLumquoteBillingColumns = null;
+};
+if (!window._lumquoteBillingVisibilityAttached) {
+  window._lumquoteBillingVisibilityAttached = true;
+  document.addEventListener('visibilitychange', onLumquoteTabVisible);
 }
 
 // Make functions globally available

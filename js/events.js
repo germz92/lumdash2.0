@@ -4805,6 +4805,18 @@ function formatUsd(amount, withCents) {
   }).format(Number(amount) || 0);
 }
 
+function lumquoteProjectUrl(table, tab) {
+  if (table.externalSource !== 'lumquote') return '';
+  const id = String(table.externalId || '').trim();
+  if (!/^[a-fA-F0-9]{24}$/.test(id)) return '';
+  return `https://lumquote.com/projects/${id}#${tab}`;
+}
+
+function lumquoteColumnLink(url, inner) {
+  if (!url) return inner;
+  return `<a class="lumquote-column-link" href="${escapeEventHtml(url)}" target="_blank" rel="noopener noreferrer" title="Open in LumQuote" onclick="event.stopPropagation()">${inner}</a>`;
+}
+
 function contractCellHtml(table) {
   const billing = table.lumquoteBilling;
   if (!billing) {
@@ -4814,7 +4826,8 @@ function contractCellHtml(table) {
     ? billing.contractStatus
     : 'none';
   const labels = { none: 'None', draft: 'Draft', sent: 'Sent', signed: 'Signed' };
-  return `<td class="event-contract-cell"><span class="contract-chip contract-chip-${status}">${labels[status]}</span></td>`;
+  const chip = `<span class="contract-chip contract-chip-${status}">${labels[status]}</span>`;
+  return `<td class="event-contract-cell">${lumquoteColumnLink(lumquoteProjectUrl(table, 'contract'), chip)}</td>`;
 }
 
 function invoicesCellHtml(table) {
@@ -4825,21 +4838,22 @@ function invoicesCellHtml(table) {
   const count = Number(billing.invoiceCount) || 0;
   const totalInvoiced = Number(billing.totalInvoiced) || 0;
   const totalPaid = Number(billing.totalPaid) || 0;
+  const invoiceUrl = lumquoteProjectUrl(table, 'invoices');
   if (totalInvoiced > 0) {
     const percent = Math.min(100, Math.round(totalPaid / totalInvoiced * 100));
     const title = `${formatUsd(totalPaid, true)} of ${formatUsd(totalInvoiced, true)} paid`;
-    return `<td class="event-invoices-cell">
-      <div class="invoice-progress" title="${escapeEventHtml(title)}">
+    const bar = `<div class="invoice-progress" title="${escapeEventHtml(title)}">
         <div class="invoice-progress-track" aria-hidden="true"><div class="invoice-progress-fill" style="width:${percent}%"></div></div>
         <span class="invoice-progress-label">${formatUsd(totalPaid, false)} / ${formatUsd(totalInvoiced, false)}</span>
-      </div>
-    </td>`;
+      </div>`;
+    return `<td class="event-invoices-cell">${lumquoteColumnLink(invoiceUrl, bar)}</td>`;
   }
   if (count > 0) {
     const label = count === 1 ? '1 draft' : `${count} drafts`;
-    return `<td class="event-invoices-cell"><span class="invoice-draft-count">${label}</span></td>`;
+    return `<td class="event-invoices-cell">${lumquoteColumnLink(invoiceUrl, `<span class="invoice-draft-count">${label}</span>`)}</td>`;
   }
-  return '<td class="event-invoices-cell"><span class="event-lumquote-empty">—</span></td>';
+  const empty = '<span class="event-lumquote-empty">—</span>';
+  return `<td class="event-invoices-cell">${invoiceUrl ? lumquoteColumnLink(invoiceUrl, empty) : empty}</td>`;
 }
 
 function applyLumquoteBilling(tables, byEvent) {
@@ -4874,7 +4888,9 @@ async function refreshLumquoteBillingColumns() {
   document.querySelectorAll('#eventsTableBody tr.event-row').forEach(row => {
     const id = row.dataset.eventId;
     if (!id || !Object.prototype.hasOwnProperty.call(billing, id)) return;
-    const table = { lumquoteBilling: billing[id] };
+    const source = (cachedTables || []).find(item => String(item._id) === id);
+    const table = source || { lumquoteBilling: billing[id] };
+    if (source) source.lumquoteBilling = billing[id];
     const contractCell = row.querySelector('.event-contract-cell');
     const invoiceCell = row.querySelector('.event-invoices-cell');
     if (contractCell) contractCell.outerHTML = contractCellHtml(table);

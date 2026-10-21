@@ -1861,6 +1861,19 @@ img.owner-avatar {
   color: var(--text-muted);
 }
 
+.lumquote-column-link {
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.lumquote-column-link:hover .contract-chip,
+.lumquote-column-link:hover .invoice-progress-label,
+.lumquote-column-link:hover .invoice-draft-count,
+.lumquote-column-link:hover .event-lumquote-empty {
+  text-decoration: underline;
+}
+
 .contract-chip {
   display: inline-flex;
   align-items: center;

@@ -32,6 +32,7 @@
   let pendingView = 'cards';
   let bookedView = 'cards';
   let guestTarget = 'request';
+  let editingGuestId = null;
 
   function esc(value) {
     return String(value == null ? '' : value)
@@ -676,6 +677,10 @@
       alert('City, check-in, and check-out are required.');
       return;
     }
+    if (datesOutOfOrder(payload.checkInDate, payload.checkOutDate)) {
+      alert('Check-out must be on or after check-in.');
+      return;
+    }
     if (!payload.guests.length) {
       alert('Add at least one guest.');
       return;
@@ -706,6 +711,16 @@
     const eventInput = document.getElementById('bookingEventName');
     if (!bookingGuests.length) {
       alert('Add at least one guest.');
+      return;
+    }
+    const bookingCheckIn = document.getElementById('bookingCheckIn').value;
+    const bookingCheckOut = document.getElementById('bookingCheckOut').value;
+    if (!bookingCheckIn || !bookingCheckOut) {
+      alert('Check-in and check-out are required.');
+      return;
+    }
+    if (datesOutOfOrder(bookingCheckIn, bookingCheckOut)) {
+      alert('Check-out must be on or after check-in.');
       return;
     }
     const payload = {
@@ -1135,21 +1150,72 @@
     renderPending();
   }
 
-  function openAddGuest(target) {
+  function guestFormPayload() {
+    return {
+      firstName: document.getElementById('newGuestFirst').value.trim(),
+      lastName: document.getElementById('newGuestLast').value.trim(),
+      email: document.getElementById('newGuestEmail').value.trim(),
+      phone: document.getElementById('newGuestPhone').value.trim(),
+      userId: document.getElementById('newGuestUserId').value || null
+    };
+  }
+
+  function setGuestFormMode(person) {
+    const title = document.querySelector('#addGuestModal h2');
+    const submit = document.querySelector('#addGuestForm .btn-save');
+    if (!person) {
+      editingGuestId = null;
+      if (title) title.textContent = 'Add Guest';
+      if (submit) submit.textContent = 'Add Guest';
+      return;
+    }
+    editingGuestId = person._id;
+    if (title) title.textContent = 'Edit Guest';
+    if (submit) submit.textContent = 'Save Guest';
+    document.getElementById('newGuestFirst').value = person.firstName || '';
+    document.getElementById('newGuestLast').value = person.lastName || '';
+    document.getElementById('newGuestEmail').value = person.email || '';
+    document.getElementById('newGuestPhone').value = person.phone || '';
+    const userSelect = document.getElementById('newGuestUserId');
+    if (userSelect) {
+      const linkedId = person.userId && typeof person.userId === 'object' ? person.userId._id : person.userId;
+      userSelect.value = linkedId || '';
+    }
+  }
+
+  function closeAddGuest() {
+    hideModal('addGuestModal');
+    const returnToManage = guestTarget === 'manage';
+    editingGuestId = null;
+    if (returnToManage) showModal('manageGuestsModal');
+  }
+
+  function openAddGuest(target, person) {
     guestTarget = target;
     document.getElementById('addGuestForm')?.reset();
+    setGuestFormMode(person || null);
+    if (target === 'manage') hideModal('manageGuestsModal');
     showModal('addGuestModal');
   }
 
   async function submitGuest(e) {
     e.preventDefault();
+    const payload = guestFormPayload();
+    if (editingGuestId) {
+      const updated = await apiRequest(`/api/passengers/${editingGuestId}`, {
+        method: 'PUT',
+        body: JSON.stringify(payload)
+      });
+      const index = guests.findIndex(person => person._id === editingGuestId);
+      if (index !== -1) guests[index] = updated;
+      fillAllGuestSelects();
+      closeAddGuest();
+      if (guestTarget === 'manage') renderGuestTable(filteredGuests());
+      return;
+    }
     const created = await apiRequest('/api/passengers', {
       method: 'POST',
-      body: JSON.stringify({
-        firstName: document.getElementById('newGuestFirst').value.trim(),
-        lastName: document.getElementById('newGuestLast').value.trim(),
-        userId: document.getElementById('newGuestUserId').value || null
-      })
+      body: JSON.stringify(payload)
     });
     guests.push(created);
     fillAllGuestSelects();
@@ -1167,8 +1233,8 @@
       selectedGuests.push(entry);
       renderRequestGuests();
     }
-    hideModal('addGuestModal');
-    if (guestTarget === 'manage') renderGuestTable(guests);
+    closeAddGuest();
+    if (guestTarget === 'manage') renderGuestTable(filteredGuests());
   }
 
   function renderGuestTable(list) {
@@ -1187,11 +1253,26 @@
       return `
         <tr>
           <td>${esc(guestName(person))}</td>
+          <td>${esc(person.email || '—')}</td>
+          <td>${esc(person.phone || '—')}</td>
           <td>${esc(linked || '—')}</td>
-          <td><button type="button" class="btn-delete-passenger" data-id="${esc(person._id)}">Remove</button></td>
+          <td>
+            <div class="passenger-actions">
+              <button type="button" class="btn-edit-passenger" data-edit="${esc(person._id)}" title="Edit guest">
+                <span class="material-symbols-outlined">edit</span>
+              </button>
+              <button type="button" class="btn-delete-passenger" data-id="${esc(person._id)}">Remove</button>
+            </div>
+          </td>
         </tr>
       `;
     }).join('');
+    body.querySelectorAll('button[data-edit]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const person = guests.find(item => item._id === btn.dataset.edit);
+        if (person) openAddGuest('manage', person);
+      });
+    });
     body.querySelectorAll('button[data-id]').forEach(btn => {
       btn.addEventListener('click', async () => {
         if (!confirm('Remove this guest from the directory?')) return;
@@ -1206,7 +1287,10 @@
   function filteredGuests() {
     const q = (document.getElementById('guestSearchInput')?.value || '').toLowerCase().trim();
     if (!q) return guests;
-    return guests.filter(person => guestName(person).toLowerCase().includes(q));
+    return guests.filter(person => {
+      const haystack = [guestName(person), person.email, person.phone].filter(Boolean).join(' ').toLowerCase();
+      return haystack.includes(q);
+    });
   }
 
   function openDeepLink() {
@@ -1232,7 +1316,38 @@
     }
   }
 
+  function datesOutOfOrder(start, end) {
+    if (!start || !end) return false;
+    return end < start;
+  }
+
+  function calmDateInputs(root) {
+    (root || document).querySelectorAll('form').forEach((form) => {
+      if (form.dataset.dateSubmitShield) return;
+      const dates = form.querySelectorAll('input[type="date"]');
+      if (!dates.length) return;
+      form.dataset.dateSubmitShield = '1';
+      let holdSubmit = false;
+      dates.forEach((input) => {
+        input.required = false;
+        input.removeAttribute('min');
+        input.removeAttribute('max');
+        input.addEventListener('invalid', (event) => event.preventDefault());
+        input.addEventListener('change', () => {
+          holdSubmit = true;
+          window.setTimeout(() => { holdSubmit = false; }, 500);
+        });
+      });
+      form.addEventListener('submit', (event) => {
+        if (!holdSubmit) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }, true);
+    });
+  }
+
   function setup() {
+    calmDateInputs(document);
     document.getElementById('createRequestBtn')?.addEventListener('click', openCreate);
     document.getElementById('closeCreateModal')?.addEventListener('click', () => hideModal('createRequestModal'));
     document.getElementById('createRequestForm')?.addEventListener('submit', guardSubmit(submitRequest));
@@ -1286,9 +1401,15 @@
       hideModal('manageGuestsModal');
       openAddGuest('manage');
     });
-    document.getElementById('closeAddGuestModal')?.addEventListener('click', () => hideModal('addGuestModal'));
-    document.getElementById('cancelAddGuestBtn')?.addEventListener('click', () => hideModal('addGuestModal'));
+    document.getElementById('closeAddGuestModal')?.addEventListener('click', closeAddGuest);
+    document.getElementById('cancelAddGuestBtn')?.addEventListener('click', closeAddGuest);
     document.getElementById('addGuestForm')?.addEventListener('submit', guardSubmit(submitGuest));
+    document.getElementById('newGuestUserId')?.addEventListener('change', (e) => {
+      const emailInput = document.getElementById('newGuestEmail');
+      if (!emailInput || emailInput.value.trim()) return;
+      const user = users.find(item => item._id === e.target.value);
+      if (user?.email) emailInput.value = user.email;
+    });
 
     document.getElementById('closeBookingConfirmedModal')?.addEventListener('click', () => hideModal('bookingConfirmedModal'));
     document.getElementById('closeBookingConfirmedBtn')?.addEventListener('click', () => hideModal('bookingConfirmedModal'));
@@ -1351,7 +1472,8 @@
       if (!e.target.closest('.booked-menu-wrapper')) {
         document.querySelectorAll('.booked-menu-dropdown.show').forEach(el => el.classList.remove('show'));
       }
-      if (e.target.classList.contains('dark-modal')) e.target.classList.remove('show');
+      if (e.target.id === 'addGuestModal') closeAddGuest();
+      else if (e.target.classList.contains('dark-modal')) e.target.classList.remove('show');
     });
   }
 

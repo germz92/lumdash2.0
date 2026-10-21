@@ -2468,8 +2468,6 @@
     max-width: 100%;
   }
 
-  .hotels-dark .passengers-table th:nth-child(3),
-  .hotels-dark .passengers-table td:nth-child(3),
   .hotels-dark .passengers-table th:nth-child(4),
   .hotels-dark .passengers-table td:nth-child(4) {
     display: none;

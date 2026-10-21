@@ -263,7 +263,9 @@ function registerHotelRoutes(app, deps) {
       if (!hotelData.checkInDate || !hotelData.checkOutDate) {
         return res.status(400).json({ error: 'Check-in and check-out dates are required' });
       }
-      if (new Date(hotelData.checkOutDate) < new Date(hotelData.checkInDate)) {
+      const checkInKey = String(hotelData.checkInDate).match(/(\d{4}-\d{2}-\d{2})/)?.[1] || '';
+      const checkOutKey = String(hotelData.checkOutDate).match(/(\d{4}-\d{2}-\d{2})/)?.[1] || '';
+      if (checkInKey && checkOutKey && checkOutKey < checkInKey) {
         return res.status(400).json({ error: 'Check-out must be on or after check-in' });
       }
       if (hotelData.status === 'booked' && hotelData.bookedDetails) {

@@ -168,11 +168,11 @@
             <div class="form-row">
               <div class="form-group">
                 <label>Check-In *</label>
-                <input type="date" id="requestCheckIn" required>
+                <input type="date" id="requestCheckIn">
               </div>
               <div class="form-group">
                 <label>Check-Out *</label>
-                <input type="date" id="requestCheckOut" required>
+                <input type="date" id="requestCheckOut">
               </div>
             </div>
             <div class="form-group">
@@ -260,7 +260,7 @@
             <div class="form-row">
               <div class="form-group">
                 <label>Check-In *</label>
-                <input type="date" id="bookingCheckIn" required>
+                <input type="date" id="bookingCheckIn">
               </div>
               <div class="form-group">
                 <label>Check-In Time</label>
@@ -270,7 +270,7 @@
             <div class="form-row">
               <div class="form-group">
                 <label>Check-Out *</label>
-                <input type="date" id="bookingCheckOut" required>
+                <input type="date" id="bookingCheckOut">
               </div>
               <div class="form-group">
                 <label>Check-Out Time</label>
@@ -583,6 +583,16 @@
                 <input type="text" id="newGuestLast" required>
               </div>
             </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Email</label>
+                <input type="email" id="newGuestEmail" placeholder="name@company.com" autocomplete="email">
+              </div>
+              <div class="form-group">
+                <label>Phone</label>
+                <input type="tel" id="newGuestPhone" placeholder="(555) 555-5555" autocomplete="tel">
+              </div>
+            </div>
             <div class="form-group">
               <label>Link to User Account (Optional)</label>
               <div class="select-wrapper">
@@ -622,6 +632,8 @@
               <thead>
                 <tr>
                   <th>Name</th>
+                  <th>Email</th>
+                  <th>Phone</th>
                   <th>Linked User</th>
                   <th></th>
                 </tr>

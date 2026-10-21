@@ -446,6 +446,37 @@
   /**
    * Setup all event listeners
    */
+  function datesOutOfOrder(start, end) {
+    if (!start || !end) return false;
+    return end < start;
+  }
+
+  // Mobile date pickers validate and can submit the form before a date is committed.
+  function calmDateInputs(root) {
+    (root || document).querySelectorAll('form').forEach((form) => {
+      if (form.dataset.dateSubmitShield) return;
+      const dates = form.querySelectorAll('input[type="date"]');
+      if (!dates.length) return;
+      form.dataset.dateSubmitShield = '1';
+      let holdSubmit = false;
+      dates.forEach((input) => {
+        input.required = false;
+        input.removeAttribute('min');
+        input.removeAttribute('max');
+        input.addEventListener('invalid', (event) => event.preventDefault());
+        input.addEventListener('change', () => {
+          holdSubmit = true;
+          window.setTimeout(() => { holdSubmit = false; }, 500);
+        });
+      });
+      form.addEventListener('submit', (event) => {
+        if (!holdSubmit) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+      }, true);
+    });
+  }
+
   function setupEventListeners() {
     // Search, Filter, Sort for Pending
     elements.pendingSearch?.addEventListener('input', debounce(() => renderPendingRequests(), 300));
@@ -478,9 +509,7 @@
       radio.addEventListener('change', handleTripTypeChange);
     });
 
-    // Date validation - ensure return date is not before depart date
-    elements.departDate?.addEventListener('change', handleDepartDateChange);
-    elements.returnDate?.addEventListener('change', handleReturnDateChange);
+    calmDateInputs(document);
 
     // Airport search inputs
     elements.fromAirport?.addEventListener('input', (e) => handleAirportSearch(e, 'from'));
@@ -1582,10 +1611,6 @@
     renderSelectedPassengers();
     // Reset form
     elements.createRequestForm?.reset();
-    // Clear return date min constraint
-    if (elements.returnDate) {
-      elements.returnDate.min = '';
-    }
     // Set default trip type
     document.querySelector('input[name="tripType"][value="roundtrip"]').checked = true;
     elements.returnDateGroup?.classList.remove('hidden');
@@ -1633,35 +1658,6 @@
     elements.returnDateGroup?.classList.toggle('hidden', !isRoundtrip);
     if (elements.returnTimePreferenceGroup) {
       elements.returnTimePreferenceGroup.classList.toggle('hidden', !isRoundtrip);
-    }
-  }
-
-  /**
-   * Handle depart date change - update return date min constraint
-   */
-  function handleDepartDateChange() {
-    const departDateValue = elements.departDate?.value;
-    if (departDateValue && elements.returnDate) {
-      // Set minimum return date to depart date
-      elements.returnDate.min = departDateValue;
-      
-      // If current return date is before new depart date, clear it
-      if (elements.returnDate.value && elements.returnDate.value < departDateValue) {
-        elements.returnDate.value = '';
-      }
-    }
-  }
-
-  /**
-   * Handle return date change - validate it's not before depart date
-   */
-  function handleReturnDateChange() {
-    const departDateValue = elements.departDate?.value;
-    const returnDateValue = elements.returnDate?.value;
-    
-    if (departDateValue && returnDateValue && returnDateValue < departDateValue) {
-      alert('Return date cannot be before depart date.');
-      elements.returnDate.value = '';
     }
   }
 
@@ -1963,6 +1959,16 @@
     }
 
     const tripType = document.querySelector('input[name="bookingTripType"]:checked').value;
+    const bookingDepart = document.getElementById('bookingDepartDate').value;
+    const bookingReturn = document.getElementById('bookingReturnDate').value;
+    if (!bookingDepart) {
+      alert('Depart date is required.');
+      return;
+    }
+    if (tripType === 'roundtrip' && datesOutOfOrder(bookingDepart, bookingReturn)) {
+      alert('Return date cannot be before the depart date.');
+      return;
+    }
     const fromAirport = parseAirportInput(elements.bookingFromAirport);
     const toAirport = parseAirportInput(elements.bookingToAirport);
 
@@ -2274,6 +2280,10 @@
     e.preventDefault();
 
     const tripType = document.querySelector('input[name="tripType"]:checked').value;
+    if (tripType === 'roundtrip' && datesOutOfOrder(elements.departDate?.value, elements.returnDate?.value)) {
+      alert('Return date cannot be before the depart date.');
+      return;
+    }
     const fromAirport = parseAirportInput(elements.fromAirport);
     const toAirport = parseAirportInput(elements.toAirport);
 

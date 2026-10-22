@@ -15086,7 +15086,8 @@ function portalPinRequiredResponse(client) {
   };
 }
 
-/** Team members who should hear about client activity on a project (creators, uploaders, admins). */
+/** Team members who should hear about client activity on a project
+ * (creators, version uploaders, the linked deliverable's editors, admins). */
 async function portalTeamRecipients(project) {
   const ids = new Set();
   if (project.createdBy) ids.add(project.createdBy.toString());
@@ -15098,6 +15099,18 @@ async function portalTeamRecipients(project) {
     admins.forEach(a => ids.add(a._id.toString()));
   } catch (err) {
     console.error('Failed to load portal admin recipients:', err.message);
+  }
+  if (project.postProductionItemId) {
+    try {
+      const item = await PostProductionItem.findById(project.postProductionItemId)
+        .select('editorId editorIds')
+        .lean();
+      if (item) {
+        getPostProductionEditorIds(item).forEach(id => ids.add(id));
+      }
+    } catch (err) {
+      console.error('Failed to load portal editor recipients:', err.message);
+    }
   }
   return [...ids];
 }

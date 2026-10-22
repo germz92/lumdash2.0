@@ -7,7 +7,8 @@ function emptyLumquoteSummary() {
     contractStatus: 'none',
     invoiceCount: 0,
     totalInvoiced: 0,
-    totalPaid: 0
+    totalPaid: 0,
+    quotes: []
   };
 }
 
@@ -52,7 +53,8 @@ async function fetchLumquoteBillingByProject(externalIds) {
   const filter = { project: { $in: objectIds } };
   const [contracts, invoices] = await Promise.all([
     db.collection('contracts').find(filter, { projection: { project: 1, status: 1 } }).toArray(),
-    db.collection('invoices').find(filter, { projection: { project: 1, status: 1, total: 1, amountPaid: 1 } }).toArray()
+    db.collection('invoices').find(filter, { projection: { project: 1, status: 1, total: 1, amountPaid: 1 } }).toArray(),
+    attachGroupedQuotes(db, byProject, objectIds)
   ]);
 
   for (const contract of contracts) {
@@ -74,6 +76,90 @@ async function fetchLumquoteBillingByProject(externalIds) {
   }
 
   return byProject;
+}
+
+/** Quotes on this project, plus quotes on projects that point back at it. */
+async function attachGroupedQuotes(db, byProject, objectIds) {
+  const idStrings = objectIds.map(id => String(id));
+  const siblings = await db.collection('crmProjects').find(
+    {
+      archived: { $ne: true },
+      $or: [
+        { lumdashProject: { $in: objectIds } },
+        { lumdashProject: { $in: idStrings } }
+      ]
+    },
+    { projection: { lumdashProject: 1 } }
+  ).toArray();
+
+  const projectToAnchor = new Map(idStrings.map(id => [id, id]));
+  const siblingIds = [];
+  for (const sibling of siblings) {
+    const anchor = String(sibling.lumdashProject || '');
+    const siblingId = String(sibling._id);
+    if (!byProject.has(anchor) || projectToAnchor.has(siblingId)) continue;
+    projectToAnchor.set(siblingId, anchor);
+    siblingIds.push(sibling._id);
+  }
+
+  const quotes = await db.collection('savedQuotes').find(
+    { project: { $in: [...objectIds, ...siblingIds] }, archived: { $ne: true } },
+    { projection: { project: 1, name: 1, booked: 1, 'quoteData.quoteTitle': 1, 'quoteData.total': 1 } }
+  ).toArray();
+
+  const contractProjects = [...objectIds, ...siblingIds];
+  const [contracts, groupedInvoices] = await Promise.all([
+    db.collection('contracts').find(
+      { project: { $in: contractProjects } },
+      { projection: { project: 1, status: 1 } }
+    ).toArray(),
+    db.collection('invoices').find(
+      { project: { $in: contractProjects } },
+      { projection: { project: 1, status: 1, total: 1, amountPaid: 1 } }
+    ).toArray()
+  ]);
+  const statusByProject = new Map();
+  for (const contract of contracts) {
+    const key = String(contract.project);
+    const status = String(contract.status || '').toLowerCase();
+    const rank = CONTRACT_RANK[status] || 0;
+    const current = CONTRACT_RANK[statusByProject.get(key)] || 0;
+    if (rank > current) statusByProject.set(key, status);
+  }
+  const invoiceByProject = new Map();
+  for (const invoice of groupedInvoices) {
+    const key = String(invoice.project);
+    if (!invoiceByProject.has(key)) {
+      invoiceByProject.set(key, { invoiceCount: 0, totalInvoiced: 0, totalPaid: 0 });
+    }
+    const bucket = invoiceByProject.get(key);
+    bucket.invoiceCount += 1;
+    if (String(invoice.status || '').toLowerCase() === 'void') continue;
+    bucket.totalInvoiced += finiteNumber(invoice.total);
+    bucket.totalPaid += finiteNumber(invoice.amountPaid);
+  }
+
+  for (const quote of quotes) {
+    const projectId = String(quote.project);
+    const row = byProject.get(projectToAnchor.get(projectId));
+    if (!row) continue;
+    const name = String(quote.name || quote.quoteData?.quoteTitle || '').trim() || 'Quote';
+    const invoices = invoiceByProject.get(projectId) || { invoiceCount: 0, totalInvoiced: 0, totalPaid: 0 };
+    row.quotes.push({
+      name,
+      total: finiteNumber(quote.quoteData?.total),
+      booked: quote.booked === true,
+      projectId,
+      contractStatus: statusByProject.get(projectId) || 'none',
+      invoiceCount: invoices.invoiceCount,
+      totalInvoiced: invoices.totalInvoiced,
+      totalPaid: invoices.totalPaid
+    });
+  }
+
+  for (const row of byProject.values()) {
+    row.quotes.sort((a, b) => a.name.localeCompare(b.name));
+  }
 }
 
 const LUMQUOTE_ORIGIN = String(process.env.LUMQUOTE_BASE_URL || 'https://lumquote.com').replace(/\/$/, '');

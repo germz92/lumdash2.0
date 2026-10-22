@@ -14,7 +14,7 @@
         <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu">
           <span class="material-symbols-outlined">menu</span>
         </button>
-        
+        <h1 class="welcome-title" id="welcomeTitle">Welcome, User</h1>
         <div class="header-spacer"></div>
         
         <div class="header-actions">
@@ -27,52 +27,41 @@
       <!-- Content Area -->
       <div class="dashboard-content">
         
-        <!-- Welcome Section -->
-        <div class="welcome-section">
-          <h1 class="welcome-title" id="welcomeTitle">Welcome, User</h1>
-        </div>
-        
-        <!-- Events Section -->
         <div class="events-section">
-          
-          <!-- Events Header with Tabs -->
           <div class="events-header-dark">
             <div class="events-tabs">
               <button class="events-tab active" data-filter="upcoming">Upcoming</button>
               <button class="events-tab" data-filter="past">Past</button>
               <button class="events-tab" data-filter="all">All</button>
             </div>
-            
-            <div class="events-filters">
-              <button class="filter-btn" id="statusFilterBtn">
-                <span class="material-symbols-outlined">filter_list</span>
-                <span id="statusFilterLabel">Active</span>
-                <span class="material-symbols-outlined">expand_more</span>
-              </button>
-              
-              <button class="filter-btn" id="dateFilterBtn">
-                <span class="material-symbols-outlined">calendar_today</span>
-                <span id="dateFilterLabel">All Dates</span>
-                <span class="material-symbols-outlined">expand_more</span>
-              </button>
-              
-              <button class="filter-btn admin-only-nav" id="ownerFilterBtn" style="display: none;">
-                <span class="material-symbols-outlined">person</span>
-                <span id="ownerFilterLabel">All Owners</span>
-                <span class="material-symbols-outlined">expand_more</span>
+            <div class="events-toolbar-actions">
+              <div class="events-search-bar">
+                <div class="search-input-wrapper">
+                  <span class="material-symbols-outlined">search</span>
+                  <input type="text" placeholder="Search events..." id="searchEventsInput">
+                </div>
+              </div>
+              <div class="events-filters">
+                <button class="filter-btn" id="statusFilterBtn">
+                  <span class="material-symbols-outlined">filter_list</span>
+                  <span id="statusFilterLabel">Active</span>
+                  <span class="material-symbols-outlined">expand_more</span>
+                </button>
+                <button class="filter-btn" id="dateFilterBtn">
+                  <span class="material-symbols-outlined">calendar_today</span>
+                  <span id="dateFilterLabel">All Dates</span>
+                  <span class="material-symbols-outlined">expand_more</span>
+                </button>
+                <button class="filter-btn admin-only-nav" id="ownerFilterBtn" style="display: none;">
+                  <span class="material-symbols-outlined">person</span>
+                  <span id="ownerFilterLabel">All Owners</span>
+                  <span class="material-symbols-outlined">expand_more</span>
+                </button>
+              </div>
+              <button class="btn-create-event" id="createEventBtn">
+                CREATE EVENT
               </button>
             </div>
-          </div>
-          
-          <!-- Search Bar & Create Event -->
-          <div class="events-search-bar">
-            <div class="search-input-wrapper">
-              <span class="material-symbols-outlined">search</span>
-              <input type="text" placeholder="Search events..." id="searchEventsInput">
-            </div>
-            <button class="btn-create-event" id="createEventBtn">
-              CREATE EVENT
-            </button>
           </div>
           
           <!-- Events Table -->

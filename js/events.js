@@ -4817,28 +4817,24 @@ function lumquoteColumnLink(url, inner) {
   return `<a class="lumquote-column-link" href="${escapeEventHtml(url)}" target="_blank" rel="noopener noreferrer" title="Open in LumQuote" onclick="event.stopPropagation()">${inner}</a>`;
 }
 
-function contractCellHtml(table) {
-  const billing = table.lumquoteBilling;
-  if (!billing) {
-    return '<td class="event-contract-cell"><span class="event-lumquote-empty">—</span></td>';
-  }
-  const status = ['none', 'draft', 'sent', 'signed'].includes(billing.contractStatus)
-    ? billing.contractStatus
-    : 'none';
-  const labels = { none: 'None', draft: 'Draft', sent: 'Sent', signed: 'Signed' };
-  const chip = `<span class="contract-chip contract-chip-${status}">${labels[status]}</span>`;
-  return `<td class="event-contract-cell">${lumquoteColumnLink(lumquoteProjectUrl(table, 'contract'), chip)}</td>`;
+const expandedQuoteGroups = new Set();
+
+function contractChipHtml(status) {
+  const known = ['none', 'draft', 'sent', 'signed', 'mixed'].includes(status) ? status : 'none';
+  const labels = { none: 'None', draft: 'Draft', sent: 'Sent', signed: 'Signed', mixed: 'Mixed' };
+  return `<span class="contract-chip contract-chip-${known}">${labels[known]}</span>`;
 }
 
-function invoicesCellHtml(table) {
-  const billing = table.lumquoteBilling;
-  if (!billing) {
-    return '<td class="event-invoices-cell"><span class="event-lumquote-empty">—</span></td>';
-  }
-  const count = Number(billing.invoiceCount) || 0;
-  const totalInvoiced = Number(billing.totalInvoiced) || 0;
-  const totalPaid = Number(billing.totalPaid) || 0;
-  const invoiceUrl = lumquoteProjectUrl(table, 'invoices');
+function quoteProjectUrl(projectId, tab) {
+  const id = String(projectId || '').trim();
+  if (!/^[a-fA-F0-9]{24}$/.test(id)) return '';
+  return `https://lumquote.com/projects/${id}#${tab}`;
+}
+
+function invoiceBarHtml(paid, invoiced, count, url) {
+  const totalInvoiced = Number(invoiced) || 0;
+  const totalPaid = Number(paid) || 0;
+  const invoiceCount = Number(count) || 0;
   if (totalInvoiced > 0) {
     const percent = Math.min(100, Math.round(totalPaid / totalInvoiced * 100));
     const title = `${formatUsd(totalPaid, true)} of ${formatUsd(totalInvoiced, true)} paid`;
@@ -4846,14 +4842,94 @@ function invoicesCellHtml(table) {
         <div class="invoice-progress-track" aria-hidden="true"><div class="invoice-progress-fill" style="width:${percent}%"></div></div>
         <span class="invoice-progress-label">${formatUsd(totalPaid, false)} / ${formatUsd(totalInvoiced, false)}</span>
       </div>`;
-    return `<td class="event-invoices-cell">${lumquoteColumnLink(invoiceUrl, bar)}</td>`;
+    return lumquoteColumnLink(url, bar);
   }
-  if (count > 0) {
-    const label = count === 1 ? '1 draft' : `${count} drafts`;
-    return `<td class="event-invoices-cell">${lumquoteColumnLink(invoiceUrl, `<span class="invoice-draft-count">${label}</span>`)}</td>`;
+  if (invoiceCount > 0) {
+    const label = invoiceCount === 1 ? '1 draft' : `${invoiceCount} drafts`;
+    return lumquoteColumnLink(url, `<span class="invoice-draft-count">${label}</span>`);
   }
   const empty = '<span class="event-lumquote-empty">—</span>';
-  return `<td class="event-invoices-cell">${invoiceUrl ? lumquoteColumnLink(invoiceUrl, empty) : empty}</td>`;
+  return url ? lumquoteColumnLink(url, empty) : empty;
+}
+
+function toggleLumquoteQuotes(button) {
+  const id = button?.dataset?.eventId;
+  if (!id) return;
+  if (expandedQuoteGroups.has(id)) expandedQuoteGroups.delete(id);
+  else expandedQuoteGroups.add(id);
+  const open = expandedQuoteGroups.has(id);
+  const row = button.closest('tr');
+  row?.querySelectorAll('.lumquote-group').forEach(group => group.classList.toggle('is-open', open));
+  const icon = button.querySelector('.material-symbols-outlined');
+  if (icon) icon.textContent = open ? 'expand_more' : 'chevron_right';
+  button.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function contractCellHtml(table) {
+  const billing = table.lumquoteBilling;
+  if (!billing) {
+    return '<td class="event-contract-cell"><span class="event-lumquote-empty">—</span></td>';
+  }
+  const quotes = Array.isArray(billing.quotes) ? billing.quotes : [];
+  const anchorStatus = ['none', 'draft', 'sent', 'signed'].includes(billing.contractStatus)
+    ? billing.contractStatus
+    : 'none';
+  if (quotes.length < 2) {
+    return `<td class="event-contract-cell">${lumquoteColumnLink(lumquoteProjectUrl(table, 'contract'), contractChipHtml(anchorStatus))}</td>`;
+  }
+  const statuses = quotes.map(quote => quote.contractStatus || 'none');
+  const summaryStatus = statuses.every(status => status === statuses[0]) ? statuses[0] : 'mixed';
+  const open = expandedQuoteGroups.has(String(table._id));
+  const lines = quotes.map(quote => `
+    <div class="lumquote-group-line">
+      ${lumquoteColumnLink(quoteProjectUrl(quote.projectId, 'contract'), contractChipHtml(quote.contractStatus || 'none'))}
+    </div>
+  `).join('');
+  return `<td class="event-contract-cell">
+    <div class="lumquote-group${open ? ' is-open' : ''}">
+      <div class="lumquote-group-summary">
+        ${lumquoteColumnLink(lumquoteProjectUrl(table, 'contract'), contractChipHtml(summaryStatus))}
+      </div>
+      <div class="lumquote-group-lines">${lines}</div>
+    </div>
+  </td>`;
+}
+
+function invoiceSummaryHtml(billing, invoiceUrl) {
+  return invoiceBarHtml(billing.totalPaid, billing.totalInvoiced, billing.invoiceCount, invoiceUrl);
+}
+
+function invoicesCellHtml(table) {
+  const billing = table.lumquoteBilling;
+  if (!billing) {
+    return '<td class="event-invoices-cell"><span class="event-lumquote-empty">—</span></td>';
+  }
+  const invoiceUrl = lumquoteProjectUrl(table, 'invoices');
+  const quotes = Array.isArray(billing.quotes) ? billing.quotes : [];
+  if (quotes.length < 2) {
+    return `<td class="event-invoices-cell">${invoiceSummaryHtml(billing, invoiceUrl)}</td>`;
+  }
+  const paid = quotes.reduce((total, quote) => total + (Number(quote.totalPaid) || 0), 0);
+  const invoiced = quotes.reduce((total, quote) => total + (Number(quote.totalInvoiced) || 0), 0);
+  const count = quotes.reduce((total, quote) => total + (Number(quote.invoiceCount) || 0), 0);
+  const open = expandedQuoteGroups.has(String(table._id));
+  const lines = quotes.map(quote => `
+    <div class="lumquote-group-line lumquote-invoice-line">
+      <span class="lumquote-quote-line">${escapeEventHtml(quote.name || 'Quote')}</span>
+      ${invoiceBarHtml(quote.totalPaid, quote.totalInvoiced, quote.invoiceCount, quoteProjectUrl(quote.projectId, 'invoices'))}
+    </div>
+  `).join('');
+  return `<td class="event-invoices-cell">
+    <div class="lumquote-group${open ? ' is-open' : ''}">
+      <div class="lumquote-group-summary">
+        <button type="button" class="lumquote-group-toggle" data-event-id="${escapeEventHtml(table._id)}" onclick="event.stopPropagation(); toggleLumquoteQuotes(this)" aria-expanded="${open}" title="Show each invoice">
+          <span class="material-symbols-outlined">${open ? 'expand_more' : 'chevron_right'}</span>
+        </button>
+        ${invoiceBarHtml(paid, invoiced, count, invoiceUrl)}
+      </div>
+      <div class="lumquote-group-lines">${lines}</div>
+    </div>
+  </td>`;
 }
 
 function applyLumquoteBilling(tables, byEvent) {
@@ -4906,6 +4982,7 @@ function onLumquoteTabVisible() {
 }
 
 window.refreshLumquoteBillingColumns = refreshLumquoteBillingColumns;
+window.toggleLumquoteQuotes = toggleLumquoteQuotes;
 window.cleanupEventsPage = function cleanupEventsPage() {
   window.refreshLumquoteBillingColumns = null;
 };

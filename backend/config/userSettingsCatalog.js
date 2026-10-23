@@ -210,9 +210,17 @@ const NOTIFICATION_SECTION = {
       title: 'Video portal',
       items: [
         {
+          key: 'portal_admin_broadcast',
+          label: 'Every portal project',
+          description: 'Client comments, approvals, and feedback reminders on all portal projects, because you are an admin or production manager. Turn toast and email off to only be notified for projects you own, edit, or uploaded.',
+          roles: ['admin', 'production_manager'],
+          defaults: { toast: true, email: true },
+          channels: { toast: true, email: true }
+        },
+        {
           key: 'portal_comment',
           label: 'Client video comments',
-          description: 'Batched alerts when a client leaves comments on a portal project. Admins, production managers, project creators, the deliverable\'s editors, and version uploaders are notified. Rapid comments in one session are grouped into a single notification/email.',
+          description: 'Batched alerts when a client leaves comments on a portal project you own, edit, created, or uploaded. Rapid comments in one session are grouped into a single notification/email.',
           roles: ALL_ROLES,
           defaults: { toast: true, email: true },
           channels: { toast: true, email: true }

@@ -35,6 +35,7 @@
     feedback_submitted:     { icon: 'bug_report',       color: '#f59e0b' },
     feedback_status_changed:{ icon: 'rate_review',      color: '#8b5cf6' },
     portal_comment:         { icon: 'comment',          color: '#3b82f6' },
+    portal_admin_broadcast: { icon: 'comment',          color: '#3b82f6' },
     portal_decision:        { icon: 'verified',         color: '#22c55e' },
     portal_feedback_due:    { icon: 'event',            color: '#f59e0b' },
     portal_mention:         { icon: 'alternate_email',  color: '#38bdf8' },

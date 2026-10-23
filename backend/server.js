@@ -889,9 +889,14 @@ async function createNotification({ recipientId, type, title, message = '', link
     }
 
     const {
-      isNotificationChannelEnabled
+      isNotificationChannelEnabled,
+      shouldStoreInAppNotification
     } = require('./lib/userSettings');
     const recipientUser = await User.findById(recipientStr).select('settings role').lean();
+    if (recipientUser && !shouldStoreInAppNotification(recipientUser, type)) {
+      console.log(`🔔 Notification skipped (turned off): [${type}] → user ${recipientStr}`);
+      return null;
+    }
     const showToast = recipientUser
       ? isNotificationChannelEnabled(recipientUser, type, 'toast')
       : true;
@@ -15087,32 +15092,55 @@ function portalPinRequiredResponse(client) {
 }
 
 /** Team members who should hear about client activity on a project
- * (creators, version uploaders, the linked deliverable's editors, admins). */
+ * (event and deliverable owners, editors, version uploaders, creators,
+ * and admins who have not turned off every-project alerts). */
 async function portalTeamRecipients(project) {
   const ids = new Set();
   if (project.createdBy) ids.add(project.createdBy.toString());
   (project.versions || []).forEach(v => { if (v.uploadedBy) ids.add(v.uploadedBy.toString()); });
-  try {
-    const admins = await User.find({
-      role: { $regex: /^(admin|production_manager)$/i }
-    }).select('_id').lean();
-    admins.forEach(a => ids.add(a._id.toString()));
-  } catch (err) {
-    console.error('Failed to load portal admin recipients:', err.message);
-  }
+
+  let eventId = project.eventId || null;
   if (project.postProductionItemId) {
     try {
       const item = await PostProductionItem.findById(project.postProductionItemId)
-        .select('editorId editorIds')
+        .select('editorId editorIds ownerId eventId')
         .lean();
       if (item) {
         getPostProductionEditorIds(item).forEach(id => ids.add(id));
+        if (item.ownerId) ids.add(item.ownerId.toString());
+        if (!eventId && item.eventId) eventId = item.eventId;
       }
     } catch (err) {
       console.error('Failed to load portal editor recipients:', err.message);
     }
   }
-  return [...ids];
+
+  if (eventId) {
+    try {
+      const table = await Table.findById(eventId).select('owners').lean();
+      (table?.owners || []).forEach(id => { if (id) ids.add(id.toString()); });
+    } catch (err) {
+      console.error('Failed to load portal project owners:', err.message);
+    }
+  }
+
+  const broadcast = [];
+  try {
+    const { isNotificationChannelEnabled } = require('./lib/userSettings');
+    const admins = await User.find({
+      role: { $regex: /^(admin|production_manager)$/i }
+    }).select('_id role settings').lean();
+    admins.forEach(admin => {
+      const id = admin._id.toString();
+      if (ids.has(id)) return;
+      const wantsAny = isNotificationChannelEnabled(admin, 'portal_admin_broadcast', 'toast')
+        || isNotificationChannelEnabled(admin, 'portal_admin_broadcast', 'email');
+      if (wantsAny) broadcast.push(id);
+    });
+  } catch (err) {
+    console.error('Failed to load portal admin recipients:', err.message);
+  }
+  return { involved: [...ids], broadcast };
 }
 
 async function logPortalActivity({
@@ -15151,25 +15179,30 @@ async function notifyTeamPortalEvent({
   emailSubject = null,
   emailHtmlExtra = null
 }) {
-  const recipients = await portalTeamRecipients(project);
-  if (recipients.length === 0) return;
+  const { involved, broadcast } = await portalTeamRecipients(project);
+  if (involved.length === 0 && broadcast.length === 0) return;
 
-  await createNotificationBulk(recipients, {
-    type,
+  const payload = {
     title,
     message,
     link: { page: 'video-portal', params: { projectId: project._id.toString() } },
     metadata: { projectId: project._id.toString(), clientId: project.clientId?.toString?.() || project.clientId }
-  });
+  };
+  await createNotificationBulk(involved, { ...payload, type });
+  await createNotificationBulk(broadcast, { ...payload, type: 'portal_admin_broadcast' });
 
   if (!process.env.SENDGRID_API_KEY || !process.env.SENDGRID_FROM_EMAIL) return;
   try {
     const { isNotificationChannelEnabled } = require('./lib/userSettings');
-    const users = await User.find({ _id: { $in: recipients } }).select('email fullName settings role').lean();
+    const users = await User.find({ _id: { $in: [...involved, ...broadcast] } })
+      .select('email fullName settings role')
+      .lean();
+    const involvedSet = new Set(involved);
     const appUrl = (process.env.APP_URL || 'https://beta.lumdash.app').replace(/\/$/, '');
     const pageUrl = `${appUrl}/dashboard.html#video-portal`;
     for (const u of users) {
-      if (!u.email || !isNotificationChannelEnabled(u, type, 'email')) continue;
+      const prefType = involvedSet.has(u._id.toString()) ? type : 'portal_admin_broadcast';
+      if (!u.email || !isNotificationChannelEnabled(u, prefType, 'email')) continue;
       const body = emailHtmlExtra || `<p>${String(message || title).replace(/</g, '&lt;').replace(/\n/g, '<br>')}</p>
                <p><a href="${pageUrl}" style="color:#CC0007;font-weight:600;">Open the Video Portal in LumDash</a></p>`;
       await sgMail.send({

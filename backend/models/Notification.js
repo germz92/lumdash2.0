@@ -32,6 +32,7 @@ const notificationSchema = new mongoose.Schema({
       'feedback_submitted',      // New bug report / feature request (for admins)
       'feedback_status_changed', // Status changed on feedback you submitted
       'portal_comment',          // Client commented on a video in the portal
+      'portal_admin_broadcast',  // Admin opted in to every portal project
       'portal_decision',         // Client approved a cut
       'portal_feedback_due',     // Feedback due date reminder for the team
       'portal_mention',          // You were @mentioned on a portal comment

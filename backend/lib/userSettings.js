@@ -27,17 +27,29 @@ function getMergedSettings(user) {
   };
 }
 
+function notificationItemFor(user, type) {
+  if (!type) return null;
+  const items = getAllNotificationItems(normalizeRole(user?.role));
+  return items.find(i => i.key === type) || null;
+}
+
 function isNotificationChannelEnabled(user, type, channel) {
   if (!type || !channel) return true;
-  const role = normalizeRole(user?.role);
-  const items = getAllNotificationItems(role);
-  const item = items.find(i => i.key === type);
+  const item = notificationItemFor(user, type);
   if (!item) return true;
   if (!item.channels[channel]) return false;
-  const prefs = mergeNotificationPrefs(role, user?.settings?.notifications);
+  const prefs = mergeNotificationPrefs(normalizeRole(user?.role), user?.settings?.notifications);
   const pref = prefs[type];
   if (!pref) return true;
   return pref[channel] !== false;
+}
+
+/** Bell + toast. When the catalog offers a toast checkbox and it is off, store nothing.
+ * Types with no toast channel keep the previous behavior (in-app record, no popup). */
+function shouldStoreInAppNotification(user, type) {
+  const item = notificationItemFor(user, type);
+  if (!item || !item.channels.toast) return true;
+  return isNotificationChannelEnabled(user, type, 'toast');
 }
 
 function sanitizeNotificationPatch(role, patch = {}) {
@@ -75,6 +87,7 @@ module.exports = {
   mergeNotificationPrefs,
   getMergedSettings,
   isNotificationChannelEnabled,
+  shouldStoreInAppNotification,
   sanitizeNotificationPatch,
   buildSettingsResponse
 };

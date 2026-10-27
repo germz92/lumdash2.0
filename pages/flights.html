@@ -653,6 +653,19 @@
         </div>
         <div class="modal-body">
           <form id="editBookedForm">
+            <div class="trip-type-toggle">
+              <label class="radio-option">
+                <input type="radio" name="editBookedTripType" value="roundtrip">
+                <span class="radio-custom"></span>
+                <span class="radio-label">Roundtrip</span>
+              </label>
+              <label class="radio-option">
+                <input type="radio" name="editBookedTripType" value="oneway">
+                <span class="radio-custom"></span>
+                <span class="radio-label">One-way</span>
+              </label>
+            </div>
+
             <!-- Event Name -->
             <div class="form-group">
               <label>Event Name</label>
@@ -676,7 +689,7 @@
             <div class="booked-flight-edit-section">
               <div class="section-title">
                 <span class="material-symbols-outlined">flight_takeoff</span>
-                <h3>Outbound Flight</h3>
+                <h3 id="editBookedLegTitle">Outbound Flight</h3>
               </div>
               
               <div class="form-row">

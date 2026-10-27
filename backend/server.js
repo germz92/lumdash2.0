@@ -10909,9 +10909,20 @@ app.put('/api/flights/:id', authenticate, async (req, res) => {
       updateData.eventName = updateData.eventName || '';
     }
 
+    if (updateData.tripType === 'roundtrip' && updateData.returnDate !== undefined && !updateData.returnDate) {
+      return res.status(400).json({ error: 'Return date is required for a roundtrip' });
+    }
+
+    const unset = {};
+    if (updateData.tripType === 'oneway') {
+      updateData.returnDate = null;
+      delete updateData.returnBookedDetails;
+      unset.returnBookedDetails = 1;
+    }
+
     const flight = await FlightRequest.findByIdAndUpdate(
       req.params.id,
-      updateData,
+      Object.keys(unset).length ? { $set: updateData, $unset: unset } : updateData,
       { new: true, runValidators: true }
     ).populate('createdBy', 'fullName email')
      .populate('eventId', 'title')

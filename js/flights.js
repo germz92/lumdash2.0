@@ -562,6 +562,10 @@
     });
     elements.addPassengerForm?.addEventListener('submit', guardSubmit(handleAddNewPassenger));
 
+    document.querySelectorAll('input[name="editBookedTripType"]').forEach(radio => {
+      radio.addEventListener('change', handleEditBookedTripTypeChange);
+    });
+
     // Edit Booked Flight Modal
     elements.closeEditBookedModal?.addEventListener('click', closeEditBookedModal);
     elements.cancelEditBookedBtn?.addEventListener('click', closeEditBookedModal);
@@ -3131,9 +3135,9 @@
 
     // Return flight (show/hide based on trip type)
     const isRoundtrip = flight.tripType === 'roundtrip';
-    if (elements.editBookedReturnSection) {
-      elements.editBookedReturnSection.style.display = isRoundtrip ? 'block' : 'none';
-    }
+    const tripTypeRadio = document.querySelector(`input[name="editBookedTripType"][value="${isRoundtrip ? 'roundtrip' : 'oneway'}"]`);
+    if (tripTypeRadio) tripTypeRadio.checked = true;
+    setEditBookedTripTypeVisibility(isRoundtrip);
 
     if (isRoundtrip) {
       document.getElementById('editBookedReturnDate').value = formatDateForInput(flight.returnDate);
@@ -3167,6 +3171,20 @@
       
       document.getElementById('editBookedReturnDepartTime').value = returnBookedDetails.departTime || '';
       document.getElementById('editBookedReturnArriveTime').value = returnBookedDetails.arriveTime || '';
+    } else {
+      ['editBookedReturnDate', 'editBookedReturnFlightNumber', 'editBookedReturnDepartTime', 'editBookedReturnArriveTime'].forEach(id => {
+        const input = document.getElementById(id);
+        if (input) input.value = '';
+      });
+      ['editBookedReturnFromCode', 'editBookedReturnToCode'].forEach(id => {
+        const input = document.getElementById(id);
+        if (!input) return;
+        input.value = '';
+        delete input.dataset.code;
+        delete input.dataset.city;
+        delete input.dataset.state;
+        delete input.dataset.name;
+      });
     }
 
     // Populate notes
@@ -3211,6 +3229,54 @@
     // Render passengers and populate dropdown
     renderBookedPassengersChips();
     populateEditBookedPassengerDropdown();
+  }
+
+  function setEditBookedTripTypeVisibility(isRoundtrip) {
+    if (elements.editBookedReturnSection) {
+      elements.editBookedReturnSection.style.display = isRoundtrip ? 'block' : 'none';
+    }
+    const legTitle = document.getElementById('editBookedLegTitle');
+    if (legTitle) legTitle.textContent = isRoundtrip ? 'Outbound Flight' : 'Flight';
+  }
+
+  function applyAirportToInput(input, airport) {
+    if (!input || !airport?.code) return;
+    const city = airport.city || '';
+    const state = airport.state || '';
+    input.value = city ? `${airport.code} - ${city}, ${state}` : airport.code;
+    input.dataset.code = airport.code || '';
+    input.dataset.city = city;
+    input.dataset.state = state;
+    input.dataset.name = airport.name || '';
+  }
+
+  function readAirportFromInput(input) {
+    if (!input?.dataset.code && !input?.value) return null;
+    return {
+      code: input.dataset.code || input.value.substring(0, 3).toUpperCase(),
+      city: input.dataset.city || '',
+      state: input.dataset.state || '',
+      name: input.dataset.name || ''
+    };
+  }
+
+  /**
+   * Show or hide the return leg when the booked trip type changes
+   */
+  function handleEditBookedTripTypeChange(e) {
+    const isRoundtrip = e.target.value === 'roundtrip';
+    setEditBookedTripTypeVisibility(isRoundtrip);
+
+    if (!isRoundtrip) return;
+
+    const returnFromInput = document.getElementById('editBookedReturnFromCode');
+    const returnToInput = document.getElementById('editBookedReturnToCode');
+    if (returnFromInput && !returnFromInput.value) {
+      applyAirportToInput(returnFromInput, readAirportFromInput(document.getElementById('editBookedToCode')));
+    }
+    if (returnToInput && !returnToInput.value) {
+      applyAirportToInput(returnToInput, readAirportFromInput(document.getElementById('editBookedFromCode')));
+    }
   }
 
   /**
@@ -3313,7 +3379,18 @@
 
     if (!currentEditingRequest) return;
 
-    const isRoundtrip = currentEditingRequest.tripType === 'roundtrip';
+    const isRoundtrip = document.querySelector('input[name="editBookedTripType"]:checked')?.value !== 'oneway';
+    const departDate = document.getElementById('editBookedDepartDate').value;
+    const returnDate = document.getElementById('editBookedReturnDate').value;
+
+    if (isRoundtrip && !returnDate) {
+      alert('Enter a return date to save this flight as a roundtrip.');
+      return;
+    }
+    if (isRoundtrip && datesOutOfOrder(departDate, returnDate)) {
+      alert('Return date cannot be before the depart date.');
+      return;
+    }
     
     // Parse airport inputs with city/state from dataset
     const fromInput = document.getElementById('editBookedFromCode');
@@ -3336,8 +3413,9 @@
     const updateData = {
       eventName: document.getElementById('editBookedEventName').value,
       eventId: elements.editBookedEventName?.dataset.eventId || currentEditingRequest.eventId?._id || currentEditingRequest.eventId || null,
-      departDate: document.getElementById('editBookedDepartDate').value,
-      returnDate: isRoundtrip ? document.getElementById('editBookedReturnDate').value : null,
+      tripType: isRoundtrip ? 'roundtrip' : 'oneway',
+      departDate: departDate,
+      returnDate: isRoundtrip ? returnDate : null,
       from: fromAirport,
       to: toAirport,
       notes: document.getElementById('editBookedNotes')?.value?.trim() || '',
@@ -3360,10 +3438,11 @@
         flightNumber: document.getElementById('editBookedReturnFlightNumber').value,
         departTime: document.getElementById('editBookedReturnDepartTime').value,
         arriveTime: document.getElementById('editBookedReturnArriveTime').value,
-        // Preserve original booking metadata
-        bookedBy: currentEditingRequest.returnBookedDetails?.bookedBy?._id || currentEditingRequest.returnBookedDetails?.bookedBy,
-        bookedAt: currentEditingRequest.returnBookedDetails?.bookedAt
+        bookedBy: currentEditingRequest.returnBookedDetails?.bookedBy?._id || currentEditingRequest.returnBookedDetails?.bookedBy || currentEditingRequest.bookedDetails?.bookedBy?._id || currentEditingRequest.bookedDetails?.bookedBy,
+        bookedAt: currentEditingRequest.returnBookedDetails?.bookedAt || new Date().toISOString()
       };
+    } else {
+      updateData.returnBookedDetails = null;
     }
 
     try {

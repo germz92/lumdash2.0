@@ -1611,6 +1611,8 @@ function addRow(date, entry = {}) {
   const category = (entry.category || '').toLowerCase();
   if (category === 'video') {
     row.classList.add('category-video');
+  } else if (category === 'audio') {
+    row.classList.add('category-audio');
   } else if (category === 'headshot') {
     row.classList.add('category-headshot');
   }
@@ -2847,9 +2849,10 @@ function updateExistingRowInDOM(date, entryData) {
   row.setAttribute('data-notes', entryData.notes || '');
 
   // Update category styling
-  row.classList.remove('category-video', 'category-headshot');
+  row.classList.remove('category-video', 'category-audio', 'category-headshot');
   const updatedCategory = (entryData.category || '').toLowerCase();
   if (updatedCategory === 'video') row.classList.add('category-video');
+  else if (updatedCategory === 'audio') row.classList.add('category-audio');
   else if (updatedCategory === 'headshot') row.classList.add('category-headshot');
 
   // Update notes indicator

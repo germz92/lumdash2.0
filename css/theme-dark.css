@@ -3170,8 +3170,51 @@ html[data-theme="light"] .contract-chip-signed {
     z-index: 200;
   }
   
-  .dashboard-sidebar.open {
+  .dashboard-sidebar.open,
+  .dashboard-sidebar.show {
     transform: translateX(0);
+  }
+
+  /* Event pages use .general-sidebar. Keep the same 1024px drawer
+     behavior as the dashboard, and honor both class names pages toggle. */
+  .general-sidebar {
+    transform: translateX(-100%);
+    z-index: 200;
+  }
+
+  .general-sidebar.open,
+  .general-sidebar.show {
+    transform: translateX(0);
+  }
+
+  .general-sidebar.open ~ .general-sidebar-overlay,
+  .general-sidebar.show ~ .general-sidebar-overlay {
+    display: block;
+    opacity: 1;
+  }
+
+  .mobile-menu-btn {
+    display: flex !important;
+  }
+
+  .call-times-page .call-times-main,
+  .feedback-page .fb-main,
+  .settings-page .settings-main,
+  .video-portal-page .vp-main,
+  .my-tasks-page .my-tasks-main,
+  .general-page .general-main,
+  .crew-page .crew-main,
+  .expenses-page .expenses-main,
+  .exec-summary-page .exec-main,
+  .shotlist-page .shotlist-main,
+  .todos-page .todos-main,
+  .card-log-page .card-log-main,
+  .travel-page .travel-main,
+  .maps-page .maps-main,
+  .schedule-page .schedule-main,
+  .gear-page .gear-main,
+  .admin-notes-page .admin-notes-main {
+    margin-left: 0 !important;
   }
   
   .dashboard-main {
@@ -8051,11 +8094,13 @@ button.pending-task-row:active {
     box-shadow: var(--shadow-xl);
   }
   
-  .general-sidebar.open {
+  .general-sidebar.open,
+  .general-sidebar.show {
     transform: translateX(0);
   }
   
-  .general-sidebar.open ~ .general-sidebar-overlay {
+  .general-sidebar.open ~ .general-sidebar-overlay,
+  .general-sidebar.show ~ .general-sidebar-overlay {
     display: block;
   }
   
@@ -17532,8 +17577,10 @@ button.pending-task-row:active {
     z-index: 1000;
   }
   
-  .users-page.dark-theme .dashboard-sidebar.open {
+  .users-page.dark-theme .dashboard-sidebar.open,
+  .users-page.dark-theme .dashboard-sidebar.show {
     left: 0;
+    transform: translateX(0);
   }
   
   .users-page.dark-theme .dashboard-main {
@@ -19077,11 +19124,13 @@ button.pending-task-row:active {
 
   .gear-page.dark-theme .general-sidebar {
     left: calc(-1 * var(--sidebar-width));
-    transition: left var(--transition-normal);
+    transition: left var(--transition-normal), transform 0.3s ease;
   }
   
-  .gear-page.dark-theme .general-sidebar.show {
+  .gear-page.dark-theme .general-sidebar.show,
+  .gear-page.dark-theme .general-sidebar.open {
     left: 0;
+    transform: translateX(0);
   }
   
   .gear-page.dark-theme .gear-main {
@@ -19191,7 +19240,28 @@ button.pending-task-row:active {
   border-right: 1px solid var(--border-subtle) !important;
   visibility: visible !important;
   opacity: 1 !important;
-  transform: none !important;
+}
+
+@media (min-width: 1025px) {
+  .my-tasks-page .dashboard-sidebar {
+    transform: none !important;
+  }
+}
+
+@media (max-width: 1024px) {
+  .my-tasks-page .dashboard-sidebar {
+    transform: translateX(-100%) !important;
+    z-index: 200 !important;
+  }
+
+  .my-tasks-page .dashboard-sidebar.show,
+  .my-tasks-page .dashboard-sidebar.open {
+    transform: translateX(0) !important;
+  }
+
+  .my-tasks-main {
+    margin-left: 0 !important;
+  }
 }
 
 .my-tasks-main {

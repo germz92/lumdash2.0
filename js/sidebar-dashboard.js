@@ -260,17 +260,22 @@
     }
     
     // Use onclick property (simple, no accumulation)
-    mobileMenuBtn.onclick = function() {
-      sidebar.classList.toggle('open');
-      overlay.classList.toggle('show');
-      document.body.style.overflow = sidebar.classList.contains('open') ? 'hidden' : '';
+    const setSidebarOpen = (open) => {
+      sidebar.classList.toggle('open', open);
+      sidebar.classList.toggle('show', open);
+      overlay.classList.toggle('show', open);
+      document.body.style.overflow = open ? 'hidden' : '';
+    };
+
+    mobileMenuBtn.onclick = function(e) {
+      e.preventDefault();
+      const isOpen = sidebar.classList.contains('open') || sidebar.classList.contains('show');
+      setSidebarOpen(!isOpen);
     };
     
     // Overlay click handler
     overlay.onclick = function() {
-      sidebar.classList.remove('open');
-      overlay.classList.remove('show');
-      document.body.style.overflow = '';
+      setSidebarOpen(false);
     };
   }
   

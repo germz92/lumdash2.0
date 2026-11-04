@@ -540,13 +540,67 @@ function injectPageContent(html, page, id) {
   });
 }
 
+function closeMobileSidebar() {
+  document.querySelectorAll('.general-sidebar, .dashboard-sidebar').forEach((sidebar) => {
+    sidebar.classList.remove('open', 'show');
+  });
+  document.querySelectorAll('.general-sidebar-overlay, .sidebar-overlay').forEach((overlay) => {
+    overlay.classList.remove('show', 'visible');
+  });
+  document.body.style.overflow = '';
+}
+
+function openMobileSidebar() {
+  const sidebar = document.querySelector('.general-sidebar, .dashboard-sidebar');
+  if (!sidebar) return;
+  sidebar.classList.add('open', 'show');
+  const overlay = sidebar.id === 'dashboardSidebar'
+    ? (document.getElementById('dashboardSidebarOverlay') || document.querySelector('.sidebar-overlay'))
+    : (sidebar.parentElement && sidebar.parentElement.querySelector('.general-sidebar-overlay')) || document.querySelector('.general-sidebar-overlay');
+  if (overlay) overlay.classList.add('show', 'visible');
+  document.body.style.overflow = 'hidden';
+}
+
+/**
+ * One document-level handler so page scripts cannot replace it with a
+ * toggle that uses the wrong class (open vs show).
+ */
+function ensureMobileSidebarToggle() {
+  if (document.documentElement.dataset.mobileSidebarBound === '1') return;
+  document.documentElement.dataset.mobileSidebarBound = '1';
+
+  document.addEventListener('click', (e) => {
+    if (window.innerWidth > 1024) return;
+
+    const overlay = e.target.closest('.sidebar-overlay, .general-sidebar-overlay');
+    if (overlay) {
+      closeMobileSidebar();
+      return;
+    }
+
+    const btn = e.target.closest('.mobile-menu-btn');
+    if (!btn) return;
+    if (!document.querySelector('.general-sidebar, .dashboard-sidebar')) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    e.stopImmediatePropagation();
+
+    const sidebar = document.querySelector('.general-sidebar, .dashboard-sidebar');
+    const isOpen = sidebar.classList.contains('open') || sidebar.classList.contains('show');
+    if (isOpen) closeMobileSidebar();
+    else openMobileSidebar();
+  }, true);
+}
+
 /**
  * Setup mobile sidebar toggle + sidebar nav links for event pages.
  * This normalizes behavior across pages that currently use different class names.
  */
 function setupEventPageSidebarNavigation() {
-  const sidebar = document.querySelector('.general-sidebar');
-  const overlay = document.querySelector('.general-sidebar-overlay');
+  ensureMobileSidebarToggle();
+
+  const sidebar = document.querySelector('.general-sidebar, .dashboard-sidebar');
   const mobileMenuBtn = document.getElementById('mobileMenuBtn');
 
   if (!sidebar || !mobileMenuBtn) return;
@@ -554,41 +608,21 @@ function setupEventPageSidebarNavigation() {
   const applyMenuButtonVisibility = () => {
     // Some page-specific CSS only enables this at 768px.
     // Force consistent mobile/tablet behavior across event pages.
-    mobileMenuBtn.style.display = window.innerWidth <= 1024 ? 'flex' : '';
+    document.querySelectorAll('.mobile-menu-btn').forEach((btn) => {
+      const hiddenView = btn.closest('[hidden], [style*="display: none"], [style*="display:none"]');
+      if (hiddenView) return;
+      btn.style.display = window.innerWidth <= 1024 ? 'flex' : '';
+    });
   };
   applyMenuButtonVisibility();
   if (window.__eventSidebarResizeHandler) {
     window.removeEventListener('resize', window.__eventSidebarResizeHandler);
   }
-  window.__eventSidebarResizeHandler = applyMenuButtonVisibility;
-  window.addEventListener('resize', applyMenuButtonVisibility);
-
-  const closeSidebar = () => {
-    sidebar.classList.remove('open', 'show');
-    if (overlay) overlay.classList.remove('show', 'visible');
-    document.body.style.overflow = '';
+  window.__eventSidebarResizeHandler = () => {
+    applyMenuButtonVisibility();
+    if (window.innerWidth > 1024) closeMobileSidebar();
   };
-
-  const openSidebar = () => {
-    sidebar.classList.add('open', 'show');
-    if (overlay) overlay.classList.add('show', 'visible');
-    document.body.style.overflow = 'hidden';
-  };
-
-  // Use onclick assignment to avoid accumulating listeners during SPA navigation
-  mobileMenuBtn.onclick = function(e) {
-    e.preventDefault();
-    const isOpen = sidebar.classList.contains('open') || sidebar.classList.contains('show');
-    if (isOpen) {
-      closeSidebar();
-    } else {
-      openSidebar();
-    }
-  };
-
-  if (overlay) {
-    overlay.onclick = closeSidebar;
-  }
+  window.addEventListener('resize', window.__eventSidebarResizeHandler);
 
   // Normalize event-page sidebar navigation links
   const sidebarLinks = sidebar.querySelectorAll('.nav-item[data-page]');
@@ -597,7 +631,7 @@ function setupEventPageSidebarNavigation() {
       e.preventDefault();
       const targetPage = link.getAttribute('data-page');
       if (!targetPage) return;
-      closeSidebar();
+      closeMobileSidebar();
       const externalHref = link.getAttribute('data-external-href');
       if (externalHref) {
         window.location.href = externalHref;

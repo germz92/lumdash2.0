@@ -7454,7 +7454,7 @@ async function runAutoAssignPreviewForDate(date) {
     const res = await fetch(`${API_BASE}/api/tables/${tableId}/auto-assign-photographers`, {
       method: 'POST',
       headers: autoAssignAuthHeaders(),
-      body: JSON.stringify({ dates: [date] })
+      body: JSON.stringify(autoAssignSchedulePayload({ dates: [date] }))
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Could not build assignments');
@@ -7485,10 +7485,10 @@ async function submitAutoAssignEdit() {
     const res = await fetch(`${API_BASE}/api/tables/${tableId}/auto-assign-photographers/edit`, {
       method: 'POST',
       headers: autoAssignAuthHeaders(),
-      body: JSON.stringify({
+      body: JSON.stringify(autoAssignSchedulePayload({
         instruction,
         proposal: autoAssignProposal
-      })
+      }))
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Could not adjust assignments');
@@ -7506,9 +7506,23 @@ function collectAutoAssignRows(proposal) {
   return (proposal?.days || []).flatMap(day => day.assignments || []);
 }
 
+function autoAssignSchedulePayload(extra = {}) {
+  return {
+    ...(activeScheduleId ? { scheduleId: activeScheduleId } : {}),
+    ...extra
+  };
+}
+
 function writeLocalPhotographer(programId, photographer) {
   const program = (tableData.programs || []).find(item => String(item._id) === String(programId));
   if (program) program.photographer = photographer;
+  const text = photographer || '';
+  const id = String(programId).replace(/"/g, '');
+  document.querySelectorAll(`[data-program-id="${id}"] [data-field="photographer"]`).forEach(el => {
+    const display = el.querySelector('.cell-display');
+    if (display) display.textContent = text;
+    else if ('value' in el) el.value = text;
+  });
 }
 
 async function applyAutoAssignProposal() {
@@ -7544,20 +7558,35 @@ async function applyAutoAssignProposal() {
     const res = await fetch(`${API_BASE}/api/tables/${tableId}/auto-assign-photographers/apply`, {
       method: 'POST',
       headers: autoAssignAuthHeaders(),
-      body: JSON.stringify({
+      body: JSON.stringify(autoAssignSchedulePayload({
         assignments: toApply,
         sessionId: window.SimpleCollab?.getCurrentUser?.()?.sessionId
-      })
+      }))
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Apply failed');
-    autoAssignUndoSnapshot = toApply;
-    for (const row of toApply) writeLocalPhotographer(row.programId, row.photographer);
+    const saved = Array.isArray(data.updated) ? data.updated : [];
+    const missed = Array.isArray(data.skipped) ? data.skipped : [];
+    if (!saved.length) {
+      throw new Error(missed[0]?.reason || 'Nothing was saved onto this schedule');
+    }
+    autoAssignUndoSnapshot = saved.map(row => {
+      const previous = toApply.find(item => String(item.programId) === String(row.programId));
+      return {
+        programId: row.programId,
+        photographer: row.photographer,
+        previousPhotographer: previous?.previousPhotographer || ''
+      };
+    });
+    for (const row of saved) writeLocalPhotographer(row.programId, row.photographer);
+    rememberOpenSchedulePrograms();
     renderProgramSections(isOwner);
+    if (currentView === 'table' && window.innerWidth > 768) renderScheduleTable();
     renderAutoAssignModal(autoAssignProposal, { applied: true });
     refreshPhotographerCoverage();
-    showImportantToast(skipped.length
-      ? `Assigned photographers (skipped ${skipped.length} being edited)`
+    const missedCount = missed.length + skipped.length;
+    showImportantToast(missedCount
+      ? `Assigned ${saved.length} session${saved.length === 1 ? '' : 's'} (${missedCount} not saved)`
       : 'Photographers assigned');
   } catch (err) {
     if (applyBtn) {
@@ -7580,18 +7609,24 @@ async function undoAutoAssign() {
     const res = await fetch(`${API_BASE}/api/tables/${tableId}/auto-assign-photographers/apply`, {
       method: 'POST',
       headers: autoAssignAuthHeaders(),
-      body: JSON.stringify({
+      body: JSON.stringify(autoAssignSchedulePayload({
         assignments,
         sessionId: window.SimpleCollab?.getCurrentUser?.()?.sessionId
-      })
+      }))
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Undo failed');
-    for (const row of autoAssignUndoSnapshot) {
-      writeLocalPhotographer(row.programId, row.previousPhotographer || '');
+    const restored = Array.isArray(data.updated) && data.updated.length
+      ? data.updated
+      : autoAssignUndoSnapshot;
+    for (const row of restored) {
+      const previous = autoAssignUndoSnapshot.find(item => String(item.programId) === String(row.programId));
+      writeLocalPhotographer(row.programId, row.photographer != null ? row.photographer : (previous?.previousPhotographer || ''));
     }
     autoAssignUndoSnapshot = null;
+    rememberOpenSchedulePrograms();
     renderProgramSections(isOwner);
+    if (currentView === 'table' && window.innerWidth > 768) renderScheduleTable();
     renderAutoAssignModal(autoAssignProposal, { applied: false });
     refreshPhotographerCoverage();
     showImportantToast('Auto assign undone');
@@ -7642,7 +7677,10 @@ async function refreshPhotographerCoverage() {
   const tableId = currentEventId || localStorage.getItem('eventId');
   if (!tableId) return null;
   try {
-    const res = await fetch(`${API_BASE}/api/tables/${tableId}/photographer-coverage`, {
+    const coverageParams = new URLSearchParams();
+    if (activeScheduleId) coverageParams.set('scheduleId', activeScheduleId);
+    const coverageQuery = coverageParams.toString();
+    const res = await fetch(`${API_BASE}/api/tables/${tableId}/photographer-coverage${coverageQuery ? `?${coverageQuery}` : ''}`, {
       headers: { Authorization: localStorage.getItem('token') }
     });
     const data = await res.json();

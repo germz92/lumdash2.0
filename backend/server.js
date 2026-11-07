@@ -6498,59 +6498,16 @@ app.delete('/api/tables/:id/schedules/:scheduleId', authenticate, async (req, re
   }
 });
 
-async function applyPhotographerField(tableId, programId, value, user, sessionId) {
+async function loadAssignableSchedule(tableId, scheduleId) {
   const table = await Table.findById(tableId);
   if (!table) return null;
   await ensureSchedules(table);
-  const schedule = findSchedule(table, null);
-  if (!schedule) return null;
-  const programObjectId = mongoose.Types.ObjectId.isValid(programId)
-    ? new mongoose.Types.ObjectId(programId)
-    : programId;
-  const now = new Date();
-  const set = {
-    [`schedules.$[sched].programs.$[prog].photographer`]: value,
-    'schedules.$[sched].programs.$[prog].lastModified': now,
-    'schedules.$[sched].programs.$[prog].lastModifiedBy': user.id,
-    'schedules.$[sched].updatedAt': now
-  };
-  const inc = { 'schedules.$[sched].programs.$[prog].rev': 1 };
-  if (schedule.isMain) {
-    set['programSchedule.$[prog].photographer'] = value;
-    set['programSchedule.$[prog].lastModified'] = now;
-    set['programSchedule.$[prog].lastModifiedBy'] = user.id;
-    inc['programSchedule.$[prog].rev'] = 1;
-  }
-  const result = await Table.findOneAndUpdate(
-    { _id: tableId },
-    { $set: set, $inc: inc },
-    {
-      arrayFilters: [
-        { 'sched._id': schedule._id },
-        { 'prog._id': programObjectId }
-      ],
-      new: true
-    }
+  const schedule = findSchedule(table, scheduleId || null);
+  if (!schedule) return { table, schedule: null, programs: [] };
+  const programs = schedule.programs.map(program =>
+    typeof program.toObject === 'function' ? program.toObject() : { ...program }
   );
-  if (!result) return null;
-  const updatedSchedule = result.schedules.id(schedule._id);
-  const updatedProgram = updatedSchedule && updatedSchedule.programs.id(programId);
-  if (updatedProgram) {
-    io.to(`event-${tableId}`).emit('programFieldUpdated', {
-      eventId: tableId,
-      scheduleId: String(schedule._id),
-      programId,
-      field: 'photographer',
-      value,
-      oldValue: null,
-      rev: updatedProgram.rev,
-      userId: user.id,
-      sessionId: sessionId || null,
-      userName: user.fullName || user.name || 'Unknown User',
-      timestamp: Date.now()
-    });
-  }
-  return updatedProgram;
+  return { table, schedule, programs };
 }
 
 app.post('/api/tables/:id/auto-assign-photographers', authenticate, async (req, res) => {
@@ -6558,13 +6515,13 @@ app.post('/api/tables/:id/auto-assign-photographers', authenticate, async (req, 
     return res.status(400).json({ error: 'Invalid table ID' });
   }
   try {
-    const table = await Table.findById(req.params.id)
-      .select('title owners leads programSchedule rows')
-      .lean();
-    if (!table) return res.status(404).json({ error: 'Table not found' });
+    const loaded = await loadAssignableSchedule(req.params.id, req.body?.scheduleId);
+    if (!loaded) return res.status(404).json({ error: 'Table not found' });
+    const { table } = loaded;
     if (!canAssignPhotographers(table, req.user)) {
       return res.status(403).json({ error: 'Only owners, leads, and admins can auto-assign photographers' });
     }
+    if (!loaded.schedule) return res.status(404).json({ error: 'Schedule not found' });
 
     const requested = Array.isArray(req.body?.dates)
       ? req.body.dates.filter(date => date && date !== 'all')
@@ -6573,7 +6530,7 @@ app.post('/api/tables/:id/auto-assign-photographers', authenticate, async (req, 
       return res.status(400).json({ error: 'Auto-assign one day at a time' });
     }
     const proposal = await buildAssignmentProposal({
-      programSchedule: table.programSchedule || [],
+      programSchedule: loaded.programs,
       rows: table.rows || [],
       dates: requested,
       openai
@@ -6590,17 +6547,17 @@ app.post('/api/tables/:id/auto-assign-photographers/edit', authenticate, async (
     return res.status(400).json({ error: 'Invalid table ID' });
   }
   try {
-    const table = await Table.findById(req.params.id)
-      .select('title owners leads programSchedule rows')
-      .lean();
-    if (!table) return res.status(404).json({ error: 'Table not found' });
+    const loaded = await loadAssignableSchedule(req.params.id, req.body?.scheduleId);
+    if (!loaded) return res.status(404).json({ error: 'Table not found' });
+    const { table } = loaded;
     if (!canAssignPhotographers(table, req.user)) {
       return res.status(403).json({ error: 'Only owners, leads, and admins can auto-assign photographers' });
     }
+    if (!loaded.schedule) return res.status(404).json({ error: 'Schedule not found' });
     const proposal = await editAssignmentProposal({
       proposal: req.body?.proposal,
       instruction: req.body?.instruction,
-      programSchedule: table.programSchedule || [],
+      programSchedule: loaded.programs,
       rows: table.rows || [],
       openai
     });
@@ -6616,16 +6573,16 @@ app.get('/api/tables/:id/photographer-coverage', authenticate, async (req, res) 
     return res.status(400).json({ error: 'Invalid table ID' });
   }
   try {
-    const table = await Table.findById(req.params.id)
-      .select('title owners leads programSchedule rows')
-      .lean();
-    if (!table) return res.status(404).json({ error: 'Table not found' });
+    const loaded = await loadAssignableSchedule(req.params.id, req.query.scheduleId);
+    if (!loaded) return res.status(404).json({ error: 'Table not found' });
+    const { table } = loaded;
     if (!canAssignPhotographers(table, req.user)) {
       return res.status(403).json({ error: 'Only owners, leads, and admins can view photographer coverage' });
     }
+    if (!loaded.schedule) return res.status(404).json({ error: 'Schedule not found' });
     const dates = req.query.date && req.query.date !== 'all' ? [req.query.date] : null;
     const report = buildCoverageReport({
-      programSchedule: table.programSchedule || [],
+      programSchedule: loaded.programs,
       rows: table.rows || [],
       dates
     });
@@ -6645,29 +6602,65 @@ app.post('/api/tables/:id/auto-assign-photographers/apply', authenticate, async 
     return res.status(400).json({ error: 'assignments are required' });
   }
   try {
-    const table = await Table.findById(req.params.id).select('owners leads programSchedule');
-    if (!table) return res.status(404).json({ error: 'Table not found' });
+    const loaded = await loadAssignableSchedule(req.params.id, req.body?.scheduleId);
+    if (!loaded) return res.status(404).json({ error: 'Table not found' });
+    const { table, schedule } = loaded;
     if (!canAssignPhotographers(table, req.user)) {
       return res.status(403).json({ error: 'Only owners, leads, and admins can auto-assign photographers' });
     }
+    if (!schedule) return res.status(404).json({ error: 'Schedule not found' });
 
     const sessionId = req.body.sessionId || null;
     const updated = [];
     const skipped = [];
+    const now = new Date();
     for (const row of assignments) {
       const programId = row.programId;
       if (!programId) continue;
-      const program = table.programSchedule.find(item => item._id.toString() === programId);
+      const program = schedule.programs.id(programId);
       if (!program) {
-        skipped.push({ programId, reason: 'Session not found' });
+        skipped.push({ programId, reason: 'Session not found on this schedule' });
         continue;
       }
       const value = row.photographer == null ? '' : String(row.photographer);
-      const saved = await applyPhotographerField(req.params.id, programId, value, req.user, sessionId);
-      if (saved) updated.push({ programId, photographer: value });
-      else skipped.push({ programId, reason: 'Save failed' });
+      program.photographer = value;
+      program.lastModified = now;
+      program.lastModifiedBy = req.user.id;
+      program.rev = (program.rev || 0) + 1;
+      if (schedule.isMain) {
+        const mirror = table.programSchedule.id(programId);
+        if (mirror) {
+          mirror.photographer = value;
+          mirror.lastModified = now;
+          mirror.lastModifiedBy = req.user.id;
+          mirror.rev = program.rev;
+        }
+      }
+      updated.push({ programId: String(program._id), photographer: value, rev: program.rev });
     }
-    res.json({ updated: updated.length, skipped });
+    if (updated.length) {
+      schedule.updatedAt = now;
+      table.markModified('schedules');
+      if (schedule.isMain) table.markModified('programSchedule');
+      await table.save();
+      const scheduleId = String(schedule._id);
+      for (const row of updated) {
+        io.to(`event-${req.params.id}`).emit('programFieldUpdated', {
+          eventId: String(req.params.id),
+          scheduleId,
+          programId: row.programId,
+          field: 'photographer',
+          value: row.photographer,
+          oldValue: null,
+          rev: row.rev,
+          userId: req.user.id,
+          sessionId: sessionId || null,
+          userName: req.user.fullName || req.user.name || 'Unknown User',
+          timestamp: Date.now()
+        });
+      }
+    }
+    res.json({ updated, skipped });
   } catch (err) {
     console.error('[AutoAssign] Apply failed:', err);
     res.status(500).json({ error: 'Failed to apply photographer assignments' });

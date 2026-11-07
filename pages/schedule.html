@@ -113,7 +113,13 @@
           </button>
           <div class="header-title">
             <h1 id="eventTitle">Schedule</h1>
-            <span class="header-subtitle">Program Schedule</span>
+            <div class="schedule-switcher" id="scheduleSwitcher">
+              <button type="button" id="scheduleSwitcherBtn" class="schedule-switcher-btn" aria-haspopup="menu" aria-expanded="false">
+                <span id="scheduleSwitcherLabel">Main</span>
+                <span class="material-symbols-outlined schedule-switcher-caret">expand_more</span>
+              </button>
+              <div id="scheduleSwitcherMenu" class="schedule-switcher-menu" hidden></div>
+            </div>
           </div>
         </div>
         <div class="header-right">
@@ -174,6 +180,7 @@
       
       <!-- Schedule Content -->
       <div class="schedule-content">
+        <div id="scheduleListView" class="schedule-list-view"></div>
         <div class="schedule-table-wrapper">
           <!-- Card View Container -->
   <div id="programSections" class="program-container"></div>

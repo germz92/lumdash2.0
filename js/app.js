@@ -594,6 +594,67 @@ function ensureMobileSidebarToggle() {
 }
 
 /**
+ * Mobile long-press on the Schedule nav item opens the schedule list.
+ * A short tap still opens the remembered schedule.
+ */
+function bindScheduleNavLongPress() {
+  if (window.__scheduleNavLongPressBound) return;
+  window.__scheduleNavLongPressBound = true;
+
+  const openSchedulePicker = (eventId) => {
+    if (eventId) sessionStorage.setItem(`schedule_show_list_${eventId}`, '1');
+    if (window.currentPage === 'schedule' && typeof window.showScheduleList === 'function') {
+      if (window.showScheduleList()) return;
+    }
+    if (window.currentPage !== 'schedule' && eventId && window.navigate) {
+      window.navigate('schedule', eventId);
+    }
+  };
+
+  document.addEventListener('touchstart', (e) => {
+    if (!window.matchMedia('(max-width: 768px)').matches) return;
+    const link = e.target.closest('.nav-item[data-page="schedule"]');
+    if (!link) return;
+    if (window.__schedulePressTimer) clearTimeout(window.__schedulePressTimer);
+    const touch = e.touches[0];
+    const startX = touch.clientX;
+    const startY = touch.clientY;
+    window.__schedulePressTimer = setTimeout(() => {
+      window.__schedulePressTimer = null;
+      window.__suppressScheduleNavClick = true;
+      if (navigator.vibrate) navigator.vibrate(12);
+      const eventId = localStorage.getItem('eventId');
+      openSchedulePicker(eventId);
+    }, 450);
+    const cancelIfMoved = (moveEvent) => {
+      const moved = moveEvent.touches && moveEvent.touches[0];
+      if (!moved) return;
+      if (Math.abs(moved.clientX - startX) > 12 || Math.abs(moved.clientY - startY) > 12) {
+        clearTimeout(window.__schedulePressTimer);
+        window.__schedulePressTimer = null;
+        document.removeEventListener('touchmove', cancelIfMoved);
+      }
+    };
+    document.addEventListener('touchmove', cancelIfMoved, { passive: true });
+    const endPress = () => {
+      clearTimeout(window.__schedulePressTimer);
+      window.__schedulePressTimer = null;
+      document.removeEventListener('touchmove', cancelIfMoved);
+      document.removeEventListener('touchend', endPress);
+      document.removeEventListener('touchcancel', endPress);
+    };
+    document.addEventListener('touchend', endPress);
+    document.addEventListener('touchcancel', endPress);
+  }, { passive: true });
+
+  document.addEventListener('contextmenu', (e) => {
+    if (!window.matchMedia('(max-width: 768px)').matches) return;
+    if (!e.target.closest('.nav-item[data-page="schedule"]')) return;
+    e.preventDefault();
+  });
+}
+
+/**
  * Setup mobile sidebar toggle + sidebar nav links for event pages.
  * This normalizes behavior across pages that currently use different class names.
  */
@@ -623,6 +684,7 @@ function setupEventPageSidebarNavigation() {
     if (window.innerWidth > 1024) closeMobileSidebar();
   };
   window.addEventListener('resize', window.__eventSidebarResizeHandler);
+  bindScheduleNavLongPress();
 
   // Normalize event-page sidebar navigation links
   const sidebarLinks = sidebar.querySelectorAll('.nav-item[data-page]');
@@ -638,6 +700,19 @@ function setupEventPageSidebarNavigation() {
         return;
       }
       const currentEventId = localStorage.getItem('eventId');
+      if (targetPage === 'schedule' && window.__suppressScheduleNavClick) {
+        window.__suppressScheduleNavClick = false;
+        closeMobileSidebar();
+        return;
+      }
+      if (targetPage === 'schedule' && window.matchMedia('(max-width: 768px)').matches) {
+        if (currentEventId) sessionStorage.removeItem(`schedule_show_list_${currentEventId}`);
+        if (window.currentPage === 'schedule') {
+          closeMobileSidebar();
+          if (typeof window.hideScheduleList === 'function') window.hideScheduleList();
+          return;
+        }
+      }
       if (window.navigate) {
         window.navigate(targetPage, currentEventId);
       }

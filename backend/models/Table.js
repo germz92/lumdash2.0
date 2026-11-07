@@ -34,6 +34,7 @@ const programSchema = new mongoose.Schema({
   notes: String,
   done: { type: Boolean, default: false },
   important: { type: Boolean, default: false },
+  rowColor: { type: String, default: '' },
   // Concurrency metadata for realtime field-level collaboration
   lastModified: Date,
   lastModifiedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -223,6 +224,21 @@ const tableSchema = new mongoose.Schema({
   },
   programSchedule: {
     type: [programSchema],
+    default: []
+  },
+  // Named schedules. programSchedule stays a live copy of the one marked isMain
+  // so share links and Luma keep reading a single schedule.
+  schedules: {
+    type: [
+      new mongoose.Schema({
+        name: { type: String, required: true, trim: true },
+        isMain: { type: Boolean, default: false },
+        programs: { type: [programSchema], default: [] },
+        createdAt: { type: Date, default: Date.now },
+        updatedAt: { type: Date, default: Date.now },
+        createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
+      }, { _id: true })
+    ],
     default: []
   },
   // Shotlist - checklist of shots to capture

@@ -28,6 +28,23 @@
     });
   }
 
+  function normalizeScheduleText(value) {
+    return String(value ?? '')
+      .replace(/\u00e2\u20ac\u2122/g, "'")
+      .replace(/\u00e2\u0080\u0099/g, "'")
+      .replace(/\u00e2\u20ac\u02dc/g, "'")
+      .replace(/[\u2018\u2019\u201A\u201B\u2032\u0091\u0092]/g, "'");
+  }
+
+  function escapeScheduleText(value) {
+    return normalizeScheduleText(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   function formatTo12Hour(time) {
     if (!time) return '';
     const [hour, minute] = time.split(':').map(Number);
@@ -248,7 +265,7 @@
                 <input type="text"
                   class="folder-input"
                   style="width: 70px; min-width: 50px; padding: 4px 8px; font-size: 12px;"
-                  value="${program.folder || ''}"
+                  value="${escapeScheduleText(program.folder || '')}"
                   readonly>
               </div>
             </div>
@@ -259,24 +276,24 @@
           <div style="display: flex; align-items: center; gap: 12px;">
             <input class="program-name" type="text"
               style="flex: 1;"
-              value="${program.name || ''}"
+              value="${escapeScheduleText(program.name || '')}"
               readonly>
           </div>
           <div style="display: flex; align-items: center; gap: 6px; margin-top: 4px;">
             <div style="display: flex; align-items: center; flex: 1;">
               <span class="material-symbols-outlined" style="margin-right: 4px; font-size: 18px;">location_on</span>
-              <textarea style="flex: 1; resize: none;" placeholder="Location" readonly>${program.location || ''}</textarea>
+              <textarea style="flex: 1; resize: none;" placeholder="Location" readonly>${escapeScheduleText(program.location || '')}</textarea>
             </div>
             <div style="display: flex; align-items: center; flex: 1;">
               <span class="material-symbols-outlined" style="margin-right: 4px; font-size: 18px;">photo_camera</span>
-              <textarea style="flex: 1; resize: none;" placeholder="Photographer" readonly>${program.photographer || ''}</textarea>
+              <textarea style="flex: 1; resize: none;" placeholder="Photographer" readonly>${escapeScheduleText(program.photographer || '')}</textarea>
             </div>
           </div>
           <div class="entry-actions">
             <button class="show-notes-btn" onclick="toggleSharedNotes(this)">Show Notes</button>
           </div>
           <div class="notes-field" style="display: ${allNotesVisible ? 'block' : 'none'};">
-            <textarea class="auto-expand" placeholder="Notes" readonly>${program.notes || ''}</textarea>
+            <textarea class="auto-expand" placeholder="Notes" readonly>${escapeScheduleText(program.notes || '')}</textarea>
           </div>
         `;
 
@@ -344,11 +361,11 @@
         row.innerHTML = `
           <td><span class="cell-display">${formatTo12Hour(program.startTime || '')}</span></td>
           <td><span class="cell-display">${formatTo12Hour(program.endTime || '')}</span></td>
-          <td><span class="cell-display">${program.name || ''}</span></td>
-          <td><span class="cell-display">${program.location || ''}</span></td>
-          <td><span class="cell-display">${program.photographer || ''}</span></td>
-          <td><span class="cell-display">${program.notes || ''}</span></td>
-          <td><span class="cell-display">${program.folder || ''}</span></td>
+          <td><span class="cell-display">${escapeScheduleText(program.name || '')}</span></td>
+          <td><span class="cell-display">${escapeScheduleText(program.location || '')}</span></td>
+          <td><span class="cell-display">${escapeScheduleText(program.photographer || '')}</span></td>
+          <td data-field="notes"><span class="cell-display">${escapeScheduleText(program.notes || '')}</span></td>
+          <td><span class="cell-display">${escapeScheduleText(program.folder || '')}</span></td>
           <td class="done-checkbox-cell">
             ${program.done
               ? '<span class="material-symbols-outlined" style="color: #28a745; font-size: 20px;">check_circle</span>'

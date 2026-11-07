@@ -21,6 +21,11 @@ const USER_COLORS = [
 
 let colorIndex = 0;
 
+function schedulePayloadApplies(data) {
+  if (typeof window.scheduleEventApplies === 'function') return window.scheduleEventApplies(data);
+  return true;
+}
+
 // =============================================================================
 // CORE FUNCTIONS
 // =============================================================================
@@ -190,7 +195,7 @@ function setupSocketListeners() {
     }
     
     console.log('🔍 [DEBUG] Received fieldUpdated event:', data);
-    if (data.eventId === collabState.eventId && data.sessionId !== collabState.currentUser.sessionId) {
+    if (data.eventId === collabState.eventId && data.sessionId !== collabState.currentUser.sessionId && schedulePayloadApplies(data)) {
       console.log('✅ [DEBUG] Processing remote field update');
       handleRemoteFieldChange(data);
     } else {
@@ -243,7 +248,7 @@ function setupSocketListeners() {
     
     console.log('🔍 [DEBUG] Received programAdded event:', data);
     console.log(`🔍 [DEBUG] Session comparison - My: ${collabState.currentUser.sessionId}, Received: ${data.sessionId}`);
-    if (data.eventId === collabState.eventId && data.sessionId !== collabState.currentUser.sessionId) {
+    if (data.eventId === collabState.eventId && data.sessionId !== collabState.currentUser.sessionId && schedulePayloadApplies(data)) {
       console.log('✅ [DEBUG] Processing program addition from another user');
       handleRemoteProgramAdded(data);
     } else {
@@ -260,7 +265,7 @@ function setupSocketListeners() {
     
     console.log('🔍 [DEBUG] Received programDeleted event:', data);
     console.log(`🔍 [DEBUG] Session comparison - My: ${collabState.currentUser.sessionId}, Received: ${data.sessionId}`);
-    if (data.eventId === collabState.eventId && data.sessionId !== collabState.currentUser.sessionId) {
+    if (data.eventId === collabState.eventId && data.sessionId !== collabState.currentUser.sessionId && schedulePayloadApplies(data)) {
       console.log('✅ [DEBUG] Processing program deletion from another user');
       handleRemoteProgramDeleted(data);
     } else {
@@ -276,7 +281,7 @@ function setupSocketListeners() {
     }
     
     console.log('🔍 [DEBUG] Received scheduleReloaded event:', data);
-    if (data.eventId === collabState.eventId && data.sessionId !== collabState.currentUser.sessionId) {
+    if (data.eventId === collabState.eventId && data.sessionId !== collabState.currentUser.sessionId && schedulePayloadApplies(data)) {
       console.log('✅ [DEBUG] Reloading schedule due to structural changes');
       handleRemoteScheduleReload();
     }
@@ -424,6 +429,7 @@ function sendFieldUpdate(programId, field, value) {
   
   window.socket.emit('updateField', {
     eventId: collabState.eventId,
+    scheduleId: window.activeScheduleId || null,
     programId: programId,
     field: field,
     value: value,
@@ -694,6 +700,7 @@ function broadcastProgramAdded(date, programData) {
   
   window.socket.emit('programAdded', {
     eventId: collabState.eventId,
+    scheduleId: window.activeScheduleId || null,
     userId: collabState.currentUser.id,
     sessionId: collabState.currentUser.sessionId,
     userName: collabState.currentUser.name,
@@ -709,6 +716,7 @@ function broadcastProgramDeleted(programData) {
   
   window.socket.emit('programDeleted', {
     eventId: collabState.eventId,
+    scheduleId: window.activeScheduleId || null,
     userId: collabState.currentUser.id,
     sessionId: collabState.currentUser.sessionId,
     userName: collabState.currentUser.name,
@@ -723,6 +731,7 @@ function broadcastScheduleReload() {
   
   window.socket.emit('scheduleReloaded', {
     eventId: collabState.eventId,
+    scheduleId: window.activeScheduleId || null,
     userId: collabState.currentUser.id,
     sessionId: collabState.currentUser.sessionId,
     userName: collabState.currentUser.name

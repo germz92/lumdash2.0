@@ -63,6 +63,356 @@ let cachedScheduleUsers = []; // Cached user list for photographer auto-suggest
 
 // Store the intended event ID at module level to prevent external interference
 let currentEventId = null;
+let eventSchedules = [];
+let activeScheduleId = null;
+let scheduleListVisible = false;
+let canManageSchedules = false;
+window.tableData = tableData;
+
+function scheduleStorageKey(eventId, kind) {
+  return `schedule_${kind}_${eventId}`;
+}
+
+function normalizeScheduleText(value) {
+  return String(value ?? '')
+    .replace(/\u00e2\u20ac\u2122/g, "'")
+    .replace(/\u00e2\u0080\u0099/g, "'")
+    .replace(/\u00e2\u20ac\u02dc/g, "'")
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u0091\u0092]/g, "'");
+}
+
+function escapeScheduleText(value) {
+  return normalizeScheduleText(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function decodeScheduleCsv(bytes) {
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  let start = 0;
+  if (data.length >= 3 && data[0] === 0xEF && data[1] === 0xBB && data[2] === 0xBF) {
+    start = 3;
+  }
+  const slice = data.subarray(start);
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(slice);
+  } catch (err) {
+    return new TextDecoder('windows-1252').decode(slice);
+  }
+}
+
+function readSchedulesFromEvent(data) {
+  if (Array.isArray(data.schedules) && data.schedules.length) {
+    return data.schedules.map((s) => ({
+      _id: s._id ? String(s._id) : null,
+      name: s.name || 'Schedule',
+      isMain: !!s.isMain,
+      programCount: Array.isArray(s.programs) ? s.programs.length : (s.programCount || 0),
+      programs: Array.isArray(s.programs) ? s.programs : []
+    }));
+  }
+  const programs = Array.isArray(data.programSchedule) ? data.programSchedule : [];
+  return [{
+    _id: null,
+    name: 'Main',
+    isMain: true,
+    programCount: programs.length,
+    programs
+  }];
+}
+
+function rememberOpenSchedulePrograms() {
+  const active = getActiveSchedule();
+  if (active) active.programs = tableData.programs;
+}
+
+function getActiveSchedule() {
+  return eventSchedules.find((s) => s._id && String(s._id) === String(activeScheduleId))
+    || eventSchedules.find((s) => s.isMain)
+    || eventSchedules[0]
+    || null;
+}
+
+function readRememberedScheduleId(eventId) {
+  return localStorage.getItem(scheduleStorageKey(eventId, 'active'))
+    || sessionStorage.getItem(scheduleStorageKey(eventId, 'active'));
+}
+
+function writeRememberedScheduleId(eventId, scheduleId) {
+  if (!eventId || !scheduleId) return;
+  const id = String(scheduleId);
+  localStorage.setItem(scheduleStorageKey(eventId, 'active'), id);
+  sessionStorage.setItem(scheduleStorageKey(eventId, 'active'), id);
+}
+
+function bindSchedulesFromEvent(data, eventId) {
+  eventSchedules = readSchedulesFromEvent(data);
+  const stored = readRememberedScheduleId(eventId);
+  let selected = eventSchedules.find((s) => s._id && String(s._id) === String(stored));
+  if (!selected) selected = eventSchedules.find((s) => s.isMain) || eventSchedules[0] || null;
+  activeScheduleId = selected && selected._id ? String(selected._id) : null;
+  window.activeScheduleId = activeScheduleId;
+  if (activeScheduleId) writeRememberedScheduleId(eventId, activeScheduleId);
+  return { selected };
+}
+
+function isScheduleMobileViewport() {
+  return window.matchMedia('(max-width: 768px)').matches;
+}
+
+function shouldOpenScheduleList(eventId) {
+  if (!isScheduleMobileViewport()) return false;
+  if (eventSchedules.length < 1) return false;
+  return sessionStorage.getItem(scheduleStorageKey(eventId, 'show_list')) === '1';
+}
+
+function scheduleEventApplies(data) {
+  if (!data) return false;
+  const currentEvent = currentEventId || localStorage.getItem('eventId');
+  const eventId = data.eventId || data.tableId;
+  if (eventId && currentEvent && String(eventId) !== String(currentEvent)) return false;
+  if (!data.scheduleId) {
+    const active = getActiveSchedule();
+    return !active || active.isMain;
+  }
+  return String(data.scheduleId) === String(activeScheduleId);
+}
+window.scheduleEventApplies = scheduleEventApplies;
+
+function syncScheduleChrome() {
+  document.querySelectorAll('.schedule-page').forEach((el) => {
+    el.classList.toggle('schedule-list-open', scheduleListVisible);
+  });
+}
+
+function syncScheduleHeaderHeight() {
+  const header = document.querySelector('.schedule-page .schedule-header');
+  const layoutHeight = header ? header.offsetHeight : 0;
+  if (layoutHeight <= 0) return;
+  document.querySelectorAll('.schedule-page').forEach((page) => {
+    page.style.setProperty('--header-height', `${layoutHeight}px`);
+  });
+}
+
+function closeScheduleMenu() {
+  const menu = document.getElementById('scheduleSwitcherMenu');
+  const btn = document.getElementById('scheduleSwitcherBtn');
+  if (menu) menu.hidden = true;
+  if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+
+function toggleScheduleMenu() {
+  const menu = document.getElementById('scheduleSwitcherMenu');
+  const btn = document.getElementById('scheduleSwitcherBtn');
+  if (!menu) return;
+  const open = menu.hidden;
+  menu.hidden = !open;
+  if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function renderScheduleSwitcher() {
+  const label = document.getElementById('scheduleSwitcherLabel');
+  const menu = document.getElementById('scheduleSwitcherMenu');
+  const active = getActiveSchedule();
+  if (label) label.textContent = active ? active.name : 'Main';
+  syncScheduleChrome();
+  syncScheduleHeaderHeight();
+  if (!menu) return;
+  const items = eventSchedules.map((s) => {
+    const current = active && String(s._id) === String(active._id);
+    return `<button type="button" class="schedule-menu-item${current ? ' is-current' : ''}" data-schedule-action="open" data-schedule-id="${escapeScheduleText(s._id)}">
+      <span class="schedule-menu-check">${current ? '✓' : ''}</span>
+      <span class="schedule-menu-name">${escapeScheduleText(s.name)}</span>
+      ${s.isMain ? '<span class="schedule-main-badge">Main</span>' : ''}
+    </button>`;
+  }).join('');
+  const editor = canManageSchedules ? `
+    <div class="schedule-menu-sep"></div>
+    <button type="button" class="schedule-menu-item" data-schedule-action="create">New schedule</button>
+    <button type="button" class="schedule-menu-item" data-schedule-action="rename">Rename</button>
+    ${active && !active.isMain ? '<button type="button" class="schedule-menu-item" data-schedule-action="main">Set as main</button>' : ''}
+    ${eventSchedules.length > 1 ? '<button type="button" class="schedule-menu-item schedule-menu-danger" data-schedule-action="delete">Delete schedule</button>' : ''}
+  ` : '';
+  menu.innerHTML = items + editor;
+}
+
+function showScheduleList() {
+  const eventId = currentEventId || localStorage.getItem('eventId');
+  if (!isScheduleMobileViewport() || eventSchedules.length < 1) {
+    if (eventId && !isScheduleMobileViewport()) {
+      sessionStorage.removeItem(scheduleStorageKey(eventId, 'show_list'));
+    }
+    return false;
+  }
+  if (eventId) sessionStorage.setItem(scheduleStorageKey(eventId, 'show_list'), '1');
+  scheduleListVisible = true;
+  closeScheduleMenu();
+  const list = document.getElementById('scheduleListView');
+  if (list) {
+    const rows = eventSchedules.map((s) => `
+      <button type="button" class="schedule-list-item" data-schedule-id="${escapeScheduleText(s._id)}">
+        <span class="schedule-list-name">${escapeScheduleText(s.name)}${s.isMain ? ' <span class="schedule-main-badge">Main</span>' : ''}</span>
+        <span class="schedule-list-meta">${(s.programs || []).length} rows</span>
+      </button>
+    `).join('');
+    const create = canManageSchedules
+      ? '<button type="button" class="schedule-list-create" data-schedule-action="create">New schedule</button>'
+      : '';
+    list.innerHTML = rows + create;
+  }
+  syncScheduleChrome();
+  syncScheduleHeaderHeight();
+  return true;
+}
+
+function hideScheduleListView() {
+  scheduleListVisible = false;
+  const eventId = currentEventId || localStorage.getItem('eventId');
+  if (eventId) sessionStorage.removeItem(scheduleStorageKey(eventId, 'show_list'));
+  syncScheduleChrome();
+  syncScheduleHeaderHeight();
+}
+
+async function openSchedule(scheduleId) {
+  const eventId = currentEventId || localStorage.getItem('eventId');
+  if (!eventId || !scheduleId) return;
+  sessionStorage.removeItem(scheduleStorageKey(eventId, 'show_list'));
+  writeRememberedScheduleId(eventId, scheduleId);
+  activeScheduleId = String(scheduleId);
+  window.activeScheduleId = activeScheduleId;
+  scheduleListVisible = false;
+  closeScheduleMenu();
+  syncScheduleChrome();
+  await loadPrograms(eventId);
+}
+
+async function createNamedSchedule() {
+  const name = window.prompt('Name this schedule');
+  if (!name || !name.trim()) return;
+  const eventId = currentEventId || localStorage.getItem('eventId');
+  const res = await fetch(`${API_BASE}/api/tables/${eventId}/schedules`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: localStorage.getItem('token')
+    },
+    body: JSON.stringify({ name: name.trim() })
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    alert(err.error || 'Could not create the schedule');
+    return;
+  }
+  const data = await res.json();
+  await openSchedule(data.schedule && data.schedule._id);
+}
+
+async function renameActiveSchedule() {
+  const active = getActiveSchedule();
+  if (!active || !active._id) return;
+  const name = window.prompt('Rename schedule', active.name);
+  if (!name || !name.trim() || name.trim() === active.name) return;
+  const eventId = currentEventId || localStorage.getItem('eventId');
+  const res = await fetch(`${API_BASE}/api/tables/${eventId}/schedules/${active._id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: localStorage.getItem('token')
+    },
+    body: JSON.stringify({ name: name.trim() })
+  });
+  if (!res.ok) {
+    alert('Could not rename the schedule');
+    return;
+  }
+  active.name = name.trim();
+  renderScheduleSwitcher();
+  if (scheduleListVisible) showScheduleList();
+}
+
+async function setActiveScheduleAsMain() {
+  const active = getActiveSchedule();
+  if (!active || !active._id || active.isMain) return;
+  const eventId = currentEventId || localStorage.getItem('eventId');
+  const res = await fetch(`${API_BASE}/api/tables/${eventId}/schedules/${active._id}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: localStorage.getItem('token')
+    },
+    body: JSON.stringify({ isMain: true })
+  });
+  if (!res.ok) {
+    alert('Could not set the main schedule');
+    return;
+  }
+  eventSchedules.forEach((s) => { s.isMain = String(s._id) === String(active._id); });
+  renderScheduleSwitcher();
+}
+
+async function deleteActiveSchedule() {
+  const active = getActiveSchedule();
+  if (!active || !active._id || eventSchedules.length < 2) return;
+  const message = active.isMain
+    ? `Delete "${active.name}"? The next schedule will become Main.`
+    : `Delete "${active.name}"?`;
+  if (!window.confirm(message)) return;
+  const eventId = currentEventId || localStorage.getItem('eventId');
+  const res = await fetch(`${API_BASE}/api/tables/${eventId}/schedules/${active._id}`, {
+    method: 'DELETE',
+    headers: { Authorization: localStorage.getItem('token') }
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    alert(err.error || 'Could not delete the schedule');
+    return;
+  }
+  const data = await res.json();
+  const summaries = data.schedules || [];
+  const nextId = (summaries.find((s) => s.isMain) || summaries[0] || {})._id;
+  eventSchedules = eventSchedules
+    .filter((s) => summaries.some((n) => String(n._id) === String(s._id)))
+    .map((s) => {
+      const next = summaries.find((n) => String(n._id) === String(s._id));
+      return next ? { ...s, name: next.name, isMain: !!next.isMain, programCount: next.programCount } : s;
+    });
+  if (nextId) await openSchedule(nextId);
+}
+
+function bindScheduleSwitcherOnce() {
+  if (window.__scheduleSwitcherHandler) return;
+  window.__scheduleSwitcherHandler = (event) => {
+    const page = document.querySelector('.schedule-page');
+    if (!page) return;
+
+    if (event.target.closest('#scheduleSwitcherBtn')) {
+      event.preventDefault();
+      toggleScheduleMenu();
+      return;
+    }
+
+    const actionEl = event.target.closest('[data-schedule-action], #scheduleListView .schedule-list-item');
+    if (actionEl && page.contains(actionEl)) {
+      const action = actionEl.getAttribute('data-schedule-action') || 'open';
+      const scheduleId = actionEl.getAttribute('data-schedule-id');
+      if (action === 'open' && scheduleId) openSchedule(scheduleId);
+      else if (action === 'create') createNamedSchedule();
+      else if (action === 'rename') renameActiveSchedule();
+      else if (action === 'main') setActiveScheduleAsMain();
+      else if (action === 'delete') deleteActiveSchedule();
+      return;
+    }
+
+    if (!event.target.closest('#scheduleSwitcherMenu')) closeScheduleMenu();
+  };
+  document.addEventListener('click', window.__scheduleSwitcherHandler);
+}
+
+window.showScheduleList = showScheduleList;
+window.hideScheduleList = hideScheduleListView;
 
 // Track recently modified checkbox states to prevent race conditions
 const recentCheckboxChanges = new Map(); // programIndex -> {checked: boolean, timestamp: number}
@@ -549,11 +899,14 @@ async function loadPrograms(tableId = null, retryCount = 0) {
     logEventIdState('AFTER_EVENT_PARSE');
 
     // Use the original data structure with validation
-    if (!data.programSchedule) {
+    if (!data.programSchedule && !(Array.isArray(data.schedules) && data.schedules.length)) {
       console.warn('⚠️ [LOAD] WARNING: Server returned no programSchedule field');
     }
-    
-    const loadedPrograms = data.programSchedule || [];
+
+    const { selected: selectedSchedule } = bindSchedulesFromEvent(data, eventId);
+    const loadedPrograms = selectedSchedule && Array.isArray(selectedSchedule.programs)
+      ? selectedSchedule.programs
+      : (data.programSchedule || []);
     
     // CRITICAL: Validate loaded data before accepting it
     if (!Array.isArray(loadedPrograms)) {
@@ -561,14 +914,19 @@ async function loadPrograms(tableId = null, retryCount = 0) {
       throw new Error('Invalid schedule data from server');
     }
     
-    // Check if we're about to lose data
-    if (loadedPrograms.length === 0 && tableData.programs && tableData.programs.length > 0) {
+    // An empty load is expected when opening a new schedule. Only offer a restore
+    // when the server returned nothing for the schedule already on screen.
+    const sameSchedule = !tableData.scheduleId || String(tableData.scheduleId) === String(activeScheduleId);
+    if (sameSchedule && loadedPrograms.length === 0 && tableData.programs && tableData.programs.length > 0) {
       console.error('❌ [LOAD] CRITICAL: Server returned empty schedule but we have local data!');
       console.error('❌ [LOAD] This could indicate data loss on server. Checking backup...');
       
       // Try to restore from backup
-      const backupData = sessionStorage.getItem(`schedule_backup_${eventId}`);
-      const backupTimestamp = sessionStorage.getItem(`schedule_backup_timestamp_${eventId}`);
+      const backupId = activeScheduleId || 'main';
+      const backupData = sessionStorage.getItem(`schedule_backup_${eventId}_${backupId}`)
+        || sessionStorage.getItem(`schedule_backup_${eventId}`);
+      const backupTimestamp = sessionStorage.getItem(`schedule_backup_timestamp_${eventId}_${backupId}`)
+        || sessionStorage.getItem(`schedule_backup_timestamp_${eventId}`);
       
       if (backupData && backupTimestamp) {
         const backupAge = Date.now() - parseInt(backupTimestamp);
@@ -581,9 +939,13 @@ async function loadPrograms(tableId = null, retryCount = 0) {
             if (Array.isArray(restoredPrograms) && restoredPrograms.length > 0) {
               console.log(`✅ [LOAD] Restoring ${restoredPrograms.length} programs from backup`);
               tableData.programs = restoredPrograms;
+              tableData.scheduleId = activeScheduleId;
+              rememberOpenSchedulePrograms();
               // Save the restored data immediately
               await savePrograms();
               alert(`Successfully restored ${restoredPrograms.length} programs from backup!`);
+              const loadedId = activeScheduleId || 'main';
+              sessionStorage.setItem(`schedule_loaded_${eventId}_${loadedId}`, 'true');
               sessionStorage.setItem(`schedule_loaded_${eventId}`, 'true');
               return;
             }
@@ -605,9 +967,11 @@ async function loadPrograms(tableId = null, retryCount = 0) {
     });
     
     tableData.programs = loadedPrograms;
+    tableData.scheduleId = activeScheduleId;
+    if (selectedSchedule) selectedSchedule.programs = tableData.programs;
     
     // Re-apply protected checkbox changes after loading
-    if (protectedChanges.length > 0) {
+    if (sameSchedule && protectedChanges.length > 0) {
       console.log(`✅ [LOAD] Protecting ${protectedChanges.length} recent checkbox changes from being overwritten`);
       protectedChanges.forEach(({ index, checked }) => {
         if (tableData.programs[index]) {
@@ -621,6 +985,8 @@ async function loadPrograms(tableId = null, retryCount = 0) {
     
     // Mark that we've successfully loaded data
     if (tableData.programs.length > 0) {
+      const loadedId = activeScheduleId || 'main';
+      sessionStorage.setItem(`schedule_loaded_${eventId}_${loadedId}`, 'true');
       sessionStorage.setItem(`schedule_loaded_${eventId}`, 'true');
     }
     
@@ -635,8 +1001,9 @@ async function loadPrograms(tableId = null, retryCount = 0) {
     console.log(`[LOAD] Access check - isOwner: ${isOwnerRaw}, isLead: ${isLead}, isAdmin: ${isAdmin}, hasAccess: ${hasScheduleAccess}`);
     logEventIdState('AFTER_ACCESS_CHECK');
     
-    // Set global variables
+    // Set global variables. Schedule create/rename/delete is admin, owner, or lead.
     isOwner = hasScheduleAccess;
+    canManageSchedules = hasScheduleAccess || isAdmin;
     
     // Add body class for CSS targeting
     if (hasScheduleAccess) {
@@ -657,6 +1024,15 @@ async function loadPrograms(tableId = null, retryCount = 0) {
 
     console.log(`[LOAD] Calling renderProgramSections with hasScheduleAccess: ${hasScheduleAccess}...`);
     renderProgramSections(hasScheduleAccess);
+    renderScheduleSwitcher();
+    bindScheduleSwitcherOnce();
+    if (shouldOpenScheduleList(eventId)) {
+      showScheduleList();
+    } else {
+      scheduleListVisible = false;
+      syncScheduleChrome();
+    }
+    syncScheduleHeaderHeight();
     console.log(`[LOAD] renderProgramSections completed`);
     logEventIdState('AFTER_RENDER_PROGRAMS');
 
@@ -707,6 +1083,7 @@ async function loadPrograms(tableId = null, retryCount = 0) {
         programList.innerHTML = '<p>Error loading schedule. Please try again.</p>';
       }
       isOwner = false; // Reset on error
+      canManageSchedules = false;
       canUsePhotoTools = false;
       photoCoverageReport = null;
       document.body.classList.remove('has-owner-controls', 'has-photo-coverage');
@@ -801,7 +1178,8 @@ async function savePrograms() {
   if (tableData.programs.length === 0) {
     console.warn('⚠️ [SAVE] WARNING: Attempting to save empty schedule. This will delete all data!');
     // Check if this is a new event or if data was loaded
-    const hasLoadedData = sessionStorage.getItem(`schedule_loaded_${tableId}`);
+    const loadedId = activeScheduleId || 'main';
+    const hasLoadedData = sessionStorage.getItem(`schedule_loaded_${tableId}_${loadedId}`);
     if (hasLoadedData === 'true') {
       console.error('❌ [SAVE] BLOCKED: Refusing to save empty array when data was previously loaded. This prevents accidental data loss.');
       throw new Error('Cannot save empty schedule - data loss prevention');
@@ -814,10 +1192,13 @@ async function savePrograms() {
     throw new Error('Schedule data validation failed');
   }
   
+  rememberOpenSchedulePrograms();
+
   // Create a backup before saving
   const backup = JSON.stringify(tableData.programs);
-  sessionStorage.setItem(`schedule_backup_${tableId}`, backup);
-  sessionStorage.setItem(`schedule_backup_timestamp_${tableId}`, Date.now().toString());
+  const backupId = activeScheduleId || 'main';
+  sessionStorage.setItem(`schedule_backup_${tableId}_${backupId}`, backup);
+  sessionStorage.setItem(`schedule_backup_timestamp_${tableId}_${backupId}`, Date.now().toString());
   
   try {
     console.log('💾 [SAVE] Saving programs for tableId:', tableId, '- Count:', tableData.programs.length);
@@ -827,7 +1208,10 @@ async function savePrograms() {
         'Content-Type': 'application/json',
         Authorization: localStorage.getItem('token'),
       },
-      body: JSON.stringify({ programSchedule: tableData.programs }),
+      body: JSON.stringify({
+        programSchedule: tableData.programs,
+        ...(activeScheduleId ? { scheduleId: activeScheduleId } : {})
+      }),
     });
     
     if (!res.ok) {
@@ -1057,7 +1441,7 @@ function renderProgramSections(hasScheduleAccess) {
                 placeholder="Folder"
                 maxlength="7"
                 ${!hasScheduleAccess ? 'readonly' : ''}
-                value="${program.folder || ''}"
+                value="${escapeScheduleText(program.folder || '')}"
                 onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
                 onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'folder')` : ''}">
             </div>` : ''}
@@ -1076,7 +1460,7 @@ function renderProgramSections(hasScheduleAccess) {
             ${!hasScheduleAccess ? 'readonly' : ''}
             placeholder="Program Name"
             style="flex: 1;"
-            value="${program.name || ''}" 
+            value="${escapeScheduleText(program.name || '')}" 
             onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}" 
             onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'name')` : ''}">
         </div>
@@ -1089,7 +1473,7 @@ function renderProgramSections(hasScheduleAccess) {
               ${!hasScheduleAccess ? 'readonly' : ''}
               onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
               oninput="${hasScheduleAccess ? 'autoResizeTextarea(this)' : ''}"
-              onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'location')` : ''}">${program.location || ''}</textarea>
+              onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'location')` : ''}">${escapeScheduleText(program.location || '')}</textarea>
           </div>
           <div style="display: flex; align-items: center; flex: 1;">
             <span class="material-symbols-outlined" style="margin-right: 4px; font-size: 18px;">photo_camera</span>
@@ -1099,7 +1483,7 @@ function renderProgramSections(hasScheduleAccess) {
               ${!hasScheduleAccess ? 'readonly' : ''}
               onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
               oninput="${hasScheduleAccess ? 'autoResizeTextarea(this)' : ''}"
-              onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'photographer')` : ''}">${program.photographer || ''}</textarea>
+              onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'photographer')` : ''}">${escapeScheduleText(program.photographer || '')}</textarea>
           </div>
         </div>
         <div class="entry-actions">
@@ -1114,7 +1498,7 @@ function renderProgramSections(hasScheduleAccess) {
             oninput="autoResizeTextarea(this)"
             ${!hasScheduleAccess ? 'readonly' : ''}
             onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
-            onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'notes')` : ''}">${program.notes || ''}</textarea>
+            onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'notes')` : ''}">${escapeScheduleText(program.notes || '')}</textarea>
         </div>
       `;
       section.appendChild(entry);
@@ -1381,7 +1765,8 @@ async function atomicSaveField(field, fieldKey, programId, newValue) {
         field: fieldKey,
         value: newValue,
         userId: await getUserIdFromToken(),
-        sessionId: window.SimpleCollab?.getCurrentUser?.()?.sessionId
+        sessionId: window.SimpleCollab?.getCurrentUser?.()?.sessionId,
+        ...(activeScheduleId ? { scheduleId: activeScheduleId } : {})
       })
     });
     
@@ -2947,7 +3332,8 @@ async function saveImportantField(programId, programIndex, newValue) {
         field: 'important',
         value: newValue,
         userId: await getUserIdFromToken(),
-        sessionId: window.SimpleCollab?.getCurrentUser?.()?.sessionId
+        sessionId: window.SimpleCollab?.getCurrentUser?.()?.sessionId,
+        ...(activeScheduleId ? { scheduleId: activeScheduleId } : {})
       })
     });
 
@@ -3345,6 +3731,7 @@ function safeDeleteDate(date) {
 function executeDeleteDate(date) {
   const originalCount = tableData.programs.length;
   tableData.programs = tableData.programs.filter(p => p.date !== date);
+  rememberOpenSchedulePrograms();
   const removedCount = originalCount - tableData.programs.length;
   
   console.log(`[SAFE DELETE DATE] Removed ${removedCount} programs for ${date}`);
@@ -3385,17 +3772,9 @@ function addProgram(date) {
 }
 
 function deleteProgram(button) {
-  // Support both card view (.program-entry) and table view (tr)
-  const cardEntry = button.closest('.program-entry');
-  const tableRow = button.closest('tr');
-  
-  let index;
-  if (cardEntry) {
-    index = parseInt(cardEntry.getAttribute('data-program-index'), 10);
-  } else if (tableRow) {
-    index = parseInt(tableRow.getAttribute('data-program-index'), 10);
-  }
-  
+  const host = button.closest('.program-entry, tr[data-program-index]');
+  if (!host) return;
+  const index = parseInt(host.getAttribute('data-program-index'), 10);
   if (!isNaN(index)) {
     safeDeleteProgram(index);
   }
@@ -3718,14 +4097,19 @@ async function handleFileImport(event) {
     reader.onload = function(e) {
       try {
         const data = new Uint8Array(e.target.result);
-        const workbook = XLSX.read(data, { type: 'array' });
+        // raw: true keeps CSV dates as written. Otherwise YYYY-MM-DD is parsed as
+        // UTC midnight and lands on the previous local day.
+        const fileName = (file.name || '').toLowerCase();
+        const workbook = fileName.endsWith('.csv')
+          ? XLSX.read(decodeScheduleCsv(data), { type: 'string', raw: true })
+          : XLSX.read(data, { type: 'array', raw: true });
         
         // Get the first sheet
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
         
         // Convert to JSON
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: true });
         
         // Process the data
         processImportedData(jsonData);
@@ -3829,6 +4213,53 @@ async function exportScheduleToExcel() {
   }
 }
 
+function excelSerialToISODate(serial) {
+  const days = Math.floor(Number(serial));
+  const utc = new Date(Math.round((days - 25569) * 86400 * 1000));
+  return utc.toISOString().slice(0, 10);
+}
+
+function normalizeImportedDate(dateValue) {
+  if (dateValue instanceof Date && !isNaN(dateValue.getTime())) {
+    const year = dateValue.getFullYear();
+    const month = String(dateValue.getMonth() + 1).padStart(2, '0');
+    const day = String(dateValue.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }
+
+  if (typeof dateValue === 'number' && !isNaN(dateValue)) {
+    return excelSerialToISODate(dateValue);
+  }
+
+  if (typeof dateValue === 'string') {
+    const dateOnly = dateValue.trim().split(/[ T]/)[0];
+    const dateParts = dateOnly.split(/[-/]/);
+    if (dateParts.length === 3 && dateParts.every(part => /^\d+$/.test(part))) {
+      let year;
+      let month;
+      let day;
+      if (dateParts[0].length === 4) {
+        year = dateParts[0];
+        month = dateParts[1];
+        day = dateParts[2];
+      } else if (parseInt(dateParts[0], 10) > 12) {
+        day = dateParts[0];
+        month = dateParts[1];
+        year = dateParts[2];
+      } else {
+        month = dateParts[0];
+        day = dateParts[1];
+        year = dateParts[2];
+      }
+      if (year.length === 2) year = String(2000 + parseInt(year, 10));
+      return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+    }
+    return dateValue.trim();
+  }
+
+  return dateValue;
+}
+
 // Process the imported data and add it to the schedule
 function processImportedData(data) {
   if (!data || data.length < 2) {
@@ -3868,31 +4299,7 @@ function processImportedData(data) {
     const row = data[i];
     if (!row[columnMap.date] || !row[columnMap.name]) continue; // Skip rows without date or name
     
-    // Format the date to YYYY-MM-DD
-    let dateValue = row[columnMap.date];
-    
-    // Handle Excel date format (numeric)
-    if (typeof dateValue === 'number') {
-      // Convert Excel date number to JS date
-      const excelDate = new Date(Math.round((dateValue - 25569) * 86400 * 1000));
-      dateValue = excelDate.toISOString().split('T')[0]; // Format as YYYY-MM-DD
-    } else if (typeof dateValue === 'string') {
-      // Try to parse the date string
-      const dateParts = dateValue.split(/[-\/]/);
-      if (dateParts.length === 3) {
-        // Check if it's MM/DD/YYYY or DD/MM/YYYY or YYYY/MM/DD
-        if (dateParts[0].length === 4) {
-          // YYYY/MM/DD
-          dateValue = `${dateParts[0]}-${dateParts[1].padStart(2, '0')}-${dateParts[2].padStart(2, '0')}`;
-        } else if (parseInt(dateParts[0]) > 12) {
-          // DD/MM/YYYY
-          dateValue = `${dateParts[2]}-${dateParts[1].padStart(2, '0')}-${dateParts[0].padStart(2, '0')}`;
-        } else {
-          // MM/DD/YYYY
-          dateValue = `${dateParts[2]}-${dateParts[0].padStart(2, '0')}-${dateParts[1].padStart(2, '0')}`;
-        }
-      }
-    }
+    const dateValue = normalizeImportedDate(row[columnMap.date]);
     
     // Format times (convert e.g. "9:00" to "09:00")
     let startTime = '';
@@ -3913,15 +4320,16 @@ function processImportedData(data) {
       isDone = doneValue === 'true' || doneValue === '1' || doneValue === 'yes' || doneValue === 'completed' || doneValue === 'done';
     }
     
+    const importedText = (value) => normalizeScheduleText(value || '');
     newPrograms.push({
       date: dateValue,
-      name: row[columnMap.name],
+      name: importedText(row[columnMap.name]),
       startTime: startTime,
       endTime: endTime,
-      location: columnMap.location !== -1 ? (row[columnMap.location] || '') : '',
-      photographer: columnMap.photographer !== -1 ? (row[columnMap.photographer] || '') : '',
-      notes: columnMap.notes !== -1 ? (row[columnMap.notes] || '') : '',
-      folder: columnMap.folder !== -1 ? (row[columnMap.folder] || '') : '',
+      location: columnMap.location !== -1 ? importedText(row[columnMap.location]) : '',
+      photographer: columnMap.photographer !== -1 ? importedText(row[columnMap.photographer]) : '',
+      notes: columnMap.notes !== -1 ? importedText(row[columnMap.notes]) : '',
+      folder: columnMap.folder !== -1 ? importedText(row[columnMap.folder]) : '',
       done: isDone,
       // Add automatic temporary ID for collaborative system compatibility
       _tempId: generateTempId(`import_${i}`)
@@ -4028,6 +4436,7 @@ function showImportModal(newPrograms) {
       // SAFE IMPORT: Add programs without overwriting existing data
       const originalLength = tableData.programs.length;
       tableData.programs = [...tableData.programs, ...newPrograms];
+      rememberOpenSchedulePrograms();
       
       // Use atomic approach: save entire schedule but with conflict detection
       await saveImportedPrograms(newPrograms, 'merge');
@@ -4039,6 +4448,7 @@ function showImportModal(newPrograms) {
       console.error('Import failed:', error);
       // Rollback on error
       tableData.programs = tableData.programs.slice(0, originalLength);
+      rememberOpenSchedulePrograms();
       alert('Import failed. Please try again.');
     }
   });
@@ -4054,6 +4464,7 @@ function showImportModal(newPrograms) {
       // SAFE REPLACE: Backup original data in case of failure
       const originalPrograms = [...tableData.programs];
       tableData.programs = newPrograms;
+      rememberOpenSchedulePrograms();
       
       // Use atomic approach: save entire schedule but with conflict detection
       await saveImportedPrograms(newPrograms, 'replace');
@@ -4065,6 +4476,7 @@ function showImportModal(newPrograms) {
       console.error('Replace failed:', error);
       // Rollback on error
       tableData.programs = originalPrograms;
+      rememberOpenSchedulePrograms();
       renderProgramSections();
       alert('Replace failed. Please try again.');
     }
@@ -4093,10 +4505,12 @@ async function saveImportedPrograms(newPrograms, mode) {
         'Content-Type': 'application/json',
         'Authorization': localStorage.getItem('token')
       },
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         programSchedule: tableData.programs,
-        importMode: mode, // Add metadata for logging
-        importCount: newPrograms.length
+        importMode: mode,
+        importCount: newPrograms.length,
+        ...(activeScheduleId ? { scheduleId: activeScheduleId } : {}),
+        ...(mode === 'replace' && tableData.programs.length === 0 ? { _intentionalDeletion: true } : {})
       })
     });
     
@@ -4208,7 +4622,7 @@ if (window.socket) {
     const currentEvent = currentEventId || localStorage.getItem('eventId');
     
     // Only update if this update is for the current event
-    if (data.eventId === currentEvent || data.tableId === currentEvent) {
+    if ((data.eventId === currentEvent || data.tableId === currentEvent) && scheduleEventApplies(data)) {
       console.log(`[SOCKET] Update is for current event (${currentEvent}), processing...`);
       
       // Check if user is actively editing to prevent disruptions
@@ -4283,7 +4697,7 @@ if (window.socket) {
     
     const currentEvent = currentEventId || localStorage.getItem('eventId');
     
-    if (data.eventId === currentEvent) {
+    if (data.eventId === currentEvent && scheduleEventApplies(data)) {
       console.log(`[SOCKET] Legacy update is for current event (${currentEvent}), refreshing...`);
       
       if (window.isActiveEditing) {
@@ -4306,7 +4720,7 @@ if (window.socket) {
     const currentEvent = currentEventId || localStorage.getItem('eventId');
     
     // Only update if this update is for the current event
-    if (data.eventId === currentEvent || data.tableId === currentEvent) {
+    if ((data.eventId === currentEvent || data.tableId === currentEvent) && scheduleEventApplies(data)) {
       console.log(`[SOCKET] Program update is for current event (${currentEvent}), processing...`);
       
       // Check if user is actively editing to prevent disruptions
@@ -4357,7 +4771,7 @@ if (window.socket) {
     const currentEvent = currentEventId || localStorage.getItem('eventId');
     
     // Only update if this update is for the current event
-    if (data.eventId === currentEvent) {
+    if (data.eventId === currentEvent && scheduleEventApplies(data)) {
       console.log(`[SOCKET] Field update is for current event (${currentEvent}), processing...`);
       
       // Don't update if this came from the current user's session
@@ -4475,6 +4889,73 @@ if (window.socket) {
     }
   });
   
+  window.socket.on('schedulesUpdated', (data) => {
+    const currentEvent = currentEventId || localStorage.getItem('eventId');
+    if (!data || String(data.eventId) !== String(currentEvent)) return;
+    const incoming = Array.isArray(data.schedules) ? data.schedules : [];
+    eventSchedules = incoming.map((s) => {
+      const existing = eventSchedules.find((e) => String(e._id) === String(s._id));
+      return {
+        _id: String(s._id),
+        name: s.name || 'Schedule',
+        isMain: !!s.isMain,
+        programCount: s.programCount || (existing && existing.programs ? existing.programs.length : 0),
+        programs: existing ? existing.programs : []
+      };
+    });
+    const stillOpen = eventSchedules.some((s) => String(s._id) === String(activeScheduleId));
+    if (!stillOpen) {
+      const main = eventSchedules.find((s) => s.isMain) || eventSchedules[0];
+      if (main) {
+        openSchedule(main._id);
+        return;
+      }
+    }
+    renderScheduleSwitcher();
+    if (scheduleListVisible) showScheduleList();
+  });
+
+  window.socket.on('programInserted', (data) => {
+    const currentEvent = currentEventId || localStorage.getItem('eventId');
+    if (String(data.eventId) !== String(currentEvent) || !scheduleEventApplies(data)) return;
+    const currentSessionId = window.SimpleCollab?.getCurrentUser?.()?.sessionId;
+    if (data.sessionId && data.sessionId === currentSessionId) return;
+    if (!data.program || !data.program._id) return;
+    if (tableData.programs.some(p => String(p._id) === String(data.program._id))) return;
+    tableData.programs.push({ ...data.program });
+    rememberOpenSchedulePrograms();
+    renderProgramSections(isOwner);
+    if (scheduleListVisible) showScheduleList();
+  });
+
+  window.socket.on('programRemoved', (data) => {
+    const currentEvent = currentEventId || localStorage.getItem('eventId');
+    if (String(data.eventId) !== String(currentEvent) || !scheduleEventApplies(data)) return;
+    const currentSessionId = window.SimpleCollab?.getCurrentUser?.()?.sessionId;
+    if (data.sessionId && data.sessionId === currentSessionId) return;
+    const idx = tableData.programs.findIndex(p => String(p._id) === String(data.programId));
+    if (idx !== -1) {
+      tableData.programs.splice(idx, 1);
+      rememberOpenSchedulePrograms();
+      renderProgramSections(isOwner);
+      if (scheduleListVisible) showScheduleList();
+    }
+  });
+
+  window.socket.on('programsRemovedByDate', (data) => {
+    const currentEvent = currentEventId || localStorage.getItem('eventId');
+    if (String(data.eventId) !== String(currentEvent) || !scheduleEventApplies(data)) return;
+    const currentSessionId = window.SimpleCollab?.getCurrentUser?.()?.sessionId;
+    if (data.sessionId && data.sessionId === currentSessionId) return;
+    const before = tableData.programs.length;
+    tableData.programs = tableData.programs.filter(p => p.date !== data.date);
+    rememberOpenSchedulePrograms();
+    if (tableData.programs.length !== before) {
+      renderProgramSections(isOwner);
+      if (scheduleListVisible) showScheduleList();
+    }
+  });
+
   // Listen for user presence updates
   window.socket.on('presenceUpdated', (data) => {
     console.log(`[SOCKET] Presence update received:`, data);
@@ -5223,19 +5704,19 @@ function renderScheduleTable() {
           <span class="cell-display">${formatTo12Hour(program.endTime || '')}</span>
         </td>
         <td class="editable-cell ${isOwner ? 'owner-editable' : ''}" data-field="name">
-          <span class="cell-display">${program.name || ''}</span>
+          <span class="cell-display">${escapeScheduleText(program.name || '')}</span>
         </td>
         <td class="editable-cell ${isOwner ? 'owner-editable' : ''}" data-field="location">
-          <span class="cell-display">${program.location || ''}</span>
+          <span class="cell-display">${escapeScheduleText(program.location || '')}</span>
         </td>
         <td class="editable-cell ${isOwner ? 'owner-editable' : ''}" data-field="photographer">
-          <span class="cell-display">${program.photographer || ''}</span>
+          <span class="cell-display">${escapeScheduleText(program.photographer || '')}</span>
         </td>
         <td class="editable-cell ${isOwner ? 'owner-editable' : ''}" data-field="notes">
-          <span class="cell-display">${program.notes || ''}</span>
+          <span class="cell-display">${escapeScheduleText(program.notes || '')}</span>
         </td>
         <td class="editable-cell ${isOwner ? 'owner-editable' : ''}" data-field="folder">
-          <span class="cell-display folder-cell">${program.folder || ''}</span>
+          <span class="cell-display folder-cell">${escapeScheduleText(program.folder || '')}</span>
         </td>
         <td class="done-checkbox-cell">
           <input type="checkbox" class="done-checkbox"
@@ -5246,8 +5727,8 @@ function renderScheduleTable() {
         </td>
         ${isOwner ? `
           <td class="action-cell">
-            <button class="row-action-btn" data-program-index="${program.__index}" title="More options">
-              <span class="material-symbols-outlined">more_horiz</span>
+            <button type="button" class="row-delete-btn" title="Delete" onclick="deleteProgram(this)">
+              <span class="material-symbols-outlined">delete</span>
             </button>
           </td>
         ` : ''}
@@ -5261,14 +5742,6 @@ function renderScheduleTable() {
           cell.addEventListener('click', () => makeTableCellEditable(cell, program));
         });
         
-        // Add row action menu handler
-        const actionBtn = row.querySelector('.row-action-btn');
-        if (actionBtn) {
-          actionBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            showScheduleRowActionMenu(program.__index, e.currentTarget);
-          });
-        }
       }
     });
     
@@ -6101,7 +6574,7 @@ function renderDarkThemeCardView(hasScheduleAccess) {
                 placeholder="Folder"
                 maxlength="7"
                 ${!hasScheduleAccess ? 'readonly' : ''}
-                value="${program.folder || ''}"
+                value="${escapeScheduleText(program.folder || '')}"
                 onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
                 onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'folder')` : ''}">
             </div>` : ''}
@@ -6119,7 +6592,7 @@ function renderDarkThemeCardView(hasScheduleAccess) {
             data-field="name"
             ${!hasScheduleAccess ? 'readonly' : ''}
             placeholder="Program Name"
-            value="${program.name || ''}" 
+            value="${escapeScheduleText(program.name || '')}" 
             onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}" 
             onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'name')` : ''}">
         </div>
@@ -6129,7 +6602,7 @@ function renderDarkThemeCardView(hasScheduleAccess) {
             <input type="text"
               data-field="location"
               placeholder="Location"
-              value="${program.location || ''}"
+              value="${escapeScheduleText(program.location || '')}"
               ${!hasScheduleAccess ? 'readonly' : ''}
               onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
               onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'location')` : ''}">
@@ -6139,7 +6612,7 @@ function renderDarkThemeCardView(hasScheduleAccess) {
             <input type="text"
               data-field="photographer"
               placeholder="Photographer"
-              value="${program.photographer || ''}"
+              value="${escapeScheduleText(program.photographer || '')}"
               ${!hasScheduleAccess ? 'readonly' : ''}
               onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
               onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'photographer')` : ''}">
@@ -6155,7 +6628,7 @@ function renderDarkThemeCardView(hasScheduleAccess) {
             placeholder="Notes"
             ${!hasScheduleAccess ? 'readonly' : ''}
             onfocus="${hasScheduleAccess ? 'enableEdit(this)' : ''}"
-            onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'notes')` : ''}">${program.notes || ''}</textarea>
+            onblur="${hasScheduleAccess ? `autoSave(this, '${program.date}', ${program.__index}, 'notes')` : ''}">${escapeScheduleText(program.notes || '')}</textarea>
         </div>
       `;
       

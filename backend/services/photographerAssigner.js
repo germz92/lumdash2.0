@@ -371,6 +371,10 @@ function buildPhotoCrew(crewRows, date) {
   });
 }
 
+function assignmentCrew(crewRows, date) {
+  return buildPhotoCrew(crewRows, date).filter(person => !person.isHeadshot);
+}
+
 function eligibleShifts(person, label, slotStart, slotEnd) {
   const duration = label?.coverage === 'dedicated'
     ? Math.max(1, slotEnd - slotStart)
@@ -613,9 +617,10 @@ function visitMinutesForSession(session, allSessions, labels, label, photographe
 
 function assignDay(date, sessions, crewRows, labels) {
   const warnings = [];
-  const photoCrew = buildPhotoCrew(crewRows, date);
+  const photoCrew = assignmentCrew(crewRows, date);
   const regularCrew = photoCrew.filter(person => person.hasRegular);
   const headshotCrew = photoCrew.filter(person => person.hasHeadshot);
+  let skippedHeadshotSessions = 0;
 
   if (!photoCrew.length) {
     warnings.push({ date, message: 'No photographers on crew this day.' });
@@ -648,6 +653,11 @@ function assignDay(date, sessions, crewRows, labels) {
       isHeadshot: !!label.isHeadshot,
       previousPhotographer
     };
+
+    if (label.isHeadshot) {
+      skippedHeadshotSessions += 1;
+      continue;
+    }
 
     if (start == null) {
       warnings.push({ date, session: session.name, message: 'Missing start time — skipped.' });
@@ -732,6 +742,13 @@ function assignDay(date, sessions, crewRows, labels) {
     });
   }
 
+  if (skippedHeadshotSessions) {
+    warnings.push({
+      date,
+      message: 'Headshot booth sessions were left unchanged. Headshot photographers are not auto-assigned.'
+    });
+  }
+
   shareCoverageAcrossGatherings(assignments, sorted, labels, photoCrew);
   fillUnderusedPhotographers({ photoCrew, assignments, sorted, labels, regularCrew, headshotCrew });
 
@@ -777,7 +794,7 @@ async function buildAssignmentProposal({ programSchedule = [], rows = [], dates 
   });
 
   const crewNames = [...new Set((rows || [])
-    .filter(row => isPhotoRole(row.role) && row.availabilityStatus !== 'declined')
+    .filter(row => isRegularPhotoRole(row.role) && row.availabilityStatus !== 'declined')
     .map(row => String(row.name || '').trim())
     .filter(Boolean))];
 
@@ -833,7 +850,7 @@ function labelsFromProposal(sessions, proposal) {
 }
 
 function rebuildDayFromDesired(date, sessions, rows, labels, desired, note) {
-  const photoCrew = buildPhotoCrew(rows, date);
+  const photoCrew = assignmentCrew(rows, date);
   const sorted = [...sessions].sort((a, b) =>
     (parseTimeToMinutes(a.startTime) ?? 9999) - (parseTimeToMinutes(b.startTime) ?? 9999)
   );
@@ -841,6 +858,7 @@ function rebuildDayFromDesired(date, sessions, rows, labels, desired, note) {
 
   for (const session of sorted) {
     const label = labels.get(String(session._id)) || classifyWithKeywords(session);
+    if (label.isHeadshot) continue;
     const start = parseTimeToMinutes(session.startTime);
     const end = parseTimeToMinutes(session.endTime);
     const slotEnd = end != null ? end : start + (label.coverage === 'dedicated' ? 60 : VISIT_MINUTES);
@@ -923,7 +941,8 @@ Rules:
 - Only use crew display names from the payload. Never invent people.
 - photographer is a comma-separated list of those display names, or "" to leave unassigned.
 - Only include sessions you change.
-- Honor call times and roles already described. Do not assign someone outside their hours or to a headshot-only window if they are not on booth then.
+- Honor call times and roles already described. Do not assign someone outside their hours.
+- Never assign headshot booth photographers. Leave headshot booth sessions unchanged.
 - If asked to give someone fewer rooms / fewer sessions, remove them from short visits and keep them on longer or dedicated sessions.
 - If asked to give someone more work, add short visits they can take.
 - Keep other people assigned unless you need their slot.
@@ -979,7 +998,7 @@ async function editAssignmentProposal({ proposal, instruction, programSchedule =
 
   const crewByDay = {};
   for (const date of dates) {
-    const people = buildPhotoCrew(rows, date);
+    const people = assignmentCrew(rows, date);
     crewByDay[date] = people.map(person => ({
       name: displayName(person, people),
       fullName: person.name,

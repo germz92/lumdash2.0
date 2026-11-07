@@ -14232,7 +14232,7 @@ app.put('/api/tables/:id/crew-bulk', authenticate, async (req, res) => {
     // deletes: [rowId, rowId, ...]
     
     // Verify ownership once
-    const table = await Table.findById(req.params.id).select('owners');
+    const table = await Table.findById(req.params.id).select('owners rows');
     if (!table || !table.owners.includes(req.user.id)) {
       return res.status(403).json({ error: 'Not authorized or not found' });
     }
@@ -14259,10 +14259,19 @@ app.put('/api/tables/:id/crew-bulk', authenticate, async (req, res) => {
             setFields[`rows.$.${field}`] = data[field];
           }
         }
-        // Changing who is assigned resets the availability workflow for that row
-        if (data.name !== undefined && data.resetAvailability) {
+        const row = (table.rows || []).find(item => String(item._id) === String(rowId));
+        const nameChanged = !!row && data.name !== undefined &&
+          String(data.name || '').trim().toLowerCase() !== String(row.name || '').trim().toLowerCase();
+        const lockedStatus = row && (row.availabilityStatus === 'accepted' || row.availabilityStatus === 'confirmed');
+        // Reassigning the person starts the workflow over. Editing call times does not,
+        // and an accepted or confirmed call keeps its status unless the person changes.
+        if (data.resetAvailability && nameChanged) {
           setFields['rows.$.availabilityStatus'] = 'tentative';
           setFields['rows.$.availabilityRespondedAt'] = null;
+        }
+        if (lockedStatus && !nameChanged) {
+          delete setFields['rows.$.availabilityStatus'];
+          delete setFields['rows.$.availabilityRespondedAt'];
         }
         if (Object.keys(setFields).length > 0) {
           await Table.updateOne(

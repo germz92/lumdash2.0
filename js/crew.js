@@ -854,12 +854,18 @@ function openEditShiftModal(rowId) {
   const row = tableData.rows.find(r => r._id === rowId);
   if (!row) return;
   
-  // Populate name dropdown
+  // Populate name dropdown. Keep the current name selected even if it is not in the user list,
+  // so saving a time edit is not treated as a reassignment.
   const nameSelect = document.getElementById('editShiftName');
   if (nameSelect) {
+    const userNames = cachedUsers.map(u => u.name).filter(Boolean);
+    const currentName = row.name || '';
+    const optionNames = currentName && !userNames.some(name => name === currentName)
+      ? [currentName, ...userNames]
+      : userNames;
     nameSelect.innerHTML = `
       <option value="">-- Select Name --</option>
-      ${cachedUsers.map(u => `<option value="${u.name}" ${u.name === row.name ? 'selected' : ''}>${u.name}</option>`).join('')}
+      ${optionNames.map(name => `<option value="${name}" ${name === currentName ? 'selected' : ''}>${name}</option>`).join('')}
     `;
   }
   
@@ -895,8 +901,11 @@ async function saveShiftFromModal() {
   }
   
   try {
+    const previousStatus = row.availabilityStatus;
+    const previousRespondedAt = row.availabilityRespondedAt;
     const newName = document.getElementById('editShiftName').value;
-    if (newName !== row.name) {
+    const nameChanged = String(newName || '').trim().toLowerCase() !== String(row.name || '').trim().toLowerCase();
+    if (nameChanged) {
       const matchedUser = findUserByName(newName);
       row.userId = matchedUser?._id || null;
       row.availabilityStatus = 'tentative';
@@ -907,6 +916,11 @@ async function saveShiftFromModal() {
     row.role = document.getElementById('editShiftRole').value;
     row.startTime = document.getElementById('editShiftStart').value;
     row.endTime = document.getElementById('editShiftEnd').value;
+    if (!nameChanged && (previousStatus === 'accepted' || previousStatus === 'confirmed')) {
+      row.availabilityStatus = previousStatus;
+      row.availabilityRespondedAt = previousRespondedAt;
+      row.__resetAvailability = false;
+    }
     row.notes = document.getElementById('editShiftNotes').value;
     row.locationBadge = document.getElementById('editShiftLocation').value;
     row.totalHours = calculateHours(row.startTime, row.endTime);
@@ -1540,8 +1554,11 @@ function makeEditable(cell, row) {
       // Update display
     if (field === 'startTime' || field === 'endTime') {
         displaySpan.textContent = formatTime(newValue);
-        // Recalculate hours
+        // Recalculate hours. A time edit does not reopen an accepted or confirmed call.
       row.totalHours = calculateHours(row.startTime, row.endTime);
+      if (row.availabilityStatus === 'accepted' || row.availabilityStatus === 'confirmed') {
+        row.__resetAvailability = false;
+      }
       const tr = cell.closest('tr');
         const hoursCell = tr.querySelector('.total-hours-cell');
         if (hoursCell) {

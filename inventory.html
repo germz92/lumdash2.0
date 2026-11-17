@@ -415,6 +415,41 @@
             font-size: 13px;
         }
 
+        /* A unit that was scanned out for an earlier event and never scanned back in.
+           Information only: it can still be reserved. */
+        .overdue-note {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            margin: 0 0 16px 0;
+            padding: 8px 10px;
+            border-radius: var(--radius-md);
+            background: rgba(234, 179, 8, 0.12);
+            color: #eab308;
+            font-size: 12px;
+            line-height: 1.4;
+            text-align: left;
+        }
+
+        .overdue-note .material-symbols-outlined {
+            font-size: 16px;
+            flex: 0 0 auto;
+            margin-top: 1px;
+        }
+
+        .serial-overdue {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            margin-top: 4px;
+            font-size: 12px;
+            color: #eab308;
+        }
+
+        .serial-overdue .material-symbols-outlined {
+            font-size: 14px;
+        }
+
         .item-actions {
             display: flex;
             justify-content: space-between;
@@ -1257,12 +1292,20 @@
                         totalAvailable: 0,
                         totalQuantity: 0,
                         hasItemsInCart: false,
-                        totalCartQuantity: 0
+                        totalCartQuantity: 0,
+                        overdueUnits: 0,
+                        overdueInfo: null
                     };
                 }
                 
                 groupedItems[key].items.push(item);
                 groupedItems[key].totalQuantity += (item.quantity || 1);
+
+                // Units still checked out on an earlier event (shown as a warning only)
+                if (item.overdue && item.overdue.quantity > 0) {
+                    groupedItems[key].overdueUnits += Math.min(item.overdue.quantity, item.quantity || 1);
+                    if (!groupedItems[key].overdueInfo) groupedItems[key].overdueInfo = item.overdue;
+                }
                 
                 // Calculate availability and cart status
                 const inCart = isItemInCart(item._id);
@@ -1356,7 +1399,7 @@
                                         <div class="info-value">${group.totalQuantity}</div>
                                     </div>
                                 </div>
-                                
+                                ${renderOverdueNote(group)}
                                 <div class="item-actions">
                                     ${statusBadge}
                                     ${actionButton}
@@ -1384,6 +1427,51 @@
                     });
                 });
             });
+        }
+
+        function escapeText(text) {
+            const div = document.createElement('div');
+            div.textContent = text == null ? '' : String(text);
+            return div.innerHTML;
+        }
+
+        // "Nov 12" - return dates are stored as UTC days
+        function formatDueDay(value) {
+            const date = value ? new Date(value) : null;
+            if (!date || isNaN(date.getTime())) return '';
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+        }
+
+        // Where an overdue unit is, e.g. from "Old Conference" (due Nov 12)
+        function overdueSource(overdue) {
+            const from = overdue.eventTitle ? `"${overdue.eventTitle}"` : 'an earlier event';
+            const due = formatDueDay(overdue.dueDate);
+            return `${from}${due ? ` (due ${due})` : ''}`;
+        }
+
+        // Warning under a card when some of its units were never checked back in.
+        // It does not block anything: the units can still be added to the cart.
+        function renderOverdueNote(group) {
+            if (!group.overdueUnits || !group.overdueInfo) return '';
+            const units = group.overdueUnits;
+            const text = `${units} ${units === 1 ? 'unit has' : 'units have'} not been checked back in from ${overdueSource(group.overdueInfo)}. You can still reserve ${units === 1 ? 'it' : 'them'}.`;
+            return `
+                <div class="overdue-note">
+                    <span class="material-symbols-outlined">schedule</span>
+                    <span>${escapeText(text)}</span>
+                </div>`;
+        }
+
+        // Same warning for one unit in the serial number chooser
+        function renderSerialOverdue(item) {
+            if (!item.overdue || !(item.overdue.quantity > 0)) return '';
+            const serialized = (item.quantity || 1) === 1;
+            const text = `${serialized ? 'Not' : `${item.overdue.quantity} not`} checked back in from ${overdueSource(item.overdue)}`;
+            return `
+                <div class="serial-overdue">
+                    <span class="material-symbols-outlined">schedule</span>
+                    <span>${escapeText(text)}</span>
+                </div>`;
         }
 
         // Add to cart (for individual items - legacy)
@@ -1502,6 +1590,7 @@
                             <div class="serial-info">
                                 <div><strong>${displayText}</strong></div>
                                 <div style="font-size: 13px; color: #666;">${similarItem.label}</div>
+                                ${renderSerialOverdue(similarItem)}
                             </div>
                             <div style="color: #28a745; font-weight: 600;">
                                 ${availableQty} available
@@ -1581,6 +1670,7 @@
                             <div class="serial-info">
                                 <div><strong>${displayText}</strong></div>
                                 <div style="font-size: 13px; color: #666;">${item.label}</div>
+                                ${renderSerialOverdue(item)}
                             </div>
                             <div style="color: #28a745; font-weight: 600;">
                                 ${availableQty} available

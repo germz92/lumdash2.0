@@ -753,7 +753,12 @@ async function calculateCartItemAvailability(cartItem, cart, allCartItems) {
 // This is a read-side display optimization only. It never creates reservations,
 // so it cannot affect integrity — the atomic reserve flow remains the sole
 // authority and re-validates availability inside a transaction.
-async function assignCartItemAvailabilityBulk(cart, cartItemsObjects) {
+//
+// It also sets `item.overdueWarning` when the line would have to use a unit that
+// has not been scanned back in from an earlier event. That is a warning only -
+// it never changes availableQuantity or blocks a reservation. `user` is only
+// used to decide whether the other event's name may be shown.
+async function assignCartItemAvailabilityBulk(cart, cartItemsObjects, user = null) {
   if (!cartItemsObjects || cartItemsObjects.length === 0) return;
 
   // Resolve the base inventory id for each cart item (handles populated or raw)
@@ -845,6 +850,69 @@ async function assignCartItemAvailabilityBulk(cart, cartItemsObjects) {
     const groupCartQty = cartQtyByKey.get(key) || 0;
     ci.availableQuantity = Math.max(0, totalAvailable - groupCartQty);
   }
+
+  // 7. Overdue warnings (non-blocking). ONE extra query; skipped entirely when
+  //    nothing in these model groups is still scanned out.
+  const outstanding = await getOutstandingByInventory({
+    inventoryIds: allSimilarItems.map(it => it._id),
+    canViewEvent: gearEventViewer(user),
+    canViewManual: canManageGearInventory(user)
+  });
+  const overdueById = new Map();
+  for (const [id, entry] of outstanding) {
+    const summary = overdueSummary(entry);
+    if (summary) overdueById.set(id, summary);
+  }
+  if (overdueById.size === 0) return;
+
+  for (const ci of cartItemsObjects) {
+    const invId = getInvId(ci);
+    const baseItem = baseById.get(invId);
+    if (!baseItem) continue;
+
+    // A specific serial was requested: warn if that exact unit is overdue
+    if (ci.specificSerialRequested && ci.serial) {
+      const summary = overdueById.get(invId);
+      if (summary) ci.overdueWarning = buildOverdueWarning(summary.quantity, summary);
+      continue;
+    }
+
+    // No serial preference: reserving hands out returned units first, so only
+    // warn when the cart needs more units than are both available and returned.
+    const key = keyForLabel(baseItem.label);
+    const groupItems = similarByKey.get(key) || [];
+    let returnedAndAvailable = 0;
+    let overdueAndAvailable = 0;
+    let firstOverdue = null;
+    for (const it of groupItems) {
+      const available = availabilityMap.get(it._id.toString()) ?? 0;
+      const summary = overdueById.get(it._id.toString());
+      const overdueUnits = summary ? Math.min(summary.quantity, available) : 0;
+      returnedAndAvailable += available - overdueUnits;
+      overdueAndAvailable += overdueUnits;
+      if (overdueUnits > 0 && !firstOverdue) firstOverdue = summary;
+    }
+
+    const groupCartQty = cartQtyByKey.get(key) || 0;
+    const overdueUnitsNeeded = Math.min(overdueAndAvailable, groupCartQty - returnedAndAvailable);
+    if (firstOverdue && overdueUnitsNeeded > 0) {
+      ci.overdueWarning = buildOverdueWarning(overdueUnitsNeeded, firstOverdue);
+    }
+  }
+}
+
+// Text + data for the "not checked back in yet" warning shown on cart and picker items
+function buildOverdueWarning(units, summary) {
+  const from = summary.eventTitle ? `"${summary.eventTitle}"` : 'an earlier event';
+  const due = summary.dueDate
+    ? new Date(summary.dueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })
+    : null;
+  return {
+    units,
+    eventTitle: summary.eventTitle,
+    dueDate: summary.dueDate,
+    message: `${units} ${units === 1 ? 'unit has' : 'units have'} not been checked back in from ${from}${due ? ` (due ${due})` : ''}. You can still reserve ${units === 1 ? 'it' : 'them'}.`
+  };
 }
 
 // Helper function to notify clients about data changes
@@ -1597,6 +1665,16 @@ mongoose.connect(MONGO_URI)
     // Fix the serial number index issue
     const { fixSerialIndex } = require('./fix-index-on-startup');
     await fixSerialIndex(mongoose);
+    // Give any inventory item without an asset tag one (needed for scan labels).
+    // Does nothing once every item is tagged; same logic as migrate-add-asset-tags.js.
+    try {
+      const tagged = await GearInventory.assignMissingAssetTags();
+      if (tagged.assigned > 0) {
+        console.log(`🏷️  Assigned asset tags to ${tagged.assigned} inventory item(s)`);
+      }
+    } catch (tagError) {
+      console.error('❌ Could not assign asset tags:', tagError.message);
+    }
     const startupAdmins = await findSystemAdminUsers();
     console.log(
       '🔔 System admins at startup:',
@@ -1667,6 +1745,15 @@ function canManageEventGearLists(table, user) {
 /** Can edit global gear inventory (catalog, notes, repairs, manual reservations). */
 function canManageGearInventory(user) {
   return !!user && (user.role === 'admin' || user.role === 'production_manager');
+}
+
+/**
+ * Returns a check for "may this user see this event's name next to a piece of gear"
+ * (used in "still out on <event>" / overdue messages). Inventory managers see all;
+ * everyone else only sees events they can already open.
+ */
+function gearEventViewer(user) {
+  return (event) => canManageGearInventory(user) || hasEventReadAccess(event, user);
 }
 
 // Read-only access check: planners can view all events, but cannot edit unless they are owners/leads/sharedWith
@@ -6771,6 +6858,13 @@ app.get('/api/gear-inventory/availability', authenticate, async (req, res) => {
       gear, startDate, endDate
     );
 
+    // Units scanned out for an earlier event and not scanned back in yet.
+    // Informational only - it does not change availability.
+    const outstanding = await getOutstandingByInventory({
+      canViewEvent: gearEventViewer(req.user),
+      canViewManual: canManageGearInventory(req.user)
+    });
+
     const gearWithAvailability = gear.map((item) => {
       const availableQty = availabilityMap.get(item._id.toString()) ?? 0;
       const reservedQty = item.quantity - availableQty;
@@ -6778,7 +6872,8 @@ app.get('/api/gear-inventory/availability', authenticate, async (req, res) => {
         ...item,
         availableQuantity: availableQty,
         reservedQuantity: reservedQty,
-        isAvailable: availableQty > 0
+        isAvailable: availableQty > 0,
+        overdue: overdueSummary(outstanding.get(item._id.toString()))
       };
     });
 
@@ -6814,9 +6909,17 @@ app.get('/api/gear-inventory/available/:eventId', authenticate, async (req, res)
       gear, cart.checkOutDate, cart.checkInDate
     );
 
+    // Units scanned out for an earlier event and not scanned back in yet.
+    // Informational only - it does not change availability.
+    const outstanding = await getOutstandingByInventory({
+      canViewEvent: gearEventViewer(req.user),
+      canViewManual: canManageGearInventory(req.user)
+    });
+
     const gearWithAvailability = gear.map((item) => ({
       ...item,
-      availableQuantity: availabilityMap.get(item._id.toString()) ?? 0
+      availableQuantity: availabilityMap.get(item._id.toString()) ?? 0,
+      overdue: overdueSummary(outstanding.get(item._id.toString()))
     }));
 
     res.json(gearWithAvailability);
@@ -7794,6 +7897,15 @@ app.get('/api/gear-packages/events-with-gear', authenticate, async (req, res) =>
 const gearPackagesRoutes = require('./routes/gearPackages');
 app.use('/api/gear-packages', authenticate, gearPackagesRoutes);
 
+// Barcode / QR scan check-out and check-in
+const createGearScanRouter = require('./routes/gearScan');
+app.use('/api/gear-scan', authenticate, createGearScanRouter({
+  hasEventAccess,
+  hasEventReadAccess,
+  canManageEventGearLists,
+  canManageGearInventory
+}));
+
 // Fallback route in case the module doesn't load properly
 app.get('/api/gear-packages-fallback', authenticate, async (req, res) => {
   try {
@@ -8070,6 +8182,8 @@ app.delete('/api/inventory/:inventoryId/reservations/all', authenticate, async (
 
 // ========= ATOMIC RESERVATION SERVICE =========
 const AtomicReservationService = require('./services/AtomicReservationService');
+// Scan check-out / check-in status (what is still out, what is overdue)
+const { getOutstandingByInventory, overdueSummary } = require('./services/gearScanStatus');
 
 // Legacy helper for backward compatibility (now uses bulletproof service)
 async function createAtomicReservation(inventoryId, eventId, userId, quantity, checkOutDate, checkInDate, listName, serial = null, specificSerialRequested = false) {
@@ -8112,7 +8226,9 @@ app.get('/api/gear-packages/event/:eventId', authenticate, async (req, res) => {
     const reservedItems = await ReservedGearItem.find({ 
       eventId,
       listName: listName || 'Main List'
-    }).populate('inventoryId', 'label category serial quantity lensClass');
+    }).populate('inventoryId', 'label category serial quantity lensClass assetTag')
+      .populate('packedBy', 'fullName')
+      .populate('returnedBy', 'fullName');
 
     console.log(`[GEAR LOAD] Found ${reservedItems.length} reserved items (all users)`);
 
@@ -8168,8 +8284,23 @@ app.get('/api/gear-packages/event/:eventId', authenticate, async (req, res) => {
     const currentGearList = table.gear?.gearLists?.find(list => list.name === (listName || 'Main List'));
     const manualItems = currentGearList?.manualItems || [];
 
+    // Units on this list that are overdue from ANOTHER event (scanned out there and not
+    // scanned back in). Shown as a warning on the line; it does not block anything.
+    const unitWarnings = {};
+    const outstandingElsewhere = await getOutstandingByInventory({
+      inventoryIds: validItems.map(item => item.inventoryId._id),
+      excludeEventId: eventId,
+      canViewEvent: gearEventViewer(req.user),
+      canViewManual: canManageGearInventory(req.user)
+    });
+    for (const [inventoryId, entry] of outstandingElsewhere) {
+      const summary = overdueSummary(entry);
+      if (summary) unitWarnings[inventoryId] = summary;
+    }
+
     res.json({ 
       reservedItems: validItems,
+      unitWarnings,
       manualItems: manualItems,
       userPermissions: {
         canReserve: canManageEventGearLists(table, req.user),
@@ -8283,14 +8414,32 @@ app.patch('/api/gear-packages/:itemId/toggle-packed', authenticate, async (req, 
       return res.status(403).json({ error: 'Not authorized to access this event' });
     }
 
+    // An item that has been checked back in is finished - its check-in has to be undone first
+    if (reservedItem.returnedQty > 0) {
+      return res.status(409).json({ error: 'This item has been checked in. Undo the check-in first.' });
+    }
+
     // Toggle packed status (ReservedGearItem uses isPacked field)
+    // The checkbox always records a MANUAL check; scanning records 'scan' (see routes/gearScan.js).
     reservedItem.isPacked = !reservedItem.isPacked;
     reservedItem.packedAt = reservedItem.isPacked ? new Date() : null;
+    reservedItem.packedMethod = reservedItem.isPacked ? 'manual' : null;
+    reservedItem.packedBy = reservedItem.isPacked ? userId : null;
+    if (!reservedItem.isPacked) {
+      // Unticking also clears any scan-out on the line
+      reservedItem.scannedOutQty = 0;
+    }
     await reservedItem.save();
 
     console.log(`[TOGGLE PACKED] Updated packed status to: ${reservedItem.isPacked}`);
 
-    res.json({ success: true, packed: reservedItem.isPacked });
+    res.json({
+      success: true,
+      packed: reservedItem.isPacked,
+      packedMethod: reservedItem.packedMethod,
+      packedAt: reservedItem.packedAt,
+      scannedOutQty: reservedItem.scannedOutQty
+    });
   } catch (error) {
     console.error('Error toggling packed status:', error);
     res.status(500).json({ error: 'Failed to toggle packed status' });
@@ -9412,7 +9561,7 @@ app.get('/api/carts/:eventId', authenticate, async (req, res) => {
 
     // Add availability information to each item
     const cartWithAvailability = cart.toObject();
-    await assignCartItemAvailabilityBulk(cart, cartWithAvailability.items);
+    await assignCartItemAvailabilityBulk(cart, cartWithAvailability.items, req.user);
 
     res.json(cartWithAvailability);
   } catch (err) {
@@ -9488,7 +9637,7 @@ app.post('/api/carts/:eventId/items', authenticate, async (req, res) => {
       await cart.save();
       await cart.populate('items.inventoryId', 'label category serial quantity status');
       const cartObj = cart.toObject();
-      await assignCartItemAvailabilityBulk(cart, cartObj.items);
+      await assignCartItemAvailabilityBulk(cart, cartObj.items, req.user);
       return res.json(cartObj);
     }
 
@@ -9538,7 +9687,7 @@ app.post('/api/carts/:eventId/items', authenticate, async (req, res) => {
     
     // Add availability information to each item
     const cartWithAvailability = cart.toObject();
-    await assignCartItemAvailabilityBulk(cart, cartWithAvailability.items);
+    await assignCartItemAvailabilityBulk(cart, cartWithAvailability.items, req.user);
 
     res.json(cartWithAvailability);
   } catch (err) {
@@ -9852,7 +10001,7 @@ app.put('/api/carts/:eventId/items/:itemId', authenticate, async (req, res) => {
     
     // Add availability information to each item
     const cartWithAvailability = cart.toObject();
-    await assignCartItemAvailabilityBulk(cart, cartWithAvailability.items);
+    await assignCartItemAvailabilityBulk(cart, cartWithAvailability.items, req.user);
 
     res.json(cartWithAvailability);
   } catch (err) {
@@ -9881,7 +10030,7 @@ app.delete('/api/carts/:eventId/items/:itemId', authenticate, async (req, res) =
     
     // Add availability information to each item
     const cartWithAvailability = cart.toObject();
-    await assignCartItemAvailabilityBulk(cart, cartWithAvailability.items);
+    await assignCartItemAvailabilityBulk(cart, cartWithAvailability.items, req.user);
 
     res.json(cartWithAvailability);
   } catch (err) {
@@ -9934,6 +10083,14 @@ app.post('/api/carts/:eventId/reserve', authenticate, async (req, res) => {
     }
     const currentListName = eventTable?.gear?.currentList || 'Main List';
 
+    // Units that are overdue (scanned out for an earlier event, not scanned back in).
+    // They can still be reserved, but when there is no serial preference they are
+    // handed out LAST so returned units are used first.
+    const outstandingUnits = await getOutstandingByInventory();
+    const overdueUnitIds = new Set(
+      [...outstandingUnits].filter(([, entry]) => entry.overdueQty > 0).map(([id]) => id)
+    );
+
     // BULLETPROOF ATOMIC BULK RESERVATION
     // Prepare all reservations for atomic bulk processing
     const reservationRequests = [];
@@ -9964,6 +10121,12 @@ app.post('/api/carts/:eventId/reserve', authenticate, async (req, res) => {
           category: baseItem.category,
           label: { $regex: `^${brand}\\s+${model}`, $options: 'i' }
         }).sort({ serial: 1 }); // Sort by serial for consistent allocation
+
+        // Overdue units go to the back (stable sort keeps serial order otherwise)
+        if (overdueUnitIds.size > 0) {
+          similarItems.sort((a, b) =>
+            Number(overdueUnitIds.has(a._id.toString())) - Number(overdueUnitIds.has(b._id.toString())));
+        }
         
         let remainingToReserve = cartItem.quantity;
         
@@ -10212,7 +10375,7 @@ app.put('/api/carts/:eventId/grouped-quantity', authenticate, async (req, res) =
       
       // Add availability information to each item
       const cartWithAvailability = cart.toObject();
-      await assignCartItemAvailabilityBulk(cart, cartWithAvailability.items);
+      await assignCartItemAvailabilityBulk(cart, cartWithAvailability.items, req.user);
       
       const message = `Added ${quantityToAdd} units: ${addedItems.join(', ')}`;
       console.log(`[GROUPED QUANTITY] Success: ${message}`);
@@ -10261,7 +10424,7 @@ app.put('/api/carts/:eventId/grouped-quantity', authenticate, async (req, res) =
       
       // Add availability information to each item
       const cartWithAvailability = cart.toObject();
-      await assignCartItemAvailabilityBulk(cart, cartWithAvailability.items);
+      await assignCartItemAvailabilityBulk(cart, cartWithAvailability.items, req.user);
       
       const message = `Removed ${quantityToRemove} units: ${removedItems.join(', ')}`;
       console.log(`[GROUPED QUANTITY] Success: ${message}`);
@@ -10514,18 +10677,22 @@ app.post('/api/manual-reservations/bulk', authenticate, async (req, res) => {
     }
 
     // Send ONE confirmation email for all created reservations
+    // (not when the form was left without an address and filled in its placeholder)
+    const bulkHasAddress = personEmail.trim().toLowerCase() !== 'noemail@placeholder.com';
     try {
-      const emailHtml = formatReservationEmail(createdReservations, personName);
+      if (bulkHasAddress) {
+        const emailHtml = formatReservationEmail(createdReservations, personName);
 
-      const msg = {
-        to: personEmail.trim().toLowerCase(),
-        from: SENDGRID_FROM,
-        subject: 'Gear Reservation Confirmation - Lumetry Media',
-        html: emailHtml
-      };
+        const msg = {
+          to: personEmail.trim().toLowerCase(),
+          from: SENDGRID_FROM,
+          subject: 'Gear Reservation Confirmation - Lumetry Media',
+          html: emailHtml
+        };
 
-      await sgMail.send(msg);
-      console.log(`Bulk reservation confirmation email sent to ${personEmail} for ${createdReservations.length} items`);
+        await sgMail.send(msg);
+        console.log(`Bulk reservation confirmation email sent to ${personEmail} for ${createdReservations.length} items`);
+      }
     } catch (emailError) {
       console.error('Failed to send bulk reservation confirmation email:', emailError);
       // Don't fail the request if email fails - reservations were created successfully
@@ -10608,26 +10775,29 @@ app.post('/api/manual-reservations', authenticate, async (req, res) => {
     await reservation.populate('inventoryId', 'label category serial quantity lensClass');
     await reservation.populate('createdBy', 'fullName email');
 
-    // Send confirmation email
+    // Send confirmation email (not when the address is the form's placeholder)
+    const hasAddress = personEmail.trim().toLowerCase() !== 'noemail@placeholder.com';
     try {
-      // Find all reservations for this person and date range to send one comprehensive email
-      const allPersonReservations = await ManualReservation.find({
-        personEmail: personEmail.trim().toLowerCase(),
-        startDate: startDate,
-        endDate: endDate
-      }).populate('inventoryId', 'label category serial quantity lensClass');
+      if (hasAddress) {
+        // Find all reservations for this person and date range to send one comprehensive email
+        const allPersonReservations = await ManualReservation.find({
+          personEmail: personEmail.trim().toLowerCase(),
+          startDate: startDate,
+          endDate: endDate
+        }).populate('inventoryId', 'label category serial quantity lensClass');
 
-      const emailHtml = formatReservationEmail(allPersonReservations, personName);
+        const emailHtml = formatReservationEmail(allPersonReservations, personName);
 
-      const msg = {
-        to: personEmail.trim().toLowerCase(),
-        from: SENDGRID_FROM,
-        subject: 'Gear Reservation Confirmation - Lumetry Media',
-        html: emailHtml
-      };
+        const msg = {
+          to: personEmail.trim().toLowerCase(),
+          from: SENDGRID_FROM,
+          subject: 'Gear Reservation Confirmation - Lumetry Media',
+          html: emailHtml
+        };
 
-      await sgMail.send(msg);
-      console.log(`Reservation confirmation email sent to ${personEmail}`);
+        await sgMail.send(msg);
+        console.log(`Reservation confirmation email sent to ${personEmail}`);
+      }
     } catch (emailError) {
       console.error('Failed to send reservation confirmation email:', emailError);
       // Don't fail the request if email fails - reservation was created successfully

@@ -1218,6 +1218,93 @@
         margin-bottom: 0;
         padding-bottom: 0;
         }
+
+      /* Asset tags, label selection and scan status */
+      .inventory-dark .inventory-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 24px;
+      }
+
+      .inventory-dark .inventory-toolbar .search-box {
+        flex: 1 1 260px;
+        margin-bottom: 0;
+      }
+
+      .inventory-dark .inventory-toolbar .btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .inventory-dark .inventory-table .select-col {
+        width: 36px;
+        padding-right: 0;
+      }
+
+      .inventory-dark .inventory-table .select-col input {
+        width: 16px;
+        height: 16px;
+        cursor: pointer;
+        accent-color: var(--brand-red);
+      }
+
+      .inventory-dark .asset-tag {
+        font-family: monospace;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-primary);
+        white-space: nowrap;
+      }
+
+      .inventory-dark .asset-tag-missing {
+        color: var(--text-tertiary);
+        font-size: 12px;
+      }
+
+      .inventory-dark .scan-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-top: 4px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+        cursor: help;
+      }
+
+      .inventory-dark .scan-status .material-symbols-outlined {
+        font-size: 14px;
+      }
+
+      .inventory-dark .scan-status-out {
+        background: var(--info-bg);
+        color: var(--info-text);
+      }
+
+      .inventory-dark .scan-status-overdue {
+        background: var(--error-bg);
+        color: var(--error-text);
+      }
+
+      .inventory-dark .scan-status-back {
+        background: var(--success-bg, rgba(34, 197, 94, 0.16));
+        color: var(--success-text, #22c55e);
+      }
+
+      .inventory-dark .reservation-item .scan-status {
+        margin: 0 0 0 6px;
+        vertical-align: middle;
+      }
+
+      .inventory-dark a.btn {
+        text-decoration: none;
+      }
     </style>
 </head>
 <body class="inventory-dark">
@@ -1381,9 +1468,15 @@
                 Inventory List
             </h2>
 
-            <div class="search-box">
-                <input type="text" id="searchInput" placeholder="Search inventory..." onkeyup="filterInventory()">
-                <span class="material-symbols-outlined">search</span>
+            <div class="inventory-toolbar">
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="Search inventory, serial or asset tag..." onkeyup="filterInventory()">
+                    <span class="material-symbols-outlined">search</span>
+                </div>
+                <button type="button" class="btn btn-secondary" id="printLabelsBtn" onclick="printSelectedLabels()" disabled>
+                    <span class="material-symbols-outlined">qr_code_2</span>
+                    <span id="printLabelsBtnText">Print labels</span>
+                </button>
             </div>
 
             <div id="inventoryContainer" class="loading">
@@ -1507,6 +1600,8 @@
         let editingNoteSerial = null;
         let manualReservationMode = false;
         let manualCart = [];
+        const selectedLabelIds = new Set();   // inventory ids ticked for label printing
+        let scanStatusById = new Map();       // inventory id -> scanned-out / overdue status
 
         const LENS_CLASSES = [
             'Ultrawide',
@@ -1697,8 +1792,14 @@
                 }
 
                 currentInventory = await response.json();
+
+                // Drop selections for items that no longer exist
+                const knownIds = new Set(currentInventory.map(item => String(item._id)));
+                selectedLabelIds.forEach(id => { if (!knownIds.has(id)) selectedLabelIds.delete(id); });
+
                 filteredInventory = [...currentInventory];
                 renderInventory();
+                loadScanStatus();
             } catch (error) {
                 console.error('Error loading inventory:', error);
                 document.getElementById('inventoryContainer').innerHTML = `
@@ -1706,6 +1807,129 @@
                         Failed to load inventory. Please refresh the page.
                     </div>
                 `;
+            }
+        }
+
+        // ========== SCAN STATUS (what is scanned out / overdue) ==========
+
+        // Scanned-out status is extra information: if it cannot be loaded the table still works
+        async function loadScanStatus() {
+            try {
+                const response = await fetch(`${window.API_BASE}/api/gear-scan/outstanding`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (!response.ok) return;
+
+                const data = await response.json();
+                scanStatusById = new Map((data.items || []).map(item => [String(item._id), item]));
+                renderInventory();
+            } catch (error) {
+                console.warn('Could not load scan status:', error);
+            }
+        }
+
+        function formatShortDate(dateStr) {
+            if (!dateStr) return '';
+            const date = new Date(dateStr);
+            if (isNaN(date.getTime())) return '';
+            // Reservation dates are stored as UTC midnight - show the calendar day that was picked
+            return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+        }
+
+        function renderScanStatus(item) {
+            const status = scanStatusById.get(String(item._id));
+            if (!status || !status.outQty) return '';
+
+            const isOverdue = status.overdueQty > 0;
+            const details = (status.lines || []).map(line => {
+                const where = line.eventTitle || 'another event';
+                const due = formatShortDate(line.checkInDate);
+                return `${line.quantity} on ${where}${due ? ` (due ${due})` : ''}${line.overdue ? ' - overdue' : ''}`;
+            }).join('\n');
+            const showCount = (item.quantity || 1) > 1;
+            const text = isOverdue
+                ? `Overdue${showCount ? ` ${status.overdueQty}` : ''}`
+                : `Out${showCount ? ` ${status.outQty}` : ''}`;
+
+            return `
+                <div>
+                    <span class="scan-status ${isOverdue ? 'scan-status-overdue' : 'scan-status-out'}" title="${escapeAttr(details)}">
+                        <span class="material-symbols-outlined">${isOverdue ? 'schedule' : 'logout'}</span>
+                        ${text}
+                    </span>
+                </div>
+            `;
+        }
+
+        // ========== LABEL PRINTING ==========
+
+        const LABEL_IDS_STORAGE_KEY = 'lumdashLabelPrintIds';
+
+        function openLabelPage(ids) {
+            if (!ids || ids.length === 0) return;
+            localStorage.setItem(LABEL_IDS_STORAGE_KEY, JSON.stringify(ids));
+            window.open('../labels-print.html', '_blank');
+        }
+
+        function printLabel(itemId) {
+            openLabelPage([String(itemId)]);
+        }
+
+        function printSelectedLabels() {
+            openLabelPage(Array.from(selectedLabelIds));
+        }
+
+        function toggleLabelSelection(itemId, checked) {
+            if (checked) selectedLabelIds.add(String(itemId));
+            else selectedLabelIds.delete(String(itemId));
+            syncLabelSelectionUI();
+        }
+
+        function toggleLabelGroup(groupIndex, checked) {
+            const group = groupInventoryByModel(filteredInventory)[groupIndex];
+            if (!group) return;
+            group.items.forEach(item => {
+                if (checked) selectedLabelIds.add(String(item._id));
+                else selectedLabelIds.delete(String(item._id));
+            });
+            syncLabelSelectionUI();
+        }
+
+        function toggleAllLabels(checked) {
+            filteredInventory.forEach(item => {
+                if (checked) selectedLabelIds.add(String(item._id));
+                else selectedLabelIds.delete(String(item._id));
+            });
+            syncLabelSelectionUI();
+        }
+
+        // Update checkboxes and the button without re-rendering the whole table
+        function syncLabelSelectionUI() {
+            const container = document.getElementById('inventoryContainer');
+            const setState = (box, ids) => {
+                const selected = ids.filter(id => selectedLabelIds.has(id)).length;
+                box.checked = ids.length > 0 && selected === ids.length;
+                box.indeterminate = selected > 0 && selected < ids.length;
+            };
+
+            if (container) {
+                container.querySelectorAll('input.label-select[data-item-id]').forEach(box => {
+                    box.checked = selectedLabelIds.has(box.getAttribute('data-item-id'));
+                });
+                const groups = groupInventoryByModel(filteredInventory);
+                container.querySelectorAll('input.label-select-group').forEach(box => {
+                    const group = groups[Number(box.getAttribute('data-group-index'))];
+                    if (group) setState(box, group.items.map(item => String(item._id)));
+                });
+                const selectAll = container.querySelector('input.label-select-all');
+                if (selectAll) setState(selectAll, filteredInventory.map(item => String(item._id)));
+            }
+
+            const count = selectedLabelIds.size;
+            const button = document.getElementById('printLabelsBtn');
+            if (button) {
+                button.disabled = count === 0;
+                document.getElementById('printLabelsBtnText').textContent = count > 0 ? `Print labels (${count})` : 'Print labels';
             }
         }
 
@@ -1728,11 +1952,13 @@
                     <table class="inventory-table">
                         <thead>
                             <tr>
+                                <th class="select-col"><input type="checkbox" class="label-select-all" title="Select all shown items for label printing" aria-label="Select all shown items" onchange="toggleAllLabels(this.checked)"></th>
                                 <th>Brand</th>
                                 <th>Model</th>
                                 <th>Category</th>
                                 <th>Class</th>
                                 <th>Serial</th>
+                                <th>Asset Tag</th>
                                 <th>Quantity</th>
                                 ${manualReservationMode ? '<th>Status</th>' : '<th>Notes</th>'}
                                 <th>Actions</th>
@@ -1747,6 +1973,7 @@
 
             container.innerHTML = tableHTML;
             attachNotesClickHandlers();
+            syncLabelSelectionUI();
         }
 
         function attachNotesClickHandlers() {
@@ -1773,6 +2000,11 @@
             const div = document.createElement('div');
             div.textContent = str;
             return div.innerHTML;
+        }
+
+        // escapeHtml leaves quotes alone, so text placed inside an attribute needs this instead
+        function escapeAttr(str) {
+            return escapeHtml(str).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
 
         function normalizeSerial(serial) {
@@ -1833,6 +2065,10 @@
                 `;
             }
             return `
+                <button class="btn btn-secondary btn-sm" onclick="printLabel('${item._id}')" title="Print a label for this item">
+                    <span class="material-symbols-outlined">qr_code_2</span>
+                    Label
+                </button>
                 <button class="btn btn-warning btn-sm" onclick="openReservationsModal('${item._id}')">
                     <span class="material-symbols-outlined">event_note</span>
                     Reservations
@@ -1894,7 +2130,7 @@
 
         function renderGroupedInventoryRows() {
             const groups = groupInventoryByModel(filteredInventory);
-            return groups.map(group => {
+            return groups.map((group, groupIndex) => {
                 const labelParts = (group.label || '').split(' ');
                 const brand = labelParts[0] || 'Unknown';
                 const model = labelParts.slice(1).join(' ') || 'Unknown';
@@ -1907,11 +2143,13 @@
 
                 const headerRow = serialCount > 1 ? `
                     <tr class="group-header-row">
+                        <td class="select-col"><input type="checkbox" class="label-select-group" data-group-index="${groupIndex}" title="Select every ${escapeAttr(group.label)} for label printing" aria-label="Select every ${escapeAttr(group.label)}" onchange="toggleLabelGroup(${groupIndex}, this.checked)"></td>
                         <td><strong>${escapeHtml(brand)}</strong></td>
                         <td>${escapeHtml(model)}</td>
                         <td>${escapeHtml(category)}</td>
                         <td>${escapeHtml(lensClass)}</td>
                         <td><span style="font-size: 13px; color: var(--text-muted);">${serialCount} serial${serialCount !== 1 ? 's' : ''}</span></td>
+                        <td></td>
                         <td>${totalQty}</td>
                         <td></td>
                         <td></td>
@@ -1931,6 +2169,7 @@
 
                     return `
                         <tr class="${rowClass}">
+                            <td class="select-col"><input type="checkbox" class="label-select" data-item-id="${itemId}" title="Select for label printing" aria-label="Select ${escapeAttr(item.label)} ${escapeAttr(formatSerialDisplay(item.serial))} for label printing" onchange="toggleLabelSelection('${itemId}', this.checked)"></td>
                             <td>${showModelCols ? `<strong>${escapeHtml(brand)}</strong>` : ''}</td>
                             <td>${showModelCols ? escapeHtml(model) : ''}</td>
                             <td>${showModelCols ? escapeHtml(category) : ''}</td>
@@ -1938,6 +2177,12 @@
                             <td>
                                 ${serialCount > 1 ? `<div class="serial-notes-label">Serial</div>` : ''}
                                 <span class="serial-code">${escapeHtml(formatSerialDisplay(item.serial))}</span>
+                            </td>
+                            <td>
+                                ${item.assetTag
+                                    ? `<span class="asset-tag">${escapeHtml(item.assetTag)}</span>`
+                                    : `<span class="asset-tag-missing" title="A tag is assigned automatically when the server restarts">Not assigned</span>`}
+                                ${renderScanStatus(item)}
                             </td>
                             <td>
                                 <span class="quantity-badge ${item.quantity === 1 ? 'quantity-single' : 'quantity-multiple'}">
@@ -1967,6 +2212,7 @@
                     item.category.toLowerCase().includes(searchTerm) ||
                     (item.lensClass || '').toLowerCase().includes(searchTerm) ||
                     (item.serial || '').toLowerCase().includes(searchTerm) ||
+                    (item.assetTag || '').toLowerCase().includes(searchTerm) ||
                     notesText.includes(searchTerm);
             });
             renderInventory();
@@ -2414,27 +2660,19 @@
                 return;
             }
             
+            if (endDate <= startDate) {
+                showMessage('The end date must be after the start date', 'error');
+                return;
+            }
+            
             try {
-                const reservations = manualCart.map(item => {
-                    // Parse brand and model from label
-                    const labelParts = (item.label || '').split(' ');
-                    const brand = labelParts[0] || 'Unknown';
-                    const model = labelParts.slice(1).join(' ') || 'Unknown';
-                    
-                    return {
-                        personName,
-                        personEmail: personEmail || 'noemail@placeholder.com',
-                        notes: eventName || '',
-                        inventoryId: item._id,
-                        brand,
-                        model,
-                        category: item.category || 'General',
-                        startDate,
-                        endDate,
-                        quantity: 1,
-                        serial: item.serial || null
-                    };
-                });
+                // One request for the whole reservation: who and when, plus the items picked.
+                // The server works out brand, model and category from each inventory item.
+                const items = manualCart.map(item => ({
+                    inventoryId: item._id,
+                    quantity: 1,
+                    serial: item.serial && item.serial !== 'N/A' ? item.serial : null
+                }));
 
                 const response = await fetch(`${window.API_BASE}/api/manual-reservations/bulk`, {
                     method: 'POST',
@@ -2442,16 +2680,30 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${localStorage.getItem('token')}`
                     },
-                    body: JSON.stringify({ reservations })
+                    body: JSON.stringify({
+                        personName,
+                        // No address given: the server needs one on file but does not send to this one
+                        personEmail: personEmail || 'noemail@placeholder.com',
+                        startDate,
+                        endDate,
+                        notes: eventName || '',
+                        items
+                    })
                 });
 
+                const result = await response.json().catch(() => null);
                 if (response.ok) {
-                    showMessage('Reservation created successfully!', 'success');
+                    // Items that could not be reserved (taken for those dates) are listed, not dropped silently
+                    const skipped = (result && result.errors) || [];
+                    showMessage(skipped.length > 0
+                        ? `Reservation created, but ${skipped.length} item${skipped.length === 1 ? ' was' : 's were'} left out: ${escapeHtml(skipped.join('; '))}`
+                        : 'Reservation created successfully!', skipped.length > 0 ? 'info' : 'success');
                     cancelManualReservation();
                     loadManualReservations();
                 } else {
-                    const result = await response.json();
-                    showMessage(result.error || 'Failed to create reservation', 'error');
+                    const reasons = (result && (result.details || result.errors)) || [];
+                    showMessage(escapeHtml(((result && result.error) || 'Failed to create reservation') +
+                        (reasons.length > 0 ? `: ${reasons.join('; ')}` : '')), 'error');
                 }
             } catch (error) {
                 console.error('Error creating reservation:', error);
@@ -2483,6 +2735,27 @@
                     </div>
                 `;
             }
+        }
+
+        // Where one manual reservation item is in the scan workflow: nothing to show until it has
+        // been scanned out, then out / overdue / part back / returned
+        function manualScanState(res) {
+            const out = res.scannedOutQty || 0;
+            if (out === 0) return null;
+            const back = res.returnedQty || 0;
+            const many = out > 1;
+            const due = formatShortDate(res.endDate);
+
+            if (back >= out) {
+                return { back: true, icon: 'assignment_turned_in', text: 'Returned', title: 'Scanned out and checked back in' };
+            }
+            if (res.isOverdue) {
+                return { overdue: true, icon: 'schedule', text: many ? `Overdue ${out - back}` : 'Overdue', title: `Scanned out and not back - was due ${due}` };
+            }
+            if (back > 0) {
+                return { icon: 'login', text: `${back} of ${out} back`, title: `${out - back} still out - due ${due}` };
+            }
+            return { icon: 'logout', text: many ? `Out ${out}` : 'Out', title: `Scanned out - due ${due}` };
         }
 
         // Render manual reservations
@@ -2521,10 +2794,18 @@
                 grouped[key].items.push({
                     label: itemLabel,
                     quantity: res.quantity || 1,
-                    serial: res.serial || 'N/A'
+                    serial: res.serial || 'N/A',
+                    scan: manualScanState(res)
                 });
                 grouped[key].ids.push(res._id);
             });
+
+            // Opens the Scan Station on this reservation, to scan its gear out (and add to it)
+            const scanLink = (group) => `/scan-station.html?${new URLSearchParams({
+                person: group.personName,
+                start: new Date(group.startDate).toISOString().slice(0, 10),
+                end: new Date(group.endDate).toISOString().slice(0, 10)
+            }).toString()}`;
 
             const tableHTML = `
                 <div class="table-container">
@@ -2546,12 +2827,12 @@
                                 return `
                                     <tr>
                                         <td>
-                                            <div class="reservation-person">${group.personName}</div>
-                                            ${group.eventName ? `<div class="reservation-event">${group.eventName}</div>` : ''}
+                                            <div class="reservation-person">${escapeHtml(group.personName)}</div>
+                                            ${group.eventName ? `<div class="reservation-event">${escapeHtml(group.eventName)}</div>` : ''}
                                         </td>
                                         <td>
                                             <div class="reservation-dates">
-                                                ${startDate.toLocaleDateString()} → ${endDate.toLocaleDateString()}
+                                                ${startDate.toLocaleDateString(undefined, { timeZone: 'UTC' })} → ${endDate.toLocaleDateString(undefined, { timeZone: 'UTC' })}
                                             </div>
                                             <div class="reservation-duration">${days} day${days > 1 ? 's' : ''}</div>
                                         </td>
@@ -2559,16 +2840,25 @@
                                             <div class="reservation-items">
                                                 ${group.items.map(item => `
                                                     <span class="reservation-item">
-                                                        <span class="reservation-item-name">${item.label}</span>
-                                                        <span class="reservation-item-details">(${item.quantity}x) • ${item.serial}</span>
+                                                        <span class="reservation-item-name">${escapeHtml(item.label)}</span>
+                                                        <span class="reservation-item-details">(${item.quantity}x) • ${escapeHtml(item.serial)}</span>
+                                                        ${item.scan ? `
+                                                            <span class="scan-status ${item.scan.overdue ? 'scan-status-overdue' : (item.scan.back ? 'scan-status-back' : 'scan-status-out')}" title="${escapeAttr(item.scan.title)}">
+                                                                <span class="material-symbols-outlined">${item.scan.icon}</span>
+                                                                ${escapeHtml(item.scan.text)}
+                                                            </span>` : ''}
                                                     </span>
                                                 `).join('')}
                                             </div>
                                         </td>
                                         <td>
                                             <div class="reservation-actions">
-                                                ${group.personEmail ? `
-                                                    <button class="btn btn-info btn-sm" onclick="sendReservationEmail('${group.ids.join(',')}', '${group.personEmail}')">
+                                                <a class="btn btn-primary btn-sm" href="${escapeAttr(scanLink(group))}" title="Open the Scan Station on this reservation to scan its gear out">
+                                                    <span class="material-symbols-outlined">barcode_scanner</span>
+                                                    Scan
+                                                </a>
+                                                ${group.personEmail && group.personEmail !== 'noemail@placeholder.com' ? `
+                                                    <button class="btn btn-info btn-sm" onclick="sendReservationEmail('${group.ids.join(',')}', '${escapeAttr(group.personEmail)}')">
                                                         <span class="material-symbols-outlined">mail</span>
                                                         Send Email
                                                     </button>

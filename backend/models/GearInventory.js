@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const Counter = require('./Counter');
 
 // Helper function to normalize dates to UTC midnight
 function normalizeDate(dateStr) {
@@ -8,11 +9,23 @@ function normalizeDate(dateStr) {
   return date;
 }
 
+// Asset tags are what the printed QR / barcode labels encode, e.g. "LD-00123".
+// Kept short and uppercase-alphanumeric so the QR code stays at its smallest grid
+// and remains readable on small round stickers.
+const ASSET_TAG_PREFIX = 'LD-';
+const ASSET_TAG_COUNTER_ID = 'gearAssetTag';
+
+function formatAssetTag(sequenceNumber) {
+  return `${ASSET_TAG_PREFIX}${String(sequenceNumber).padStart(5, '0')}`;
+}
+
 // Simplified GearInventory schema designed for the current cart-to-gear system
 const gearInventorySchema = new mongoose.Schema({
   // Basic item information
   label: { type: String, required: true }, // e.g., "Canon R5 Body #1"
   category: { type: String, required: true }, // e.g., "Camera"
+  // Scannable ID printed on the item's label. Assigned automatically, never reused.
+  assetTag: { type: String, trim: true, uppercase: true },
   serial: { 
     type: String,
     required: true,
@@ -79,6 +92,13 @@ const gearInventorySchema = new mongoose.Schema({
   timestamps: true
 });
 
+// Unique only among items that have a tag, so items created before asset tags
+// existed (no tag yet) do not collide with each other.
+gearInventorySchema.index(
+  { assetTag: 1 },
+  { unique: true, partialFilterExpression: { assetTag: { $type: 'string' } } }
+);
+
 // Pre-save hook for serial handling
 gearInventorySchema.pre('save', function(next) {
   if (!this.serial || this.serial === '') {
@@ -86,6 +106,51 @@ gearInventorySchema.pre('save', function(next) {
   }
   next();
 });
+
+// Give every new item an asset tag
+gearInventorySchema.pre('save', async function() {
+  if (this.isNew && !this.assetTag) {
+    this.assetTag = await this.constructor.nextAssetTag();
+  }
+});
+
+// Reserve the next unused asset tag
+gearInventorySchema.statics.nextAssetTag = async function() {
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const counter = await Counter.findOneAndUpdate(
+      { _id: ASSET_TAG_COUNTER_ID },
+      { $inc: { seq: 1 } },
+      { new: true, upsert: true }
+    );
+    const tag = formatAssetTag(counter.seq);
+    // Skip numbers already in use (e.g. if the counter was ever reset)
+    const taken = await this.exists({ assetTag: tag });
+    if (!taken) return tag;
+  }
+  throw new Error('Could not allocate an asset tag');
+};
+
+// Give an asset tag to every item that does not have one yet (oldest first).
+// Safe to run repeatedly. Returns how many items were tagged.
+gearInventorySchema.statics.assignMissingAssetTags = async function({ dryRun = false } = {}) {
+  const missing = await this.find({
+    $or: [{ assetTag: { $exists: false } }, { assetTag: null }, { assetTag: '' }]
+  }).select('_id label serial').sort({ createdAt: 1, _id: 1 }).lean();
+
+  if (dryRun) return { missing: missing.length, assigned: 0 };
+
+  let assigned = 0;
+  for (const item of missing) {
+    const tag = await this.nextAssetTag();
+    // updateOne (not save) so unrelated validation on old records cannot block tagging
+    const result = await this.updateOne(
+      { _id: item._id, $or: [{ assetTag: { $exists: false } }, { assetTag: null }, { assetTag: '' }] },
+      { $set: { assetTag: tag } }
+    );
+    if (result.modifiedCount === 1) assigned++;
+  }
+  return { missing: missing.length, assigned };
+};
 
 // Method to get available quantity for given dates
 gearInventorySchema.methods.getAvailableQuantity = async function(checkOutDate, checkInDate) {

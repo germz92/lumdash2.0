@@ -29,6 +29,7 @@
     if (path.includes('event-calendar')) return 'event-calendar';
     if (path.includes('users')) return 'users';
     if (path.includes('inventory-management')) return 'inventory-management';
+    if (path.includes('scan-station')) return 'scan-station';
     if (path.includes('crew-planner')) return 'crew-planner';
     if (path.includes('crew-calendar')) return 'crew-calendar';
     if (path.includes('flights')) return 'flights';

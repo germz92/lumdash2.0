@@ -1,0 +1,1884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#121216">
+    <script src="js/theme-early.js?v=2.0.0"></script>
+    <title>Scan Station - LumDash</title>
+    <link rel="icon" href="assets/favicon.png" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
+    <link rel="stylesheet" href="css/general.css">
+    <link rel="stylesheet" href="css/theme-tokens.css?v=2.0.0">
+    <link rel="stylesheet" href="css/theme-dark.css?v=2.0.0">
+    <link rel="stylesheet" href="css/theme-light.css?v=2.0.0">
+    <script src="js/theme.js?v=2.0.0"></script>
+    <script src="js/config.js"></script>
+    <script src="js/sidebar-dashboard.js"></script>
+    <script src="js/gear-scanner.js?v=2"></script>
+    <style>
+      /* Scan station: a dedicated screen for a handheld scanner at the gear bench */
+      .scan-station {
+        font-family: var(--font-family);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        min-height: 100vh;
+        display: flex;
+        margin: 0;
+      }
+
+      .scan-station .main-content {
+        flex: 1;
+        min-width: 0;
+        margin-left: var(--sidebar-width);
+        padding: 28px 32px;
+        min-height: 100vh;
+        box-sizing: border-box;
+      }
+
+      .scan-station .page-header {
+        display: flex;
+        align-items: center;
+        gap: 12px 20px;
+        flex-wrap: wrap;
+        margin-bottom: 24px;
+      }
+
+      .scan-station .page-header .mobile-menu-btn {
+        flex-shrink: 0;
+      }
+
+      .scan-station .page-header-text {
+        flex: 1 1 240px;
+        min-width: 0;
+      }
+
+      .scan-station .page-header h1 {
+        font-size: var(--font-size-2xl);
+        font-weight: var(--font-weight-bold);
+        color: var(--text-primary);
+        margin: 0 0 6px 0;
+      }
+
+      .scan-station .page-header p {
+        color: var(--text-secondary);
+        font-size: var(--font-size-base);
+        margin: 0;
+      }
+
+      /* Mode switch: Check out / Check in / Look up */
+      .scan-station .mode-tabs {
+        display: inline-flex;
+        padding: 4px;
+        gap: 4px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+      }
+
+      .scan-station .mode-tab {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        height: auto;
+        min-width: 0;
+        padding: 12px 20px;
+        background: transparent;
+        color: var(--text-secondary);
+        border: none;
+        border-radius: var(--radius-md);
+        box-shadow: none;
+        font-family: inherit;
+        font-size: 16px;
+        font-weight: 600;
+        text-transform: none;
+        letter-spacing: normal;
+        cursor: pointer;
+        transition: background-color 0.15s ease, color 0.15s ease;
+      }
+
+      .scan-station .mode-tab:hover {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+      }
+
+      .scan-station .mode-tab.active {
+        background: var(--brand-red);
+        color: #fff;
+      }
+
+      .scan-station .mode-tab .material-symbols-outlined {
+        font-size: 22px;
+      }
+
+      .scan-station .station-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+        gap: 24px;
+        align-items: start;
+      }
+
+      /* Event and list being packed (check-out mode) */
+      .scan-station .station-setup {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 12px 16px;
+        margin-bottom: 16px;
+        padding: 16px;
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+      }
+
+      .scan-station .station-setup.needs-event {
+        border-color: var(--accent-yellow, #eab308);
+      }
+
+      .scan-station .setup-field {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+      }
+
+      .scan-station .setup-field-event { flex: 2 1 280px; }
+      .scan-station .setup-field-list { flex: 1 1 160px; }
+
+      .scan-station .setup-field label {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        color: var(--text-tertiary);
+      }
+
+      .scan-station .setup-field select {
+        width: 100%;
+        margin: 0;
+        padding: 12px 14px;
+        font-family: inherit;
+        font-size: 17px;
+        color: var(--text-primary);
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+      }
+
+      .scan-station .setup-field select:focus {
+        outline: none;
+        border-color: var(--brand-red);
+      }
+
+      .scan-station .setup-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 0;
+        font-size: 15px;
+        color: var(--text-secondary);
+        cursor: pointer;
+        user-select: none;
+      }
+
+      .scan-station .setup-toggle input {
+        width: 18px;
+        height: 18px;
+        margin: 0;
+        accent-color: var(--brand-red);
+        cursor: pointer;
+      }
+
+      /* New manual check-out: who is taking the gear, and when it is due back */
+      .scan-station .manual-form {
+        flex: 1 1 100%;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 12px 16px;
+        padding-top: 14px;
+        border-top: 1px solid var(--border-default);
+      }
+
+      .scan-station .manual-form .setup-field { flex: 1 1 170px; }
+      .scan-station .manual-form .setup-field-name { flex: 2 1 220px; }
+      .scan-station .manual-form .setup-field-date { flex: 0 1 170px; }
+
+      .scan-station .setup-field input[type="text"],
+      .scan-station .setup-field input[type="email"],
+      .scan-station .setup-field input[type="date"] {
+        width: 100%;
+        height: auto;
+        margin: 0;
+        padding: 11px 14px;
+        box-sizing: border-box;
+        font-family: inherit;
+        font-size: 16px;
+        color: var(--text-primary);
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+      }
+
+      .scan-station .setup-field input:focus {
+        outline: none;
+        border-color: var(--brand-red);
+      }
+
+      .scan-station .setup-field input.invalid {
+        border-color: var(--accent-red, #ef4444);
+      }
+
+      .scan-station .manual-form-actions {
+        display: inline-flex;
+        gap: 10px;
+      }
+
+      .scan-station .manual-form-actions .side-btn {
+        padding: 12px 16px;
+        font-size: 15px;
+      }
+
+      .scan-station .manual-form-actions .side-btn.primary {
+        background: var(--brand-red);
+        border-color: var(--brand-red);
+        color: #fff;
+      }
+
+      .scan-station .manual-form-error {
+        flex: 1 1 100%;
+        font-size: 14px;
+        color: var(--accent-red, #ef4444);
+      }
+
+      .scan-station .side-note {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px 10px;
+        margin: -4px 0 12px 0;
+        font-size: 14px;
+        color: var(--text-tertiary);
+      }
+
+      /* Side panel: the list being packed, what is still out, or the item looked up */
+      .scan-station .station-side {
+        background: var(--bg-secondary);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        padding: 20px;
+        min-height: 240px;
+      }
+
+      .scan-station .side-head {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px 12px;
+        margin-bottom: 12px;
+      }
+
+      .scan-station .side-head h2 {
+        flex: 1 1 180px;
+        min-width: 0;
+        margin: 0;
+        font-size: 19px;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+      }
+
+      .scan-station .side-link,
+      .scan-station .side-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        flex: 0 0 auto;
+        margin: 0;
+        height: auto;
+        min-width: 0;
+        padding: 7px 12px;
+        background: transparent;
+        color: var(--text-secondary);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        box-shadow: none;
+        font-family: inherit;
+        font-size: 13px;
+        font-weight: 600;
+        text-transform: none;
+        letter-spacing: normal;
+        text-decoration: none;
+        white-space: nowrap;
+        cursor: pointer;
+      }
+
+      .scan-station .side-link:hover,
+      .scan-station .side-btn:hover {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+      }
+
+      .scan-station .side-btn:disabled {
+        opacity: 0.5;
+        cursor: default;
+      }
+
+      .scan-station .side-link .material-symbols-outlined,
+      .scan-station .side-btn .material-symbols-outlined {
+        font-size: 17px;
+      }
+
+      .scan-station .side-summary {
+        font-size: 16px;
+        color: var(--text-secondary);
+        margin-bottom: 10px;
+      }
+
+      .scan-station .side-summary strong {
+        color: var(--text-primary);
+        font-size: 20px;
+      }
+
+      .scan-station .side-summary .all-done {
+        color: var(--accent-green, #22c55e);
+        font-weight: 700;
+      }
+
+      .scan-station .progress-track {
+        height: 8px;
+        margin-bottom: 14px;
+        background: var(--bg-tertiary);
+        border-radius: 999px;
+        overflow: hidden;
+      }
+
+      .scan-station .progress-fill {
+        height: 100%;
+        background: var(--accent-green, #22c55e);
+        border-radius: 999px;
+        transition: width 0.25s ease;
+      }
+
+      .scan-station .line-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        max-height: calc(100vh - 290px);
+        min-height: 120px;
+        overflow-y: auto;
+      }
+
+      .scan-station .line-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 11px 8px;
+        border-top: 1px solid var(--border-default);
+        border-radius: 6px;
+      }
+
+      .scan-station .line-row:first-child {
+        border-top: none;
+      }
+
+      .scan-station .line-icon {
+        flex: 0 0 auto;
+        font-size: 24px;
+        color: var(--text-tertiary);
+      }
+
+      .scan-station .line-text {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .scan-station .line-name {
+        font-size: 16px;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+
+      .scan-station .line-sub {
+        margin-top: 2px;
+        font-size: 13px;
+        color: var(--text-tertiary);
+        overflow-wrap: anywhere;
+      }
+
+      .scan-station .line-state {
+        flex: 0 0 auto;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        color: var(--text-tertiary);
+        white-space: nowrap;
+      }
+
+      /* Scanned (blue) is deliberately different from ticked by hand (green) */
+      .scan-station .line-row.state-scanned .line-icon,
+      .scan-station .line-row.state-scanned .line-state { color: var(--accent-blue, #3b82f6); }
+      .scan-station .line-row.state-checked .line-icon,
+      .scan-station .line-row.state-checked .line-state { color: var(--accent-green, #22c55e); }
+      .scan-station .line-row.state-partial .line-icon,
+      .scan-station .line-row.state-partial .line-state,
+      .scan-station .line-row.state-returning .line-icon,
+      .scan-station .line-row.state-returning .line-state { color: var(--accent-yellow, #eab308); }
+      .scan-station .line-row.state-returned { opacity: 0.6; }
+      .scan-station .line-row.state-overdue .line-icon { color: var(--accent-red, #ef4444); }
+
+      .scan-station .badge {
+        display: inline-flex;
+        align-items: center;
+        flex: 0 0 auto;
+        padding: 3px 9px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+        white-space: nowrap;
+      }
+
+      .scan-station .badge-overdue { background: var(--accent-red, #ef4444); color: #fff; }
+      .scan-station .badge-out { background: rgba(59, 130, 246, 0.18); color: var(--accent-blue, #3b82f6); }
+      .scan-station .badge-in { background: rgba(34, 197, 94, 0.16); color: var(--accent-green, #22c55e); }
+
+      .scan-station .line-row.row-hit {
+        animation: stationRowHit 1.2s ease-out;
+      }
+
+      @keyframes stationRowHit {
+        0% { background: rgba(34, 197, 94, 0.35); }
+        100% { background: transparent; }
+      }
+
+      .scan-station .side-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        padding: 36px 16px;
+        text-align: center;
+        color: var(--text-tertiary);
+        font-size: 15px;
+      }
+
+      .scan-station .side-empty .material-symbols-outlined {
+        font-size: 44px;
+      }
+
+      .scan-station .side-error {
+        color: var(--accent-red, #ef4444);
+      }
+
+      /* Look up */
+      .scan-station .lookup-name {
+        font-size: 24px;
+        font-weight: 700;
+        overflow-wrap: anywhere;
+      }
+
+      .scan-station .lookup-category {
+        margin-top: 2px;
+        color: var(--text-tertiary);
+        font-size: 14px;
+      }
+
+      .scan-station .lookup-status {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px 10px;
+        margin: 14px 0;
+        font-size: 15px;
+        color: var(--text-secondary);
+      }
+
+      .scan-station .lookup-facts {
+        display: grid;
+        grid-template-columns: max-content minmax(0, 1fr);
+        gap: 6px 16px;
+        margin: 0 0 6px 0;
+        font-size: 15px;
+      }
+
+      .scan-station .lookup-facts dt {
+        color: var(--text-tertiary);
+      }
+
+      .scan-station .lookup-facts dd {
+        margin: 0;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+
+      .scan-station .lookup-facts .mono {
+        font-family: var(--font-mono, ui-monospace, Consolas, monospace);
+      }
+
+      .scan-station .lookup-section {
+        margin: 18px 0 6px 0;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        color: var(--text-tertiary);
+      }
+
+      .scan-station .lookup-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        font-size: 14px;
+      }
+
+      .scan-station .lookup-list li {
+        padding: 7px 0;
+        border-top: 1px solid var(--border-default);
+        color: var(--text-secondary);
+        overflow-wrap: anywhere;
+      }
+
+      .scan-station .lookup-list li strong {
+        color: var(--text-primary);
+      }
+
+      .scan-station .lookup-actions {
+        margin-top: 18px;
+      }
+
+      @media (max-width: 1280px) {
+        .scan-station .station-grid {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .scan-station .line-list {
+          max-height: none;
+        }
+      }
+
+      @media (max-width: 1024px) {
+        .scan-station .main-content {
+          margin-left: 0;
+          padding: 20px 16px;
+        }
+      }
+
+      @media (max-width: 600px) {
+        .scan-station .mode-tabs {
+          width: 100%;
+        }
+
+        .scan-station .mode-tab {
+          flex: 1;
+          justify-content: center;
+          padding: 12px 8px;
+          font-size: 14px;
+        }
+      }
+    </style>
+</head>
+<body class="scan-station">
+    <!-- Sidebar Container - will be populated by sidebar-dashboard.js -->
+    <div id="sidebarContainer"></div>
+
+    <main class="main-content">
+        <div class="page-header">
+            <button class="mobile-menu-btn" id="mobileMenuBtn" title="Open menu">
+                <span class="material-symbols-outlined">menu</span>
+            </button>
+            <div class="page-header-text">
+                <h1>Scan Station</h1>
+                <p id="modeDescription">Scan gear out to an event and back into inventory.</p>
+            </div>
+            <div class="mode-tabs" role="tablist" aria-label="Scan mode">
+                <button type="button" class="mode-tab" role="tab" data-mode="out">
+                    <span class="material-symbols-outlined">logout</span>
+                    Check out
+                </button>
+                <button type="button" class="mode-tab" role="tab" data-mode="in">
+                    <span class="material-symbols-outlined">login</span>
+                    Check in
+                </button>
+                <button type="button" class="mode-tab" role="tab" data-mode="lookup">
+                    <span class="material-symbols-outlined">search</span>
+                    Look up
+                </button>
+            </div>
+        </div>
+
+        <div class="station-grid">
+            <section>
+                <div class="station-setup" id="checkoutSetup" style="display: none;">
+                    <div class="setup-field setup-field-event">
+                        <label for="eventSelect" id="eventSelectLabel">Event</label>
+                        <select id="eventSelect">
+                            <option value="">Loading events...</option>
+                        </select>
+                    </div>
+                    <div class="setup-field setup-field-list">
+                        <label for="listSelect">Gear list</label>
+                        <select id="listSelect" disabled>
+                            <option value="">-</option>
+                        </select>
+                    </div>
+                    <label class="setup-toggle" id="addUnlistedToggle" style="display: none;"
+                           title="When on, scanning an item that is not on the list reserves it and marks it scanned">
+                        <input type="checkbox" id="addUnlisted">
+                        <span id="addUnlistedText">Add unlisted items to this list</span>
+                    </label>
+
+                    <!-- Gear going out with no event: a manual reservation for a person (inventory managers) -->
+                    <div class="manual-form" id="manualForm" style="display: none;">
+                        <div class="setup-field setup-field-name">
+                            <label for="manualName">Who is taking it *</label>
+                            <input type="text" id="manualName" maxlength="120" autocomplete="off" placeholder="Name">
+                        </div>
+                        <div class="setup-field">
+                            <label for="manualReason">What for</label>
+                            <input type="text" id="manualReason" maxlength="200" autocomplete="off" placeholder="e.g. Family photos">
+                        </div>
+                        <div class="setup-field setup-field-date">
+                            <label for="manualDue">Due back *</label>
+                            <input type="date" id="manualDue">
+                        </div>
+                        <div class="setup-field">
+                            <label for="manualEmail">Email</label>
+                            <input type="email" id="manualEmail" maxlength="200" autocomplete="off" placeholder="Optional">
+                        </div>
+                        <div class="manual-form-actions">
+                            <button type="button" class="side-btn primary" id="manualStartBtn">
+                                <span class="material-symbols-outlined">barcode_scanner</span>
+                                Start scanning
+                            </button>
+                            <button type="button" class="side-btn" id="manualCancelBtn">Cancel</button>
+                        </div>
+                        <div class="manual-form-error" id="manualFormError" style="display: none;"></div>
+                    </div>
+                </div>
+                <div id="scannerMount"></div>
+            </section>
+
+            <section class="station-side" id="sidePanel" aria-live="polite"></section>
+        </div>
+    </main>
+
+    <script>
+    (function () {
+        'use strict';
+
+        const STORAGE_KEY = 'lumdashScanStation';
+        const RECENT_EVENT_DAYS = 14; // events that ended this recently still count as current
+
+        const MODES = {
+            out: {
+                description: 'Pick the event, then scan each item as it is packed.',
+                title: 'Check out',
+                hint: 'Scan each item as it is packed. For batteries, cables and other bulk items, set Qty before scanning.',
+                idle: 'Scan the first item'
+            },
+            in: {
+                description: 'Scan each item as it comes back. No need to pick an event.',
+                title: 'Check in',
+                hint: 'Scan each returned item. It is checked in on whichever event it went out for.',
+                idle: 'Scan the first returned item'
+            },
+            lookup: {
+                description: 'Scan any label to see what it is and where it should be. Nothing is changed.',
+                title: 'Look up',
+                hint: 'Scan a label, or type its asset tag or serial number and press Enter.',
+                idle: 'Scan an item to look it up'
+            }
+        };
+
+        // manual: gear going out with no event - a manual reservation for a person, known by
+        // { personName, startDate, endDate } (days as YYYY-MM-DD) plus personEmail and reason
+        const state = { mode: 'out', eventId: '', listName: '', addUnlisted: false, manual: null };
+        let canManual = false;    // inventory managers can check gear out with no event
+        let manualList = [];      // manual reservations that are current, upcoming or still out
+        let manualFormOpen = false;
+        let events = [];          // events this person can open
+        let eventsLoaded = false; // until then, a remembered event missing from the list means nothing
+        let listNames = [];       // gear lists of the chosen event
+        let canReserve = false;   // may add items to the chosen event
+        let lines = [];           // reserved lines on the chosen list
+        let linesError = '';
+        let outstanding = [];     // rows still out, for check-in mode
+        let outstandingError = '';
+        let lookupResult = null;  // last item looked up
+        const checkedInHere = new Set(); // lines checked in on this screen since it was opened
+        let scanner = null;
+        let loadToken = 0;        // ignores answers that arrive after the selection changed
+
+        const $ = (id) => document.getElementById(id);
+
+        // ---------- Small helpers ----------
+
+        function escapeHtml(value) {
+            const div = document.createElement('div');
+            div.textContent = value == null ? '' : String(value);
+            return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        }
+
+        // Gear dates are calendar days stored in UTC
+        function formatDay(value) {
+            if (!value) return '';
+            const date = new Date(value);
+            if (isNaN(date.getTime())) return '';
+            return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });
+        }
+
+        // The calendar day of a stored date, as YYYY-MM-DD
+        function dayOf(value) {
+            const date = new Date(value);
+            return isNaN(date.getTime()) ? '' : date.toISOString().slice(0, 10);
+        }
+
+        // Today on this computer (plus a number of days), as YYYY-MM-DD
+        function localDay(offsetDays) {
+            const date = new Date();
+            date.setDate(date.getDate() + (offsetDays || 0));
+            const pad = (number) => String(number).padStart(2, '0');
+            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+        }
+
+        function manualKey(reservation) {
+            return `${reservation.personName}|${dayOf(reservation.startDate)}|${dayOf(reservation.endDate)}`;
+        }
+
+        function manualTitle(reservation) {
+            return reservation.reason ? `${reservation.personName} - ${reservation.reason}` : reservation.personName;
+        }
+
+        // Where a line that is out (or booked) is: an event the person may see, a manual
+        // reservation, or just "somewhere else" when they may not see which
+        function whereName(line) {
+            if (line.eventTitle) return `"${line.eventTitle}"`;
+            return line.kind === 'manual' ? 'a manual reservation' : 'another event';
+        }
+
+        function unitIdText(unit) {
+            const parts = [];
+            if (unit.serial && unit.serial !== 'N/A') parts.push(`SN ${unit.serial}`);
+            if (unit.assetTag) parts.push(unit.assetTag);
+            return parts.join(' · ');
+        }
+
+        function authHeaders(extra) {
+            return Object.assign({ Authorization: `Bearer ${localStorage.getItem('token')}` }, extra || {});
+        }
+
+        async function apiGet(path) {
+            const response = await fetch(`${API_BASE}${path}`, { headers: authHeaders() });
+            const data = await response.json().catch(() => null);
+            if (!response.ok) throw new Error((data && data.error) || `Request failed (${response.status})`);
+            return data;
+        }
+
+        // Scan requests answer 200 with an outcome; anything else becomes an error outcome
+        async function scanRequest(path, body) {
+            const response = await fetch(`${API_BASE}/api/gear-scan${path}`, {
+                method: 'POST',
+                headers: authHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify(body)
+            });
+            const data = await response.json().catch(() => null);
+            if (!response.ok) {
+                return { ok: false, level: 'error', title: 'That did not work', detail: (data && data.error) || 'Please try again.', lines: [] };
+            }
+            return data;
+        }
+
+        function saveState() {
+            try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (error) { /* storage blocked */ }
+        }
+
+        function restoreState() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+                if (saved && typeof saved === 'object') {
+                    if (MODES[saved.mode]) state.mode = saved.mode;
+                    if (typeof saved.eventId === 'string') state.eventId = saved.eventId;
+                    if (typeof saved.listName === 'string') state.listName = saved.listName;
+                    state.addUnlisted = saved.addUnlisted === true;
+                    state.manual = cleanManual(saved.manual);
+                    if (state.manual) state.eventId = '';
+                }
+            } catch (error) { /* start fresh */ }
+            applyLinkedEvent();
+        }
+
+        // A usable manual reservation from saved or linked details, or null
+        function cleanManual(value) {
+            if (!value || typeof value !== 'object') return null;
+            const personName = typeof value.personName === 'string' ? value.personName.trim().slice(0, 120) : '';
+            const isDay = (day) => typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day) && dayOf(day) === day;
+            if (!personName || !isDay(value.startDate) || !isDay(value.endDate) || value.endDate < value.startDate) return null;
+            return {
+                personName,
+                startDate: value.startDate,
+                endDate: value.endDate,
+                personEmail: typeof value.personEmail === 'string' ? value.personEmail.trim().slice(0, 200) : '',
+                reason: typeof value.reason === 'string' ? value.reason.trim().slice(0, 200) : ''
+            };
+        }
+
+        // Opened from an event's gear page (?eventId=...&list=...&mode=...) or from a manual
+        // reservation on the inventory page (?person=...&start=...&end=...): start on that
+        function applyLinkedEvent() {
+            const params = new URLSearchParams(window.location.search);
+            const linkedEvent = params.get('eventId');
+            const linkedManual = cleanManual({
+                personName: params.get('person'),
+                startDate: params.get('start'),
+                endDate: params.get('end')
+            });
+
+            if (linkedManual) {
+                const sameAsBefore = state.manual && manualKey(state.manual) === manualKey(linkedManual);
+                if (!sameAsBefore) {
+                    state.addUnlisted = false; // that switch was for something else
+                    state.manual = linkedManual;
+                }
+                state.eventId = '';
+                state.listName = '';
+            } else if (linkedEvent && /^[0-9a-f]{24}$/i.test(linkedEvent)) {
+                if (linkedEvent !== state.eventId) state.addUnlisted = false; // that switch was for another event
+                state.manual = null;
+                state.eventId = linkedEvent;
+                state.listName = params.get('list') || '';
+            } else {
+                return;
+            }
+            state.mode = MODES[params.get('mode')] ? params.get('mode') : 'out';
+            saveState();
+
+            // Drop the link details so a reload keeps whatever is chosen on this page afterwards
+            try { history.replaceState(null, '', window.location.pathname); } catch (error) { /* keep the address */ }
+        }
+
+        // ---------- Check out: event and list ----------
+
+        function eventDates(event) {
+            const out = event.gear && event.gear.checkOutDate;
+            const back = event.gear && event.gear.checkInDate;
+            return { out: out ? new Date(out) : null, back: back ? new Date(back) : null };
+        }
+
+        function eventLabel(event) {
+            const { out, back } = eventDates(event);
+            const title = event.title || 'Untitled event';
+            if (!out || !back || isNaN(out) || isNaN(back)) return title;
+            return `${title}  ·  ${formatDay(out)} - ${formatDay(back)}`;
+        }
+
+        // Current and upcoming first (soonest at the top), then earlier ones, then events with no gear dates
+        function renderEventOptions() {
+            const select = $('eventSelect');
+            const cutoff = Date.now() - RECENT_EVENT_DAYS * 24 * 60 * 60 * 1000;
+            const current = [], earlier = [], undated = [];
+
+            events.forEach(event => {
+                const { out, back } = eventDates(event);
+                if (!out || !back || isNaN(out) || isNaN(back)) undated.push(event);
+                else if (back.getTime() >= cutoff) current.push(event);
+                else earlier.push(event);
+            });
+            current.sort((a, b) => eventDates(a).out - eventDates(b).out);
+            earlier.sort((a, b) => eventDates(b).out - eventDates(a).out);
+            undated.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+
+            const group = (label, list) => list.length === 0 ? '' : `
+                <optgroup label="${escapeHtml(label)}">
+                    ${list.map(event => `<option value="${escapeHtml(event._id)}">${escapeHtml(eventLabel(event))}</option>`).join('')}
+                </optgroup>`;
+
+            // Inventory managers can also check gear out with no event
+            let manualGroup = '';
+            if (canManual) {
+                const known = manualList.slice();
+                // One started here that has nothing scanned onto it yet is not on the server's list
+                if (state.manual && !known.some(m => manualKey(m) === manualKey(state.manual))) known.unshift(state.manual);
+                const label = (m) => `${manualTitle(m)}  ·  ${formatDay(m.startDate)} - ${formatDay(m.endDate)}` +
+                    (m.stillOut > 0 ? `  ·  ${m.stillOut} out` : '');
+                manualGroup = `
+                    <optgroup label="No event - manual check-out">
+                        <option value="manual:new">New manual check-out...</option>
+                        ${known.map(m => `<option value="${escapeHtml('manual:' + manualKey(m))}">${escapeHtml(label(m))}</option>`).join('')}
+                    </optgroup>`;
+            }
+            $('eventSelectLabel').textContent = canManual ? 'Event or manual check-out' : 'Event';
+
+            const placeholder = canManual
+                ? 'Choose an event or a manual check-out...'
+                : (events.length ? 'Choose an event...' : 'No events found');
+            select.innerHTML = `<option value="">${placeholder}</option>` +
+                manualGroup +
+                group('Current and upcoming', current) +
+                group('Earlier', earlier) +
+                group('No gear dates set', undated);
+
+            if (manualFormOpen) {
+                select.value = 'manual:new';
+                return;
+            }
+            if (state.manual) {
+                select.value = 'manual:' + manualKey(state.manual);
+                return;
+            }
+            select.value = state.eventId;
+            if (eventsLoaded && select.value !== state.eventId) {
+                // The remembered event is gone (deleted, archived or no longer shared)
+                state.eventId = '';
+                state.listName = '';
+            }
+        }
+
+        function renderListOptions() {
+            const select = $('listSelect');
+            if (state.manual || manualFormOpen) {
+                // A manual check-out is one list
+                select.disabled = true;
+                select.innerHTML = '<option value="">-</option>';
+                return;
+            }
+            select.disabled = listNames.length === 0;
+            select.innerHTML = listNames.length === 0
+                ? '<option value="">-</option>'
+                : listNames.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join('');
+            select.value = state.listName;
+        }
+
+        function renderSetup() {
+            $('checkoutSetup').style.display = state.mode === 'out' ? '' : 'none';
+            $('checkoutSetup').classList.toggle('needs-event', !hasTarget());
+            $('addUnlistedToggle').style.display = !manualFormOpen && hasTarget() && canReserve ? '' : 'none';
+            $('addUnlistedText').textContent = state.manual
+                ? 'Add unlisted items to this check-out'
+                : 'Add unlisted items to this list';
+            $('addUnlisted').checked = state.addUnlisted;
+            $('manualForm').style.display = manualFormOpen ? '' : 'none';
+        }
+
+        // Something to scan out to has been chosen: an event, or a manual check-out
+        function hasTarget() {
+            return !!(state.eventId || state.manual);
+        }
+
+        // Manual reservations, for inventory managers. Anyone else gets a "no" and never sees them.
+        async function loadManualList() {
+            try {
+                const response = await fetch(`${API_BASE}/api/gear-scan/manual`, { headers: authHeaders() });
+                if (response.status === 401 || response.status === 403) {
+                    manualList = [];
+                    canManual = false;
+                } else if (response.ok) {
+                    const data = await response.json();
+                    manualList = (data.reservations || []).map(m => ({
+                        personName: m.personName,
+                        personEmail: m.personEmail || '',
+                        reason: m.reason || '',
+                        startDate: dayOf(m.startDate),
+                        endDate: dayOf(m.endDate),
+                        stillOut: m.stillOut || 0
+                    }));
+                    canManual = true;
+                }
+                // Any other answer (server hiccup): keep what was known
+            } catch (error) {
+                console.error('Scan station: could not load manual reservations', error);
+            }
+            if (!canManual && (state.manual || manualFormOpen)) {
+                state.manual = null;
+                manualFormOpen = false;
+                saveState();
+            }
+            renderEventOptions();
+        }
+
+        async function loadEvents() {
+            try {
+                const all = await apiGet('/api/tables');
+                // Archived events are left out, unless one is the event this page was opened for
+                events = (Array.isArray(all) ? all : [])
+                    .filter(event => (!event.archived && !event.userArchived) || event._id === state.eventId);
+            } catch (error) {
+                console.error('Scan station: could not load events', error);
+                events = [];
+            }
+            eventsLoaded = true;
+            renderEventOptions();
+        }
+
+        // Lists and permissions of the chosen event, then its lines
+        async function loadEvent() {
+            const token = ++loadToken;
+            listNames = [];
+            canReserve = false;
+            lines = [];
+            linesError = '';
+
+            if (state.manual) {
+                canReserve = true; // only inventory managers get this far
+                renderListOptions();
+                renderSetup();
+                saveState();
+                await loadLines();
+                return;
+            }
+
+            if (!state.eventId) {
+                renderListOptions();
+                renderSetup();
+                renderSide();
+                return;
+            }
+
+            try {
+                const data = await apiGet(`/api/tables/${state.eventId}/gear-lists`);
+                if (token !== loadToken) return;
+                listNames = (data.gearLists || []).map(list => list.name);
+                if (!listNames.includes('Main List')) listNames.unshift('Main List');
+                canReserve = !!(data.userPermissions && data.userPermissions.canReserve);
+                if (!listNames.includes(state.listName)) {
+                    state.listName = listNames.includes(data.currentList) ? data.currentList : listNames[0];
+                }
+            } catch (error) {
+                if (token !== loadToken) return;
+                linesError = error.message;
+            }
+
+            renderListOptions();
+            renderSetup();
+            saveState();
+            if (linesError) renderSide();
+            else await loadLines();
+        }
+
+        function manualQuery(manual) {
+            return new URLSearchParams({
+                personName: manual.personName,
+                startDate: manual.startDate,
+                endDate: manual.endDate
+            }).toString();
+        }
+
+        async function loadManualLines() {
+            const manual = state.manual;
+            const token = ++loadToken;
+            try {
+                const data = await apiGet(`/api/gear-scan/manual/lines?${manualQuery(manual)}`);
+                if (token !== loadToken) return;
+                lines = (data.lines || []).filter(line => line.inventoryId);
+                linesError = '';
+                // Opened from a link: the reason comes with the reservation
+                if (!manual.reason && data.reservation && data.reservation.reason) {
+                    manual.reason = data.reservation.reason;
+                    saveState();
+                    renderEventOptions();
+                }
+            } catch (error) {
+                if (token !== loadToken) return;
+                lines = [];
+                linesError = error.message;
+            }
+            renderSide();
+        }
+
+        async function loadLines() {
+            if (state.manual) return loadManualLines();
+            if (!state.eventId || !state.listName) return;
+            const token = ++loadToken;
+            try {
+                const data = await apiGet(`/api/gear-packages/event/${state.eventId}?listName=${encodeURIComponent(state.listName)}`);
+                if (token !== loadToken) return;
+                lines = (data.reservedItems || []).filter(line => line.inventoryId);
+                linesError = '';
+            } catch (error) {
+                if (token !== loadToken) return;
+                lines = [];
+                linesError = error.message;
+            }
+            renderSide();
+        }
+
+        // ---------- Check in: what is still out ----------
+
+        async function loadOutstanding() {
+            try {
+                const data = await apiGet('/api/gear-scan/outstanding');
+                const rows = [];
+                (data.items || []).forEach(unit => {
+                    (unit.lines || []).forEach(line => rows.push({ unit, line }));
+                });
+                // Overdue first, then by when it is due back
+                rows.sort((a, b) => (Number(b.line.overdue) - Number(a.line.overdue)) ||
+                    (new Date(a.line.checkInDate) - new Date(b.line.checkInDate)));
+                outstanding = rows;
+                outstandingError = '';
+            } catch (error) {
+                outstanding = [];
+                outstandingError = error.message;
+            }
+            if (state.mode === 'in') renderSide();
+        }
+
+        // ---------- Side panel ----------
+
+        // Same states as the gear list page
+        function lineState(line) {
+            const quantity = line.quantity || 1;
+            const scanned = line.scannedOutQty || 0;
+            const returned = line.returnedQty || 0;
+            const out = line.isPacked ? quantity : (scanned > 0 ? scanned : quantity);
+
+            let key = 'open';
+            if (returned > 0) key = returned >= out ? 'returned' : 'returning';
+            else if (line.isPacked) key = line.packedMethod === 'scan' ? 'scanned' : 'checked';
+            else if (scanned > 0) key = 'partial';
+            return { key, quantity, scanned, returned, out };
+        }
+
+        const LINE_ICONS = {
+            open: 'radio_button_unchecked',
+            partial: 'barcode_scanner',
+            scanned: 'barcode_scanner',
+            checked: 'check_circle',
+            returning: 'login',
+            returned: 'assignment_turned_in'
+        };
+
+        function lineStateText(s) {
+            if (s.key === 'scanned') return 'Scanned';
+            if (s.key === 'checked') return 'By hand';
+            if (s.key === 'partial') return `${s.scanned} of ${s.quantity}`;
+            if (s.key === 'returning') return `${s.returned} of ${s.out} back`;
+            if (s.key === 'returned') return 'Returned';
+            return s.quantity > 1 ? `0 of ${s.quantity}` : '';
+        }
+
+        function emptyHtml(icon, text, isError) {
+            return `
+                <div class="side-empty${isError ? ' side-error' : ''}">
+                    <span class="material-symbols-outlined">${icon}</span>
+                    <div>${escapeHtml(text)}</div>
+                </div>`;
+        }
+
+        function renderCheckoutSide() {
+            if (manualFormOpen) {
+                return emptyHtml('person_add', 'Fill in who is taking the gear and when it is due back, then press Start scanning. Each item you scan is reserved for them and checked out.');
+            }
+            if (!hasTarget()) {
+                return emptyHtml('event', canManual
+                    ? 'Choose the event you are packing for, or start a manual check-out for gear that is not going to an event. The list shows here and fills in as you scan.'
+                    : 'Choose the event you are packing for. Its gear list shows here and fills in as you scan.');
+            }
+            if (linesError) return emptyHtml('error', linesError, true);
+
+            const manual = state.manual;
+            const event = manual ? null : events.find(e => e._id === state.eventId);
+            const title = manual
+                ? manualTitle(manual)
+                : `${event ? (event.title || 'Untitled event') : 'Event'} - ${state.listName}`;
+            const emptyText = manual
+                ? (state.addUnlisted
+                    ? 'Nothing on this check-out yet. Scan the first item to add it.'
+                    : 'Nothing is reserved for this check-out yet. Turn on "Add unlisted items" to add gear by scanning.')
+                : (canReserve
+                    ? 'Nothing is reserved on this list yet. Turn on "Add unlisted items" to build the list by scanning.'
+                    : 'Nothing is reserved on this list yet.');
+            const states = lines.map(lineState);
+            const count = (key) => states.filter(s => s.key === key).length;
+            const done = states.filter(s => s.key !== 'open' && s.key !== 'partial').length;
+            const extras = [];
+            if (count('partial') > 0) extras.push(`${count('partial')} part scanned`);
+            if (count('checked') > 0) extras.push(`${count('checked')} checked by hand`);
+            if (count('returned') + count('returning') > 0) extras.push(`${count('returned') + count('returning')} checked in`);
+            const allDone = lines.length > 0 && done === lines.length;
+
+            // What is left to scan stays at the top
+            const order = { open: 0, partial: 0, returning: 1, checked: 2, scanned: 2, returned: 3 };
+            const rows = lines
+                .map((line, index) => ({ line, s: states[index], index }))
+                .sort((a, b) => (order[a.s.key] - order[b.s.key]) || (a.index - b.index));
+
+            return `
+                <div class="side-head">
+                    <h2>${escapeHtml(title)}</h2>
+                    ${scannedLines().length > 0 ? `
+                        <button type="button" class="side-btn" id="clearScansBtn" title="Clear every scan on this list in one go, so it can be scanned again from the start">
+                            <span class="material-symbols-outlined">restart_alt</span>
+                            Clear scans
+                        </button>` : ''}
+                    <button type="button" class="side-btn" id="refreshSideBtn" title="Reload this list">
+                        <span class="material-symbols-outlined">refresh</span>
+                    </button>
+                    ${manual ? `
+                        <a class="side-link" href="/pages/inventory-management.html" title="Manual reservations are listed on the inventory page">
+                            <span class="material-symbols-outlined">open_in_new</span>
+                            Reservations
+                        </a>` : `
+                        <a class="side-link" href="/dashboard.html#gear?id=${escapeHtml(state.eventId)}" title="Open this event's gear page">
+                            <span class="material-symbols-outlined">open_in_new</span>
+                            Gear list
+                        </a>`}
+                </div>
+                ${manual ? `
+                    <div class="side-note">
+                        <span>Manual check-out · ${escapeHtml(formatDay(manual.startDate))} - due back ${escapeHtml(formatDay(manual.endDate))}</span>
+                    </div>` : ''}
+                <div class="side-summary">
+                    <strong>${count('scanned')} of ${lines.length}</strong> scanned${extras.length ? ' · ' + escapeHtml(extras.join(' · ')) : ''}
+                    ${allDone ? ' · <span class="all-done">Everything is packed</span>' : ''}
+                </div>
+                <div class="progress-track"><div class="progress-fill" style="width: ${lines.length ? Math.round(done / lines.length * 100) : 0}%"></div></div>
+                ${lines.length === 0
+                    ? emptyHtml('inventory_2', emptyText)
+                    : `<ul class="line-list">
+                        ${rows.map(({ line, s }) => `
+                            <li class="line-row state-${s.key}" data-line-id="${escapeHtml(line._id)}">
+                                <span class="material-symbols-outlined line-icon">${LINE_ICONS[s.key]}</span>
+                                <div class="line-text">
+                                    <div class="line-name">${escapeHtml(line.inventoryId.label || `${line.brand} ${line.model}`)}${s.quantity > 1 ? ` × ${s.quantity}` : ''}</div>
+                                    <div class="line-sub">${escapeHtml(unitIdText(line.inventoryId) || line.inventoryId.category || '')}</div>
+                                </div>
+                                ${line.isOverdue ? '<span class="badge badge-overdue">Overdue</span>' : ''}
+                                <span class="line-state">${escapeHtml(lineStateText(s))}</span>
+                            </li>`).join('')}
+                    </ul>`}`;
+        }
+
+        function renderCheckinSide() {
+            if (outstandingError) return emptyHtml('error', outstandingError, true);
+
+            const units = outstanding.reduce((sum, row) => sum + (row.line.quantity || 1), 0);
+            const overdue = outstanding.filter(row => row.line.overdue).reduce((sum, row) => sum + (row.line.quantity || 1), 0);
+
+            return `
+                <div class="side-head">
+                    <h2>Still out</h2>
+                    ${checkedInHere.size > 0 ? `
+                        <button type="button" class="side-btn" id="clearScansBtn" title="Undo every check-in made on this screen since it was opened, in one go">
+                            <span class="material-symbols-outlined">restart_alt</span>
+                            Clear check-ins (${checkedInHere.size})
+                        </button>` : ''}
+                    <button type="button" class="side-btn" id="refreshSideBtn" title="Reload this list">
+                        <span class="material-symbols-outlined">refresh</span>
+                    </button>
+                </div>
+                <div class="side-summary">
+                    <strong>${units}</strong> ${units === 1 ? 'item' : 'items'} scanned out and not back${overdue > 0 ? ` · ${overdue} overdue` : ''}
+                </div>
+                ${outstanding.length === 0
+                    ? emptyHtml('task_alt', 'Everything that was scanned out has been scanned back in.')
+                    : `<ul class="line-list">
+                        ${outstanding.map(({ unit, line }) => {
+                            const sub = [unitIdText(unit), whereName(line), `due ${formatDay(line.checkInDate)}`].filter(Boolean).join(' · ');
+                            return `
+                                <li class="line-row ${line.overdue ? 'state-overdue' : 'state-out'}" data-line-id="${escapeHtml(line.lineId)}">
+                                    <span class="material-symbols-outlined line-icon">${line.overdue ? 'schedule' : 'logout'}</span>
+                                    <div class="line-text">
+                                        <div class="line-name">${escapeHtml(unit.label)}${line.quantity > 1 ? ` × ${line.quantity}` : ''}</div>
+                                        <div class="line-sub">${escapeHtml(sub)}</div>
+                                    </div>
+                                    ${line.overdue ? '<span class="badge badge-overdue">Overdue</span>' : ''}
+                                    <button type="button" class="side-btn mark-returned-btn" data-line-id="${escapeHtml(line.lineId)}"
+                                            title="Check this item in without scanning it (label missing or unreadable)">
+                                        <span class="material-symbols-outlined">login</span>
+                                        Mark returned
+                                    </button>
+                                </li>`;
+                        }).join('')}
+                    </ul>`}`;
+        }
+
+        function renderLookupSide() {
+            if (!lookupResult) {
+                return emptyHtml('qr_code_scanner', 'Scan any label to see what the item is, whether it is checked out, and where it is booked next.');
+            }
+            const { unit, status, reservations } = lookupResult;
+            // Manual reservations have no gear list name
+            const whereText = (line) => `${whereName(line)}${line.listName ? ` (${line.listName})` : ''}`;
+
+            let statusHtml;
+            if (status.state === 'in') {
+                statusHtml = '<span class="badge badge-in">In</span> Not checked out';
+            } else {
+                const first = status.lines[0];
+                const badge = status.state === 'overdue'
+                    ? '<span class="badge badge-overdue">Overdue</span>'
+                    : '<span class="badge badge-out">Checked out</span>';
+                const amount = unit.quantity > 1 ? `${status.outQty} of ${unit.quantity} out` : 'Out';
+                statusHtml = `${badge} ${escapeHtml(`${amount} on ${whereText(first)}, ${first.overdue ? 'was due' : 'due'} ${formatDay(first.checkInDate)}`)}` +
+                    (status.lines.length > 1 ? escapeHtml(` and ${status.lines.length - 1} more`) : '');
+            }
+
+            const facts = [
+                ['Asset tag', unit.assetTag || 'Not assigned', true],
+                ['Serial', unit.serial && unit.serial !== 'N/A' ? unit.serial : 'None', true],
+                unit.quantity > 1 ? ['Quantity', unit.quantity, false] : null,
+                unit.lensClass ? ['Lens class', unit.lensClass, false] : null
+            ].filter(Boolean);
+
+            return `
+                <div class="lookup-name">${escapeHtml(unit.label)}</div>
+                <div class="lookup-category">${escapeHtml(unit.category || '')}</div>
+                <div class="lookup-status">${statusHtml}</div>
+                <dl class="lookup-facts">
+                    ${facts.map(([name, value, mono]) => `<dt>${escapeHtml(name)}</dt><dd${mono ? ' class="mono"' : ''}>${escapeHtml(value)}</dd>`).join('')}
+                </dl>
+                <div class="lookup-section">Current and upcoming reservations</div>
+                ${reservations.length === 0
+                    ? '<ul class="lookup-list"><li>None</li></ul>'
+                    : `<ul class="lookup-list">
+                        ${reservations.map(r => `
+                            <li><strong>${escapeHtml(formatDay(r.checkOutDate))} - ${escapeHtml(formatDay(r.checkInDate))}</strong>
+                                ${escapeHtml(` · ${whereText(r)}${r.quantity > 1 ? ` × ${r.quantity}` : ''}`)}</li>`).join('')}
+                    </ul>`}
+                ${(unit.notes || []).length === 0 ? '' : `
+                    <div class="lookup-section">Notes</div>
+                    <ul class="lookup-list">
+                        ${unit.notes.map(note => `
+                            <li><strong>${escapeHtml(note.text)}</strong>
+                                ${escapeHtml(` · ${[note.createdBy, new Date(note.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })].filter(Boolean).join(', ')}`)}</li>`).join('')}
+                    </ul>`}
+                ${unit.assetTag ? `
+                    <div class="lookup-actions">
+                        <a class="side-link" href="labels-print.html?ids=${escapeHtml(unit._id)}" target="_blank" rel="noopener" title="Print a new label for this item">
+                            <span class="material-symbols-outlined">print</span>
+                            Print label
+                        </a>
+                    </div>` : ''}`;
+        }
+
+        function renderSide() {
+            const panel = $('sidePanel');
+            if (state.mode === 'out') panel.innerHTML = renderCheckoutSide();
+            else if (state.mode === 'in') panel.innerHTML = renderCheckinSide();
+            else panel.innerHTML = renderLookupSide();
+        }
+
+        function highlightRow(lineId) {
+            const row = Array.from(document.querySelectorAll('#sidePanel .line-row'))
+                .find(el => el.dataset.lineId === String(lineId));
+            if (!row) return;
+            row.classList.add('row-hit');
+            row.scrollIntoView({ block: 'nearest' });
+            setTimeout(() => row.classList.remove('row-hit'), 1300);
+        }
+
+        // ---------- Scans ----------
+
+        // Update the packing list from what a scan changed
+        function applyCheckoutOutcome(outcome) {
+            if (!outcome) return;
+            let changed = false;
+            let hitId = null;
+
+            const manual = state.manual;
+            const isShown = (line) => manual
+                ? !line.eventId && line.personName === manual.personName &&
+                    dayOf(line.startDate) === manual.startDate && dayOf(line.endDate) === manual.endDate
+                : String(line.eventId) === state.eventId && line.listName === state.listName;
+
+            (outcome.lines || []).forEach(line => {
+                if (!isShown(line)) return;
+                const index = lines.findIndex(existing => existing._id === line._id);
+                if (index >= 0) lines[index] = line;
+                else lines.push(line);
+                changed = true;
+                hitId = line._id;
+            });
+            if (outcome.removedLineId) {
+                lines = lines.filter(line => line._id !== outcome.removedLineId);
+                changed = true;
+            }
+            if (changed) {
+                renderSide();
+                if (hitId) highlightRow(hitId);
+            }
+        }
+
+        // Keep the dropdown's manual check-outs (and their "out" counts) current, in the background
+        function refreshManualList() {
+            loadManualList().catch(() => { /* the list is only a convenience */ });
+        }
+
+        // Check out with no event: the items are reserved for a person
+        async function scanOutManual(code, quantity) {
+            const manual = state.manual;
+            const reservation = {
+                personName: manual.personName,
+                startDate: manual.startDate,
+                endDate: manual.endDate,
+                personEmail: manual.personEmail,
+                reason: manual.reason
+            };
+            const stillShown = () => state.manual && manualKey(state.manual) === manualKey(manual);
+            const send = async (addUnlisted) => {
+                const outcome = await scanRequest('/manual/scan-out', { code, quantity, addUnlisted, reservation });
+                if (stillShown()) applyCheckoutOutcome(outcome);
+                if (outcome.effect === 'added') refreshManualList();
+                return outcome;
+            };
+
+            const outcome = await send(state.addUnlisted);
+            if (outcome.result === 'not_on_list') {
+                outcome.actions = [{ label: 'Add to this check-out', code, onClick: () => send(true) }];
+            }
+            return outcome;
+        }
+
+        async function scanOut(code, quantity) {
+            if (manualFormOpen) {
+                return {
+                    level: 'error',
+                    title: 'Finish the new check-out first',
+                    detail: 'Nothing was scanned. Fill in who is taking the gear and press Start scanning, then scan again.'
+                };
+            }
+            if (state.manual) return scanOutManual(code, quantity);
+            if (!state.eventId) {
+                return {
+                    level: 'error',
+                    title: canManual ? 'Choose an event or a manual check-out first' : 'Choose an event first',
+                    detail: 'Nothing was scanned. Pick the event you are packing for, then scan again.'
+                };
+            }
+            const eventId = state.eventId;
+            const listName = state.listName;
+            const send = (addUnlisted) => scanRequest(`/events/${eventId}/scan-out`, { code, quantity, listName, addUnlisted });
+
+            const outcome = await send(state.addUnlisted && canReserve);
+            applyCheckoutOutcome(outcome);
+
+            if (outcome.result === 'not_on_list' && canReserve) {
+                outcome.actions = [{
+                    label: 'Add to this list',
+                    code,
+                    onClick: async () => {
+                        const added = await send(true);
+                        applyCheckoutOutcome(added);
+                        return added;
+                    }
+                }];
+            }
+            return outcome;
+        }
+
+        // Remember what was checked in on this screen, for "Clear check-ins"
+        function noteCheckedIn(outcome) {
+            if (!outcome || !outcome.ok || outcome.effect !== 'returned') return;
+            (outcome.lines || []).forEach(line => checkedInHere.add(String(line._id)));
+        }
+
+        async function scanIn(code, quantity) {
+            const outcome = await scanRequest('/scan-in', { code, quantity });
+            noteCheckedIn(outcome);
+            await loadOutstanding();
+            return outcome;
+        }
+
+        async function lookUp(code) {
+            let data;
+            try {
+                data = await apiGet(`/api/gear-scan/resolve?code=${encodeURIComponent(code)}`);
+            } catch (error) {
+                return { level: 'error', title: 'That did not work', detail: error.message };
+            }
+
+            if (!data.found) {
+                lookupResult = null;
+                renderSide();
+                return {
+                    level: 'error',
+                    title: data.reason === 'ambiguous' ? 'More than one match' : 'Unknown code',
+                    detail: data.message
+                };
+            }
+
+            lookupResult = data;
+            renderSide();
+
+            const { unit, status } = data;
+            let detail = 'In - not checked out';
+            if (status.state !== 'in') {
+                const first = status.lines[0];
+                const where = whereName(first);
+                detail = status.state === 'overdue'
+                    ? `Overdue - out on ${where}, was due ${formatDay(first.checkInDate)}`
+                    : `Checked out on ${where}, due ${formatDay(first.checkInDate)}`;
+            }
+            return {
+                level: status.state === 'overdue' ? 'warn' : 'ok',
+                title: unit.label,
+                detail: [unitIdText(unit), detail].filter(Boolean).join(' - ')
+            };
+        }
+
+        function handleScan(code, quantity) {
+            if (state.mode === 'out') return scanOut(code, quantity);
+            if (state.mode === 'in') return scanIn(code, quantity);
+            return lookUp(code);
+        }
+
+        async function handleUndo(scanOutcome) {
+            const line = scanOutcome && scanOutcome.lines && scanOutcome.lines[0];
+            if (!line || !scanOutcome.logId) return { level: 'error', title: 'Nothing to undo', detail: '' };
+
+            const outcome = await scanRequest(`/lines/${line._id}/undo`, { logId: scanOutcome.logId });
+            if (state.mode === 'out') {
+                applyCheckoutOutcome(outcome);
+                if (state.manual && outcome.removedLineId) refreshManualList();
+            } else {
+                // A check-in that was undone is out again; nothing left of it to clear
+                const undone = outcome.ok && (outcome.lines || []).find(l => String(l._id) === String(line._id));
+                if (undone && !(undone.returnedQty > 0)) checkedInHere.delete(String(line._id));
+                await loadOutstanding();
+            }
+            return outcome;
+        }
+
+        // ---------- Clear everything in one go ----------
+
+        // Lines on the chosen list that have been scanned (fully or in part)
+        function scannedLines() {
+            return lines.filter(line => (line.scannedOutQty || 0) > 0);
+        }
+
+        // Asked in the scan banner rather than a pop-up, so a scan that arrives while the
+        // question is showing can never answer it by accident
+        function askToClear({ title, detail, warnings, label, run }) {
+            scanner.showResult({
+                level: 'warn',
+                title,
+                detail,
+                warnings: warnings || [],
+                actions: [
+                    { label, onClick: run },
+                    { label: 'Cancel', onClick: () => { scanner.clearResult(); return null; } }
+                ]
+            }, { sound: false });
+            scanner.focus();
+        }
+
+        // Check out: every scan on the chosen list
+        function confirmClearScans() {
+            const count = scannedLines().length;
+            if (!hasTarget() || count === 0) return;
+            const eventId = state.eventId;
+            const listName = state.listName;
+            const manual = state.manual;
+            const checkedIn = scannedLines().filter(line => (line.returnedQty || 0) > 0).length;
+            const place = manual ? 'check-out' : 'list';
+            const stillShown = () => state.mode === 'out' && (manual
+                ? state.manual && manualKey(state.manual) === manualKey(manual)
+                : !state.manual && state.eventId === eventId && state.listName === listName);
+
+            askToClear({
+                title: count === 1 ? `Clear the scan on this ${place}?` : `Clear all ${count} scans on this ${place}?`,
+                detail: manual
+                    ? 'Those items go back to not checked out. They stay reserved for this person.'
+                    : 'Those items go back to not packed. Items ticked by hand stay ticked.',
+                warnings: checkedIn > 0
+                    ? [`${checkedIn} of them ${checkedIn === 1 ? 'has' : 'have'} already been checked in - that is cleared as well.`]
+                    : [],
+                label: 'Clear scans',
+                run: async () => {
+                    const outcome = await scanRequest('/clear', manual
+                        ? { action: 'scan_out', reservation: { personName: manual.personName, startDate: manual.startDate, endDate: manual.endDate } }
+                        : { action: 'scan_out', eventId, listName });
+                    if (outcome.ok) {
+                        scanner.reset(); // the recent scans are all undone now
+                        (outcome.lineIds || []).forEach(id => checkedInHere.delete(String(id)));
+                    }
+                    if (stillShown()) await loadLines();
+                    if (manual) refreshManualList();
+                    return outcome;
+                }
+            });
+        }
+
+        // ---------- New manual check-out ----------
+
+        function openManualForm() {
+            manualFormOpen = true;
+            state.eventId = '';
+            state.listName = '';
+            state.manual = null;
+            state.addUnlisted = false;
+            saveState();
+            lines = [];
+            linesError = '';
+            loadToken++; // drop any list still loading
+
+            $('manualName').value = '';
+            $('manualReason').value = '';
+            $('manualEmail').value = '';
+            $('manualDue').value = localDay(1);
+            $('manualDue').min = localDay(0);
+            showManualFormError('');
+
+            renderEventOptions();
+            renderListOptions();
+            renderSetup();
+            renderSide();
+            $('manualName').focus();
+        }
+
+        function closeManualForm() {
+            manualFormOpen = false;
+            renderEventOptions();
+            renderListOptions();
+            renderSetup();
+            renderSide();
+            scanner.focus();
+        }
+
+        function showManualFormError(message, field) {
+            const box = $('manualFormError');
+            box.textContent = message || '';
+            box.style.display = message ? '' : 'none';
+            ['manualName', 'manualDue', 'manualEmail'].forEach(id => $(id).classList.toggle('invalid', id === field));
+            if (field) $(field).focus();
+        }
+
+        function startManualCheckout() {
+            const email = $('manualEmail').value.trim();
+            const manual = cleanManual({
+                personName: $('manualName').value,
+                reason: $('manualReason').value,
+                personEmail: email,
+                startDate: localDay(0),
+                endDate: $('manualDue').value
+            });
+
+            if (!$('manualName').value.trim()) return showManualFormError('Enter who is taking the gear.', 'manualName');
+            if (!$('manualDue').value) return showManualFormError('Pick the day the gear is due back.', 'manualDue');
+            if (!manual) return showManualFormError('The due back day cannot be before today.', 'manualDue');
+            if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                return showManualFormError('That email address does not look right. Leave it empty if there is none.', 'manualEmail');
+            }
+
+            // The same person and dates as one that already exists carries on with that one
+            const existing = manualList.find(m => manualKey(m) === manualKey(manual));
+            state.manual = existing
+                ? { personName: existing.personName, startDate: existing.startDate, endDate: existing.endDate, personEmail: existing.personEmail, reason: existing.reason }
+                : manual;
+            state.addUnlisted = true; // a walk-up check-out is built by scanning
+            manualFormOpen = false;
+            saveState();
+            scanner.reset();
+            renderEventOptions();
+            loadEvent();
+            scanner.focus();
+        }
+
+        // Check in: every check-in made on this screen since it was opened
+        function confirmClearCheckins() {
+            const lineIds = Array.from(checkedInHere);
+            if (lineIds.length === 0) return;
+            const count = lineIds.length;
+
+            askToClear({
+                title: count === 1 ? 'Clear the check-in made here?' : `Clear all ${count} check-ins made here?`,
+                detail: 'Those items go back to not returned. Check-ins made anywhere else are not touched.',
+                label: 'Clear check-ins',
+                run: async () => {
+                    const outcome = await scanRequest('/clear', { action: 'scan_in', lineIds });
+                    // "Nothing to clear" means they were all undone somewhere else already
+                    if (outcome.ok || outcome.result === 'nothing_to_clear') {
+                        lineIds.forEach(id => checkedInHere.delete(id));
+                    }
+                    if (outcome.ok) scanner.reset();
+                    await loadOutstanding();
+                    return outcome;
+                }
+            });
+        }
+
+        // "Mark returned" on a row whose label cannot be scanned
+        async function markReturned(lineId, button) {
+            button.disabled = true;
+            let outcome;
+            try {
+                outcome = await scanRequest('/scan-in', { lineId });
+            } catch (error) {
+                outcome = { level: 'error', title: 'Could not reach the server', detail: 'Nothing was recorded. Check the connection and try again.' };
+            }
+            noteCheckedIn(outcome);
+            scanner.showResult(outcome);
+            await loadOutstanding();
+            scanner.focus();
+        }
+
+        // ---------- Mode ----------
+
+        function setMode(mode, { keepRecent = false } = {}) {
+            if (!MODES[mode]) return;
+            const changed = state.mode !== mode;
+            state.mode = mode;
+            saveState();
+
+            const texts = MODES[mode];
+            $('modeDescription').textContent = texts.description;
+            document.querySelectorAll('.mode-tab').forEach(tab => {
+                const isActive = tab.dataset.mode === mode;
+                tab.classList.toggle('active', isActive);
+                tab.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            });
+
+            scanner.setTitle(texts.title);
+            scanner.setHint(texts.hint);
+            scanner.setIdleText(texts.idle);
+            scanner.setShowQuantity(mode !== 'lookup');
+            if (changed && !keepRecent) scanner.reset();
+
+            renderSetup();
+            renderSide();
+            if (mode === 'in') loadOutstanding();
+            if (mode === 'out' && changed && hasTarget()) loadLines();
+            scanner.focus();
+        }
+
+        // ---------- Wiring ----------
+
+        function wireEvents() {
+            document.querySelectorAll('.mode-tab').forEach(tab => {
+                tab.addEventListener('click', () => setMode(tab.dataset.mode));
+            });
+
+            $('eventSelect').addEventListener('change', (event) => {
+                const value = event.target.value;
+                if (value === 'manual:new') {
+                    scanner.reset();
+                    openManualForm();
+                    return;
+                }
+
+                manualFormOpen = false;
+                const wasManual = !!state.manual;
+                if (value.startsWith('manual:')) {
+                    const picked = manualList.find(m => 'manual:' + manualKey(m) === value) ||
+                        (state.manual && 'manual:' + manualKey(state.manual) === value ? state.manual : null);
+                    state.manual = cleanManual(picked);
+                    state.eventId = '';
+                } else {
+                    state.manual = null;
+                    state.eventId = value;
+                }
+                // "Add unlisted" set for a manual check-out is not carried to anything else, or the other way
+                if (wasManual || state.manual) state.addUnlisted = false;
+                state.listName = '';
+                saveState();
+                scanner.reset();
+                loadEvent();
+                // Hand the keyboard back to the scanner - a dropdown would swallow the next scan
+                event.target.blur();
+                scanner.focus();
+            });
+
+            $('listSelect').addEventListener('change', (event) => {
+                state.listName = event.target.value;
+                saveState();
+                scanner.reset();
+                loadLines();
+                event.target.blur();
+                scanner.focus();
+            });
+
+            $('addUnlisted').addEventListener('change', (event) => {
+                state.addUnlisted = event.target.checked;
+                saveState();
+                if (state.manual && lines.length === 0) renderSide(); // the empty text depends on it
+                scanner.focus();
+            });
+
+            $('manualStartBtn').addEventListener('click', startManualCheckout);
+            $('manualForm').addEventListener('input', () => showManualFormError(''));
+            $('manualCancelBtn').addEventListener('click', closeManualForm);
+            // Enter moves to the next field and never starts the check-out: a label scanned while
+            // one of these fields has the cursor types its code and presses Enter
+            $('manualForm').addEventListener('keydown', (event) => {
+                if (event.key !== 'Enter' || event.target.tagName !== 'INPUT') return;
+                event.preventDefault();
+                const fields = ['manualName', 'manualReason', 'manualDue', 'manualEmail', 'manualStartBtn'];
+                const next = fields[fields.indexOf(event.target.id) + 1];
+                if (next) $(next).focus();
+            });
+
+            $('sidePanel').addEventListener('click', (event) => {
+                const returnBtn = event.target.closest('.mark-returned-btn');
+                if (returnBtn) {
+                    markReturned(returnBtn.dataset.lineId, returnBtn);
+                    return;
+                }
+                if (event.target.closest('#clearScansBtn')) {
+                    if (state.mode === 'in') confirmClearCheckins();
+                    else if (state.mode === 'out') confirmClearScans();
+                    return;
+                }
+                if (event.target.closest('#refreshSideBtn')) {
+                    if (state.mode === 'in') loadOutstanding();
+                    else if (state.mode === 'out') loadLines();
+                    scanner.focus();
+                }
+            });
+
+            // Another computer may have changed things while this tab was in the background
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) return;
+                if (state.mode === 'in') loadOutstanding();
+                else if (state.mode === 'out' && hasTarget()) loadLines();
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (!localStorage.getItem('token')) {
+                window.location.href = 'index.html';
+                return;
+            }
+
+            restoreState();
+
+            scanner = window.GearScanner.create({
+                container: $('scannerMount'),
+                onScan: handleScan,
+                onUndo: handleUndo,
+                large: true,
+                title: MODES[state.mode].title,
+                hint: MODES[state.mode].hint,
+                idleText: MODES[state.mode].idle
+            });
+            wireEvents();
+            setMode(state.mode, { keepRecent: true });
+            scanner.start();
+
+            const sidebarContainer = $('sidebarContainer');
+            if (sidebarContainer && window.injectDashboardSidebar) {
+                window.injectDashboardSidebar(sidebarContainer, { position: 'replace', activePage: 'scan-station' })
+                    .catch(error => console.error('Scan station: sidebar failed to load', error));
+            }
+
+            await Promise.all([loadEvents(), loadManualList()]);
+            await loadEvent();
+
+            // A remembered walk-up check-out from an earlier day that never had anything
+            // scanned onto it is not worth coming back to
+            if (state.manual && !linesError && lines.length === 0 && state.manual.endDate < localDay(0)) {
+                state.manual = null;
+                saveState();
+                renderEventOptions();
+                await loadEvent();
+            }
+            scanner.focus();
+        });
+    })();
+    </script>
+</body>
+</html>

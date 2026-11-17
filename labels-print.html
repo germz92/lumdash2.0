@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#121216">
+    <script src="js/theme-early.js?v=2.0.0"></script>
+    <title>Print Labels - LumDash</title>
+    <link rel="icon" href="assets/favicon.png" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
+    <link rel="stylesheet" href="css/general.css">
+    <link rel="stylesheet" href="css/theme-tokens.css?v=2.0.0">
+    <link rel="stylesheet" href="css/theme-dark.css?v=2.0.0">
+    <link rel="stylesheet" href="css/theme-light.css?v=2.0.0">
+    <script src="js/theme.js?v=2.0.0"></script>
+    <style>
+        /* Override global overflow hidden from theme-dark.css */
+        html, body {
+            overflow: auto !important;
+            height: auto !important;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        .layout {
+            display: grid;
+            grid-template-columns: 340px 1fr;
+            min-height: 100vh;
+        }
+
+        /* ---- Settings panel ---- */
+        .settings {
+            background: var(--bg-secondary);
+            border-right: 1px solid var(--border-default);
+            padding: 20px;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            box-sizing: border-box;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+
+        .back-link:hover { color: var(--text-primary); }
+
+        .settings h1 {
+            font-size: 22px;
+            margin: 0 0 4px 0;
+        }
+
+        .settings .summary {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin: 0 0 16px 0;
+        }
+
+        .group {
+            border-top: 1px solid var(--border-default);
+            padding: 14px 0;
+        }
+
+        .group h2 {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: var(--text-tertiary);
+            margin: 0 0 10px 0;
+        }
+
+        .field { margin-bottom: 10px; }
+
+        .field label {
+            display: block;
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+        }
+
+        .field input[type="number"],
+        .field select {
+            width: 100%;
+            box-sizing: border-box;
+            padding: 8px 10px;
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border: 1px solid var(--border-default);
+            border-radius: var(--radius-md);
+            font-size: 14px;
+        }
+
+        .field-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .check {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            font-size: 14px;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            cursor: pointer;
+        }
+
+        .check input { margin-top: 3px; }
+
+        .check input:disabled + span { color: var(--text-tertiary); }
+
+        .hint {
+            font-size: 12px;
+            color: var(--text-tertiary);
+            line-height: 1.45;
+            margin: 6px 0 0 0;
+        }
+
+        .print-btn {
+            width: 100%;
+            padding: 12px 16px;
+            border: none;
+            border-radius: var(--radius-md);
+            background: var(--brand-red);
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .print-btn:hover:not(:disabled) { background: var(--brand-red-hover); }
+        .print-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .notice {
+            background: var(--warning-bg);
+            border: 1px solid var(--warning-text);
+            color: var(--warning-text);
+            padding: 10px 12px;
+            border-radius: var(--radius-md);
+            font-size: 13px;
+            margin-bottom: 12px;
+        }
+
+        .preview .notice { max-width: 640px; }
+
+        /* ---- Preview ---- */
+        .preview {
+            padding: 24px;
+            overflow: auto;
+        }
+
+        .preview-status {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin: 0 0 16px 0;
+        }
+
+        .empty {
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-tertiary);
+        }
+
+        .empty a { color: var(--brand-red); }
+
+        /* A page is drawn at real size: 1mm on screen = 1mm on paper */
+        .page {
+            position: relative;
+            background: #fff;
+            color: #000;
+            margin: 0 0 24px 0;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+            overflow: hidden;
+        }
+
+        .label {
+            position: absolute;
+            box-sizing: border-box;
+            overflow: hidden;
+            color: #000;
+            font-family: Arial, Helvetica, sans-serif;
+            outline: 0.2mm dashed #b5b5b5;
+        }
+
+        .label.round { border-radius: 50%; }
+        .label.blank { outline-style: dotted; outline-color: #dcdcdc; }
+
+        .label svg { display: block; }
+
+        /* Round: QR in the middle, tag text in the gap underneath */
+        .round .qr { position: absolute; }
+        .round .tag {
+            position: absolute;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-family: "Courier New", Courier, monospace;
+            font-weight: 700;
+            line-height: 1;
+            white-space: nowrap;
+        }
+
+        /* Rectangle: code(s) on the left, text on the right */
+        .rect {
+            display: flex;
+            align-items: center;
+        }
+
+        .rect .qr { flex: 0 0 auto; }
+
+        .rect .text {
+            flex: 1 1 auto;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            height: 100%;
+        }
+
+        /* Text lines keep their height; only the barcode stretches or shrinks */
+        .rect .name,
+        .rect .serial,
+        .rect .tagline {
+            flex: 0 0 auto;
+        }
+
+        .rect .name {
+            font-weight: 700;
+            line-height: 1.15;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-box-orient: vertical;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            word-break: break-word;
+        }
+
+        .rect .name.one-line {
+            display: block;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+
+        .rect .serial {
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Asset tag, then the serial if there is room for it */
+        .rect .tagline {
+            display: flex;
+            align-items: baseline;
+            gap: 0.6em;
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .rect .tag {
+            flex: 0 0 auto;
+            font-family: "Courier New", Courier, monospace;
+            font-weight: 700;
+        }
+
+        .rect .tagline .serial {
+            flex: 0 1 auto;
+            min-width: 0;
+            font-size: 0.9em;
+        }
+
+        .rect .barcode {
+            flex: 1 1 0;
+            min-height: 0;
+            width: 100%;
+            position: relative;
+        }
+
+        .rect .barcode svg {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        @media (max-width: 900px) {
+            .layout { grid-template-columns: 1fr; }
+            .settings { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border-default); }
+        }
+
+        @media print {
+            html, body {
+                background: #fff !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            .no-print { display: none !important; }
+            .layout { display: block; }
+            .preview { padding: 0; overflow: visible; }
+            .page {
+                margin: 0;
+                box-shadow: none;
+                break-after: page;
+                page-break-after: always;
+            }
+            .page:last-child {
+                break-after: auto;
+                page-break-after: auto;
+            }
+            .label { outline: none; }
+            body.print-outlines .label { outline: 0.2mm solid #888; }
+        }
+    </style>
+    <!-- The @page size is set from the chosen label layout -->
+    <style id="pageRule"></style>
+</head>
+<body>
+    <div class="layout">
+        <aside class="settings no-print">
+            <a class="back-link" href="pages/inventory-management.html">
+                <span class="material-symbols-outlined" style="font-size: 18px;">arrow_back</span>
+                Back to Inventory
+            </a>
+            <h1 id="pageTitle">Print labels</h1>
+            <p class="summary" id="summary">Loading items...</p>
+
+            <div id="notice"></div>
+
+            <button class="print-btn" id="printBtn" disabled>
+                <span class="material-symbols-outlined">print</span>
+                Print
+            </button>
+            <p class="hint" id="printHint">In the print dialog set <strong>Scale: 100%</strong> (not "Fit to page") and <strong>Margins: None</strong>. Print one page on plain paper first and hold it against your labels to check the alignment.</p>
+
+            <div class="group">
+                <h2>Label</h2>
+                <div class="field">
+                    <label for="preset">Label stock</label>
+                    <select id="preset"></select>
+                </div>
+                <div class="field">
+                    <label for="codeType">Code</label>
+                    <select id="codeType">
+                        <option value="qr">QR code</option>
+                        <option value="barcode">Barcode (Code 128)</option>
+                        <option value="both">QR code + barcode</option>
+                    </select>
+                    <p class="hint" id="codeHint"></p>
+                </div>
+                <label class="check"><input type="checkbox" id="showTag"><span>Print the asset tag as text</span></label>
+                <label class="check"><input type="checkbox" id="showName"><span>Print the item name and serial</span></label>
+            </div>
+
+            <div class="group">
+                <h2>Quantity</h2>
+                <div class="field-row">
+                    <div class="field">
+                        <label for="copies">Copies of each</label>
+                        <input type="number" id="copies" min="1" max="50" step="1">
+                    </div>
+                    <div class="field">
+                        <label for="startAt">Start at label #</label>
+                        <input type="number" id="startAt" min="1" step="1">
+                    </div>
+                </div>
+                <label class="check"><input type="checkbox" id="perUnit"><span>Bulk items: one label per unit (instead of one shared label)</span></label>
+                <p class="hint">"Start at label #" skips the labels already used on a partly used sheet.</p>
+            </div>
+
+            <div class="group">
+                <h2>Layout</h2>
+                <div class="field-row">
+                    <div class="field">
+                        <label for="units">Units</label>
+                        <select id="units">
+                            <option value="in">Inches</option>
+                            <option value="mm">Millimetres</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label for="shape">Shape</label>
+                        <select id="shape">
+                            <option value="round">Round</option>
+                            <option value="rect">Rectangle</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="field">
+                    <label for="pageSize">Paper</label>
+                    <select id="pageSize">
+                        <option value="letter">Letter sheet (8.5 x 11 in)</option>
+                        <option value="a4">A4 sheet (210 x 297 mm)</option>
+                        <option value="roll">Label roll (one label per page)</option>
+                    </select>
+                </div>
+                <div class="field-row">
+                    <div class="field">
+                        <label for="labelW" id="labelWLabel">Label width</label>
+                        <input type="number" id="labelW" min="0" step="any">
+                    </div>
+                    <div class="field" id="labelHField">
+                        <label for="labelH">Label height</label>
+                        <input type="number" id="labelH" min="0" step="any">
+                    </div>
+                </div>
+                <div id="sheetFields">
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="cols">Labels across</label>
+                            <input type="number" id="cols" min="1" max="40" step="1">
+                        </div>
+                        <div class="field">
+                            <label for="rows">Labels down</label>
+                            <input type="number" id="rows" min="1" max="60" step="1">
+                        </div>
+                    </div>
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="marginTop">Top margin</label>
+                            <input type="number" id="marginTop" min="0" step="any">
+                        </div>
+                        <div class="field">
+                            <label for="marginLeft">Left margin</label>
+                            <input type="number" id="marginLeft" min="0" step="any">
+                        </div>
+                    </div>
+                    <div class="field-row">
+                        <div class="field">
+                            <label for="gapX">Gap between columns</label>
+                            <input type="number" id="gapX" min="0" step="any">
+                        </div>
+                        <div class="field">
+                            <label for="gapY">Gap between rows</label>
+                            <input type="number" id="gapY" min="0" step="any">
+                        </div>
+                    </div>
+                </div>
+                <label class="check"><input type="checkbox" id="outlines"><span>Print label outlines (for an alignment test)</span></label>
+                <p class="hint">Sheet layouts differ between brands. Use the measurements from your label pack or its template, then save time later: these settings are remembered on this computer.</p>
+            </div>
+        </aside>
+
+        <main class="preview">
+            <p class="preview-status no-print" id="previewStatus"></p>
+            <div class="no-print" id="sizeWarning"></div>
+            <div id="pages"></div>
+        </main>
+    </div>
+
+    <script src="js/config.js"></script>
+    <script src="js/vendor/qrcode-generator.js"></script>
+    <script src="js/vendor/JsBarcode.js"></script>
+    <script>
+        const MM_PER_INCH = 25.4;
+        const IDS_STORAGE_KEY = 'lumdashLabelPrintIds';
+
+        const PAGE_PARAMS = new URLSearchParams(window.location.search);
+        // ?sheet=test - a plain-paper page of large codes, each with its name, for trying out a scanner
+        const TEST_SHEET = PAGE_PARAMS.get('sheet') === 'test';
+        // ?category=camera,lens - every item whose category starts with one of these (any letter case)
+        const CATEGORY_FILTER = (PAGE_PARAMS.get('category') || '')
+            .split(',').map(name => name.trim().toLowerCase()).filter(Boolean);
+
+        // The test sheet remembers its own settings so it never changes the real label setup
+        const SETTINGS_STORAGE_KEY = TEST_SHEET ? 'lumdashTestSheetSettings' : 'lumdashLabelPrintSettings';
+        const PAGE_SIZES_MM = {
+            letter: { width: 215.9, height: 279.4 },
+            a4: { width: 210, height: 297 }
+        };
+
+        // All measurements in millimetres.
+        // Sheet presets whose margins are null are centred on the page - a starting point to
+        // adjust against the real sheet. Roll presets print one label per page.
+        const PRESETS = [
+            { id: 'roll-round-19', name: 'Roll - round 3/4 in (19 mm)', shape: 'round', page: 'roll', w: 19.05, h: 19.05 },
+            { id: 'roll-round-25', name: 'Roll - round 1 in (25 mm)', shape: 'round', page: 'roll', w: 25.4, h: 25.4 },
+            { id: 'roll-round-12', name: 'Roll - round 1/2 in (12 mm)', shape: 'round', page: 'roll', w: 12.7, h: 12.7 },
+            { id: 'sheet-round-19', name: 'Sheet - round 3/4 in, 8 x 10 (Letter)', shape: 'round', page: 'letter', w: 19.05, h: 19.05, cols: 8, rows: 10, gapX: 6.35, gapY: 6.35, marginTop: null, marginLeft: null },
+            { id: 'sheet-round-25', name: 'Sheet - round 1 in, 7 x 9 (Letter)', shape: 'round', page: 'letter', w: 25.4, h: 25.4, cols: 7, rows: 9, gapX: 3.175, gapY: 3.175, marginTop: null, marginLeft: null },
+            { id: 'roll-rect-51x25', name: 'Roll - 2 x 1 in (51 x 25 mm)', shape: 'rect', page: 'roll', w: 50.8, h: 25.4 },
+            { id: 'roll-rect-57x32', name: 'Roll - 2-1/4 x 1-1/4 in (57 x 32 mm)', shape: 'rect', page: 'roll', w: 57.15, h: 31.75 },
+            { id: 'sheet-rect-30', name: 'Sheet - 1 x 2-5/8 in, 30 per sheet (Avery 5160 layout)', shape: 'rect', page: 'letter', w: 66.675, h: 25.4, cols: 3, rows: 10, gapX: 3.175, gapY: 0, marginTop: 12.7, marginLeft: 4.7625 },
+            { id: 'sheet-rect-80', name: 'Sheet - 1/2 x 1-3/4 in, 80 per sheet (Avery 5167 layout)', shape: 'rect', page: 'letter', w: 44.45, h: 12.7, cols: 4, rows: 20, gapX: 7.62, gapY: 0, marginTop: 12.7, marginLeft: 7.62 },
+            // Not label stock: big codes with room between them, so a scanner only sees one at a time
+            { id: 'sheet-test', name: 'Test sheet - plain paper, large codes with names (Letter)', shape: 'rect', page: 'letter', w: 64, h: 28, cols: 3, rows: 8, gapX: 4, gapY: 5, marginTop: null, marginLeft: null }
+        ];
+
+        const DEFAULT_SETTINGS = {
+            presetId: TEST_SHEET ? 'sheet-test' : PRESETS[0].id,
+            codeType: 'qr',
+            showTag: true,
+            showName: true,
+            copies: 1,
+            startAt: 1,
+            perUnit: false,
+            units: 'in',
+            outlines: TEST_SHEET // boxes around each code make a plain-paper sheet easier to read
+        };
+
+        let items = [];        // inventory items to print (each has an asset tag)
+        let skipped = 0;       // selected items without an asset tag
+        let settings = { ...DEFAULT_SETTINGS, ...layoutFromPreset(PRESETS.find(preset => preset.id === DEFAULT_SETTINGS.presetId)) };
+
+        const $ = (id) => document.getElementById(id);
+
+        function escapeHtml(value) {
+            const div = document.createElement('div');
+            div.textContent = value == null ? '' : String(value);
+            return div.innerHTML;
+        }
+
+        // ---------------------------------------------------------------
+        // Layout
+        // ---------------------------------------------------------------
+
+        function layoutFromPreset(preset) {
+            const layout = {
+                shape: preset.shape,
+                pageSize: preset.page,
+                labelW: preset.w,
+                labelH: preset.h,
+                cols: preset.cols || 1,
+                rows: preset.rows || 1,
+                gapX: preset.gapX || 0,
+                gapY: preset.gapY || 0,
+                marginTop: preset.marginTop || 0,
+                marginLeft: preset.marginLeft || 0
+            };
+            if (preset.page !== 'roll') {
+                const page = PAGE_SIZES_MM[preset.page];
+                if (preset.marginLeft == null) {
+                    layout.marginLeft = Math.max(0, (page.width - layout.cols * layout.labelW - (layout.cols - 1) * layout.gapX) / 2);
+                }
+                if (preset.marginTop == null) {
+                    layout.marginTop = Math.max(0, (page.height - layout.rows * layout.labelH - (layout.rows - 1) * layout.gapY) / 2);
+                }
+            }
+            return layout;
+        }
+
+        /** The page and grid actually used for rendering */
+        function currentLayout() {
+            const isRoll = settings.pageSize === 'roll';
+            const labelH = settings.shape === 'round' ? settings.labelW : settings.labelH;
+            if (isRoll) {
+                return {
+                    pageW: settings.labelW, pageH: labelH, labelW: settings.labelW, labelH,
+                    cols: 1, rows: 1, gapX: 0, gapY: 0, marginTop: 0, marginLeft: 0
+                };
+            }
+            const page = PAGE_SIZES_MM[settings.pageSize] || PAGE_SIZES_MM.letter;
+            return {
+                pageW: page.width, pageH: page.height, labelW: settings.labelW, labelH,
+                cols: settings.cols, rows: settings.rows, gapX: settings.gapX, gapY: settings.gapY,
+                marginTop: settings.marginTop, marginLeft: settings.marginLeft
+            };
+        }
+
+        // ---------------------------------------------------------------
+        // Codes
+        // ---------------------------------------------------------------
+
+        /**
+         * QR code as a vector SVG (prints sharp at any size).
+         * Asset tags are short and uppercase, so they fit the smallest QR grid (21 x 21)
+         * even with the stronger "Q" error correction - best for tiny round stickers.
+         */
+        function qrSvg(text, quietModules) {
+            const isAlphanumeric = /^[0-9A-Z $%*+\-./:]+$/.test(text);
+            let qr;
+            try {
+                qr = qrcode(0, isAlphanumeric ? 'Q' : 'M');
+                qr.addData(text, isAlphanumeric ? 'Alphanumeric' : 'Byte');
+                qr.make();
+            } catch (error) {
+                console.error('Could not create QR code for', text, error);
+                return '';
+            }
+
+            const count = qr.getModuleCount();
+            const size = count + quietModules * 2;
+            let path = '';
+            for (let row = 0; row < count; row++) {
+                let col = 0;
+                while (col < count) {
+                    if (!qr.isDark(row, col)) { col++; continue; }
+                    let run = 1;
+                    while (col + run < count && qr.isDark(row, col + run)) run++;
+                    path += `M${col + quietModules} ${row + quietModules}h${run}v1h-${run}z`;
+                    col += run;
+                }
+            }
+            return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="100%" height="100%" shape-rendering="crispEdges"><rect width="${size}" height="${size}" fill="#fff"/><path d="${path}" fill="#000"/></svg>`;
+        }
+
+        /** Code 128 barcode as a vector SVG that stretches to fill its box */
+        function barcodeSvg(text) {
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            try {
+                JsBarcode(svg, text, {
+                    format: 'CODE128',
+                    displayValue: false,
+                    width: 2,
+                    height: 40,
+                    marginTop: 0,
+                    marginBottom: 0,
+                    // Quiet zone of 10 bar-widths each side, required for reliable reads
+                    marginLeft: 20,
+                    marginRight: 20,
+                    background: '#ffffff',
+                    lineColor: '#000000'
+                });
+            } catch (error) {
+                console.error('Could not create barcode for', text, error);
+                return '';
+            }
+            const width = parseFloat(svg.getAttribute('width'));
+            const height = parseFloat(svg.getAttribute('height'));
+            svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+            svg.setAttribute('preserveAspectRatio', 'none');
+            svg.removeAttribute('width');
+            svg.removeAttribute('height');
+            svg.removeAttribute('style');
+            svg.setAttribute('shape-rendering', 'crispEdges');
+            return svg.outerHTML;
+        }
+
+        // ---------------------------------------------------------------
+        // One label
+        // ---------------------------------------------------------------
+
+        const mm = (value) => `${Math.round(value * 1000) / 1000}mm`;
+        const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+        function serialText(item) {
+            return item.serial && item.serial !== 'N/A' ? `SN ${item.serial}` : '';
+        }
+
+        // The QR drawing includes a white border ("quiet zone") of this many squares on each side
+        const QR_QUIET = 2;
+        // Below this label diameter the tag text is dropped so the QR can use the whole circle
+        const ROUND_TEXT_MIN_DIAMETER = 11;
+
+        /**
+         * Where things go on a round label, as fractions of the diameter.
+         * The black part of the QR stays clear of the cut edge; only its white border
+         * may run past the circle. With tag text the QR sits higher to leave room below.
+         */
+        function roundGeometry(diameter) {
+            const showTag = settings.showTag && diameter >= ROUND_TEXT_MIN_DIAMETER;
+            const side = diameter * (showTag ? 0.68 : 0.74);
+            const top = showTag ? diameter * 0.076 : (diameter - side) / 2;
+            return {
+                showTag,
+                side,
+                top,
+                left: (diameter - side) / 2,
+                fontSize: diameter * 0.11,
+                tagTop: diameter * 0.735
+            };
+        }
+
+        function roundLabelHtml(item, diameter) {
+            const g = roundGeometry(diameter);
+            return `
+                <div class="qr" style="left:${mm(g.left)};top:${mm(g.top)};width:${mm(g.side)};height:${mm(g.side)};">${qrSvg(item.assetTag, QR_QUIET)}</div>
+                ${g.showTag ? `<div class="tag" style="top:${mm(g.tagTop)};font-size:${mm(g.fontSize)};">${escapeHtml(item.assetTag)}</div>` : ''}
+            `;
+        }
+
+        /** Sizes for a rectangular label (all in mm) */
+        function rectGeometry(width, height) {
+            const pad = clamp(height * 0.08, 0.8, 2);
+            const gap = clamp(width * 0.03, 0.8, 2);
+            const showQr = settings.codeType === 'qr' || settings.codeType === 'both';
+            const showBarcode = settings.codeType === 'barcode' || settings.codeType === 'both';
+            const qrSide = Math.min(height - pad * 2, width * 0.42);
+            const textWidth = width - pad * 2 - (showQr ? qrSide + gap : 0);
+            return { pad, gap, showQr, showBarcode, qrSide, textWidth, font: clamp(height * 0.13, 1.5, 3.4) };
+        }
+
+        function rectLabelHtml(item, width, height) {
+            const g = rectGeometry(width, height);
+            const serial = settings.showName ? serialText(item) : '';
+            // On the test sheet the line under the name also says what kind of item it is
+            const detail = TEST_SHEET && settings.showName
+                ? [item.category, serial].filter(Boolean).join(' · ')
+                : serial;
+
+            // With a barcode the text is kept to single lines so the bars get the height
+            const name = settings.showName
+                ? `<div class="name ${g.showBarcode ? 'one-line' : ''}" style="font-size:${mm(g.font)};">${escapeHtml(item.label)}</div>`
+                : '';
+            const serialLine = detail && !g.showBarcode
+                ? `<div class="serial" style="font-size:${mm(g.font * 0.85)};">${escapeHtml(detail)}</div>`
+                : '';
+            const tagLine = settings.showTag
+                ? `<div class="tagline" style="font-size:${mm(g.font * 0.95)};">
+                       <span class="tag">${escapeHtml(item.assetTag)}</span>
+                       ${serial && g.showBarcode ? `<span class="serial">${escapeHtml(serial)}</span>` : ''}
+                   </div>`
+                : '';
+            const barcode = g.showBarcode ? `<div class="barcode">${barcodeSvg(item.assetTag)}</div>` : '';
+
+            return `
+                <div style="display:flex;align-items:center;gap:${mm(g.gap)};width:100%;height:100%;box-sizing:border-box;padding:${mm(g.pad)};">
+                    ${g.showQr ? `<div class="qr" style="width:${mm(g.qrSide)};height:${mm(g.qrSide)};">${qrSvg(item.assetTag, QR_QUIET)}</div>` : ''}
+                    <div class="text">${name}${barcode}${serialLine}${tagLine}</div>
+                </div>
+            `;
+        }
+
+        /**
+         * Warn when the printed code would be too fine to scan reliably.
+         * Sizes are for one QR square / the thinnest barcode bar.
+         */
+        function scanSizeWarning(layout, sampleTag) {
+            const MIN_QR_MODULE_MM = 0.25;
+            const MIN_BAR_MM = 0.19;
+            const warnings = [];
+
+            let qrSide = 0;
+            let barcodeWidth = 0;
+            if (settings.shape === 'round') {
+                qrSide = roundGeometry(layout.labelW).side;
+            } else {
+                const g = rectGeometry(layout.labelW, layout.labelH);
+                if (g.showQr) qrSide = g.qrSide;
+                if (g.showBarcode) barcodeWidth = g.textWidth;
+            }
+
+            if (qrSide > 0) {
+                const probe = qrcode(0, 'Q');
+                probe.addData(sampleTag, 'Alphanumeric');
+                probe.make();
+                if (qrSide / (probe.getModuleCount() + QR_QUIET * 2) < MIN_QR_MODULE_MM) {
+                    warnings.push('The QR code is very small at this label size - scan a test print before printing a batch.');
+                }
+            }
+            if (barcodeWidth > 0) {
+                const probe = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                JsBarcode(probe, sampleTag, { format: 'CODE128', displayValue: false, width: 1, margin: 0, marginLeft: 10, marginRight: 10 });
+                if (barcodeWidth / parseFloat(probe.getAttribute('width')) < MIN_BAR_MM) {
+                    warnings.push('The barcode bars are very thin at this label size - use the QR code on its own or a wider label.');
+                }
+            }
+            return warnings;
+        }
+
+        function labelHtml(item, layout) {
+            if (settings.shape === 'round') return roundLabelHtml(item, layout.labelW);
+            return rectLabelHtml(item, layout.labelW, layout.labelH);
+        }
+
+        // ---------------------------------------------------------------
+        // Pages
+        // ---------------------------------------------------------------
+
+        /** The list of labels to print, in order (copies and per-unit expanded) */
+        function labelQueue() {
+            const queue = [];
+            for (const item of items) {
+                const units = settings.perUnit && item.quantity > 1 ? item.quantity : 1;
+                for (let n = 0; n < units * settings.copies; n++) queue.push(item);
+            }
+            return queue;
+        }
+
+        function render() {
+            const layout = currentLayout();
+            const perPage = layout.cols * layout.rows;
+            const isRoll = settings.pageSize === 'roll';
+            const skip = isRoll ? 0 : clamp(settings.startAt - 1, 0, perPage - 1);
+            const queue = labelQueue();
+            const shapeClass = settings.shape === 'round' ? 'round' : 'rect';
+
+            // Page size for the printer
+            $('pageRule').textContent = `@page { size: ${mm(layout.pageW)} ${mm(layout.pageH)}; margin: 0; }`;
+            document.body.classList.toggle('print-outlines', settings.outlines);
+
+            const fitsAcross = layout.marginLeft + layout.cols * layout.labelW + (layout.cols - 1) * layout.gapX <= layout.pageW + 0.01;
+            const fitsDown = layout.marginTop + layout.rows * layout.labelH + (layout.rows - 1) * layout.gapY <= layout.pageH + 0.01;
+
+            let pagesHtml = '';
+            let pageCount = 0;
+            const totalSlots = queue.length + skip;
+            for (let start = 0; start < totalSlots; start += perPage) {
+                let labels = '';
+                for (let slot = 0; slot < perPage; slot++) {
+                    const index = start + slot;
+                    if (index >= totalSlots) break;
+                    const row = Math.floor(slot / layout.cols);
+                    const col = slot % layout.cols;
+                    const left = layout.marginLeft + col * (layout.labelW + layout.gapX);
+                    const top = layout.marginTop + row * (layout.labelH + layout.gapY);
+                    const box = `left:${mm(left)};top:${mm(top)};width:${mm(layout.labelW)};height:${mm(layout.labelH)};`;
+
+                    if (index < skip) {
+                        labels += `<div class="label blank ${shapeClass}" style="${box}"></div>`;
+                    } else {
+                        labels += `<div class="label ${shapeClass}" style="${box}">${labelHtml(queue[index - skip], layout)}</div>`;
+                    }
+                }
+                pagesHtml += `<div class="page" style="width:${mm(layout.pageW)};height:${mm(layout.pageH)};">${labels}</div>`;
+                pageCount++;
+            }
+
+            $('pages').innerHTML = queue.length > 0 ? pagesHtml : '';
+            $('printBtn').disabled = queue.length === 0;
+
+            let status = '';
+            const warnings = [];
+            if (queue.length > 0) {
+                status = `${queue.length} label${queue.length === 1 ? '' : 's'}`
+                    + (isRoll ? ', one per page' : ` on ${pageCount} page${pageCount === 1 ? '' : 's'}`)
+                    + ', shown at actual size.';
+                if (!fitsAcross || !fitsDown) {
+                    warnings.push('The layout is larger than the paper - reduce the margins, gaps or number of labels.');
+                }
+                try {
+                    warnings.push(...scanSizeWarning(layout, queue[0].assetTag));
+                } catch (error) {
+                    console.error('Could not check the code size:', error);
+                }
+            }
+            $('previewStatus').textContent = status;
+            $('sizeWarning').innerHTML = warnings.map(text => `<div class="notice">${escapeHtml(text)}</div>`).join('');
+        }
+
+        // ---------------------------------------------------------------
+        // Settings form
+        // ---------------------------------------------------------------
+
+        const LENGTH_FIELDS = ['labelW', 'labelH', 'marginTop', 'marginLeft', 'gapX', 'gapY'];
+
+        function toDisplay(valueMm) {
+            return settings.units === 'in'
+                ? Math.round((valueMm / MM_PER_INCH) * 10000) / 10000
+                : Math.round(valueMm * 100) / 100;
+        }
+
+        function fromDisplay(value) {
+            const number = parseFloat(value);
+            if (!Number.isFinite(number) || number < 0) return null;
+            return settings.units === 'in' ? number * MM_PER_INCH : number;
+        }
+
+        function fillForm() {
+            $('preset').value = settings.presetId;
+            $('codeType').value = settings.codeType;
+            $('showTag').checked = settings.showTag;
+            $('showName').checked = settings.showName;
+            $('copies').value = settings.copies;
+            $('startAt').value = settings.startAt;
+            $('perUnit').checked = settings.perUnit;
+            $('units').value = settings.units;
+            $('shape').value = settings.shape;
+            $('pageSize').value = settings.pageSize;
+            $('cols').value = settings.cols;
+            $('rows').value = settings.rows;
+            $('outlines').checked = settings.outlines;
+            LENGTH_FIELDS.forEach(field => { $(field).value = toDisplay(settings[field]); });
+            updateFormState();
+        }
+
+        /** Enable / disable the options that do not apply to the current shape and paper */
+        function updateFormState() {
+            const isRound = settings.shape === 'round';
+            const isRoll = settings.pageSize === 'roll';
+
+            // A circle cannot hold a 1D barcode - round labels always carry a QR code
+            $('codeType').disabled = isRound;
+            if (isRound) $('codeType').value = 'qr';
+            $('codeHint').textContent = isRound
+                ? 'Round labels always use a QR code - a barcode needs a rectangular label.'
+                : 'A QR code needs a 2D scanner. Code 128 barcodes work with any barcode scanner.';
+
+            $('showName').disabled = isRound;
+            $('labelWLabel').textContent = isRound ? 'Label diameter' : 'Label width';
+            $('labelHField').style.display = isRound ? 'none' : '';
+            $('sheetFields').style.display = isRoll ? 'none' : '';
+            $('startAt').disabled = isRoll;
+        }
+
+        function saveSettings() {
+            try {
+                localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+            } catch (error) { /* storage full or blocked - settings just are not remembered */ }
+        }
+
+        function loadSettings() {
+            try {
+                const saved = JSON.parse(localStorage.getItem(SETTINGS_STORAGE_KEY) || 'null');
+                if (saved && typeof saved === 'object') settings = { ...settings, ...saved };
+            } catch (error) { /* ignore unreadable saved settings */ }
+        }
+
+        function setupForm() {
+            $('preset').innerHTML = PRESETS.map(preset => `<option value="${preset.id}">${escapeHtml(preset.name)}</option>`).join('')
+                + '<option value="custom">Custom</option>';
+
+            const changed = () => { updateFormState(); saveSettings(); render(); };
+
+            $('preset').addEventListener('change', () => {
+                const preset = PRESETS.find(p => p.id === $('preset').value);
+                settings.presetId = $('preset').value;
+                if (preset) Object.assign(settings, layoutFromPreset(preset));
+                fillForm();
+                changed();
+            });
+
+            $('units').addEventListener('change', () => {
+                settings.units = $('units').value;
+                fillForm();
+                saveSettings();
+            });
+
+            // Anything that changes the layout by hand turns the preset into "Custom"
+            const layoutChanged = () => { settings.presetId = 'custom'; $('preset').value = 'custom'; changed(); };
+
+            $('shape').addEventListener('change', () => { settings.shape = $('shape').value; layoutChanged(); });
+            $('pageSize').addEventListener('change', () => { settings.pageSize = $('pageSize').value; layoutChanged(); });
+
+            LENGTH_FIELDS.forEach(field => {
+                $(field).addEventListener('change', () => {
+                    const value = fromDisplay($(field).value);
+                    if (value === null || (field.startsWith('label') && value <= 0)) {
+                        $(field).value = toDisplay(settings[field]);
+                        return;
+                    }
+                    settings[field] = value;
+                    layoutChanged();
+                });
+            });
+
+            const intField = (id, min, max, isLayout) => {
+                $(id).addEventListener('change', () => {
+                    const value = parseInt($(id).value, 10);
+                    settings[id] = Number.isFinite(value) ? clamp(value, min, max) : settings[id];
+                    $(id).value = settings[id];
+                    if (isLayout) layoutChanged(); else changed();
+                });
+            };
+            intField('cols', 1, 40, true);
+            intField('rows', 1, 60, true);
+            intField('copies', 1, 50, false);
+            intField('startAt', 1, 2400, false);
+
+            $('codeType').addEventListener('change', () => { settings.codeType = $('codeType').value; changed(); });
+            ['showTag', 'showName', 'perUnit', 'outlines'].forEach(id => {
+                $(id).addEventListener('change', () => { settings[id] = $(id).checked; changed(); });
+            });
+
+            $('printBtn').addEventListener('click', () => window.print());
+        }
+
+        // ---------------------------------------------------------------
+        // Data
+        // ---------------------------------------------------------------
+
+        function requestedIds() {
+            const params = PAGE_PARAMS;
+            // null = every item (narrowed by ?category= when that is given)
+            if (params.get('all') === '1' || CATEGORY_FILTER.length > 0) return null;
+            if (params.get('ids')) return params.get('ids').split(',').filter(Boolean);
+            try {
+                const stored = JSON.parse(localStorage.getItem(IDS_STORAGE_KEY) || '[]');
+                return Array.isArray(stored) ? stored : [];
+            } catch (error) {
+                return [];
+            }
+        }
+
+        async function loadItems() {
+            const ids = requestedIds();
+            if (ids && ids.length === 0) {
+                showEmpty('No items selected. Choose items on the <a href="pages/inventory-management.html">Inventory</a> page and click "Print labels".');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/gear-inventory`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (!response.ok) throw new Error(`Inventory request failed (${response.status})`);
+
+                const inventory = await response.json();
+                const wanted = ids ? new Set(ids) : null;
+                const inCategory = (item) => CATEGORY_FILTER.length === 0 ||
+                    CATEGORY_FILTER.some(prefix => String(item.category || '').toLowerCase().startsWith(prefix));
+                const selected = inventory.filter(item => (!wanted || wanted.has(String(item._id))) && inCategory(item));
+
+                if (selected.length === 0 && CATEGORY_FILTER.length > 0) {
+                    showEmpty(`No inventory items found in: ${escapeHtml(CATEGORY_FILTER.join(', '))}.`);
+                    return;
+                }
+
+                items = selected
+                    .filter(item => item.assetTag)
+                    .sort((a, b) =>
+                        // The test sheet keeps each kind of item together (cameras, then lenses)
+                        (TEST_SHEET ? String(a.category).localeCompare(String(b.category)) : 0) ||
+                        a.label.localeCompare(b.label) || String(a.serial).localeCompare(String(b.serial)));
+                skipped = selected.length - items.length;
+
+                const categories = [...new Set(items.map(item => item.category))].join(', ');
+                $('summary').textContent = CATEGORY_FILTER.length > 0 && items.length > 0
+                    ? `${items.length} item${items.length === 1 ? '' : 's'}: ${categories}`
+                    : `${items.length} item${items.length === 1 ? '' : 's'} selected`;
+                $('notice').innerHTML = skipped > 0
+                    ? `<div class="notice">${skipped} selected item${skipped === 1 ? ' has' : 's have'} no asset tag yet and ${skipped === 1 ? 'is' : 'are'} not shown. Tags are assigned when the server restarts.</div>`
+                    : '';
+
+                if (items.length === 0) {
+                    showEmpty('None of the selected items can be printed.');
+                    return;
+                }
+                render();
+            } catch (error) {
+                console.error('Error loading items for labels:', error);
+                showEmpty('Could not load the inventory. Refresh the page to try again.');
+            }
+        }
+
+        function showEmpty(html) {
+            $('summary').textContent = 'No labels to print';
+            $('pages').innerHTML = `<div class="empty">${html}</div>`;
+            $('previewStatus').textContent = '';
+            $('sizeWarning').innerHTML = '';
+            $('printBtn').disabled = true;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (TEST_SHEET) {
+                document.title = 'Scanner test sheet - LumDash';
+                $('pageTitle').textContent = 'Scanner test sheet';
+                $('printHint').textContent = 'Print on plain paper, then scan the codes instead of real gear. They are the same codes the real labels carry.';
+            }
+            loadSettings();
+            setupForm();
+            fillForm();
+            loadItems();
+        });
+    </script>
+</body>
+</html>

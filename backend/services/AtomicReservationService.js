@@ -163,6 +163,90 @@ class AtomicReservationService {
   }
   
   /**
+   * SWAP UNIT
+   * Points an existing reservation at a different unit (inventory item), e.g. when a
+   * packer scans a different unit of the same model than the one the cart assigned.
+   * Dates, quantity, event and list stay the same. Fails (and changes nothing) if the
+   * new unit is not available for the reservation's dates.
+   */
+  static async swapReservationUnit(reservedItemId, newInventoryId) {
+    const session = await mongoose.startSession();
+    let swappedItem = null;
+
+    try {
+      await session.withTransaction(async () => {
+
+        const reservedItem = await ReservedGearItem.findById(reservedItemId).session(session);
+        if (!reservedItem) {
+          throw new Error(`Reserved item not found: ${reservedItemId}`);
+        }
+
+        // Already on this unit - nothing to do
+        if (reservedItem.inventoryId.toString() === newInventoryId.toString()) {
+          swappedItem = reservedItem;
+          return;
+        }
+
+        const newInventoryItem = await GearInventory.findById(newInventoryId).session(session);
+        if (!newInventoryItem) {
+          throw new Error(`Inventory item not found: ${newInventoryId}`);
+        }
+
+        // Same availability rule as a new reservation
+        const availableQty = await ReservedGearItem.getAvailableQuantity(
+          newInventoryId,
+          reservedItem.checkOutDate,
+          reservedItem.checkInDate
+        );
+
+        if (reservedItem.quantity > availableQty) {
+          const error = new Error(`${newInventoryItem.label}: Insufficient availability. Available: ${availableQty}, Requested: ${reservedItem.quantity}`);
+          error.code = 'UNAVAILABLE';
+          throw error;
+        }
+
+        // Release the old unit in the availability cache
+        const oldInventoryItem = await GearInventory.findById(reservedItem.inventoryId).session(session);
+        if (oldInventoryItem) {
+          oldInventoryItem.releaseQuantity(reservedItem.eventId, reservedItem.userId, reservedItem.quantity);
+          await oldInventoryItem.save({ session });
+        }
+
+        // Point the primary reservation at the new unit
+        const labelParts = newInventoryItem.label.split(' ');
+        reservedItem.inventoryId = newInventoryItem._id;
+        reservedItem.brand = labelParts[0] || 'Unknown';
+        reservedItem.model = labelParts.slice(1).join(' ') || 'Unknown';
+        reservedItem.category = newInventoryItem.category;
+        reservedItem.serial = newInventoryItem.serial;
+        await reservedItem.save({ session });
+
+        // Add the new unit to the availability cache
+        newInventoryItem.reservations.push({
+          eventId: reservedItem.eventId,
+          userId: reservedItem.userId,
+          quantity: reservedItem.quantity,
+          checkOutDate: reservedItem.checkOutDate,
+          checkInDate: reservedItem.checkInDate,
+          createdAt: new Date()
+        });
+        await newInventoryItem.save({ session });
+
+        swappedItem = reservedItem;
+        console.log(`[ATOMIC SWAP] ✅ Reservation ${reservedItemId} now uses ${newInventoryItem.label} (${newInventoryItem.serial})`);
+      });
+
+      return swappedItem;
+
+    } catch (error) {
+      console.error(`[ATOMIC SWAP] ❌ Transaction failed:`, error.message);
+      throw error;
+    } finally {
+      await session.endSession();
+    }
+  }
+
+  /**
    * BULLETPROOF BULK RESERVATION
    * Reserves multiple items atomically (all succeed or all fail)
    */

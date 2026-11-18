@@ -457,6 +457,17 @@
                         </div>
                     </div>
                 </div>
+                <div class="field-row">
+                    <div class="field">
+                        <label for="offsetX">Nudge right</label>
+                        <input type="number" id="offsetX" step="any">
+                    </div>
+                    <div class="field">
+                        <label for="offsetY">Nudge down</label>
+                        <input type="number" id="offsetY" step="any">
+                    </div>
+                </div>
+                <p class="hint">If the code is off-centre on the sticker, nudge it. Positive moves right / down; negative moves left / up. On a Brother QL, try about −0.5 mm if there is extra space on the left.</p>
                 <label class="check"><input type="checkbox" id="outlines"><span>Print label outlines (for an alignment test)</span></label>
                 <p class="hint">Sheet layouts differ between brands. Use the measurements from your label pack or its template, then save time later: these settings are remembered on this computer.</p>
             </div>
@@ -496,7 +507,8 @@
         const PRESETS = [
             { id: 'roll-round-19', name: 'Roll - round 3/4 in (19 mm)', shape: 'round', page: 'roll', w: 19.05, h: 19.05 },
             { id: 'roll-round-25', name: 'Roll - round 1 in (25 mm)', shape: 'round', page: 'roll', w: 25.4, h: 25.4 },
-            { id: 'roll-round-12', name: 'Roll - round 1/2 in (12 mm)', shape: 'round', page: 'roll', w: 12.7, h: 12.7 },
+            // Brother QL "0.47&quot; Round" (DK-1219) is 12 mm across, not a full half inch
+            { id: 'roll-round-12', name: 'Roll - round 1/2 in / Brother 0.47 in (12 mm)', shape: 'round', page: 'roll', w: 12, h: 12 },
             { id: 'sheet-round-19', name: 'Sheet - round 3/4 in, 8 x 10 (Letter)', shape: 'round', page: 'letter', w: 19.05, h: 19.05, cols: 8, rows: 10, gapX: 6.35, gapY: 6.35, marginTop: null, marginLeft: null },
             { id: 'sheet-round-25', name: 'Sheet - round 1 in, 7 x 9 (Letter)', shape: 'round', page: 'letter', w: 25.4, h: 25.4, cols: 7, rows: 9, gapX: 3.175, gapY: 3.175, marginTop: null, marginLeft: null },
             { id: 'roll-rect-51x25', name: 'Roll - 2 x 1 in (51 x 25 mm)', shape: 'rect', page: 'roll', w: 50.8, h: 25.4 },
@@ -516,6 +528,9 @@
             startAt: 1,
             perUnit: false,
             units: 'in',
+            // Fine tuning when the printer puts the code a hair off the die-cut centre
+            offsetX: 0,
+            offsetY: 0,
             outlines: TEST_SHEET // boxes around each code make a plain-paper sheet easier to read
         };
 
@@ -675,18 +690,22 @@
             return {
                 showTag,
                 side,
-                top,
-                left: (diameter - side) / 2,
+                top: top + (settings.offsetY || 0),
+                left: (diameter - side) / 2 + (settings.offsetX || 0),
                 fontSize: diameter * 0.11,
-                tagTop: diameter * 0.735
+                tagTop: diameter * 0.735 + (settings.offsetY || 0)
             };
         }
 
         function roundLabelHtml(item, diameter) {
             const g = roundGeometry(diameter);
+            // Tag text is centred with left/right: 0; shift it with the same horizontal nudge as the QR
+            const tagShift = settings.offsetX
+                ? `transform:translateX(${mm(settings.offsetX)});`
+                : '';
             return `
                 <div class="qr" style="left:${mm(g.left)};top:${mm(g.top)};width:${mm(g.side)};height:${mm(g.side)};">${qrSvg(item.assetTag, QR_QUIET)}</div>
-                ${g.showTag ? `<div class="tag" style="top:${mm(g.tagTop)};font-size:${mm(g.fontSize)};">${escapeHtml(item.assetTag)}</div>` : ''}
+                ${g.showTag ? `<div class="tag" style="top:${mm(g.tagTop)};font-size:${mm(g.fontSize)};${tagShift}">${escapeHtml(item.assetTag)}</div>` : ''}
             `;
         }
 
@@ -724,8 +743,11 @@
                 : '';
             const barcode = g.showBarcode ? `<div class="barcode">${barcodeSvg(item.assetTag)}</div>` : '';
 
+            const nudge = (settings.offsetX || settings.offsetY)
+                ? `transform:translate(${mm(settings.offsetX || 0)},${mm(settings.offsetY || 0)});`
+                : '';
             return `
-                <div style="display:flex;align-items:center;gap:${mm(g.gap)};width:100%;height:100%;box-sizing:border-box;padding:${mm(g.pad)};">
+                <div style="display:flex;align-items:center;gap:${mm(g.gap)};width:100%;height:100%;box-sizing:border-box;padding:${mm(g.pad)};${nudge}">
                     ${g.showQr ? `<div class="qr" style="width:${mm(g.qrSide)};height:${mm(g.qrSide)};">${qrSvg(item.assetTag, QR_QUIET)}</div>` : ''}
                     <div class="text">${name}${barcode}${serialLine}${tagLine}</div>
                 </div>
@@ -854,6 +876,8 @@
         // ---------------------------------------------------------------
 
         const LENGTH_FIELDS = ['labelW', 'labelH', 'marginTop', 'marginLeft', 'gapX', 'gapY'];
+        // May be negative: used to centre the code on a die-cut roll when the printer is a hair off
+        const OFFSET_FIELDS = ['offsetX', 'offsetY'];
 
         function toDisplay(valueMm) {
             return settings.units === 'in'
@@ -861,9 +885,9 @@
                 : Math.round(valueMm * 100) / 100;
         }
 
-        function fromDisplay(value) {
+        function fromDisplay(value, { allowNegative = false } = {}) {
             const number = parseFloat(value);
-            if (!Number.isFinite(number) || number < 0) return null;
+            if (!Number.isFinite(number) || (!allowNegative && number < 0)) return null;
             return settings.units === 'in' ? number * MM_PER_INCH : number;
         }
 
@@ -881,7 +905,8 @@
             $('cols').value = settings.cols;
             $('rows').value = settings.rows;
             $('outlines').checked = settings.outlines;
-            LENGTH_FIELDS.forEach(field => { $(field).value = toDisplay(settings[field]); });
+            LENGTH_FIELDS.forEach(field => { $(field).value = toDisplay(settings[field] || 0); });
+            OFFSET_FIELDS.forEach(field => { $(field).value = toDisplay(settings[field] || 0); });
             updateFormState();
         }
 
@@ -952,6 +977,18 @@
                     }
                     settings[field] = value;
                     layoutChanged();
+                });
+            });
+
+            OFFSET_FIELDS.forEach(field => {
+                $(field).addEventListener('change', () => {
+                    const value = fromDisplay($(field).value, { allowNegative: true });
+                    if (value === null) {
+                        $(field).value = toDisplay(settings[field] || 0);
+                        return;
+                    }
+                    settings[field] = value;
+                    changed();
                 });
             });
 

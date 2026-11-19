@@ -198,15 +198,19 @@ module.exports = function createGearScanRouter({
       const where = conflict.eventTitle ? `"${conflict.eventTitle}"` : 'another event';
       return {
         result: 'unavailable',
-        title: 'Reserved for another event',
-        detail: `${unitText(unit)} is reserved for ${where} (${formatDay(conflict.checkOutDate)} - ${formatDay(conflict.checkInDate)}). Use a different unit.`
+        title: conflict.packedEarly ? 'Already packed for another event' : 'Reserved for another event',
+        detail: conflict.packedEarly
+          ? `${unitText(unit)} was packed early for ${where} (held since ${formatDay(conflict.heldSince)}, due back ${formatDay(conflict.checkInDate)}). Use a different unit.`
+          : `${unitText(unit)} is reserved for ${where} (${formatDay(conflict.checkOutDate)} - ${formatDay(conflict.checkInDate)}). Use a different unit.`
       };
     }
     if (conflict?.type === 'manual') {
       return {
         result: 'unavailable',
-        title: 'Reserved',
-        detail: `${unitText(unit)} is reserved for ${conflict.personName} (${formatDay(conflict.checkOutDate)} - ${formatDay(conflict.checkInDate)}). Use a different unit.`
+        title: conflict.packedEarly ? 'Already packed' : 'Reserved',
+        detail: conflict.packedEarly
+          ? `${unitText(unit)} was packed early for ${conflict.personName} (held since ${formatDay(conflict.heldSince)}, due back ${formatDay(conflict.checkInDate)}). Use a different unit.`
+          : `${unitText(unit)} is reserved for ${conflict.personName} (${formatDay(conflict.checkOutDate)} - ${formatDay(conflict.checkInDate)}). Use a different unit.`
       };
     }
     return {
@@ -269,6 +273,46 @@ module.exports = function createGearScanRouter({
   }
 
   /**
+   * Before adding a unit to an earlier event, clear scan state on a later reservation that
+   * was packed ahead of time. That frees availability for the reserve step; the scan still
+   * warns that it was pulled from the later pack.
+   */
+  async function releaseLaterEarlyPacks(unit, currentCheckIn, user) {
+    if (unit.quantity !== 1 || !currentCheckIn) return { warnings: [] };
+
+    const [eventLines, manualLines] = await Promise.all([
+      getOutstandingLines({ inventoryIds: [unit._id] }),
+      getOutstandingManualLines({ inventoryIds: [unit._id] })
+    ]);
+    const canView = canViewEventFor(user);
+    const warnings = [];
+
+    for (const { line, kind, checkOutDate, where } of [
+      ...eventLines.map(line => ({
+        line,
+        kind: 'event',
+        checkOutDate: line.checkOutDate,
+        where: canView(line.eventId) ? `"${line.eventId.title || 'Untitled event'}"` : 'another event'
+      })),
+      ...manualLines.map(line => ({
+        line,
+        kind: 'manual',
+        checkOutDate: line.startDate,
+        where: canManageGearInventory(user) ? `"${manualTitle(line)}"` : 'a manual reservation'
+      }))
+    ]) {
+      if (!(new Date(checkOutDate) > new Date(currentCheckIn))) continue;
+      const updated = await updateLineIfUnchanged(line, {
+        scannedOutQty: 0, isPacked: false, packedAt: null, packedMethod: null, packedBy: null
+      }, kind);
+      if (!updated) continue;
+      warnings.push(`Was already packed for ${where} - it is no longer marked as packed there.`);
+    }
+
+    return { warnings };
+  }
+
+  /**
    * Returns the function that marks a line scanned out for `take` units and answers the
    * request. Shared by event gear lists (kind 'event') and manual reservations ('manual').
    * `extra` is added to the answer, e.g. which manual reservation the scan belongs to.
@@ -279,8 +323,12 @@ module.exports = function createGearScanRouter({
       const scanned = Math.min(line.quantity, (line.scannedOutQty || 0) + take);
       const complete = scanned >= line.quantity;
       const changes = { scannedOutQty: scanned };
+      // Record the first scan day even on a partial pack - availability holds from then
+      if (!(line.scannedOutQty > 0) && !line.packedAt) {
+        Object.assign(changes, { packedAt: now, packedBy: user.id, packedMethod: line.packedMethod || 'scan' });
+      }
       if (complete) {
-        Object.assign(changes, { isPacked: true, packedMethod: 'scan', packedAt: now, packedBy: user.id });
+        Object.assign(changes, { isPacked: true, packedMethod: 'scan', packedAt: line.packedAt || now, packedBy: user.id });
       }
 
       const updated = await updateLineIfUnchanged(line, changes, kind);
@@ -290,6 +338,13 @@ module.exports = function createGearScanRouter({
       const allWarnings = [...extraWarnings, ...warnings];
       if (quantity > take && effect !== 'added') {
         allWarnings.push(`Only ${take} more ${take === 1 ? 'was' : 'were'} needed on this ${kind === 'manual' ? 'reservation' : 'list'} - the other ${quantity - take} ${quantity - take === 1 ? 'was' : 'were'} not counted.`);
+      }
+
+      // Allowed, but make it obvious when packing before the listed check-out day
+      const checkOut = cleanDay(updated.checkOutDate != null ? updated.checkOutDate : updated.startDate);
+      const today = cleanDay(now);
+      if (checkOut && today && today < checkOut) {
+        allWarnings.push(`Packed early - check-out is ${formatDay(checkOut)}. This unit is held from today so nobody else can reserve it.`);
       }
 
       const progress = updated.quantity > 1 ? ` (${scanned} of ${updated.quantity})` : '';
@@ -639,6 +694,7 @@ module.exports = function createGearScanRouter({
 
       if (swapLine) {
         const canView = canViewEventFor(user);
+        const pulled = await releaseLaterEarlyPacks(unit, swapLine.checkInDate, user);
         const available = await AtomicReservationService.getAvailableQuantity(
           unit._id, swapLine.checkOutDate, swapLine.checkInDate
         );
@@ -667,7 +723,8 @@ module.exports = function createGearScanRouter({
           effect: 'swapped',
           title: 'Scanned out',
           detail: `${unitText(unit)} - used in place of ${replaced}.`,
-          previousExtra: { inventoryId: previousInventoryId }
+          previousExtra: { inventoryId: previousInventoryId },
+          extraWarnings: pulled.warnings
         });
       }
 
@@ -694,6 +751,9 @@ module.exports = function createGearScanRouter({
         }
 
         const canView = canViewEventFor(user);
+        // Pulling for this event: undo an ahead-of-time pack on a later reservation first
+        const pulled = await releaseLaterEarlyPacks(unit, checkInDate, user);
+
         const available = await AtomicReservationService.getAvailableQuantity(unit._id, checkOutDate, checkInDate);
         if (available < quantity) {
           if (available > 0) {
@@ -741,7 +801,8 @@ module.exports = function createGearScanRouter({
         return markScannedOut(fresh, quantity, {
           effect: 'added',
           title: 'Added and scanned out',
-          detail: quantity > 1 ? `${unitText(unit)} x ${quantity}` : unitText(unit)
+          detail: quantity > 1 ? `${unitText(unit)} x ${quantity}` : unitText(unit),
+          extraWarnings: pulled.warnings
         });
       }
 
@@ -965,6 +1026,7 @@ module.exports = function createGearScanRouter({
 
       // ---- 3. Not on the reservation -> add it (when allowed) -------------------
       if (addUnlisted) {
+        const pulled = await releaseLaterEarlyPacks(unit, key.endDate, user);
         const available = await AtomicReservationService.getAvailableQuantity(unit._id, key.startDate, key.endDate);
         if (available < quantity) {
           if (available > 0) {
@@ -1006,7 +1068,8 @@ module.exports = function createGearScanRouter({
         return markScannedOut(added, quantity, {
           effect: 'added',
           title: 'Added and scanned out',
-          detail: quantity > 1 ? `${unitText(unit)} x ${quantity}` : unitText(unit)
+          detail: quantity > 1 ? `${unitText(unit)} x ${quantity}` : unitText(unit),
+          extraWarnings: pulled.warnings
         });
       }
 

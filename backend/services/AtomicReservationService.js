@@ -418,27 +418,22 @@ class AtomicReservationService {
       return result;
     }
 
-    const normalizeDate = (dateStr) => {
-      const date = new Date(dateStr);
-      date.setUTCHours(0, 0, 0, 0);
-      return date;
-    };
+    const { utcDay, utcDayAfter, reservedQtyForRequest } = require('./reservationHold');
 
-    const reqStart = normalizeDate(checkOutDate);
-    const reqEnd = normalizeDate(checkInDate);
-    const now = new Date();
-    now.setUTCHours(0, 0, 0, 0);
+    const reqStart = utcDay(checkOutDate);
+    const reqEnd = utcDay(checkInDate);
+    const now = utcDay(new Date());
+    const packedByEndOfReq = utcDayAfter(reqEnd);
 
     const inventoryIds = inventoryItems.map(item => item._id);
 
-    // Base overlap conditions, identical to getAvailableQuantity():
-    //   reservation overlaps [reqStart, reqEnd] AND has not already expired
+    // Same windows as getAvailableQuantity: listed overlap, or already packed early
     const reservedQuery = {
       inventoryId: { $in: inventoryIds },
-      $and: [
-        { checkOutDate: { $lte: reqEnd } },
-        { checkInDate: { $gte: reqStart } },
-        { checkInDate: { $gte: now } }
+      checkInDate: { $gte: now },
+      $or: [
+        { checkOutDate: { $lte: reqEnd }, checkInDate: { $gte: reqStart } },
+        { packedAt: { $ne: null, $lt: packedByEndOfReq }, $or: [{ scannedOutQty: { $gt: 0 } }, { isPacked: true }] }
       ]
     };
     if (excludeEventId) {
@@ -447,28 +442,27 @@ class AtomicReservationService {
 
     const manualQuery = {
       inventoryId: { $in: inventoryIds },
-      $and: [
-        { startDate: { $lte: reqEnd } },
-        { endDate: { $gte: reqStart } },
-        { endDate: { $gte: now } }
+      endDate: { $gte: now },
+      $or: [
+        { startDate: { $lte: reqEnd }, endDate: { $gte: reqStart } },
+        { packedAt: { $ne: null, $lt: packedByEndOfReq }, $or: [{ scannedOutQty: { $gt: 0 } }, { isPacked: true }] }
       ]
     };
 
-    // TWO queries total (instead of 3 per item)
+    const holdFields = 'inventoryId quantity checkOutDate checkInDate startDate endDate packedAt scannedOutQty returnedQty isPacked';
     const [overlappingReservations, manualReservations] = await Promise.all([
-      ReservedGearItem.find(reservedQuery).select('inventoryId quantity').lean(),
-      ManualReservation.find(manualQuery).select('inventoryId quantity').lean()
+      ReservedGearItem.find(reservedQuery).select(holdFields).lean(),
+      ManualReservation.find(manualQuery).select(holdFields).lean()
     ]);
 
-    // Aggregate reserved quantity per inventory item
     const reservedById = new Map();
-    for (const res of overlappingReservations) {
-      const id = res.inventoryId.toString();
-      reservedById.set(id, (reservedById.get(id) || 0) + res.quantity);
+    for (const line of overlappingReservations) {
+      const id = line.inventoryId.toString();
+      reservedById.set(id, (reservedById.get(id) || 0) + reservedQtyForRequest(line, reqStart, reqEnd));
     }
-    for (const res of manualReservations) {
-      const id = res.inventoryId.toString();
-      reservedById.set(id, (reservedById.get(id) || 0) + res.quantity);
+    for (const line of manualReservations) {
+      const id = line.inventoryId.toString();
+      reservedById.set(id, (reservedById.get(id) || 0) + reservedQtyForRequest(line, reqStart, reqEnd));
     }
 
     for (const item of inventoryItems) {

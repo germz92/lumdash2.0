@@ -1233,6 +1233,26 @@
         margin-bottom: 0;
       }
 
+      .inventory-dark .inventory-toolbar .category-filter {
+        flex: 0 1 200px;
+        min-width: 160px;
+        margin: 0;
+        padding: 12px 14px;
+        background: var(--surface-input);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        color: var(--text-primary);
+        font-family: inherit;
+        font-size: var(--font-size-base);
+        cursor: pointer;
+      }
+
+      .inventory-dark .inventory-toolbar .category-filter:focus {
+        outline: none;
+        border-color: var(--brand-red);
+        box-shadow: 0 0 0 3px var(--brand-red-muted);
+      }
+
       .inventory-dark .inventory-toolbar .btn:disabled {
         opacity: 0.5;
         cursor: not-allowed;
@@ -1348,12 +1368,6 @@
                         <label for="category">Category *</label>
                         <select id="category" name="category" required>
                             <option value="">Select Category</option>
-                            <option value="Camera">Camera</option>
-                            <option value="Lenses">Lenses</option>
-                            <option value="Lighting">Lighting</option>
-                            <option value="Support">Support</option>
-                            <option value="Accessories">Accessories</option>
-                            <option value="Computers">Computers</option>
                         </select>
                     </div>
 
@@ -1470,9 +1484,12 @@
 
             <div class="inventory-toolbar">
                 <div class="search-box">
-                    <input type="text" id="searchInput" placeholder="Search inventory, serial or asset tag..." onkeyup="filterInventory()">
+                    <input type="text" id="searchInput" placeholder="Search inventory, serial or asset tag..." oninput="filterInventory()">
                     <span class="material-symbols-outlined">search</span>
                 </div>
+                <select id="categoryFilter" class="category-filter" onchange="filterInventory()" aria-label="Filter by category">
+                    <option value="">All categories</option>
+                </select>
                 <button type="button" class="btn btn-secondary" id="printLabelsBtn" onclick="printSelectedLabels()" disabled>
                     <span class="material-symbols-outlined">qr_code_2</span>
                     <span id="printLabelsBtnText">Print labels</span>
@@ -1523,12 +1540,6 @@
                 <label for="editCategory">Category *</label>
                 <select id="editCategory" name="category" required>
                   <option value="">Select Category</option>
-                  <option value="Camera">Camera</option>
-                  <option value="Lenses">Lenses</option>
-                  <option value="Lighting">Lighting</option>
-                  <option value="Support">Support</option>
-                  <option value="Accessories">Accessories</option>
-                  <option value="Computers">Computers</option>
                 </select>
               </div>
               <div class="form-group" id="editLensClassGroup" style="display: none;">
@@ -1551,12 +1562,9 @@
                 <span class="material-symbols-outlined">sticky_note_2</span>
                 Item Notes
               </h3>
-              <div class="form-group" id="noteSerialGroup" style="margin-bottom: 12px;">
-                <label for="noteSerialSelect">Serial number for this note</label>
-                <select id="noteSerialSelect"></select>
-              </div>
+              <p id="editNotesFor" class="help-text" style="margin: 0 0 12px;"></p>
               <label for="itemNoteInput" style="font-weight: var(--font-weight-medium); color: var(--text-secondary); font-size: var(--font-size-sm);">Add a note</label>
-              <textarea id="itemNoteInput" placeholder="Enter a note for the selected serial (saved with timestamp when you click Add Note)..."></textarea>
+              <textarea id="itemNoteInput" placeholder="Note for this item (saved with a timestamp when you click Add Note)..."></textarea>
               <div style="margin-top: 12px;">
                 <button type="button" class="btn btn-secondary btn-sm" id="addNoteBtn" onclick="addInventoryNote()">
                   <span class="material-symbols-outlined">note_add</span>
@@ -1597,7 +1605,6 @@
         let currentInventory = [];
         let filteredInventory = [];
         let editingItemId = null;
-        let editingNoteSerial = null;
         let manualReservationMode = false;
         let manualCart = [];
         const selectedLabelIds = new Set();   // inventory ids ticked for label printing
@@ -1617,8 +1624,46 @@
             'Other'
         ];
 
+        // Built-in categories plus any extra names already used on inventory items
+        const KNOWN_CATEGORIES = [
+            'Camera',
+            'Lenses',
+            'Lighting',
+            'Audio',
+            'Support',
+            'Accessories',
+            'Computers'
+        ];
+
         function isLensCategory(category) {
             return /lens/i.test(category || '');
+        }
+
+        function allCategoryNames(extra) {
+            const names = [
+                ...KNOWN_CATEGORIES,
+                ...currentInventory.map(item => item.category).filter(Boolean),
+                ...(extra ? [extra] : [])
+            ];
+            return [...new Set(names)]
+                .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+        }
+
+        function fillCategorySelect(selectEl, selectedValue) {
+            if (!selectEl) return;
+            const selected = selectedValue || selectEl.value || '';
+            const categories = allCategoryNames(selected);
+            selectEl.innerHTML = '<option value="">Select Category</option>' +
+                categories.map(category =>
+                    `<option value="${escapeAttr(category)}">${escapeHtml(category)}</option>`
+                ).join('');
+            if (selected && categories.includes(selected)) selectEl.value = selected;
+        }
+
+        function refreshCategorySelects(selectedEditCategory) {
+            fillCategorySelect(document.getElementById('category'));
+            fillCategorySelect(document.getElementById('editCategory'), selectedEditCategory);
+            refreshCategoryFilterOptions();
         }
 
         function fillLensClassSelect(selectEl, selectedValue) {
@@ -1673,6 +1718,7 @@
             checkAdminAccess();
             fillLensClassSelect(document.getElementById('lensClass'));
             fillLensClassSelect(document.getElementById('editLensClass'));
+            refreshCategorySelects();
             const addCategory = document.getElementById('category');
             const editCategory = document.getElementById('editCategory');
             if (addCategory) {
@@ -1797,8 +1843,9 @@
                 const knownIds = new Set(currentInventory.map(item => String(item._id)));
                 selectedLabelIds.forEach(id => { if (!knownIds.has(id)) selectedLabelIds.delete(id); });
 
-                filteredInventory = [...currentInventory];
-                renderInventory();
+                refreshCategorySelects();
+                // Keep whatever search / category the person already had typed in
+                filterInventory();
                 loadScanStatus();
             } catch (error) {
                 console.error('Error loading inventory:', error);
@@ -2203,13 +2250,35 @@
             }).join('');
         }
 
-        // Filter inventory
+        // Filter dropdown: every known category, plus any already used on items
+        function refreshCategoryFilterOptions() {
+            const select = document.getElementById('categoryFilter');
+            if (!select) return;
+
+            const selected = select.value;
+            const categories = allCategoryNames(selected);
+
+            select.innerHTML = '<option value="">All categories</option>' +
+                categories.map(category =>
+                    `<option value="${escapeAttr(category)}">${escapeHtml(category)}</option>`
+                ).join('');
+
+            select.value = categories.includes(selected) ? selected : '';
+        }
+
+        // Apply the search box and category filter. Call this after any change to the list
+        // instead of resetting to the full inventory, so the filters stay put.
         function filterInventory() {
-            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const searchTerm = (document.getElementById('searchInput')?.value || '').trim().toLowerCase();
+            const category = document.getElementById('categoryFilter')?.value || '';
+
             filteredInventory = currentInventory.filter(item => {
+                if (category && item.category !== category) return false;
+                if (!searchTerm) return true;
+
                 const notesText = (item.notes || []).map(n => `${n.text} ${n.serial || item.serial}`).join(' ').toLowerCase();
-                return item.label.toLowerCase().includes(searchTerm) ||
-                    item.category.toLowerCase().includes(searchTerm) ||
+                return (item.label || '').toLowerCase().includes(searchTerm) ||
+                    (item.category || '').toLowerCase().includes(searchTerm) ||
                     (item.lensClass || '').toLowerCase().includes(searchTerm) ||
                     (item.serial || '').toLowerCase().includes(searchTerm) ||
                     (item.assetTag || '').toLowerCase().includes(searchTerm) ||
@@ -2283,9 +2352,9 @@
                     if (index !== -1 && updatedItem) {
                         currentInventory[index] = updatedItem;
                     }
-                    filteredInventory = [...currentInventory];
+                    refreshCategorySelects();
                     showMessage('Item updated successfully!', 'success');
-                    renderInventory();
+                    filterInventory();
                     closeEditModal();
                 } else {
                     showMessage(result.error || 'Failed to update item', 'error');
@@ -2299,33 +2368,9 @@
             }
         }
 
-        function getInventoryDocForSerial(item, serial) {
-            const targetSerial = normalizeSerial(serial);
-            const sibling = getSiblingItems(item).find(i => normalizeSerial(i.serial) === targetSerial);
-            return sibling || item;
-        }
-
-        function updateNoteSerialSelect(item) {
-            const select = document.getElementById('noteSerialSelect');
-            const siblings = getSiblingItems(item);
-            const serials = [...new Set(siblings.map(i => normalizeSerial(i.serial)))].sort();
-
-            select.innerHTML = '';
-            serials.forEach(s => {
-                const opt = document.createElement('option');
-                opt.value = s;
-                opt.textContent = formatSerialDisplay(s);
-                select.appendChild(opt);
-            });
-
-            const defaultSerial = editingNoteSerial || normalizeSerial(item.serial);
-            select.value = serials.includes(defaultSerial) ? defaultSerial : serials[0];
-            editingNoteSerial = select.value;
-
-            select.onchange = () => {
-                editingNoteSerial = select.value;
-                renderEditNotesHistory(item);
-            };
+        // Notes on the inventory document that is open in the edit modal (not its siblings)
+        function getNotesForEditingItem(item) {
+            return [...(item.notes || [])].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         }
 
         async function addInventoryNote() {
@@ -2344,16 +2389,14 @@
                 return;
             }
 
-            const serial = document.getElementById('noteSerialSelect').value;
-            const targetDoc = getInventoryDocForSerial(item, serial);
-
+            const serial = normalizeSerial(item.serial);
             const btn = document.getElementById('addNoteBtn');
             const originalText = btn.innerHTML;
             btn.disabled = true;
             btn.innerHTML = 'Saving...';
 
             try {
-                const response = await fetch(`${window.API_BASE}/api/gear-inventory/${targetDoc._id}/notes`, {
+                const response = await fetch(`${window.API_BASE}/api/gear-inventory/${item._id}/notes`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -2379,12 +2422,11 @@
                     if (index !== -1) currentInventory[index] = result.gear;
                 }
 
-                filteredInventory = [...currentInventory];
-                editingNoteSerial = serial;
                 noteInput.value = '';
-                renderEditNotesHistory(item);
-                renderInventory();
-                showMessage(`Note added for ${formatSerialDisplay(serial)}`, 'success');
+                const refreshed = currentInventory.find(i => String(i._id) === String(editingItemId)) || item;
+                renderEditNotesHistory(refreshed);
+                filterInventory();
+                showMessage('Note added', 'success');
             } catch (error) {
                 console.error('Error adding note:', error);
                 showMessage(error.message || 'Failed to add note', 'error');
@@ -2396,14 +2438,13 @@
 
         function renderEditNotesHistory(item) {
             const container = document.getElementById('editNotesHistory');
-            const serial = document.getElementById('noteSerialSelect')?.value || editingNoteSerial || normalizeSerial(item.serial);
-            const notes = getNotesForSerial(item, serial);
+            const notes = getNotesForEditingItem(item);
             if (notes.length === 0) {
-                container.innerHTML = `<p style="color: var(--text-muted); font-size: 13px; margin: 12px 0 0;">No notes yet for serial ${escapeHtml(formatSerialDisplay(serial))}.</p>`;
+                container.innerHTML = '<p style="color: var(--text-muted); font-size: 13px; margin: 12px 0 0;">No notes yet for this item.</p>';
                 return;
             }
             container.innerHTML = `
-                <h4 style="margin: 16px 0 8px; font-size: 14px; color: var(--text-secondary);">Notes for ${escapeHtml(formatSerialDisplay(serial))}</h4>
+                <h4 style="margin: 16px 0 8px; font-size: 14px; color: var(--text-secondary);">Notes on this item</h4>
                 ${renderNotesListHTML(notes)}
             `;
         }
@@ -2417,19 +2458,22 @@
             const labelParts = (item.label || '').split(' ');
             const brand = labelParts[0] || '';
             const model = labelParts.slice(1).join(' ') || '';
+            const serialLabel = formatSerialDisplay(item.serial);
 
-            document.getElementById('editModalTitle').textContent = `Edit — ${brand} ${model}`;
+            document.getElementById('editModalTitle').textContent = `Edit — ${brand} ${model}${serialLabel !== 'No Serial' ? ` · ${serialLabel}` : ''}`;
             document.getElementById('editBrand').value = brand;
             document.getElementById('editModel').value = model;
-            document.getElementById('editCategory').value = item.category;
+            fillCategorySelect(document.getElementById('editCategory'), item.category);
             fillLensClassSelect(document.getElementById('editLensClass'), item.lensClass || '');
             toggleLensClassField(item.category, 'editLensClassGroup', 'editLensClass', false);
             document.getElementById('editSerial').value = item.serial === 'N/A' ? '' : item.serial;
             document.getElementById('editQuantity').value = item.quantity;
             document.getElementById('itemNoteInput').value = '';
-            editingNoteSerial = normalizeSerial(item.serial);
+            document.getElementById('editNotesFor').textContent =
+                serialLabel === 'No Serial'
+                    ? 'Notes are saved on this inventory item.'
+                    : `Notes are saved on this unit (${serialLabel}).`;
 
-            updateNoteSerialSelect(item);
             renderEditNotesHistory(item);
 
             document.getElementById('editItemModal').classList.add('show');
@@ -2438,12 +2482,11 @@
         function closeEditModal() {
             document.getElementById('editItemModal').classList.remove('show');
             editingItemId = null;
-            editingNoteSerial = null;
             document.getElementById('editItemForm').reset();
             toggleLensClassField('', 'editLensClassGroup', 'editLensClass', false);
             document.getElementById('itemNoteInput').value = '';
             document.getElementById('editNotesHistory').innerHTML = '';
-            document.getElementById('noteSerialSelect').innerHTML = '';
+            document.getElementById('editNotesFor').textContent = '';
         }
 
         function openNotesHistory(itemId, serial) {

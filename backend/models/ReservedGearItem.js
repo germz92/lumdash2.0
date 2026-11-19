@@ -165,63 +165,49 @@ reservedGearItemSchema.set('toJSON', { virtuals: true });
 
 // STATIC METHOD: Check availability for an inventory item across all reservations
 reservedGearItemSchema.statics.getAvailableQuantity = async function(inventoryId, checkOutDate, checkInDate, excludeEventId = null) {
-  const normalizeDate = (dateStr) => {
-    const date = new Date(dateStr);
-    date.setUTCHours(0, 0, 0, 0);
-    return date;
-  };
-  
-  const reqStart = normalizeDate(checkOutDate);
-  const reqEnd = normalizeDate(checkInDate);
-  const now = new Date();
-  now.setUTCHours(0, 0, 0, 0);
-  
-  // Get the base inventory item
+  const { utcDay, utcDayAfter, reservedQtyForRequest } = require('../services/reservationHold');
+
+  const reqStart = utcDay(checkOutDate);
+  const reqEnd = utcDay(checkInDate);
+  const now = utcDay(new Date());
+  const packedByEndOfReq = utcDayAfter(reqEnd);
+
   const GearInventory = require('./GearInventory');
   const inventoryItem = await GearInventory.findById(inventoryId);
   if (!inventoryItem) {
     throw new Error('Inventory item not found');
   }
-  
-  let reservedQuantity = 0;
-  
-  // Check ReservedGearItem reservations for date overlaps
-  const query = {
-    inventoryId: inventoryId,
-    // Only include reservations that overlap with our date range
-    $and: [
-      { checkOutDate: { $lte: reqEnd } },
-      { checkInDate: { $gte: reqStart } },
-      { checkInDate: { $gte: now } } // Exclude expired reservations
+
+  // Normal date overlap, plus anything already packed that might hold days before check-out
+  const eventQuery = {
+    inventoryId,
+    checkInDate: { $gte: now },
+    $or: [
+      { checkOutDate: { $lte: reqEnd }, checkInDate: { $gte: reqStart } },
+      { packedAt: { $ne: null, $lt: packedByEndOfReq }, $or: [{ scannedOutQty: { $gt: 0 } }, { isPacked: true }] }
     ]
   };
-  
-  // Exclude current event if specified (for updates)
   if (excludeEventId) {
-    query.eventId = { $ne: excludeEventId };
+    eventQuery.eventId = { $ne: excludeEventId };
   }
-  
-  const overlappingReservations = await this.find(query);
-  
-  overlappingReservations.forEach(reservation => {
-    reservedQuantity += reservation.quantity;
-  });
-  
-  // Also check manual reservations
+
   const ManualReservation = require('./ManualReservation');
-  const manualReservations = await ManualReservation.find({
-    inventoryId: inventoryId,
-    $and: [
-      { startDate: { $lte: reqEnd } },
-      { endDate: { $gte: reqStart } },
-      { endDate: { $gte: now } } // Exclude expired reservations
-    ]
-  });
-  
-  manualReservations.forEach(reservation => {
-    reservedQuantity += reservation.quantity;
-  });
-  
+  const [eventLines, manualLines] = await Promise.all([
+    this.find(eventQuery),
+    ManualReservation.find({
+      inventoryId,
+      endDate: { $gte: now },
+      $or: [
+        { startDate: { $lte: reqEnd }, endDate: { $gte: reqStart } },
+        { packedAt: { $ne: null, $lt: packedByEndOfReq }, $or: [{ scannedOutQty: { $gt: 0 } }, { isPacked: true }] }
+      ]
+    })
+  ]);
+
+  let reservedQuantity = 0;
+  for (const line of eventLines) reservedQuantity += reservedQtyForRequest(line, reqStart, reqEnd);
+  for (const line of manualLines) reservedQuantity += reservedQtyForRequest(line, reqStart, reqEnd);
+
   return Math.max(0, inventoryItem.quantity - reservedQuantity);
 };
 

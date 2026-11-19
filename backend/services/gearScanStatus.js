@@ -196,16 +196,21 @@ function overdueSummary(outstandingEntry) {
  * @returns {{ type: 'same_event'|'event'|'manual', listName?, eventTitle?, personName? } | null}
  */
 async function findReservationConflict(inventoryId, checkOutDate, checkInDate, { eventId = null, canViewEvent = () => false } = {}) {
-  const start = new Date(checkOutDate);
-  start.setUTCHours(0, 0, 0, 0);
-  const end = new Date(checkInDate);
-  end.setUTCHours(0, 0, 0, 0);
+  const { utcDay, utcDayAfter, holdOverlaps, heldQty, holdStart, checkOutOf } = require('./reservationHold');
+  const start = utcDay(checkOutDate);
+  const end = utcDay(checkInDate);
 
-  const overlapping = await ReservedGearItem.find({
+  // Listed overlaps, plus units already packed that hold days before check-out
+  const packedByEnd = utcDayAfter(end);
+  const candidates = await ReservedGearItem.find({
     inventoryId,
-    checkOutDate: { $lte: end },
-    checkInDate: { $gte: start }
+    $or: [
+      { checkOutDate: { $lte: end }, checkInDate: { $gte: start } },
+      { packedAt: { $ne: null, $lt: packedByEnd }, $or: [{ scannedOutQty: { $gt: 0 } }, { isPacked: true }] }
+    ]
   }).populate('eventId', EVENT_ACCESS_FIELDS).sort({ checkOutDate: 1 }).lean();
+
+  const overlapping = candidates.filter(line => holdOverlaps(line, start, end));
 
   const sameEvent = eventId
     ? overlapping.find(line => line.eventId && line.eventId._id.toString() === eventId.toString())
@@ -216,21 +221,37 @@ async function findReservationConflict(inventoryId, checkOutDate, checkInDate, {
 
   const otherEvent = overlapping.find(line => line.eventId);
   if (otherEvent) {
+    const listedStart = checkOutOf(otherEvent);
+    const packedEarly = heldQty(otherEvent) > 0 && listedStart && listedStart > start;
     return {
       type: 'event',
       eventTitle: canViewEvent(otherEvent.eventId) ? (otherEvent.eventId.title || 'Untitled event') : null,
       checkOutDate: otherEvent.checkOutDate,
-      checkInDate: otherEvent.checkInDate
+      checkInDate: otherEvent.checkInDate,
+      heldSince: packedEarly ? holdStart(otherEvent) : null,
+      packedEarly
     };
   }
 
-  const manual = await ManualReservation.findOne({
+  const manuals = await ManualReservation.find({
     inventoryId,
-    startDate: { $lte: end },
-    endDate: { $gte: start }
-  }).lean();
+    $or: [
+      { startDate: { $lte: end }, endDate: { $gte: start } },
+      { packedAt: { $ne: null, $lt: packedByEnd }, $or: [{ scannedOutQty: { $gt: 0 } }, { isPacked: true }] }
+    ]
+  }).sort({ startDate: 1 }).lean();
+  const manual = manuals.find(line => holdOverlaps(line, start, end));
   if (manual) {
-    return { type: 'manual', personName: manual.personName, checkOutDate: manual.startDate, checkInDate: manual.endDate };
+    const listedStart = checkOutOf(manual);
+    const packedEarly = heldQty(manual) > 0 && listedStart && listedStart > start;
+    return {
+      type: 'manual',
+      personName: manual.personName,
+      checkOutDate: manual.startDate,
+      checkInDate: manual.endDate,
+      heldSince: packedEarly ? holdStart(manual) : null,
+      packedEarly
+    };
   }
 
   return null;

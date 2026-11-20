@@ -1319,6 +1319,77 @@ module.exports = function createGearScanRouter({
   });
 
   // ---------------------------------------------------------------------------
+  // DELETE /api/gear-scan/lines/:id  - remove a line from the list (not scanned out)
+  // Event gear managers / inventory managers (manual). Refuses if scannedOutQty > 0.
+  // ---------------------------------------------------------------------------
+  router.delete('/lines/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      if (!isId(id)) return res.status(400).json({ error: 'Invalid line ID' });
+
+      const user = req.user;
+      const foundLine = await findLineOfAnyKind(id);
+      if (!foundLine) return res.status(404).json({ error: 'Gear list item not found' });
+      const { line, kind } = foundLine;
+      const isManual = kind === 'manual';
+
+      let event = null;
+      if (isManual) {
+        if (!canManageGearInventory(user)) {
+          return res.status(403).json({ error: 'Only inventory managers can change a manual reservation' });
+        }
+      } else {
+        event = await loadEvent(line.eventId);
+        if (!event) return res.status(404).json({ error: 'Event not found' });
+        if (!canManageEventGearLists(event, user)) {
+          return res.status(403).json({ error: 'Not authorized to edit gear for this event' });
+        }
+      }
+
+      if ((line.scannedOutQty || 0) > 0) {
+        return res.status(409).json({
+          error: 'This item has been scanned out. Clear the scan before removing it from the list.'
+        });
+      }
+
+      const label = `${line.brand || ''} ${line.model || ''}`.trim() || 'Item';
+      const quantity = line.quantity || 1;
+
+      if (isManual) {
+        await ManualReservation.deleteOne({ _id: line._id });
+      } else {
+        await AtomicReservationService.releaseReservation(line._id);
+      }
+
+      GearScanLog.create({
+        code: '',
+        lineType: kind,
+        inventoryId: line.inventoryId,
+        reservedItemId: line._id,
+        eventId: isManual ? null : line.eventId,
+        listName: isManual ? null : line.listName,
+        userId: user.id,
+        action: 'undo',
+        method: 'manual',
+        result: 'ok',
+        effect: 'removed',
+        quantity,
+        message: `Removed from list: ${label}`
+      }).catch(logError => console.error('[GEAR SCAN] Failed to write remove log:', logError.message));
+
+      return res.json({
+        ok: true,
+        removedLineId: line._id,
+        title: 'Removed from list',
+        detail: label
+      });
+    } catch (error) {
+      console.error('[GEAR SCAN] remove line failed:', error);
+      res.status(500).json({ error: 'Failed to remove item from the list' });
+    }
+  });
+
+  // ---------------------------------------------------------------------------
   // POST /api/gear-scan/lines/:id/undo   (an event gear line or a manual reservation)
   // body: { logId }               - reverse exactly what that scan did
   //    or { action }              - 'scan_out' (default) clears the scan-out,

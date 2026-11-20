@@ -402,7 +402,7 @@
   <div class="toast" id="toast"></div>
 
   <script>
-    const KNOWN_CATEGORIES = ['Camera','Lenses','Lighting','Audio','Support','Accessories','Computers'];
+    const KNOWN_CATEGORIES = ['Cameras','Lenses','Lighting','Audio','Support','Accessories','Computers'];
     let kits = [];
     let inventory = [];
     let models = [];
@@ -498,7 +498,7 @@
     function fillCategoryFilter() {
       const select = document.getElementById('pickerCategory');
       const cats = new Set(KNOWN_CATEGORIES);
-      models.forEach((m) => cats.add(m.category));
+      models.forEach((m) => { if (m.category && m.category !== 'Camera') cats.add(m.category); });
       const current = select.value;
       select.innerHTML = '<option value="">All categories</option>' +
         [...cats].sort().map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');

@@ -461,6 +461,35 @@
         white-space: nowrap;
       }
 
+      .scan-station .line-remove-btn {
+        flex: 0 0 auto;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        padding: 0;
+        border: none;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--text-tertiary);
+        cursor: pointer;
+      }
+
+      .scan-station .line-remove-btn:hover {
+        background: rgba(239, 68, 68, 0.12);
+        color: var(--accent-red, #ef4444);
+      }
+
+      .scan-station .line-remove-btn .material-symbols-outlined {
+        font-size: 20px;
+      }
+
+      .scan-station .line-remove-btn:disabled {
+        opacity: 0.5;
+        cursor: wait;
+      }
+
       /* Scanned (blue) is deliberately different from ticked by hand (green) */
       .scan-station .line-row.state-scanned .line-icon,
       .scan-station .line-row.state-scanned .line-state { color: var(--accent-blue, #3b82f6); }
@@ -827,6 +856,16 @@
                 method: 'PUT',
                 headers: authHeaders({ 'Content-Type': 'application/json' }),
                 body: JSON.stringify(body)
+            });
+            const data = await response.json().catch(() => null);
+            if (!response.ok) throw new Error((data && data.error) || `Request failed (${response.status})`);
+            return data;
+        }
+
+        async function apiDelete(path) {
+            const response = await fetch(`${API_BASE}${path}`, {
+                method: 'DELETE',
+                headers: authHeaders()
             });
             const data = await response.json().catch(() => null);
             if (!response.ok) throw new Error((data && data.error) || `Request failed (${response.status})`);
@@ -1262,6 +1301,7 @@
                 .sort((a, b) => (order[a.s.key] - order[b.s.key]) || (a.index - b.index));
 
             function renderLineRow({ line, s }) {
+                const canRemove = canReserve && !(line.scannedOutQty > 0);
                 return `
                     <li class="line-row state-${s.key}" data-line-id="${escapeHtml(line._id)}">
                         <span class="material-symbols-outlined line-icon">${LINE_ICONS[s.key]}</span>
@@ -1271,6 +1311,11 @@
                         </div>
                         ${line.isOverdue ? '<span class="badge badge-overdue">Overdue</span>' : ''}
                         <span class="line-state">${escapeHtml(lineStateText(s))}</span>
+                        ${canRemove ? `
+                            <button type="button" class="line-remove-btn" data-line-id="${escapeHtml(line._id)}"
+                                title="Remove from this list">
+                                <span class="material-symbols-outlined">delete</span>
+                            </button>` : ''}
                     </li>`;
             }
 
@@ -1822,6 +1867,40 @@
             scanner.focus();
         }
 
+        // Remove a line that has not been scanned out (event list or manual check-out)
+        async function removeLineFromList(lineId, button) {
+            if (!canReserve || !lineId) return;
+            if (!confirm('Remove this item from the list?')) return;
+            if (button) button.disabled = true;
+            try {
+                const result = await apiDelete(`/api/gear-scan/lines/${lineId}`);
+                lines = lines.filter(line => line._id !== lineId && String(line._id) !== String(lineId));
+                if (state.manual) refreshManualList();
+                renderSide();
+                if (scanner && scanner.showResult) {
+                    scanner.showResult({
+                        result: 'ok',
+                        level: 'ok',
+                        title: result.title || 'Removed from list',
+                        detail: result.detail || ''
+                    }, { sound: false });
+                }
+            } catch (error) {
+                if (scanner && scanner.showResult) {
+                    scanner.showResult({
+                        result: 'error',
+                        level: 'error',
+                        title: 'Could not remove',
+                        detail: error.message
+                    }, { sound: false });
+                } else {
+                    alert(error.message);
+                }
+                if (button) button.disabled = false;
+            }
+            scanner.focus();
+        }
+
         // ---------- Mode ----------
 
         function setMode(mode, { keepRecent = false } = {}) {
@@ -1921,6 +2000,11 @@
                 const returnBtn = event.target.closest('.mark-returned-btn');
                 if (returnBtn) {
                     markReturned(returnBtn.dataset.lineId, returnBtn);
+                    return;
+                }
+                const removeBtn = event.target.closest('.line-remove-btn');
+                if (removeBtn) {
+                    removeLineFromList(removeBtn.dataset.lineId, removeBtn);
                     return;
                 }
                 if (event.target.closest('#clearScansBtn')) {

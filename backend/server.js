@@ -8143,11 +8143,14 @@ app.get('/api/inventory/:inventoryId/reservations', authenticate, async (req, re
       .sort({ createdAt: -1 });
     
     console.log(`[RESERVATIONS] Found ${reservedItems.length} user-facing reservations`);
-    
-    // Get availability statistics from GearInventory for admin info
-    const totalReservedQuantity = inventoryItem.reservations.reduce((sum, res) => sum + res.quantity, 0);
-    const availableQuantity = inventoryItem.quantity - totalReservedQuantity;
-    
+
+    // Headline numbers follow the same date-overlap rules as booking.
+    // Summing every historical line (or the GearInventory.reservations cache)
+    // stacks non-overlapping events and goes negative on a quantity of 1.
+    const today = new Date();
+    const availableToday = await ReservedGearItem.getAvailableQuantity(inventoryId, today, today);
+    const heldToday = Math.max(0, (inventoryItem.quantity || 0) - availableToday);
+
     res.json({
       inventoryItem: {
         _id: inventoryItem._id,
@@ -8155,8 +8158,11 @@ app.get('/api/inventory/:inventoryId/reservations', authenticate, async (req, re
         category: inventoryItem.category,
         serial: inventoryItem.serial,
         quantity: inventoryItem.quantity,
-        totalReserved: totalReservedQuantity,
-        available: availableQuantity
+        available: availableToday,
+        availableToday,
+        heldToday,
+        totalReserved: heldToday,
+        onLists: reservedItems.length
       },
       reservedItems
     });

@@ -1678,8 +1678,16 @@
         ];
 
         // Built-in categories plus any extra names already used on inventory items
+        const LIGHTING_CLASSES = [
+            'Speedlights',
+            'Strobes',
+            'Continuous Light',
+            'Modifiers',
+            'Triggers'
+        ];
+
         const KNOWN_CATEGORIES = [
-            'Camera',
+            'Cameras',
             'Lenses',
             'Lighting',
             'Audio',
@@ -1692,12 +1700,26 @@
             return /lens/i.test(category || '');
         }
 
+        function isLightingCategory(category) {
+            return /^lighting$/i.test(String(category || '').trim());
+        }
+
+        function hasGearClass(category) {
+            return isLensCategory(category) || isLightingCategory(category);
+        }
+
+        function classesForCategory(category) {
+            if (isLensCategory(category)) return LENS_CLASSES;
+            if (isLightingCategory(category)) return LIGHTING_CLASSES;
+            return [];
+        }
+
         function allCategoryNames(extra) {
             const names = [
                 ...KNOWN_CATEGORIES,
                 ...currentInventory.map(item => item.category).filter(Boolean),
                 ...(extra ? [extra] : [])
-            ];
+            ].filter(name => name !== 'Camera');
             return [...new Set(names)]
                 .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
         }
@@ -1719,20 +1741,30 @@
             refreshCategoryFilterOptions();
         }
 
-        function fillLensClassSelect(selectEl, selectedValue) {
+        function fillLensClassSelect(selectEl, selectedValue, category) {
             if (!selectEl) return;
             const current = selectedValue || '';
+            const classes = classesForCategory(category);
             selectEl.innerHTML = '<option value="">Select Class</option>' +
-                LENS_CLASSES.map(cls => `<option value="${cls}" ${cls === current ? 'selected' : ''}>${cls}</option>`).join('');
+                classes.map(cls => `<option value="${escapeAttr(cls)}" ${cls === current ? 'selected' : ''}>${escapeHtml(cls)}</option>`).join('');
+            if (current && classes.includes(current)) selectEl.value = current;
         }
 
         function toggleLensClassField(categoryValue, groupId, selectId, required) {
             const group = document.getElementById(groupId);
             const select = document.getElementById(selectId);
             if (!group || !select) return;
-            const show = isLensCategory(categoryValue);
+            const show = hasGearClass(categoryValue);
+            const previous = select.value;
+            fillLensClassSelect(select, previous, categoryValue);
             group.style.display = show ? '' : 'none';
             select.required = !!(required && show);
+            const help = group.querySelector('.help-text');
+            if (help) {
+                help.textContent = isLightingCategory(categoryValue)
+                    ? 'Speedlight, strobe, continuous light, modifier, or trigger.'
+                    : 'Used by package templates to reserve a lens type instead of a specific model';
+            }
             if (!show) {
                 select.value = '';
             }
@@ -1769,8 +1801,8 @@
             }
 
             checkAdminAccess();
-            fillLensClassSelect(document.getElementById('lensClass'));
-            fillLensClassSelect(document.getElementById('editLensClass'));
+            fillLensClassSelect(document.getElementById('lensClass'), '', '');
+            fillLensClassSelect(document.getElementById('editLensClass'), '', '');
             refreshCategorySelects();
             const addCategory = document.getElementById('category');
             const editCategory = document.getElementById('editCategory');
@@ -1847,8 +1879,10 @@
                     showMessage('Brand, model, and category are required.', 'error');
                     return;
                 }
-                if (isLensCategory(itemData.category) && !itemData.lensClass) {
-                    showMessage('Class is required for lenses.', 'error');
+                if (hasGearClass(itemData.category) && !itemData.lensClass) {
+                    showMessage(isLightingCategory(itemData.category)
+                        ? 'Class is required for lighting.'
+                        : 'Class is required for lenses.', 'error');
                     return;
                 }
 
@@ -2391,7 +2425,7 @@
                 const totalQty = group.items.reduce((sum, i) => sum + (i.quantity || 1), 0);
                 const serialCount = group.items.length;
                 const category = group.items[0]?.category || '';
-                const lensClass = isLensCategory(category)
+                const lensClass = hasGearClass(category)
                     ? (group.items.find(i => i.lensClass)?.lensClass || 'Unclassified')
                     : '—';
 
@@ -2427,7 +2461,7 @@
                             <td>${showModelCols ? `<strong>${escapeHtml(brand)}</strong>` : ''}</td>
                             <td>${showModelCols ? escapeHtml(model) : ''}</td>
                             <td>${showModelCols ? escapeHtml(category) : ''}</td>
-                            <td>${showModelCols ? escapeHtml(isLensCategory(category) ? (item.lensClass || 'Unclassified') : '—') : ''}</td>
+                            <td>${showModelCols ? escapeHtml(hasGearClass(category) ? (item.lensClass || 'Unclassified') : '—') : ''}</td>
                             <td>
                                 ${serialCount > 1 ? `<div class="serial-notes-label">Serial</div>` : ''}
                                 <span class="serial-code">${escapeHtml(formatSerialDisplay(item.serial))}</span>
@@ -2671,8 +2705,8 @@
             document.getElementById('editBrand').value = brand;
             document.getElementById('editModel').value = model;
             fillCategorySelect(document.getElementById('editCategory'), item.category);
-            fillLensClassSelect(document.getElementById('editLensClass'), item.lensClass || '');
             toggleLensClassField(item.category, 'editLensClassGroup', 'editLensClass', false);
+            fillLensClassSelect(document.getElementById('editLensClass'), item.lensClass || '', item.category);
             document.getElementById('editSerial').value = item.serial === 'N/A' ? '' : item.serial;
             document.getElementById('editQuantity').value = item.quantity;
             document.getElementById('itemNoteInput').value = '';
@@ -3200,52 +3234,120 @@
                 const reserved = activeRes.reservedItems || [];
                 const manual = Array.isArray(manualRes) ? manualRes : [];
                 const totalCount = reserved.length + manual.length;
+                const heldToday = item.heldToday ?? item.totalReserved ?? 0;
+                const availableToday = item.availableToday ?? item.available;
+
+                const utcDay = (value) => {
+                    if (!value) return null;
+                    const date = new Date(value);
+                    if (isNaN(date.getTime())) return null;
+                    return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+                };
+                const todayUtc = utcDay(new Date());
+                const stillOut = (r) => (r.scannedOutQty || 0) > (r.returnedQty || 0);
+                const isPastReservation = (start, end, row) => {
+                    const endDay = utcDay(end);
+                    if (endDay == null || todayUtc == null) return false;
+                    if (stillOut(row)) return false;
+                    return endDay < todayUtc;
+                };
+                const rangesOverlap = (aStart, aEnd, bStart, bEnd) => {
+                    const a0 = utcDay(aStart), a1 = utcDay(aEnd), b0 = utcDay(bStart), b1 = utcDay(bEnd);
+                    if (a0 == null || a1 == null || b0 == null || b1 == null) return false;
+                    return a0 <= b1 && a1 >= b0;
+                };
+                const windows = [
+                    ...reserved.map(r => ({
+                        id: r._id,
+                        start: r.checkOutDate || r.eventId?.gear?.checkOutDate,
+                        end: r.checkInDate || r.eventId?.gear?.checkInDate,
+                        past: isPastReservation(r.checkOutDate || r.eventId?.gear?.checkOutDate, r.checkInDate || r.eventId?.gear?.checkInDate, r)
+                    })),
+                    ...manual.map(r => ({
+                        id: r._id,
+                        start: r.startDate,
+                        end: r.endDate,
+                        past: isPastReservation(r.startDate, r.endDate, r)
+                    }))
+                ];
+                const overlapsAnother = (row) => windows.some(other =>
+                    other.id !== row._id && !other.past &&
+                    rangesOverlap(row.start, row.end, other.start, other.end)
+                );
+
+                function packLabel(row) {
+                    const qty = row.quantity || 1;
+                    const scanned = row.scannedOutQty || 0;
+                    const returned = row.returnedQty || 0;
+                    if (returned > 0 && returned >= Math.max(scanned, row.isPacked ? qty : 0)) return 'Returned';
+                    if (scanned > returned) return qty > 1 ? `${scanned - returned} out` : 'Out';
+                    if (row.isPacked) return 'By hand';
+                    return 'No';
+                }
+
+                function eventCard(r) {
+                    const event = r.eventId || {};
+                    const user = r.userId || {};
+                    const checkOut = r.checkOutDate || event?.gear?.checkOutDate;
+                    const checkIn = r.checkInDate || event?.gear?.checkInDate;
+                    const past = isPastReservation(checkOut, checkIn, r);
+                    const clash = !past && overlapsAnother({ _id: r._id, start: checkOut, end: checkIn });
+                    return `
+                        <div class="res-card ${clash ? 'conflict' : ''}">
+                            <div class="res-card-header">
+                                <div>
+                                    <h4>${escapeHtml(event.title || 'Unknown Event')}</h4>
+                                    <div class="res-meta">
+                                        <strong>List:</strong> ${escapeHtml(r.listName || 'Main List')}<br>
+                                        <strong>User:</strong> ${escapeHtml(user.fullName || '—')} (${escapeHtml(user.email || '—')})<br>
+                                        <strong>Dates:</strong> ${fmtDate(checkOut)} - ${fmtDate(checkIn)}
+                                    </div>
+                                </div>
+                                <button class="res-btn-release" onclick="releaseReservationModal('${r._id}')">Release</button>
+                            </div>
+                            <div class="res-card-details">
+                                <div class="stat"><span class="stat-label">Quantity</span><span class="stat-value">${r.quantity || 1}</span></div>
+                                <div class="stat"><span class="stat-label">Serial</span><span class="stat-value">${escapeHtml(r.serial || item.serial || '—')}</span></div>
+                                <div class="stat"><span class="stat-label">Packed</span><span class="stat-value">${escapeHtml(packLabel(r))}</span></div>
+                                <div class="stat"><span class="stat-label">Reserved</span><span class="stat-value">${fmtDate(r.createdAt)}</span></div>
+                            </div>
+                        </div>`;
+                }
+
+                const currentReserved = [];
+                const pastReserved = [];
+                reserved.forEach(r => {
+                    const checkOut = r.checkOutDate || r.eventId?.gear?.checkOutDate;
+                    const checkIn = r.checkInDate || r.eventId?.gear?.checkInDate;
+                    (isPastReservation(checkOut, checkIn, r) ? pastReserved : currentReserved).push(r);
+                });
 
                 let html = '';
 
                 html += `
                     <div class="res-item-summary">
-                        <h3>${item.label || 'Unknown Item'}</h3>
+                        <h3>${escapeHtml(item.label || 'Unknown Item')}</h3>
                         <div class="res-item-stats">
-                            <div class="stat"><span class="stat-label">Category</span><span class="stat-value">${item.category || '—'}</span></div>
-                            <div class="stat"><span class="stat-label">Serial</span><span class="stat-value">${item.serial || '—'}</span></div>
+                            <div class="stat"><span class="stat-label">Category</span><span class="stat-value">${escapeHtml(item.category || '—')}</span></div>
+                            <div class="stat"><span class="stat-label">Serial</span><span class="stat-value">${escapeHtml(item.serial || '—')}</span></div>
                             <div class="stat"><span class="stat-label">Total Quantity</span><span class="stat-value">${item.quantity || 1}</span></div>
-                            <div class="stat"><span class="stat-label">Available</span><span class="stat-value">${item.available ?? '—'}</span></div>
-                            <div class="stat"><span class="stat-label">Reserved</span><span class="stat-value">${item.totalReserved || 0}</span></div>
+                            <div class="stat"><span class="stat-label">Available today</span><span class="stat-value">${availableToday ?? '—'}</span></div>
+                            <div class="stat"><span class="stat-label">Held today</span><span class="stat-value">${heldToday}</span></div>
                         </div>
                     </div>`;
 
-                html += `<div class="res-section-title"><span class="material-symbols-outlined">event_available</span> Active Reservations (${reserved.length})</div>`;
-                if (reserved.length === 0) {
-                    html += '<div class="res-empty">No active reservations</div>';
+                html += `<div class="res-section-title"><span class="material-symbols-outlined">event_available</span> Current &amp; upcoming (${currentReserved.length})</div>`;
+                if (currentReserved.length === 0) {
+                    html += '<div class="res-empty">Nothing reserved for today or later</div>';
                 } else {
-                    reserved.forEach(r => {
-                        const event = r.eventId || {};
-                        const user = r.userId || {};
-                        const checkOut = r.checkOutDate || event?.gear?.checkOutDate;
-                        const checkIn = r.checkInDate || event?.gear?.checkInDate;
-                        const isPast = checkIn && new Date(checkIn) < new Date();
-                        html += `
-                            <div class="res-card ${isPast ? '' : 'conflict'}">
-                                <div class="res-card-header">
-                                    <div>
-                                        <h4>${event.title || 'Unknown Event'}</h4>
-                                        <div class="res-meta">
-                                            <strong>List:</strong> ${r.listName || 'Main List'}<br>
-                                            <strong>User:</strong> ${user.fullName || '—'} (${user.email || '—'})<br>
-                                            <strong>Dates:</strong> ${fmtDate(checkOut)} - ${fmtDate(checkIn)}
-                                        </div>
-                                    </div>
-                                    <button class="res-btn-release" onclick="releaseReservationModal('${r._id}')">Release</button>
-                                </div>
-                                <div class="res-card-details">
-                                    <div class="stat"><span class="stat-label">Quantity</span><span class="stat-value">${r.quantity || 1}</span></div>
-                                    <div class="stat"><span class="stat-label">Serial</span><span class="stat-value">${r.serial || item.serial || '—'}</span></div>
-                                    <div class="stat"><span class="stat-label">Packed</span><span class="stat-value">${r.packed ? 'Yes' : 'No'}</span></div>
-                                    <div class="stat"><span class="stat-label">Reserved</span><span class="stat-value">${fmtDate(r.createdAt)}</span></div>
-                                </div>
-                            </div>`;
-                    });
+                    currentReserved.forEach(r => { html += eventCard(r); });
+                }
+
+                html += `<div class="res-section-title"><span class="material-symbols-outlined">history</span> Past (${pastReserved.length})</div>`;
+                if (pastReserved.length === 0) {
+                    html += '<div class="res-empty">No past reservations on the gear lists</div>';
+                } else {
+                    pastReserved.forEach(r => { html += eventCard(r); });
                 }
 
                 html += `<div class="res-section-title"><span class="material-symbols-outlined">person</span> Manual Reservations (${manual.length})</div>`;

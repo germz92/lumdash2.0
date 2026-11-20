@@ -132,6 +132,23 @@ const reservedGearItemSchema = new mongoose.Schema({
     type: String,
     enum: ['scan', 'manual', 'auto', null],
     default: null
+  },
+
+  // Kit membership — one instanceId per copy of a kit on this list
+  kitInstanceId: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  kitId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Kit',
+    default: null
+  },
+  kitName: {
+    type: String,
+    default: null,
+    trim: true
   }
 }, {
   timestamps: true
@@ -146,6 +163,10 @@ reservedGearItemSchema.index({ inventoryId: 1, checkOutDate: 1, checkInDate: 1 }
 reservedGearItemSchema.index(
   { scannedOutQty: 1 },
   { partialFilterExpression: { scannedOutQty: { $gt: 0 } } }
+);
+reservedGearItemSchema.index(
+  { eventId: 1, kitInstanceId: 1 },
+  { partialFilterExpression: { kitInstanceId: { $type: 'string' } } }
 );
 
 // Check-in dates are stored as UTC midnight of the due day. Gear only counts as
@@ -165,12 +186,13 @@ reservedGearItemSchema.set('toJSON', { virtuals: true });
 
 // STATIC METHOD: Check availability for an inventory item across all reservations
 reservedGearItemSchema.statics.getAvailableQuantity = async function(inventoryId, checkOutDate, checkInDate, excludeEventId = null) {
-  const { utcDay, utcDayAfter, reservedQtyForRequest } = require('../services/reservationHold');
+  const { utcDay, utcDayAfter, reservedQtyForRequest, stillHoldingMongo } = require('../services/reservationHold');
 
   const reqStart = utcDay(checkOutDate);
   const reqEnd = utcDay(checkInDate);
   const now = utcDay(new Date());
   const packedByEndOfReq = utcDayAfter(reqEnd);
+  const stillHolding = stillHoldingMongo();
 
   const GearInventory = require('./GearInventory');
   const inventoryItem = await GearInventory.findById(inventoryId);
@@ -178,13 +200,13 @@ reservedGearItemSchema.statics.getAvailableQuantity = async function(inventoryId
     throw new Error('Inventory item not found');
   }
 
-  // Normal date overlap, plus anything already packed that might hold days before check-out
+  // Normal date overlap, plus anything still physically held that packed early
   const eventQuery = {
     inventoryId,
     checkInDate: { $gte: now },
     $or: [
       { checkOutDate: { $lte: reqEnd }, checkInDate: { $gte: reqStart } },
-      { packedAt: { $ne: null, $lt: packedByEndOfReq }, $or: [{ scannedOutQty: { $gt: 0 } }, { isPacked: true }] }
+      { packedAt: { $ne: null, $lt: packedByEndOfReq }, ...stillHolding }
     ]
   };
   if (excludeEventId) {
@@ -199,7 +221,7 @@ reservedGearItemSchema.statics.getAvailableQuantity = async function(inventoryId
       endDate: { $gte: now },
       $or: [
         { startDate: { $lte: reqEnd }, endDate: { $gte: reqStart } },
-        { packedAt: { $ne: null, $lt: packedByEndOfReq }, $or: [{ scannedOutQty: { $gt: 0 } }, { isPacked: true }] }
+        { packedAt: { $ne: null, $lt: packedByEndOfReq }, ...stillHolding }
       ]
     })
   ]);

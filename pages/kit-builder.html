@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#121216">
+    <script src="../js/theme-early.js?v=2.0.0"></script>
+    <title>Kit Builder - LumDash</title>
+    <link rel="icon" href="../assets/favicon.png" type="image/png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
+    <link rel="stylesheet" href="../css/general.css">
+    <link rel="stylesheet" href="../css/theme-tokens.css?v=2.0.0">
+    <link rel="stylesheet" href="../css/theme-dark.css?v=2.0.0">
+    <link rel="stylesheet" href="../css/theme-light.css?v=2.0.0">
+    <link rel="stylesheet" href="../css/chat.css">
+    <script src="../js/theme.js?v=2.0.0"></script>
+    <script src="../js/config.js"></script>
+    <script src="../js/sidebar-dashboard.js"></script>
+    <script src="../js/chat.js"></script>
+    <style>
+      .kit-builder {
+        font-family: var(--font-family);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        min-height: 100vh;
+        display: flex;
+      }
+      .kit-builder .main-content {
+        flex: 1;
+        margin-left: var(--sidebar-width);
+        padding: 32px;
+        overflow-y: auto;
+        min-height: 100vh;
+      }
+      .kit-builder .page-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 24px;
+      }
+      .kit-builder .page-header-text { flex: 1; min-width: 0; }
+      .kit-builder .page-header h1 {
+        font-size: var(--font-size-2xl);
+        font-weight: var(--font-weight-bold);
+        margin: 0 0 6px 0;
+      }
+      .kit-builder .page-header p {
+        color: var(--text-secondary);
+        margin: 0;
+        font-size: var(--font-size-base);
+      }
+      .kit-layout {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 20px;
+        min-height: 60vh;
+      }
+      @media (max-width: 900px) {
+        .kit-layout { grid-template-columns: 1fr; }
+        .kit-builder .main-content { margin-left: 0; padding: 16px; }
+      }
+      .kit-panel {
+        background: var(--surface-card);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        display: flex;
+        flex-direction: column;
+        min-height: 520px;
+      }
+      .kit-panel-header {
+        padding: 16px 18px;
+        border-bottom: 1px solid var(--border-subtle);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .kit-panel-header h2 {
+        margin: 0;
+        font-size: 15px;
+        font-weight: 600;
+        flex: 1;
+      }
+      .kit-list-search {
+        width: 100%;
+        padding: 10px 12px;
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 14px;
+      }
+      .kit-list {
+        overflow-y: auto;
+        flex: 1;
+        padding: 8px;
+      }
+      .kit-list-item {
+        display: block;
+        width: 100%;
+        text-align: left;
+        padding: 12px 14px;
+        border: none;
+        border-radius: var(--radius-md);
+        background: transparent;
+        color: var(--text-primary);
+        cursor: pointer;
+        margin-bottom: 4px;
+      }
+      .kit-list-item:hover { background: var(--surface-hover, rgba(255,255,255,0.04)); }
+      .kit-list-item.active {
+        background: var(--accent-primary-bg, rgba(59,130,246,0.15));
+        outline: 1px solid var(--accent-primary, #3b82f6);
+      }
+      .kit-list-item .kit-list-name { font-weight: 600; font-size: 14px; }
+      .kit-list-item .kit-list-meta {
+        font-size: 12px;
+        color: var(--text-tertiary);
+        margin-top: 2px;
+      }
+      .kit-editor { padding: 20px; flex: 1; display: flex; flex-direction: column; gap: 16px; }
+      .kit-editor .form-row { display: flex; flex-direction: column; gap: 6px; }
+      .kit-editor label {
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+      .kit-editor input[type="text"],
+      .kit-editor textarea {
+        padding: 10px 12px;
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 14px;
+        font-family: inherit;
+      }
+      .kit-editor textarea { min-height: 64px; resize: vertical; }
+      .kit-items-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+      .kit-items-head h3 { margin: 0; font-size: 15px; }
+      .kit-item-row {
+        display: grid;
+        grid-template-columns: 1fr auto auto;
+        gap: 10px;
+        align-items: center;
+        padding: 12px 0;
+        border-bottom: 1px solid var(--border-subtle);
+      }
+      .kit-item-row .item-name { font-weight: 500; }
+      .kit-item-row .item-cat {
+        font-size: 12px;
+        color: var(--text-tertiary);
+        margin-top: 2px;
+      }
+      .kit-item-row .item-warn {
+        font-size: 12px;
+        color: #f59e0b;
+        margin-top: 4px;
+      }
+      .qty-stepper {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .qty-stepper button {
+        width: 30px;
+        height: 30px;
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        cursor: pointer;
+      }
+      .qty-stepper span {
+        min-width: 28px;
+        text-align: center;
+        font-weight: 600;
+      }
+      .kit-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding-top: 8px;
+        border-top: 1px solid var(--border-subtle);
+        margin-top: auto;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 10px 16px;
+        border-radius: var(--radius-md);
+        border: 1px solid var(--border-default);
+        background: var(--surface-card);
+        color: var(--text-primary);
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: none;
+      }
+      .btn:hover { background: var(--surface-hover, rgba(255,255,255,0.04)); }
+      .btn.primary {
+        background: var(--accent-primary, #3b82f6);
+        border-color: var(--accent-primary, #3b82f6);
+        color: #fff;
+      }
+      .btn.danger {
+        color: var(--accent-red, #ef4444);
+        border-color: rgba(239, 68, 68, 0.4);
+      }
+      .btn.icon-only {
+        padding: 6px;
+        border: none;
+        background: transparent;
+        color: var(--text-tertiary);
+      }
+      .btn.icon-only:hover { color: var(--accent-red, #ef4444); }
+      .empty-state {
+        text-align: center;
+        padding: 48px 20px;
+        color: var(--text-tertiary);
+      }
+      .empty-state .material-symbols-outlined {
+        font-size: 48px;
+        display: block;
+        margin-bottom: 12px;
+        color: var(--text-muted);
+      }
+      .toast {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        padding: 12px 18px;
+        border-radius: var(--radius-md);
+        background: var(--surface-card);
+        border: 1px solid var(--border-default);
+        color: var(--text-primary);
+        box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+        z-index: 1000;
+        display: none;
+      }
+      .toast.show { display: block; }
+      .toast.success { border-color: rgba(34,197,94,0.5); }
+      .toast.error { border-color: rgba(239,68,68,0.5); }
+      .modal-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.55);
+        z-index: 900;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      .modal-backdrop.open { display: flex; }
+      .modal-card {
+        background: var(--surface-card);
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-lg);
+        width: min(720px, 100%);
+        max-height: 85vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .modal-card header {
+        padding: 16px 20px;
+        border-bottom: 1px solid var(--border-subtle);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .modal-card header h3 { margin: 0; flex: 1; font-size: 16px; }
+      .modal-card .modal-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
+      .picker-filters {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 14px;
+        flex-wrap: wrap;
+      }
+      .picker-filters input,
+      .picker-filters select {
+        flex: 1;
+        min-width: 140px;
+        padding: 10px 12px;
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 14px;
+      }
+      .picker-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 0;
+        border-bottom: 1px solid var(--border-subtle);
+      }
+      .picker-row .picker-info { flex: 1; min-width: 0; }
+      .picker-row .picker-name { font-weight: 500; }
+      .picker-row .picker-meta { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+    </style>
+</head>
+<body class="kit-builder">
+  <div id="sidebarContainer"></div>
+  <div class="main-content">
+    <div class="page-header">
+      <div class="page-header-text">
+        <h1>Kit Builder</h1>
+        <p>Build model-based kits (for example a Headshot Booth Kit). Serials are chosen when the kit is added to a gear list.</p>
+      </div>
+      <a class="btn" href="inventory-management.html">
+        <span class="material-symbols-outlined" style="font-size:18px;">arrow_back</span>
+        Inventory
+      </a>
+    </div>
+
+    <div class="kit-layout">
+      <div class="kit-panel">
+        <div class="kit-panel-header">
+          <h2>Kits</h2>
+          <button type="button" class="btn primary" id="newKitBtn" style="padding:8px 12px;">
+            <span class="material-symbols-outlined" style="font-size:18px;">add</span>
+            New
+          </button>
+        </div>
+        <div style="padding: 12px 14px 0;">
+          <input type="search" class="kit-list-search" id="kitSearch" placeholder="Search kits…">
+        </div>
+        <div class="kit-list" id="kitList"></div>
+      </div>
+
+      <div class="kit-panel" id="editorPanel">
+        <div class="empty-state" id="emptyEditor">
+          <span class="material-symbols-outlined">package_2</span>
+          <h3>No kit selected</h3>
+          <p>Select a kit on the left, or create a new one.</p>
+        </div>
+        <div class="kit-editor" id="kitEditor" style="display:none;">
+          <div class="form-row">
+            <label for="kitName">Name</label>
+            <input type="text" id="kitName" placeholder="Headshot Booth Kit" maxlength="120">
+          </div>
+          <div class="form-row">
+            <label for="kitDescription">Description</label>
+            <textarea id="kitDescription" placeholder="Optional notes about what this kit is for" maxlength="500"></textarea>
+          </div>
+          <div class="kit-items-head">
+            <h3>Items</h3>
+            <button type="button" class="btn" id="addItemBtn">
+              <span class="material-symbols-outlined" style="font-size:18px;">add</span>
+              Add item
+            </button>
+          </div>
+          <div id="kitItems"></div>
+          <div class="kit-actions">
+            <button type="button" class="btn primary" id="saveKitBtn">
+              <span class="material-symbols-outlined" style="font-size:18px;">save</span>
+              Save
+            </button>
+            <button type="button" class="btn" id="duplicateKitBtn">
+              <span class="material-symbols-outlined" style="font-size:18px;">content_copy</span>
+              Duplicate
+            </button>
+            <button type="button" class="btn danger" id="deleteKitBtn">
+              <span class="material-symbols-outlined" style="font-size:18px;">delete</span>
+              Delete
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="pickerModal">
+    <div class="modal-card">
+      <header>
+        <h3>Add item to kit</h3>
+        <button type="button" class="btn icon-only" id="closePickerBtn" title="Close">
+          <span class="material-symbols-outlined">close</span>
+        </button>
+      </header>
+      <div class="modal-body">
+        <div class="picker-filters">
+          <input type="search" id="pickerSearch" placeholder="Search models…">
+          <select id="pickerCategory">
+            <option value="">All categories</option>
+          </select>
+        </div>
+        <div id="pickerList"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const KNOWN_CATEGORIES = ['Camera','Lenses','Lighting','Audio','Support','Accessories','Computers'];
+    let kits = [];
+    let inventory = [];
+    let models = [];
+    let selectedId = null;
+    let draftItems = [];
+    let isNew = false;
+    let currentUser = null;
+
+    function authHeaders() {
+      return { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' };
+    }
+
+    function showToast(message, type = 'success') {
+      const el = document.getElementById('toast');
+      el.textContent = message;
+      el.className = `toast show ${type}`;
+      setTimeout(() => { el.className = 'toast'; }, 3200);
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '').replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+
+    function norm(s) {
+      return (s ?? '').toString().trim().replace(/\s+/g, ' ').toLowerCase();
+    }
+
+    function ownedQty(brand, model, category) {
+      const key = `${norm(brand)}|${norm(model)}|${norm(category)}`;
+      const m = models.find((row) => row.key === key);
+      return m ? m.owned : 0;
+    }
+
+    function canEditSelected() {
+      if (!currentUser || !selectedId && !isNew) return false;
+      if (isNew) return true;
+      const kit = kits.find((k) => k._id === selectedId);
+      if (!kit) return false;
+      if (currentUser.role === 'admin' || currentUser.role === 'production_manager') return true;
+      const creatorId = kit.createdBy?._id || kit.createdBy;
+      return creatorId && String(creatorId) === String(currentUser.id);
+    }
+
+    function buildModels() {
+      const map = new Map();
+      for (const item of inventory) {
+        const parts = (item.label || '').split(' ');
+        const brand = parts[0] || 'Unknown';
+        const model = parts.slice(1).join(' ') || 'Unknown';
+        const category = item.category || 'Uncategorized';
+        const key = `${norm(brand)}|${norm(model)}|${norm(category)}`;
+        if (!map.has(key)) {
+          map.set(key, { brand, model, category, owned: 0, key });
+        }
+        map.get(key).owned += item.quantity || 1;
+      }
+      models = [...map.values()].sort((a, b) =>
+        a.category.localeCompare(b.category) || a.brand.localeCompare(b.brand) || a.model.localeCompare(b.model)
+      );
+    }
+
+    async function loadUser() {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        window.location.href = '/index.html';
+        return;
+      }
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        currentUser = { id: payload.id || payload._id || payload.userId, role: payload.role };
+      } catch (e) {
+        window.location.href = '/index.html';
+      }
+    }
+
+    async function loadKits() {
+      const res = await fetch(`${API_BASE}/api/kits`, { headers: authHeaders() });
+      if (!res.ok) throw new Error('Failed to load kits');
+      kits = await res.json();
+      renderKitList();
+    }
+
+    async function loadInventory() {
+      const res = await fetch(`${API_BASE}/api/gear-inventory`, { headers: authHeaders() });
+      if (!res.ok) throw new Error('Failed to load inventory');
+      inventory = await res.json();
+      buildModels();
+      fillCategoryFilter();
+    }
+
+    function fillCategoryFilter() {
+      const select = document.getElementById('pickerCategory');
+      const cats = new Set(KNOWN_CATEGORIES);
+      models.forEach((m) => cats.add(m.category));
+      const current = select.value;
+      select.innerHTML = '<option value="">All categories</option>' +
+        [...cats].sort().map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+      select.value = current;
+    }
+
+    function renderKitList() {
+      const q = norm(document.getElementById('kitSearch').value);
+      const list = document.getElementById('kitList');
+      const filtered = kits.filter((k) => !q || norm(k.name).includes(q) || norm(k.description).includes(q));
+      if (filtered.length === 0) {
+        list.innerHTML = `<div class="empty-state" style="padding:32px 12px;"><p>No kits yet</p></div>`;
+        return;
+      }
+      list.innerHTML = filtered.map((kit) => `
+        <button type="button" class="kit-list-item ${kit._id === selectedId ? 'active' : ''}" data-id="${kit._id}">
+          <div class="kit-list-name">${escapeHtml(kit.name)}</div>
+          <div class="kit-list-meta">${(kit.items || []).length} item${(kit.items || []).length === 1 ? '' : 's'}</div>
+        </button>
+      `).join('');
+      list.querySelectorAll('.kit-list-item').forEach((btn) => {
+        btn.addEventListener('click', () => selectKit(btn.dataset.id));
+      });
+    }
+
+    function selectKit(id) {
+      const kit = kits.find((k) => k._id === id);
+      if (!kit) return;
+      selectedId = id;
+      isNew = false;
+      draftItems = (kit.items || []).map((item) => ({ ...item }));
+      document.getElementById('emptyEditor').style.display = 'none';
+      document.getElementById('kitEditor').style.display = 'flex';
+      document.getElementById('kitName').value = kit.name || '';
+      document.getElementById('kitDescription').value = kit.description || '';
+      renderDraftItems();
+      renderKitList();
+      updateActionState();
+    }
+
+    function startNewKit() {
+      selectedId = null;
+      isNew = true;
+      draftItems = [];
+      document.getElementById('emptyEditor').style.display = 'none';
+      document.getElementById('kitEditor').style.display = 'flex';
+      document.getElementById('kitName').value = '';
+      document.getElementById('kitDescription').value = '';
+      renderDraftItems();
+      renderKitList();
+      updateActionState();
+      document.getElementById('kitName').focus();
+    }
+
+    function updateActionState() {
+      const editable = canEditSelected();
+      document.getElementById('kitName').disabled = !editable;
+      document.getElementById('kitDescription').disabled = !editable;
+      document.getElementById('addItemBtn').disabled = !editable;
+      document.getElementById('saveKitBtn').disabled = !editable;
+      document.getElementById('duplicateKitBtn').disabled = isNew;
+      document.getElementById('deleteKitBtn').disabled = isNew || !editable;
+    }
+
+    function renderDraftItems() {
+      const container = document.getElementById('kitItems');
+      if (draftItems.length === 0) {
+        container.innerHTML = `<div class="empty-state" style="padding:24px;"><p>No items yet — add models from inventory</p></div>`;
+        return;
+      }
+      const editable = canEditSelected();
+      container.innerHTML = draftItems.map((item, index) => {
+        const owned = ownedQty(item.brand, item.model, item.category);
+        const warn = item.quantity > owned
+          ? `<div class="item-warn">Asks for ${item.quantity}, you own ${owned}</div>`
+          : '';
+        return `
+          <div class="kit-item-row" data-index="${index}">
+            <div>
+              <div class="item-name">${escapeHtml(item.brand)} ${escapeHtml(item.model)}</div>
+              <div class="item-cat">${escapeHtml(item.category)} · ${owned} owned</div>
+              ${warn}
+            </div>
+            <div class="qty-stepper">
+              <button type="button" data-act="dec" ${editable ? '' : 'disabled'}>−</button>
+              <span>${item.quantity}</span>
+              <button type="button" data-act="inc" ${editable ? '' : 'disabled'}>+</button>
+            </div>
+            <button type="button" class="btn icon-only" data-act="remove" title="Remove" ${editable ? '' : 'disabled'}>
+              <span class="material-symbols-outlined">close</span>
+            </button>
+          </div>
+        `;
+      }).join('');
+      container.querySelectorAll('.kit-item-row').forEach((row) => {
+        const index = Number(row.dataset.index);
+        row.querySelectorAll('[data-act]').forEach((btn) => {
+          btn.addEventListener('click', () => {
+            const act = btn.dataset.act;
+            if (act === 'inc') draftItems[index].quantity += 1;
+            if (act === 'dec') draftItems[index].quantity = Math.max(1, draftItems[index].quantity - 1);
+            if (act === 'remove') draftItems.splice(index, 1);
+            renderDraftItems();
+          });
+        });
+      });
+    }
+
+    function openPicker() {
+      document.getElementById('pickerSearch').value = '';
+      document.getElementById('pickerCategory').value = '';
+      renderPicker();
+      document.getElementById('pickerModal').classList.add('open');
+      document.getElementById('pickerSearch').focus();
+    }
+
+    function closePicker() {
+      document.getElementById('pickerModal').classList.remove('open');
+    }
+
+    function renderPicker() {
+      const q = norm(document.getElementById('pickerSearch').value);
+      const cat = document.getElementById('pickerCategory').value;
+      const list = document.getElementById('pickerList');
+      const filtered = models.filter((m) => {
+        if (cat && m.category !== cat) return false;
+        if (!q) return true;
+        return norm(`${m.brand} ${m.model} ${m.category}`).includes(q);
+      });
+      if (filtered.length === 0) {
+        list.innerHTML = `<div class="empty-state" style="padding:24px;"><p>No models match</p></div>`;
+        return;
+      }
+      list.innerHTML = filtered.map((m) => `
+        <div class="picker-row">
+          <div class="picker-info">
+            <div class="picker-name">${escapeHtml(m.brand)} ${escapeHtml(m.model)}</div>
+            <div class="picker-meta">${escapeHtml(m.category)} · ${m.owned} owned</div>
+          </div>
+          <button type="button" class="btn primary" data-key="${escapeHtml(m.key)}" style="padding:6px 12px;">Add</button>
+        </div>
+      `).join('');
+      list.querySelectorAll('button[data-key]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const model = models.find((m) => m.key === btn.dataset.key);
+          if (!model) return;
+          const existing = draftItems.find((item) =>
+            norm(item.brand) === norm(model.brand) &&
+            norm(item.model) === norm(model.model) &&
+            norm(item.category) === norm(model.category)
+          );
+          if (existing) existing.quantity += 1;
+          else draftItems.push({
+            brand: model.brand,
+            model: model.model,
+            category: model.category,
+            quantity: 1
+          });
+          renderDraftItems();
+          showToast(`Added ${model.brand} ${model.model}`);
+        });
+      });
+    }
+
+    async function saveKit() {
+      const name = document.getElementById('kitName').value.trim();
+      const description = document.getElementById('kitDescription').value.trim();
+      if (!name) {
+        showToast('Enter a kit name', 'error');
+        return;
+      }
+      if (draftItems.length === 0) {
+        showToast('Add at least one item', 'error');
+        return;
+      }
+      const body = { name, description, items: draftItems };
+      try {
+        let res;
+        if (isNew) {
+          res = await fetch(`${API_BASE}/api/kits`, {
+            method: 'POST',
+            headers: authHeaders(),
+            body: JSON.stringify(body)
+          });
+        } else {
+          res = await fetch(`${API_BASE}/api/kits/${selectedId}`, {
+            method: 'PUT',
+            headers: authHeaders(),
+            body: JSON.stringify(body)
+          });
+        }
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Save failed');
+        await loadKits();
+        selectKit(data._id);
+        showToast(isNew ? 'Kit created' : 'Kit saved');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function duplicateKit() {
+      const kit = kits.find((k) => k._id === selectedId);
+      if (!kit) return;
+      try {
+        const res = await fetch(`${API_BASE}/api/kits`, {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            name: `${kit.name} (copy)`,
+            description: kit.description || '',
+            items: kit.items || []
+          })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Duplicate failed');
+        await loadKits();
+        selectKit(data._id);
+        showToast('Kit duplicated');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    async function deleteKit() {
+      if (!selectedId || isNew) return;
+      const kit = kits.find((k) => k._id === selectedId);
+      if (!kit) return;
+      if (!confirm(`Delete kit "${kit.name}"? This cannot be undone.`)) return;
+      try {
+        const res = await fetch(`${API_BASE}/api/kits/${selectedId}`, {
+          method: 'DELETE',
+          headers: authHeaders()
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Delete failed');
+        selectedId = null;
+        isNew = false;
+        document.getElementById('kitEditor').style.display = 'none';
+        document.getElementById('emptyEditor').style.display = 'block';
+        await loadKits();
+        showToast('Kit deleted');
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      if (typeof window.initGlobalChat === 'function') {
+        setTimeout(() => window.initGlobalChat(), 500);
+      }
+      const sidebarContainer = document.getElementById('sidebarContainer');
+      if (sidebarContainer && window.injectDashboardSidebar) {
+        await window.injectDashboardSidebar(sidebarContainer, {
+          position: 'replace',
+          activePage: 'kit-builder'
+        });
+      }
+
+      await loadUser();
+      try {
+        await Promise.all([loadKits(), loadInventory()]);
+      } catch (err) {
+        showToast(err.message, 'error');
+      }
+
+      document.getElementById('newKitBtn').addEventListener('click', startNewKit);
+      document.getElementById('kitSearch').addEventListener('input', renderKitList);
+      document.getElementById('addItemBtn').addEventListener('click', openPicker);
+      document.getElementById('closePickerBtn').addEventListener('click', closePicker);
+      document.getElementById('pickerModal').addEventListener('click', (e) => {
+        if (e.target.id === 'pickerModal') closePicker();
+      });
+      document.getElementById('pickerSearch').addEventListener('input', renderPicker);
+      document.getElementById('pickerCategory').addEventListener('change', renderPicker);
+      document.getElementById('saveKitBtn').addEventListener('click', saveKit);
+      document.getElementById('duplicateKitBtn').addEventListener('click', duplicateKit);
+      document.getElementById('deleteKitBtn').addEventListener('click', deleteKit);
+    });
+  </script>
+</body>
+</html>

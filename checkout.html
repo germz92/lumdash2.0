@@ -843,96 +843,37 @@
                     </div>
                     
                     <div class="cart-items">
-                        ${groupCartItems(currentCart.items).map(item => {
-                            // Handle cases where inventoryId is null or missing label
-                            let brand = 'Unknown';
-                            let model = 'Unknown';
-                            let category = 'Unknown';
-                            
-                            if (item.inventoryId && item.inventoryId.label) {
-                                const labelParts = item.inventoryId.label.split(' ');
-                                brand = labelParts[0] || 'Unknown';
-                                model = labelParts.slice(1).join(' ') || 'Unknown';
-                            } else if (item.brand && item.model) {
-                                // Fallback to direct brand/model properties if they exist
-                                brand = item.brand;
-                                model = item.model;
-                            }
-                            
-                            if (item.inventoryId && item.inventoryId.category) {
-                                category = item.inventoryId.category;
-                            }
-                            
-                            const isAvailable = isItemAvailable(item);
-                            
-                            return `
-                                <div class="cart-item ${isAvailable ? '' : 'unavailable'}">
-                                    <div class="item-info">
-                                        <div class="item-name">${brand} ${model}</div>
-                                        <div class="item-details">
-                                            <div class="item-detail">
-                                                <span class="material-symbols-outlined" style="font-size: 16px;">category</span>
-                                                ${category}
+                        ${groupCartItems(currentCart.items).map(entry => {
+                            if (entry.isKitSection) {
+                                return `
+                                    <div class="cart-kit-section" style="border:1px solid var(--border-default,#333);border-radius:10px;margin-bottom:12px;overflow:hidden;">
+                                        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;background:rgba(255,255,255,0.03);">
+                                            <div style="font-weight:600;display:flex;align-items:center;gap:8px;">
+                                                <span class="material-symbols-outlined" style="font-size:18px;">package_2</span>
+                                                ${entry.kitName}
                                             </div>
-                                            ${item.serial ? `
-                                                <div class="item-detail">
-                                                    <span class="material-symbols-outlined" style="font-size: 16px;">tag</span>
-                                                    <span class="serial-code">${item.serial}</span>
-                                                </div>
-                                            ` : ''}
-                                            ${item.specificSerialRequested ? `
-                                                <div class="item-detail">
-                                                    <span class="material-symbols-outlined" style="font-size: 16px;">lock</span>
-                                                    Specific Serial
-                                                </div>
-                                            ` : ''}
-                                            ${item.isGrouped ? `
-                                                <div class="item-detail">
-                                                    <span class="material-symbols-outlined" style="font-size: 16px;">group</span>
-                                                    Grouped (${item.groupedItems.length} items)
-                                                </div>
-                                            ` : ''}
+                                            <button class="remove-btn remove-kit-btn" data-kit-instance="${entry.kitInstanceId}" style="padding:6px 10px;">
+                                                <span class="material-symbols-outlined" style="font-size:16px;">delete</span>
+                                                Remove kit
+                                            </button>
                                         </div>
-                                        <div class="item-status">
-                                            <span class="status-badge ${isAvailable ? 'status-available' : 'status-unavailable'}">
-                                                ${isAvailable ? 'Available' : 'Unavailable'}
-                                            </span>
-                                        </div>
-                                        ${renderOverdueWarning(item)}
+                                        ${entry.items.map((item) => renderCartItemRow(item, { lockQuantity: true })).join('')}
                                     </div>
-                                    
-                                    <div class="item-controls">
-                                        <div class="quantity-controls">
-                                            <button class="quantity-btn quantity-decrease" 
-                                                    data-item-id="${item._id}" 
-                                                    data-new-quantity="${item.quantity - 1}"
-                                                    ${item.quantity <= 1 ? 'disabled' : ''}>−</button>
-                                            <span class="quantity-display">${item.quantity}</span>
-                                            <button class="quantity-btn quantity-increase" 
-                                                    data-item-id="${item._id}" 
-                                                    data-new-quantity="${item.quantity + 1}"
-                                                    ${(item.availableQuantity || 0) <= 0 ? 'disabled' : ''}>+</button>
-                                        </div>
-                                        ${item.availableQuantity !== undefined ? `
-                                            <div class="availability-info">
-                                                <span class="availability-text">
-                                                    ${item.availableQuantity} available
-                                                </span>
-                                            </div>
-                                        ` : ''}
-                                        <button class="remove-btn remove-item-btn" data-item-id="${item._id}">
-                                            <span class="material-symbols-outlined" style="font-size: 16px;">delete</span>
-                                            Remove
-                                        </button>
-                                    </div>
-                                </div>
-                            `;
+                                `;
+                            }
+                            return renderCartItemRow(entry, { lockQuantity: false });
                         }).join('')}
                     </div>
                 </div>
             `;
 
             container.innerHTML = cartHTML;
+
+            document.querySelectorAll('.remove-kit-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    removeKitFromCart(this.getAttribute('data-kit-instance'));
+                });
+            });
             
             // Add event listeners for quantity buttons
             document.querySelectorAll('.quantity-btn').forEach(button => {
@@ -1235,10 +1176,133 @@
             }
         }
 
-        // Group cart items according to Rule #3
+        function renderCartItemRow(item, { lockQuantity = false } = {}) {
+            let brand = 'Unknown';
+            let model = 'Unknown';
+            let category = 'Unknown';
+
+            if (item.inventoryId && item.inventoryId.label) {
+                const labelParts = item.inventoryId.label.split(' ');
+                brand = labelParts[0] || 'Unknown';
+                model = labelParts.slice(1).join(' ') || 'Unknown';
+            } else if (item.brand && item.model) {
+                brand = item.brand;
+                model = item.model;
+            }
+
+            if (item.inventoryId && item.inventoryId.category) {
+                category = item.inventoryId.category;
+            }
+
+            const isAvailable = isItemAvailable(item);
+
+            return `
+                <div class="cart-item ${isAvailable ? '' : 'unavailable'}">
+                    <div class="item-info">
+                        <div class="item-name">${brand} ${model}</div>
+                        <div class="item-details">
+                            <div class="item-detail">
+                                <span class="material-symbols-outlined" style="font-size: 16px;">category</span>
+                                ${category}
+                            </div>
+                            ${item.serial ? `
+                                <div class="item-detail">
+                                    <span class="material-symbols-outlined" style="font-size: 16px;">tag</span>
+                                    <span class="serial-code">${item.serial}</span>
+                                </div>
+                            ` : ''}
+                            ${item.specificSerialRequested ? `
+                                <div class="item-detail">
+                                    <span class="material-symbols-outlined" style="font-size: 16px;">lock</span>
+                                    Specific Serial
+                                </div>
+                            ` : ''}
+                            ${item.isGrouped ? `
+                                <div class="item-detail">
+                                    <span class="material-symbols-outlined" style="font-size: 16px;">group</span>
+                                    Grouped (${item.groupedItems.length} items)
+                                </div>
+                            ` : ''}
+                        </div>
+                        <div class="item-status">
+                            <span class="status-badge ${isAvailable ? 'status-available' : 'status-unavailable'}">
+                                ${isAvailable ? 'Available' : 'Unavailable'}
+                            </span>
+                        </div>
+                        ${renderOverdueWarning(item)}
+                    </div>
+
+                    <div class="item-controls">
+                        ${lockQuantity ? `
+                            <div class="quantity-controls">
+                                <span class="quantity-display">${item.quantity}</span>
+                            </div>
+                        ` : `
+                            <div class="quantity-controls">
+                                <button class="quantity-btn quantity-decrease"
+                                        data-item-id="${item._id}"
+                                        data-new-quantity="${item.quantity - 1}"
+                                        ${item.quantity <= 1 ? 'disabled' : ''}>−</button>
+                                <span class="quantity-display">${item.quantity}</span>
+                                <button class="quantity-btn quantity-increase"
+                                        data-item-id="${item._id}"
+                                        data-new-quantity="${item.quantity + 1}"
+                                        ${(item.availableQuantity || 0) <= 0 ? 'disabled' : ''}>+</button>
+                            </div>
+                            ${item.availableQuantity !== undefined ? `
+                                <div class="availability-info">
+                                    <span class="availability-text">
+                                        ${item.availableQuantity} available
+                                    </span>
+                                </div>
+                            ` : ''}
+                            <button class="remove-btn remove-item-btn" data-item-id="${item._id}">
+                                <span class="material-symbols-outlined" style="font-size: 16px;">delete</span>
+                                Remove
+                            </button>
+                        `}
+                    </div>
+                </div>
+            `;
+        }
+
+        // Group cart items: kit sections first, then brand/model groups for loose items
         function groupCartItems(items) {
             if (!items || items.length === 0) return [];
 
+            const kitSections = [];
+            const kitOrder = [];
+            const byKit = new Map();
+            const loose = [];
+
+            items.forEach((item) => {
+                if (item.kitInstanceId) {
+                    if (!byKit.has(item.kitInstanceId)) {
+                        byKit.set(item.kitInstanceId, []);
+                        kitOrder.push(item.kitInstanceId);
+                    }
+                    byKit.get(item.kitInstanceId).push(item);
+                } else {
+                    loose.push(item);
+                }
+            });
+
+            for (const instanceId of kitOrder) {
+                const kitItems = byKit.get(instanceId) || [];
+                kitSections.push({
+                    _id: `kit_${instanceId}`,
+                    isKitSection: true,
+                    kitInstanceId: instanceId,
+                    kitName: kitItems[0]?.kitName || 'Kit',
+                    items: groupLooseCartItems(kitItems),
+                    rawItems: kitItems
+                });
+            }
+
+            return [...kitSections, ...groupLooseCartItems(loose)];
+        }
+
+        function groupLooseCartItems(items) {
             const grouped = [];
             const processedItems = new Set();
 
@@ -1246,53 +1310,52 @@
                 if (processedItems.has(item._id)) return;
 
                 if (item.specificSerialRequested || item.serial) {
-                    // Specific serial items: list individually
                     grouped.push(item);
                     processedItems.add(item._id);
                 } else {
-                    // Non-specific items: group by brand+model
                     const brand = item.brand || (item.inventoryId?.label?.split(' ')[0]) || 'Unknown';
                     const model = item.model || (item.inventoryId?.label?.split(' ').slice(1).join(' ')) || 'Unknown';
-                    
-                    // Find all non-specific items with same brand+model
+                    const kitKey = item.kitInstanceId || '';
+
                     const similarItems = items.filter(otherItem => {
                         if (processedItems.has(otherItem._id)) return false;
                         if (otherItem.specificSerialRequested || otherItem.serial) return false;
-                        
+                        if ((otherItem.kitInstanceId || '') !== kitKey) return false;
+
                         const otherBrand = otherItem.brand || (otherItem.inventoryId?.label?.split(' ')[0]) || 'Unknown';
                         const otherModel = otherItem.model || (otherItem.inventoryId?.label?.split(' ').slice(1).join(' ')) || 'Unknown';
-                        
+
                         return brand === otherBrand && model === otherModel;
                     });
 
                     if (similarItems.length > 0) {
-                        // Create grouped item
                         const totalQuantity = similarItems.reduce((sum, si) => sum + si.quantity, 0);
-                        
-                        // For grouped items, we need to calculate availability based on the total quantity
-                        // The backend calculateCartItemAvailability returns: totalAvailable - currentCartItemQuantity
-                        // For grouped display, we want to show how much MORE can be added to the group total
-                        // So we take the availableQuantity from the first item (which represents additional capacity)
                         const additionalAvailable = similarItems[0].availableQuantity || 0;
-                        
-                        const groupedItem = {
+
+                        grouped.push({
                             ...item,
-                            _id: `grouped_${brand}_${model}`, // Create unique ID for grouped item
+                            _id: `grouped_${kitKey}_${brand}_${model}`,
                             quantity: totalQuantity,
                             availableQuantity: additionalAvailable,
                             isGrouped: true,
-                            groupedItems: similarItems // Keep reference to original items
-                        };
-                        
-                        grouped.push(groupedItem);
-                        
-                        // Mark all similar items as processed
+                            groupedItems: similarItems
+                        });
+
                         similarItems.forEach(si => processedItems.add(si._id));
                     }
                 }
             });
 
             return grouped;
+        }
+
+        async function removeKitFromCart(instanceId) {
+            const kitItems = (currentCart.items || []).filter((item) => item.kitInstanceId === instanceId);
+            if (kitItems.length === 0) return;
+            if (!confirm(`Remove kit "${kitItems[0].kitName || 'Kit'}" from the cart?`)) return;
+            for (const item of kitItems) {
+                await removeItem(item._id, true);
+            }
         }
 
         // Warning (never a block) when this line would use a unit that was scanned out for an

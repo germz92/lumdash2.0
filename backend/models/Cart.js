@@ -25,6 +25,22 @@ const cartItemSchema = new mongoose.Schema({
   specificSerialRequested: { 
     type: Boolean, 
     default: false 
+  },
+  // Kit membership — items from different kit instances must not merge
+  kitInstanceId: {
+    type: String,
+    default: null,
+    trim: true
+  },
+  kitId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Kit',
+    default: null
+  },
+  kitName: {
+    type: String,
+    default: null,
+    trim: true
   }
 }, { _id: true });
 
@@ -60,32 +76,40 @@ const cartSchema = new mongoose.Schema({
 cartSchema.index({ userId: 1, eventId: 1 }, { unique: true });
 
 // Method to add item to cart
-cartSchema.methods.addItem = function(inventoryItem, quantity = 1, specificSerial = null) {
-  // Check if item already exists in cart
+// kitTag: optional { kitInstanceId, kitId, kitName } — items from different kits never merge
+cartSchema.methods.addItem = function(inventoryItem, quantity = 1, specificSerial = null, kitTag = null) {
+  const kitInstanceId = kitTag?.kitInstanceId || null;
+  const kitId = kitTag?.kitId || null;
+  const kitName = kitTag?.kitName || null;
+  const sameKit = (item) => {
+    const itemKit = item.kitInstanceId || null;
+    return itemKit === kitInstanceId;
+  };
+
+  // Check if item already exists in cart (same unit + same kit instance)
   const existingItemIndex = this.items.findIndex(item => {
+    if (!sameKit(item)) return false;
     if (specificSerial) {
-      // If specific serial requested, match exactly
-      return item.inventoryId.toString() === inventoryItem._id.toString() && 
+      return item.inventoryId.toString() === inventoryItem._id.toString() &&
              item.serial === specificSerial;
-    } else {
-      // If no specific serial, match inventory ID and no specific serial requested
-      return item.inventoryId.toString() === inventoryItem._id.toString() && 
-             !item.specificSerialRequested;
     }
+    return item.inventoryId.toString() === inventoryItem._id.toString() &&
+           !item.specificSerialRequested;
   });
 
   if (existingItemIndex > -1) {
-    // Update quantity of existing item
     this.items[existingItemIndex].quantity += quantity;
   } else {
-    // Add new item to cart
     this.items.push({
       inventoryId: inventoryItem._id,
-      brand: inventoryItem.label.split(' ')[0] || 'Unknown', // Extract brand from label
-      model: inventoryItem.label.split(' ').slice(1).join(' ') || 'Unknown', // Extract model
+      brand: inventoryItem.label.split(' ')[0] || 'Unknown',
+      model: inventoryItem.label.split(' ').slice(1).join(' ') || 'Unknown',
       serial: specificSerial,
       quantity: quantity,
-      specificSerialRequested: !!specificSerial
+      specificSerialRequested: !!specificSerial,
+      kitInstanceId,
+      kitId,
+      kitName
     });
   }
 };

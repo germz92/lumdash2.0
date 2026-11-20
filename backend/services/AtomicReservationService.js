@@ -23,7 +23,10 @@ class AtomicReservationService {
     checkInDate,
     listName,
     serial = null,
-    specificSerialRequested = false
+    specificSerialRequested = false,
+    kitInstanceId = null,
+    kitId = null,
+    kitName = null
   }) {
     
     // Input validation
@@ -81,7 +84,10 @@ class AtomicReservationService {
           specificSerialRequested,
           checkOutDate,  // NEW - Critical for availability calculations
           checkInDate,   // NEW - Critical for availability calculations
-          isPacked: false
+          isPacked: false,
+          kitInstanceId: kitInstanceId || null,
+          kitId: kitId || null,
+          kitName: kitName || null
         });
         
         await reservedItem.save({ session });
@@ -284,7 +290,8 @@ class AtomicReservationService {
   static async _createSingleReservation(reservationData, session) {
     const { 
       inventoryId, eventId, userId, quantity, checkOutDate, checkInDate, 
-      listName, serial, specificSerialRequested 
+      listName, serial, specificSerialRequested,
+      kitInstanceId, kitId, kitName
     } = reservationData;
     
     // Lock inventory item
@@ -316,7 +323,10 @@ class AtomicReservationService {
       serial: serial || inventoryItem.serial,
       specificSerialRequested: specificSerialRequested || false,
       checkOutDate, checkInDate,
-      isPacked: false
+      isPacked: false,
+      kitInstanceId: kitInstanceId || null,
+      kitId: kitId || null,
+      kitName: kitName || null
     });
     
     await reservedItem.save({ session });
@@ -418,22 +428,23 @@ class AtomicReservationService {
       return result;
     }
 
-    const { utcDay, utcDayAfter, reservedQtyForRequest } = require('./reservationHold');
+    const { utcDay, utcDayAfter, reservedQtyForRequest, stillHoldingMongo } = require('./reservationHold');
 
     const reqStart = utcDay(checkOutDate);
     const reqEnd = utcDay(checkInDate);
     const now = utcDay(new Date());
     const packedByEndOfReq = utcDayAfter(reqEnd);
+    const stillHolding = stillHoldingMongo();
 
     const inventoryIds = inventoryItems.map(item => item._id);
 
-    // Same windows as getAvailableQuantity: listed overlap, or already packed early
+    // Same windows as getAvailableQuantity: listed overlap, or still held after early pack
     const reservedQuery = {
       inventoryId: { $in: inventoryIds },
       checkInDate: { $gte: now },
       $or: [
         { checkOutDate: { $lte: reqEnd }, checkInDate: { $gte: reqStart } },
-        { packedAt: { $ne: null, $lt: packedByEndOfReq }, $or: [{ scannedOutQty: { $gt: 0 } }, { isPacked: true }] }
+        { packedAt: { $ne: null, $lt: packedByEndOfReq }, ...stillHolding }
       ]
     };
     if (excludeEventId) {
@@ -445,7 +456,7 @@ class AtomicReservationService {
       endDate: { $gte: now },
       $or: [
         { startDate: { $lte: reqEnd }, endDate: { $gte: reqStart } },
-        { packedAt: { $ne: null, $lt: packedByEndOfReq }, $or: [{ scannedOutQty: { $gt: 0 } }, { isPacked: true }] }
+        { packedAt: { $ne: null, $lt: packedByEndOfReq }, ...stillHolding }
       ]
     };
 

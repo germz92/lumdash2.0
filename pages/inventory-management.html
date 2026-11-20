@@ -1307,6 +1307,25 @@
         color: var(--info-text);
       }
 
+      .inventory-dark .item-count {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.5rem;
+        height: 1.5rem;
+        padding: 0 6px;
+        margin-left: 8px;
+        border-radius: 999px;
+        background: var(--accent-primary, #4a90d9);
+        color: #fff;
+        font-size: 0.75rem;
+        font-weight: 600;
+      }
+
+      .inventory-dark .currently-out-overdue td {
+        background: rgba(220, 80, 60, 0.08);
+      }
+
       .inventory-dark .scan-status-overdue {
         background: var(--error-bg);
         color: var(--error-text);
@@ -1341,6 +1360,10 @@
               <h1>Inventory Management</h1>
               <p>Add and manage gear inventory items. All fields are required.</p>
             </div>
+            <a href="kit-builder.html" class="package-btn" style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;border:1px solid var(--border-default);border-radius:var(--radius-md);color:var(--text-primary);text-decoration:none;font-size:14px;font-weight:500;white-space:nowrap;">
+              <span class="material-symbols-outlined" style="font-size:18px;">package_2</span>
+              Kit Builder
+            </a>
         </div>
 
         <div id="messageContainer"></div>
@@ -1404,6 +1427,36 @@
                 </div>
             </form>
         </div>
+
+      <!-- Currently Out overview -->
+      <div class="section-card collapsible-section" id="currentlyOutSection">
+        <div class="section-header-collapsible" onclick="toggleSectionCollapse('currentlyOutSection')">
+          <h2 class="section-title">
+            <span class="material-symbols-outlined">logout</span>
+            Currently Out
+            <span id="currentlyOutCount" class="item-count" style="display:none;"></span>
+          </h2>
+          <button class="collapse-toggle-btn" type="button">
+            <span class="material-symbols-outlined collapse-icon">expand_more</span>
+          </button>
+        </div>
+        <div class="section-content">
+          <div class="manual-reservations-header">
+            <p class="manual-reservations-description">Gear that has been scanned out and is not back yet (events and manual check-outs).</p>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+              <input type="search" id="currentlyOutSearch" placeholder="Filter by item or event…" oninput="filterCurrentlyOut()" style="padding:10px 12px;border:1px solid var(--border-default);border-radius:var(--radius-md);background:var(--bg-primary);color:var(--text-primary);min-width:200px;">
+              <button type="button" class="btn btn-secondary" onclick="event.stopPropagation(); loadCurrentlyOut()">
+                <span class="material-symbols-outlined">refresh</span>
+                Refresh
+              </button>
+            </div>
+          </div>
+          <div id="currentlyOutContainer" class="loading">
+            <div class="loading-spinner"></div>
+            <p>Loading checked-out gear...</p>
+          </div>
+        </div>
+      </div>
 
       <!-- Manual Reservations Section -->
       <div class="section-card collapsible-section" id="manualReservationsSection">
@@ -1734,6 +1787,7 @@
             loadInventory();
             setupForm();
             setupEditForm();
+            loadCurrentlyOut();
             loadManualReservations();
             restoreCollapsedStates();
         });
@@ -1855,6 +1909,159 @@
                     </div>
                 `;
             }
+        }
+
+        // ========== CURRENTLY OUT OVERVIEW ==========
+
+        let currentlyOutRows = [];
+
+        function currentlyOutStationHref(line) {
+            if (line.kind === 'manual' && line.personName) {
+                const params = new URLSearchParams({
+                    person: line.personName,
+                    start: new Date(line.checkOutDate).toISOString().slice(0, 10),
+                    end: new Date(line.checkInDate).toISOString().slice(0, 10)
+                });
+                return `/scan-station.html?${params.toString()}`;
+            }
+            if (line.eventId) {
+                return `/scan-station.html?eventId=${encodeURIComponent(line.eventId)}`;
+            }
+            return '/scan-station.html';
+        }
+
+        function flattenCurrentlyOut(items) {
+            const rows = [];
+            for (const item of items || []) {
+                for (const line of item.lines || []) {
+                    if (!line.quantity) continue;
+                    rows.push({
+                        inventoryId: item._id,
+                        label: item.label || 'Unknown',
+                        serial: item.serial || '',
+                        assetTag: item.assetTag || '',
+                        quantity: line.quantity,
+                        where: line.eventTitle || (line.kind === 'manual' ? 'Manual check-out' : 'Event'),
+                        kind: line.kind,
+                        eventId: line.eventId,
+                        personName: line.personName || null,
+                        checkOutDate: line.checkOutDate,
+                        checkInDate: line.checkInDate,
+                        overdue: !!line.overdue
+                    });
+                }
+            }
+            rows.sort((a, b) => {
+                if (a.overdue !== b.overdue) return a.overdue ? -1 : 1;
+                return new Date(a.checkInDate) - new Date(b.checkInDate);
+            });
+            return rows;
+        }
+
+        async function loadCurrentlyOut() {
+            const container = document.getElementById('currentlyOutContainer');
+            if (!container) return;
+            try {
+                const response = await fetch(`${window.API_BASE}/api/gear-scan/outstanding`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (!response.ok) throw new Error('Failed to load');
+                const data = await response.json();
+                currentlyOutRows = flattenCurrentlyOut(data.items);
+                const countEl = document.getElementById('currentlyOutCount');
+                if (countEl) {
+                    if (currentlyOutRows.length) {
+                        countEl.textContent = String(currentlyOutRows.length);
+                        countEl.style.display = '';
+                    } else {
+                        countEl.style.display = 'none';
+                    }
+                }
+                filterCurrentlyOut();
+            } catch (error) {
+                console.error('Error loading currently out:', error);
+                container.classList.remove('loading');
+                container.innerHTML = `
+                    <div class="empty-reservations">
+                        <span class="material-symbols-outlined">warning</span>
+                        <p>Failed to load checked-out gear</p>
+                    </div>
+                `;
+            }
+        }
+
+        function filterCurrentlyOut() {
+            const q = (document.getElementById('currentlyOutSearch')?.value || '').trim().toLowerCase();
+            const rows = !q
+                ? currentlyOutRows
+                : currentlyOutRows.filter(row => {
+                    const hay = [row.label, row.serial, row.assetTag, row.where, row.personName]
+                        .filter(Boolean).join(' ').toLowerCase();
+                    return hay.includes(q);
+                });
+            renderCurrentlyOut(rows);
+        }
+
+        function renderCurrentlyOut(rows) {
+            const container = document.getElementById('currentlyOutContainer');
+            if (!container) return;
+            container.classList.remove('loading');
+            if (!rows.length) {
+                container.innerHTML = `
+                    <div class="empty-reservations">
+                        <span class="material-symbols-outlined">inventory_2</span>
+                        <p>${currentlyOutRows.length ? 'No matches' : 'Nothing currently out'}</p>
+                    </div>
+                `;
+                return;
+            }
+            container.innerHTML = `
+                <div class="table-container">
+                    <table class="reservations-table currently-out-table">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th>Where</th>
+                                <th>Due back</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${rows.map(row => {
+                                const idBits = [row.serial, row.assetTag].filter(Boolean).join(' · ');
+                                const qty = row.quantity > 1 ? ` ×${row.quantity}` : '';
+                                const due = formatShortDate(row.checkInDate);
+                                const statusClass = row.overdue ? 'scan-status-overdue' : 'scan-status-out';
+                                const statusText = row.overdue ? 'Overdue' : 'Out';
+                                const href = currentlyOutStationHref(row);
+                                return `
+                                    <tr class="${row.overdue ? 'currently-out-overdue' : ''}">
+                                        <td>
+                                            <div class="reservation-person">${escapeHtml(row.label)}${qty}</div>
+                                            ${idBits ? `<div class="reservation-event">${escapeHtml(idBits)}</div>` : ''}
+                                        </td>
+                                        <td>${escapeHtml(row.where)}</td>
+                                        <td>${escapeHtml(due || '—')}</td>
+                                        <td>
+                                            <span class="scan-status ${statusClass}">
+                                                <span class="material-symbols-outlined">${row.overdue ? 'schedule' : 'logout'}</span>
+                                                ${statusText}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            <a class="btn btn-secondary" href="${escapeAttr(href)}" style="padding:6px 10px;font-size:0.85rem;text-decoration:none;display:inline-flex;align-items:center;gap:4px;">
+                                                <span class="material-symbols-outlined" style="font-size:18px;">qr_code_scanner</span>
+                                                Scan
+                                            </a>
+                                        </td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
         }
 
         // ========== SCAN STATUS (what is scanned out / overdue) ==========

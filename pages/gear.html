@@ -675,6 +675,7 @@
     #newPackageModal,
     #packageContentsModal,
     #packageSerialModal,
+    #kitsModal,
     #templatesModal,
     #templateDetailsModal,
     #createTemplateModal {
@@ -695,6 +696,7 @@
     #newPackageModal[style*="display: block"],
     #packageContentsModal[style*="display: block"],
     #packageSerialModal[style*="display: block"],
+    #kitsModal[style*="display: block"],
     #templatesModal[style*="display: block"],
     #templateDetailsModal[style*="display: block"],
     #createTemplateModal[style*="display: block"] {
@@ -705,6 +707,7 @@
     #newPackageModal .modal-content,
     #packageContentsModal .modal-content,
     #packageSerialModal .modal-content,
+    #kitsModal .modal-content,
     #templatesModal .modal-content,
     #templateDetailsModal .modal-content,
     #createTemplateModal .modal-content {
@@ -726,14 +729,84 @@
     #newPackageModal .modal-content { max-width: 500px; }
     #packageContentsModal .modal-content { max-width: 900px; }
     #packageSerialModal .modal-content { max-width: 650px; }
+    #kitsModal .modal-content { max-width: 700px; }
     #templatesModal .modal-content { max-width: 700px; }
     #templateDetailsModal .modal-content { max-width: 600px; }
     #createTemplateModal .modal-content { max-width: 560px; }
+
+    .gear-page.dark-theme .kit-card {
+        border: 1px solid var(--border-default);
+        border-radius: 12px;
+        background: var(--surface-card);
+        margin-bottom: 16px;
+        overflow: hidden;
+    }
+    .gear-page.dark-theme .kit-card-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 14px 16px;
+        background: var(--bg-tertiary);
+        border-bottom: 1px solid var(--border-subtle);
+    }
+    .gear-page.dark-theme .kit-card-header .kit-title {
+        margin: 0;
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .gear-page.dark-theme .kit-card-meta {
+        font-size: 13px;
+        color: var(--text-tertiary);
+        margin-top: 4px;
+    }
+    .gear-page.dark-theme .kit-progress {
+        height: 4px;
+        background: var(--border-subtle);
+        border-radius: 2px;
+        margin-top: 8px;
+        overflow: hidden;
+    }
+    .gear-page.dark-theme .kit-progress-fill {
+        height: 100%;
+        background: var(--accent-primary, #3b82f6);
+        border-radius: 2px;
+    }
+    .gear-page.dark-theme .kit-incomplete {
+        margin: 0 16px 12px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        background: rgba(245, 158, 11, 0.12);
+        border: 1px solid rgba(245, 158, 11, 0.35);
+        color: #f59e0b;
+        font-size: 13px;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .gear-page.dark-theme .kit-incomplete .kit-incomplete-text { flex: 1; min-width: 160px; }
+    .gear-page.dark-theme .status-chip.chip-incomplete {
+        background: rgba(245, 158, 11, 0.15);
+        color: #f59e0b;
+    }
+    .gear-page.dark-theme .kit-section-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        margin: 8px 0 12px;
+    }
 
     /* --- Header --- */
     #newPackageModal .modal-header,
     #packageContentsModal .modal-header,
     #packageSerialModal .modal-header,
+    #kitsModal .modal-header,
     #templatesModal .modal-header,
     #templateDetailsModal .modal-header,
     #createTemplateModal .modal-header {
@@ -748,6 +821,7 @@
     #newPackageModal .modal-header h3,
     #packageContentsModal .modal-header h3,
     #packageSerialModal .modal-header h3,
+    #kitsModal .modal-header h3,
     #templatesModal .modal-header h3,
     #templateDetailsModal .modal-header h3,
     #createTemplateModal .modal-header h3 {
@@ -761,6 +835,7 @@
     #newPackageModal .modal-close-btn,
     #packageContentsModal .modal-close-btn,
     #packageSerialModal .modal-close-btn,
+    #kitsModal .modal-close-btn,
     #templatesModal .modal-close-btn,
     #templateDetailsModal .modal-close-btn,
     #createTemplateModal .modal-close-btn {
@@ -1018,7 +1093,8 @@
     }
 
     /* --- Template list items --- */
-    #templatesContainer .template-item {
+    #templatesContainer .template-item,
+    #kitsContainer .template-item {
         background: var(--bg-tertiary) !important;
         border: 1px solid var(--border-subtle) !important;
         border-radius: var(--radius-lg) !important;
@@ -1026,15 +1102,18 @@
         margin-bottom: 12px;
         transition: border-color var(--transition-fast);
     }
-    #templatesContainer .template-item:hover {
+    #templatesContainer .template-item:hover,
+    #kitsContainer .template-item:hover {
         border-color: var(--border-strong) !important;
     }
-    #templatesContainer .template-item h4 {
+    #templatesContainer .template-item h4,
+    #kitsContainer .template-item h4 {
         color: var(--text-primary) !important;
         font-weight: var(--font-weight-semibold) !important;
         margin: 0 0 4px 0 !important;
     }
-    #templatesContainer .template-item p {
+    #templatesContainer .template-item p,
+    #kitsContainer .template-item p {
         color: var(--text-tertiary) !important;
         margin: 0 0 12px 0 !important;
         font-size: var(--font-size-sm) !important;
@@ -1606,6 +1685,7 @@
                         Package Templates
                     </h2>
                     <div class="package-controls">
+                        <button class="package-btn" onclick="openKitsModal()">Kits</button>
                         <button class="package-btn" onclick="openTemplatesModal()">Load</button>
                         <button class="package-btn primary" onclick="saveAsTemplate()">Save</button>
                     </div>
@@ -1780,6 +1860,30 @@
         </div>
     </div>
 
+    <!-- Kits Modal -->
+    <div id="kitsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Kits</h3>
+                <button class="modal-close-btn" onclick="closeKitsModal()">
+                    <span class="material-symbols-outlined">close</span>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 16px;">
+                    <a class="package-btn" href="/pages/kit-builder.html" style="width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 6px; text-decoration: none;">
+                        <span class="material-symbols-outlined" style="font-size: 18px;">package_2</span>
+                        Open Kit Builder
+                    </a>
+                </div>
+                <div id="kitsContainer"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="package-btn" onclick="closeKitsModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Templates Modal -->
     <div id="templatesModal" class="modal">
         <div class="modal-content">
@@ -1883,12 +1987,15 @@
         // Page-specific variables (scoped to IIFE to prevent redeclaration errors)
         let currentEvent = null;
         let currentGear = [];
+        let currentKits = [];
+        let gearKitsCatalog = [];
         let manualItems = [];
         let gearLists = [];
         let currentListName = 'Main List';
         let packageTemplates = [];
         let currentTemplateId = null;
         let currentTemplate = null;
+        let currentKitForAdd = null;
         let currentEventId = null;
         let eventId = null;
         let currentUser = null;
@@ -2167,6 +2274,7 @@
                 if (response.ok) {
                     const result = await response.json();
                     currentGear = result.reservedItems || [];
+                    currentKits = result.kits || [];
                     manualItems = result.manualItems || [];
                     unitWarnings = result.unitWarnings || {};
                     userPermissions = result.userPermissions || { canReserve: false, canManageLists: false, canPack: true };
@@ -2177,6 +2285,7 @@
                 } else {
                     // No gear reserved yet
                     currentGear = [];
+                    currentKits = [];
                     manualItems = [];
                     unitWarnings = {};
                     userPermissions = { canReserve: false, canManageLists: false, canPack: true };
@@ -2218,7 +2327,106 @@
             }
         }
 
-        // Render gear by categories
+        function newKitInstanceId() {
+            if (window.crypto && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+            return `kit_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        }
+
+        function renderGearLine(item) {
+            const label = item.inventoryId?.label || `${item.brand} ${item.model}`;
+            const labelParts = label.split(' ');
+            const brand = labelParts[0] || item.brand || 'Unknown';
+            const model = labelParts.slice(1).join(' ') || item.model || 'Unknown';
+            const state = getLineState(item);
+
+            return `
+                <div class="${lineClasses(item, state)}" data-line-id="${item._id}">
+                    <input type="checkbox" class="packed-checkbox"
+                           ${item.isPacked ? 'checked' : ''}
+                           ${state.returned > 0 ? 'disabled title="Checked in - undo the return to change this"' : ''}
+                           onchange="togglePacked('${item._id}')">
+                    <div class="gear-info">
+                        <div class="gear-name">${escapeHtml(brand)} ${escapeHtml(model)}</div>
+                        <div class="gear-details">
+                            <span>Brand: ${escapeHtml(brand)}</span>
+                            <span>Model: ${escapeHtml(model)}</span>
+                            ${item.serial ? `<span>Serial: <span class="serial-code">${escapeHtml(item.serial)}</span></span>` : ''}
+                            <span>Qty: ${item.quantity}</span>
+                        </div>
+                        ${renderLineStatus(item, state)}
+                        ${renderReturnControls(item, state)}
+                    </div>
+                    <div class="gear-controls">
+                        ${userPermissions.canReserve ? `
+                            <button class="delete-btn" onclick="deleteGearItem('${item._id}')"
+                                    title="Remove from list">
+                                <span class="material-symbols-outlined" style="font-size: 16px;">delete</span>
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }
+
+        function kitDisplayName(kit) {
+            if (kit.displayNumber) return `${kit.name} ${kit.displayNumber}`;
+            return kit.name;
+        }
+
+        function renderKitCards() {
+            if (!currentKits || currentKits.length === 0) return '';
+            const linesById = new Map(currentGear.map((line) => [String(line._id), line]));
+
+            return `
+                <div class="kit-section-label">Kits</div>
+                ${currentKits.map((kit) => {
+                    const lines = (kit.lines || []).map((id) => linesById.get(String(id))).filter(Boolean);
+                    const packed = kit.packed || 0;
+                    const total = Math.max(kit.total || lines.length, 1);
+                    const pct = Math.round((packed / total) * 100);
+                    const missingText = (kit.missing || []).map((m) =>
+                        `${m.quantity} × ${m.brand} ${m.model}`
+                    ).join(', ');
+
+                    return `
+                        <div class="kit-card" data-kit-instance="${escapeHtml(kit.instanceId)}">
+                            <div class="kit-card-header">
+                                <div style="flex:1;min-width:0;">
+                                    <h3 class="kit-title">
+                                        <span class="material-symbols-outlined">package_2</span>
+                                        ${escapeHtml(kitDisplayName(kit))}
+                                    </h3>
+                                    <div class="kit-card-meta">${packed} of ${total} packed</div>
+                                    <div class="kit-progress"><div class="kit-progress-fill" style="width:${pct}%"></div></div>
+                                </div>
+                                ${userPermissions.canReserve ? `
+                                    <button class="package-btn danger" onclick="removeKitFromList('${escapeHtml(kit.instanceId)}')" title="Remove this kit from the list" style="padding:6px 10px;">
+                                        <span class="material-symbols-outlined" style="font-size:16px;">delete</span>
+                                        Remove kit
+                                    </button>
+                                ` : ''}
+                            </div>
+                            ${kit.incomplete ? `
+                                <div class="kit-incomplete">
+                                    <span class="status-chip chip-incomplete"><span class="material-symbols-outlined">warning</span>Incomplete</span>
+                                    <div class="kit-incomplete-text">Missing: ${escapeHtml(missingText || 'items')}</div>
+                                    ${userPermissions.canReserve ? `
+                                        <button class="package-btn" onclick="addMissingKitItems('${escapeHtml(kit.instanceId)}')" style="padding:6px 10px;">
+                                            Add missing
+                                        </button>
+                                    ` : ''}
+                                </div>
+                            ` : ''}
+                            <div class="gear-list" style="padding: 0 8px 8px;">
+                                ${lines.map(renderGearLine).join('') || '<div style="padding:16px;color:var(--text-tertiary);font-size:13px;">No items reserved yet for this kit.</div>'}
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            `;
+        }
+
+        // Render gear by kits first, then categories for loose items
         function renderGear() {
             const container = document.getElementById('gearContainer');
             if (!container) {
@@ -2234,8 +2442,14 @@
             }
 
             updateScanPanel();
+
+            const kitInstanceIds = new Set((currentKits || []).map((k) => k.instanceId));
+            const looseGear = currentGear.filter((item) => {
+                if (!item.inventoryId) return false;
+                return !item.kitInstanceId || !kitInstanceIds.has(item.kitInstanceId);
+            });
             
-            if (currentGear.length === 0) {
+            if (currentGear.length === 0 && (!currentKits || currentKits.length === 0)) {
                 const emptyMessage = userPermissions.canReserve 
                     ? 'Click "Add Items" below to start building your gear list.' 
                     : 'Someone with access to this event can add items to this list.';
@@ -2252,29 +2466,18 @@
                 return;
             }
 
-            // Group gear by category
+            // Group loose gear by category
             const categories = {};
-            currentGear.forEach(item => {
-                // Skip items with null inventoryId (orphaned items)
-                if (!item.inventoryId) {
-                    console.warn('Skipping item with null inventoryId:', item);
-                    return;
-                }
-                
-                const category = item.inventoryId.category || 'Uncategorized';
-                if (!categories[category]) {
-                    categories[category] = [];
-                }
+            looseGear.forEach(item => {
+                const category = item.inventoryId.category || item.category || 'Uncategorized';
+                if (!categories[category]) categories[category] = [];
                 categories[category].push(item);
             });
 
-            // Sort categories
             const sortedCategories = Object.keys(categories).sort();
-
             const categoriesHTML = sortedCategories.map(category => {
                 const items = categories[category];
                 const categoryIcon = getCategoryIcon(category);
-
                 return `
                     <div class="category-card">
                         <div class="category-header">
@@ -2284,53 +2487,22 @@
                             </h3>
                             <span class="category-count">${items.length} items</span>
                         </div>
-                        
                         <div class="gear-list">
-                            ${items.map(item => {
-                                // Handle cases where inventoryId might be null (shouldn't happen after filtering, but be safe)
-                                const label = item.inventoryId?.label || `${item.brand} ${item.model}`;
-                                const labelParts = label.split(' ');
-                                const brand = labelParts[0] || item.brand || 'Unknown';
-                                const model = labelParts.slice(1).join(' ') || item.model || 'Unknown';
-                                const state = getLineState(item);
-                                
-                                return `
-                                    <div class="${lineClasses(item, state)}" data-line-id="${item._id}">
-                                        <input type="checkbox" class="packed-checkbox" 
-                                               ${item.isPacked ? 'checked' : ''} 
-                                               ${state.returned > 0 ? 'disabled title="Checked in - undo the return to change this"' : ''}
-                                               onchange="togglePacked('${item._id}')">
-                                        <div class="gear-info">
-                                            <div class="gear-name">${brand} ${model}</div>
-                                            <div class="gear-details">
-                                                <span>Brand: ${brand}</span>
-                                                <span>Model: ${model}</span>
-                                                ${item.serial ? `<span>Serial: <span class="serial-code">${item.serial}</span></span>` : ''}
-                                                <span>Qty: ${item.quantity}</span>
-                                            </div>
-                                            ${renderLineStatus(item, state)}
-                                            ${renderReturnControls(item, state)}
-                                        </div>
-                                        <div class="gear-controls">
-                                            ${userPermissions.canReserve ? `
-                                                <button class="delete-btn" onclick="deleteGearItem('${item._id}')" 
-                                                        title="Remove from list">
-                                                    <span class="material-symbols-outlined" style="font-size: 16px;">delete</span>
-                                                </button>
-                                            ` : ''}
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('')}
+                            ${items.map(renderGearLine).join('')}
                         </div>
                     </div>
                 `;
             }).join('');
 
-            // Render manual items section
+            const kitsHTML = renderKitCards();
+            const looseLabel = kitsHTML && categoriesHTML
+                ? '<div class="kit-section-label">Other gear</div>'
+                : '';
             const manualItemsHTML = renderManualItems();
             
             container.innerHTML = `
+                ${kitsHTML}
+                ${looseLabel}
                 <div class="categories-grid">${categoriesHTML}</div>
                 ${manualItemsHTML}
             `;
@@ -3585,6 +3757,275 @@
 
 
         // Open templates modal
+        async function loadGearKitsCatalog() {
+            try {
+                const response = await fetch(`${API_BASE}/api/kits`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                if (!response.ok) {
+                    gearKitsCatalog = [];
+                    return [];
+                }
+                gearKitsCatalog = await response.json();
+                return gearKitsCatalog;
+            } catch (error) {
+                console.error('Error loading kits:', error);
+                gearKitsCatalog = [];
+                return [];
+            }
+        }
+
+        async function openKitsModal() {
+            const kits = await loadGearKitsCatalog();
+            renderKitsModal(kits);
+            document.getElementById('kitsModal').style.display = 'block';
+        }
+
+        function closeKitsModal() {
+            document.getElementById('kitsModal').style.display = 'none';
+        }
+
+        function renderKitsModal(kits) {
+            const container = document.getElementById('kitsContainer');
+            if (!kits || kits.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: var(--text-tertiary);">
+                        <span class="material-symbols-outlined" style="font-size: 48px; color: var(--text-muted); margin-bottom: 12px; display: block;">package_2</span>
+                        <h3 style="color: var(--text-primary); margin: 0 0 8px 0;">No Kits Yet</h3>
+                        <p style="margin: 0; font-size: 14px;">Create kits in the Kit Builder, then add them here.</p>
+                    </div>
+                `;
+                return;
+            }
+            container.innerHTML = kits.map((kit) => `
+                <div class="template-item" style="display: flex; align-items: center; justify-content: space-between;">
+                    <div style="flex: 1; min-width: 0;">
+                        <h4>${escapeHtml(kit.name)}</h4>
+                        ${kit.description ? `<p>${escapeHtml(kit.description)}</p>` : ''}
+                        <div style="font-size: 12px; color: var(--text-muted);">
+                            ${(kit.items || []).length} item${(kit.items || []).length !== 1 ? 's' : ''}
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0; margin-left: 16px;">
+                        <button class="package-btn primary" onclick="addKitFromModal('${kit._id}')">
+                            <span class="material-symbols-outlined" style="font-size: 16px;">add</span>
+                            Add
+                        </button>
+                        <button class="package-btn" onclick="showKitDetails('${kit._id}')">
+                            <span class="material-symbols-outlined" style="font-size: 16px;">info</span>
+                            Details
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function showKitDetails(kitId) {
+            const kit = gearKitsCatalog.find((k) => k._id === kitId);
+            if (!kit) return;
+            currentTemplateId = null;
+            document.getElementById('templateDetailsTitle').textContent = kit.name;
+            const descEl = document.getElementById('templateDetailsDescription');
+            descEl.textContent = kit.description || '';
+            descEl.style.display = kit.description ? 'block' : 'none';
+            document.getElementById('templateDetailsBody').innerHTML = (kit.items || []).map((item) => `
+                <tr>
+                    <td style="font-weight: 500;">${escapeHtml(item.brand)} ${escapeHtml(item.model)}</td>
+                    <td style="text-align: center;"><span class="qty-badge">${item.quantity || 1}</span></td>
+                </tr>
+            `).join('') || '<tr><td colspan="2">No items</td></tr>';
+            const deleteBtn = document.getElementById('deleteTemplateFromDetailsBtn');
+            if (deleteBtn) deleteBtn.style.display = 'none';
+            closeKitsModal();
+            document.getElementById('templateDetailsModal').style.display = 'block';
+        }
+
+        async function addKitFromModal(kitId) {
+            const kit = gearKitsCatalog.find((k) => k._id === kitId) ||
+                (await loadGearKitsCatalog()).find((k) => k._id === kitId);
+            if (!kit) {
+                alert('Kit not found');
+                return;
+            }
+            closeKitsModal();
+            await showKitContentsModal(kit);
+        }
+
+        async function showKitContentsModal(kit, options = {}) {
+            currentKitForAdd = kit;
+            currentTemplate = null;
+            const instanceId = options.instanceId || newKitInstanceId();
+            const inventoryItems = await getTemplateInventoryItems(
+                (kit.items || []).map((item) => ({
+                    matchType: 'model',
+                    brand: item.brand,
+                    model: item.model,
+                    category: item.category,
+                    quantity: item.quantity || 1
+                }))
+            );
+
+            document.getElementById('packageModalTitle').textContent = `Add Kit — ${kit.name}`;
+            const container = document.getElementById('packageItemsContainer');
+            if (inventoryItems.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 40px; color: var(--text-tertiary);">
+                        <h3 style="color: var(--text-primary);">No items in this kit</h3>
+                    </div>
+                `;
+            } else {
+                let html = `
+                    <table class="pkg-table">
+                        <thead>
+                            <tr>
+                                <th>Item</th>
+                                <th style="text-align: center;">Qty</th>
+                                <th style="text-align: center;">Available</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+                inventoryItems.forEach((item) => {
+                    const { statusClass, statusText, templateQty, availableQty } = getTemplateItemStatus(item);
+                    html += `
+                        <tr>
+                            <td style="font-weight: 500;">${escapeHtml(item.brand)} ${escapeHtml(item.model)}</td>
+                            <td style="text-align: center;"><span class="qty-badge">${templateQty}</span></td>
+                            <td style="text-align: center;"><span class="qty-badge">${availableQty}</span></td>
+                            <td><span class="${statusClass}">${statusText}</span></td>
+                        </tr>
+                    `;
+                });
+                html += `</tbody></table>
+                    <div style="margin-top: 16px; text-align: right;">
+                        <button class="package-btn primary" id="addKitNowBtn">
+                            <span class="material-symbols-outlined" style="font-size: 16px;">add</span>
+                            Add kit
+                        </button>
+                    </div>`;
+                container.innerHTML = html;
+                document.getElementById('addKitNowBtn')?.addEventListener('click', () =>
+                    addKitItemsToCart(kit, inventoryItems, instanceId)
+                );
+            }
+
+            currentPackageItems = inventoryItems;
+            const addAllBtn = document.getElementById('addAllBtn');
+            if (addAllBtn) addAllBtn.style.display = 'none';
+            document.getElementById('packageContentsModal').style.display = 'block';
+        }
+
+        async function addKitItemsToCart(kit, inventoryItems, instanceId) {
+            const batchItems = [];
+            const shortfalls = [];
+
+            for (const item of inventoryItems) {
+                if (item.matchType === 'class' || item.notInInventory) {
+                    shortfalls.push(`${item.brand} ${item.model}`);
+                    continue;
+                }
+                const templateQty = item.templateQuantity || 1;
+                const availableQty = item.availableQuantity || 0;
+                const qtyToAdd = Math.min(templateQty, availableQty);
+                if (qtyToAdd <= 0 || !item.matchingItems) {
+                    shortfalls.push(`${item.brand} ${item.model}`);
+                    continue;
+                }
+                let remaining = qtyToAdd;
+                const sorted = item.matchingItems
+                    .filter((mi) => (mi.availableQuantity ?? 0) > 0)
+                    .sort((a, b) => (b.availableQuantity ?? 0) - (a.availableQuantity ?? 0));
+                for (const mi of sorted) {
+                    if (remaining <= 0) break;
+                    const qty = Math.min(remaining, mi.availableQuantity ?? 0);
+                    if (qty > 0) {
+                        batchItems.push({
+                            inventoryId: mi._id,
+                            quantity: qty,
+                            specificSerial: null,
+                            kitInstanceId: instanceId,
+                            kitId: kit._id
+                        });
+                        remaining -= qty;
+                    }
+                }
+                if (qtyToAdd < templateQty) {
+                    shortfalls.push(`${item.brand} ${item.model}: ${qtyToAdd}/${templateQty}`);
+                }
+            }
+
+            if (batchItems.length === 0) {
+                closePackageModal();
+                showToast('Nothing available to add for this kit', 'warning');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/api/carts/${eventId}/items/batch`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({ items: batchItems })
+                });
+                if (!response.ok) {
+                    const result = await response.json();
+                    throw new Error(result.error || 'Failed to add kit');
+                }
+                const result = await response.json();
+                closePackageModal();
+                let message = `Added ${result.successCount} item${result.successCount === 1 ? '' : 's'} from ${kit.name} to cart`;
+                if (shortfalls.length > 0) {
+                    message += ` (short: ${shortfalls.join(', ')})`;
+                }
+                showToast(message, shortfalls.length > 0 ? 'warning' : 'success');
+                await loadGear();
+                updateCartBadge();
+            } catch (error) {
+                closePackageModal();
+                showToast(error.message, 'error');
+            }
+        }
+
+        async function removeKitFromList(instanceId) {
+            const kit = currentKits.find((k) => k.instanceId === instanceId);
+            const name = kit ? kitDisplayName(kit) : 'this kit';
+            if (!confirm(`Remove ${name} and all of its items from this list?`)) return;
+            try {
+                const response = await fetch(`${API_BASE}/api/gear-packages/event/${eventId}/kits/${encodeURIComponent(instanceId)}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                const result = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(result.error || 'Failed to remove kit');
+                showToast(result.message || 'Kit removed', 'success');
+                await loadGear();
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        }
+
+        async function addMissingKitItems(instanceId) {
+            const kitSnap = currentKits.find((k) => k.instanceId === instanceId);
+            if (!kitSnap || !kitSnap.missing || kitSnap.missing.length === 0) {
+                showToast('Nothing missing on this kit', 'info');
+                return;
+            }
+            const kit = { _id: kitSnap.kitId, name: kitSnap.name, items: kitSnap.missing };
+            const inventoryItems = await getTemplateInventoryItems(
+                kitSnap.missing.map((item) => ({
+                    matchType: 'model',
+                    brand: item.brand,
+                    model: item.model,
+                    category: item.category,
+                    quantity: item.quantity || 1
+                }))
+            );
+            await addKitItemsToCart(kit, inventoryItems, instanceId);
+        }
+
         async function openTemplatesModal() {
             const templates = await loadPackageTemplates();
             renderTemplatesModal(templates);
@@ -3611,13 +4052,19 @@
                 return;
             }
 
-            container.innerHTML = templates.map(template => `
+            container.innerHTML = templates.map(template => {
+                const kitCount = (template.kits || []).length;
+                const itemCount = (template.items || []).length;
+                const parts = [];
+                if (kitCount) parts.push(`${kitCount} kit${kitCount !== 1 ? 's' : ''}`);
+                if (itemCount) parts.push(`${itemCount} item${itemCount !== 1 ? 's' : ''}`);
+                return `
                 <div class="template-item" style="display: flex; align-items: center; justify-content: space-between;">
                     <div style="flex: 1; min-width: 0;">
-                        <h4>${template.name}</h4>
-                        ${template.description ? `<p>${template.description}</p>` : ''}
+                        <h4>${escapeHtml(template.name)}</h4>
+                        ${template.description ? `<p>${escapeHtml(template.description)}</p>` : ''}
                         <div style="font-size: 12px; color: var(--text-muted);">
-                            ${template.items.length} item${template.items.length !== 1 ? 's' : ''} • Created ${formatDate(template.createdAt)}
+                            ${parts.join(' · ') || 'Empty'} • Created ${formatDate(template.createdAt)}
                         </div>
                     </div>
                     <div style="display: flex; gap: 8px; align-items: center; flex-shrink: 0; margin-left: 16px;">
@@ -3631,7 +4078,8 @@
                         </button>
                     </div>
                 </div>
-            `).join('');
+            `;
+            }).join('');
         }
 
         // Load a specific template
@@ -3664,13 +4112,36 @@
             descEl.style.display = template.description ? 'block' : 'none';
 
             const tbody = document.getElementById('templateDetailsBody');
-            tbody.innerHTML = template.items.map(item => `
+            const kitRows = (template.kits || []).flatMap((entry) => {
+                const kit = entry.kitId && typeof entry.kitId === 'object' ? entry.kitId : null;
+                const qty = entry.quantity || 1;
+                const name = kit?.name || 'Kit';
+                const rows = [`
+                    <tr>
+                        <td style="font-weight: 600;">Kit: ${escapeHtml(name)}${qty > 1 ? ` × ${qty}` : ''}</td>
+                        <td style="text-align: center;"><span class="qty-badge">${qty}</span></td>
+                    </tr>
+                `];
+                (kit?.items || []).forEach((item) => {
+                    rows.push(`
+                        <tr>
+                            <td style="padding-left: 20px; color: var(--text-secondary);">${escapeHtml(item.brand)} ${escapeHtml(item.model)}</td>
+                            <td style="text-align: center;"><span class="qty-badge">${item.quantity || 1}</span></td>
+                        </tr>
+                    `);
+                });
+                return rows;
+            });
+            const itemRows = (template.items || []).map(item => `
                 <tr>
-                    <td style="font-weight: 500;">${templateItemLabel(item)}</td>
+                    <td style="font-weight: 500;">${escapeHtml(templateItemLabel(item))}</td>
                     <td style="text-align: center;"><span class="qty-badge">${item.quantity}</span></td>
                 </tr>
-            `).join('');
+            `);
+            tbody.innerHTML = [...kitRows, ...itemRows].join('') || '<tr><td colspan="2">No contents</td></tr>';
 
+            const deleteBtn = document.getElementById('deleteTemplateFromDetailsBtn');
+            if (deleteBtn) deleteBtn.style.display = '';
             document.getElementById('templateDetailsModal').style.display = 'block';
         }
 
@@ -3748,22 +4219,29 @@
         }
 
         async function saveAsTemplate() {
-            if (!currentGear || currentGear.length === 0) {
+            const kitInstanceIds = new Set((currentKits || []).map((k) => k.instanceId));
+            const looseGear = (currentGear || []).filter((item) =>
+                (item.inventoryId || item.brand) && (!item.kitInstanceId || !kitInstanceIds.has(item.kitInstanceId))
+            );
+
+            if ((!currentKits || currentKits.length === 0) && looseGear.length === 0) {
                 alert('No gear items on the current list to save as a template. Add items first.');
                 return;
             }
 
-            // Filter out items with null inventoryId
-            const validGear = currentGear.filter(item => item.inventoryId || item.brand);
-
-            if (validGear.length === 0) {
-                alert('No valid gear items found to save as a template.');
-                return;
-            }
-
-            // Show current gear items in preview using direct brand/model fields (more reliable)
+            // Show kits + loose gear in preview
             const previewContainer = document.getElementById('templateItemsPreview');
-            previewContainer.innerHTML = validGear.map((item, index) => {
+            const kitPreview = (currentKits || []).map((kit) => `
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--border-subtle);">
+                    <div>
+                        <strong style="color: var(--text-primary);">Kit: ${escapeHtml(kitDisplayName(kit))}</strong>
+                        <div style="font-size: 12px; color: var(--text-tertiary); margin-top: 2px;">${(kit.items || []).length} models</div>
+                    </div>
+                    <span class="qty-badge">×1</span>
+                </div>
+            `).join('');
+
+            const itemPreview = looseGear.map((item, index) => {
                 const { brand, model, category } = getGearBrandModel(item);
                 const lens = isLensCategory(category);
                 const lensClass = getItemLensClass(item);
@@ -3785,14 +4263,17 @@
                 return `
                     <div style="display: flex; justify-content: space-between; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid var(--border-subtle);">
                         <div>
-                            <strong style="color: var(--text-primary);">${brand} ${model}</strong>
-                            <div style="font-size: 12px; color: var(--text-tertiary); margin-top: 2px;">${category}</div>
+                            <strong style="color: var(--text-primary);">${escapeHtml(brand)} ${escapeHtml(model)}</strong>
+                            <div style="font-size: 12px; color: var(--text-tertiary); margin-top: 2px;">${escapeHtml(category)}</div>
                             ${choiceHtml}
                         </div>
                         <span class="qty-badge">×${item.quantity || 1}</span>
                     </div>
                 `;
             }).join('');
+
+            previewContainer.innerHTML = kitPreview + itemPreview;
+            previewContainer.dataset.looseCount = String(looseGear.length);
 
             // Clear previous input
             document.getElementById('templateNameInput').value = '';
@@ -3823,10 +4304,21 @@
                 return;
             }
 
-            // Filter out invalid items and convert to template items
-            // Use direct brand/model fields from ReservedGearItem (more reliable than parsing label)
-            const validGear = currentGear.filter(item => item.inventoryId || item.brand);
-            const items = validGear.map((item, index) => {
+            const kitInstanceIds = new Set((currentKits || []).map((k) => k.instanceId));
+            const looseGear = (currentGear || []).filter((item) =>
+                (item.inventoryId || item.brand) && (!item.kitInstanceId || !kitInstanceIds.has(item.kitInstanceId))
+            );
+
+            // Kits on the list → kit references (dedupe by kitId, count copies)
+            const kitQty = new Map();
+            for (const kit of currentKits || []) {
+                if (!kit.kitId) continue;
+                const id = String(kit.kitId);
+                kitQty.set(id, (kitQty.get(id) || 0) + 1);
+            }
+            const kits = [...kitQty.entries()].map(([kitId, quantity]) => ({ kitId, quantity }));
+
+            const items = looseGear.map((item, index) => {
                 const { brand, model, category } = getGearBrandModel(item);
                 const lensClass = getItemLensClass(item);
                 const matchChoice = isLensCategory(category)
@@ -3851,7 +4343,7 @@
                 };
             });
 
-            if (items.length === 0) {
+            if (items.length === 0 && kits.length === 0) {
                 alert('No valid items to save in template');
                 return;
             }
@@ -3866,14 +4358,18 @@
                     body: JSON.stringify({
                         name: templateName,
                         description: description,
-                        items: items
+                        items: items,
+                        kits: kits
                     })
                 });
 
                 if (response.ok) {
                     closeCreateTemplateModal();
-                    packageTemplates = await loadPackageTemplates(); // Reload templates
-                    showToast(`Template "${templateName}" created with ${items.length} items!`, 'success');
+                    packageTemplates = await loadPackageTemplates();
+                    const parts = [];
+                    if (kits.length) parts.push(`${kits.length} kit${kits.length === 1 ? '' : 's'}`);
+                    if (items.length) parts.push(`${items.length} item${items.length === 1 ? '' : 's'}`);
+                    showToast(`Template "${templateName}" created with ${parts.join(' and ')}!`, 'success');
                 } else {
                     const error = await response.json();
                     alert(error.error || 'Failed to create template');
@@ -4041,14 +4537,42 @@
             try {
                 // Store the current template for use in other functions
                 currentTemplate = selectedTemplate;
+                currentKitForAdd = null;
                 // Get inventory items for this template
-                const inventoryItems = await getTemplateInventoryItems(selectedTemplate.items);
+                const inventoryItems = await getTemplateInventoryItems(selectedTemplate.items || []);
+
+                // Expand kit references into display blocks
+                const templateKits = [];
+                for (const entry of selectedTemplate.kits || []) {
+                    const kitDoc = entry.kitId && typeof entry.kitId === 'object'
+                        ? entry.kitId
+                        : (await loadGearKitsCatalog()).find((k) => String(k._id) === String(entry.kitId));
+                    if (!kitDoc) continue;
+                    const copies = Math.max(1, entry.quantity || 1);
+                    for (let i = 0; i < copies; i++) {
+                        const kitItems = await getTemplateInventoryItems(
+                            (kitDoc.items || []).map((item) => ({
+                                matchType: 'model',
+                                brand: item.brand,
+                                model: item.model,
+                                category: item.category,
+                                quantity: item.quantity || 1
+                            }))
+                        );
+                        templateKits.push({
+                            kit: kitDoc,
+                            copyIndex: copies > 1 ? i + 1 : null,
+                            inventoryItems: kitItems
+                        });
+                    }
+                }
+                currentTemplate._resolvedKits = templateKits;
                 
                 document.getElementById('packageModalTitle').textContent = `Load Gear Package — ${selectedTemplate.name}`;
                 
                 const container = document.getElementById('packageItemsContainer');
                 
-                if (inventoryItems.length === 0) {
+                if (inventoryItems.length === 0 && templateKits.length === 0) {
                     container.innerHTML = `
                         <div style="text-align: center; padding: 40px; color: var(--text-tertiary);">
                             <span class="material-symbols-outlined" style="font-size: 48px; color: var(--text-muted); margin-bottom: 12px; display: block;">playlist_remove</span>
@@ -4060,6 +4584,48 @@
                     const modelItems = inventoryItems.filter(item => item.matchType !== 'class');
                     const classItems = inventoryItems.filter(item => item.matchType === 'class');
                     let html = '';
+
+                    templateKits.forEach((block, idx) => {
+                        const title = block.copyIndex
+                            ? `${block.kit.name} ${block.copyIndex}`
+                            : block.kit.name;
+                        html += `
+                            <div class="template-class-section" style="margin-bottom: 16px;">
+                                <div class="template-class-header">
+                                    <div>
+                                        <h4>Kit: ${escapeHtml(title)}</h4>
+                                        <div class="template-class-meta">${block.inventoryItems.length} models</div>
+                                    </div>
+                                    <button class="package-btn primary" onclick="addTemplateKitCopy(${idx})" style="padding: 6px 14px; font-size: 13px;">
+                                        <span class="material-symbols-outlined" style="font-size: 16px;">add</span> Add kit
+                                    </button>
+                                </div>
+                                <table class="pkg-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Item</th>
+                                            <th style="text-align: center;">Qty</th>
+                                            <th style="text-align: center;">Available</th>
+                                            <th>Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${block.inventoryItems.map((item) => {
+                                            const { statusClass, statusText, templateQty, availableQty } = getTemplateItemStatus(item);
+                                            return `
+                                                <tr>
+                                                    <td style="font-weight: 500;">${escapeHtml(item.brand)} ${escapeHtml(item.model)}</td>
+                                                    <td style="text-align: center;"><span class="qty-badge">${templateQty}</span></td>
+                                                    <td style="text-align: center;"><span class="qty-badge">${availableQty}</span></td>
+                                                    <td><span class="${statusClass}">${statusText}</span></td>
+                                                </tr>
+                                            `;
+                                        }).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        `;
+                    });
 
                     if (modelItems.length > 0) {
                         html += `
@@ -4105,7 +4671,8 @@
                 const addAllBtn = document.getElementById('addAllBtn');
                 if (addAllBtn) {
                     const hasModelItems = inventoryItems.some(item => item.matchType !== 'class');
-                    addAllBtn.style.display = hasModelItems ? '' : 'none';
+                    const hasKits = templateKits.length > 0;
+                    addAllBtn.style.display = (hasModelItems || hasKits) ? '' : 'none';
                 }
                 document.getElementById('packageContentsModal').style.display = 'block';
                 
@@ -4113,6 +4680,12 @@
                 console.error('Error loading template contents:', error);
                 alert('Failed to load template contents');
             }
+        }
+
+        async function addTemplateKitCopy(index) {
+            const block = currentTemplate?._resolvedKits?.[index];
+            if (!block) return;
+            await addKitItemsToCart(block.kit, block.inventoryItems, newKitInstanceId());
         }
 
         // Get inventory items for template with availability
@@ -4760,19 +5333,55 @@
         // Add all available package items to cart (batch - single API call)
         async function addAllAvailableToCart() {
             const availableItems = currentPackageItems.filter(item => item.matchType !== 'class' && item.availableQuantity > 0);
-            
-            if (availableItems.length === 0) {
+            const templateKits = currentTemplate?._resolvedKits || [];
+
+            if (availableItems.length === 0 && templateKits.length === 0) {
                 alert('No items are available to add to cart');
                 return;
             }
 
-            if (!confirm(`Add all ${availableItems.length} available items to cart with no serial preference?`)) {
+            if (!confirm(`Add all available kits and items to cart with no serial preference?`)) {
                 return;
             }
 
             // Build batch request: collect all individual inventory items to add
             const batchItems = [];
             const partialAdds = [];
+
+            // Each kit copy gets its own instance id
+            for (const block of templateKits) {
+                const instanceId = newKitInstanceId();
+                for (const item of block.inventoryItems) {
+                    if (item.notInInventory || !item.matchingItems) {
+                        partialAdds.push(`${item.brand} ${item.model}: 0/${item.templateQuantity || 1}`);
+                        continue;
+                    }
+                    const templateQty = item.templateQuantity || 1;
+                    const availableQty = item.availableQuantity || 0;
+                    const qtyToAdd = Math.min(templateQty, availableQty);
+                    let remaining = qtyToAdd;
+                    const sorted = item.matchingItems
+                        .filter(mi => (mi.availableQuantity ?? 0) > 0)
+                        .sort((a, b) => (b.availableQuantity ?? 0) - (a.availableQuantity ?? 0));
+                    for (const mi of sorted) {
+                        if (remaining <= 0) break;
+                        const qty = Math.min(remaining, mi.availableQuantity ?? 0);
+                        if (qty > 0) {
+                            batchItems.push({
+                                inventoryId: mi._id,
+                                quantity: qty,
+                                specificSerial: null,
+                                kitInstanceId: instanceId,
+                                kitId: block.kit._id
+                            });
+                            remaining -= qty;
+                        }
+                    }
+                    if (qtyToAdd < templateQty) {
+                        partialAdds.push(`${block.kit.name}: ${item.brand} ${item.model} ${qtyToAdd}/${templateQty}`);
+                    }
+                }
+            }
 
             for (const item of availableItems) {
                 const templateQty = item.templateQuantity || 1;
@@ -5118,6 +5727,13 @@
         window.handleListSelection = handleListSelection;
         window.renameCurrentList = renameCurrentList;
         window.deleteCurrentList = deleteCurrentList;
+        window.openKitsModal = openKitsModal;
+        window.closeKitsModal = closeKitsModal;
+        window.addKitFromModal = addKitFromModal;
+        window.showKitDetails = showKitDetails;
+        window.removeKitFromList = removeKitFromList;
+        window.addMissingKitItems = addMissingKitItems;
+        window.addTemplateKitCopy = addTemplateKitCopy;
         window.openTemplatesModal = openTemplatesModal;
         window.saveAsTemplate = saveAsTemplate;
         window.viewCart = viewCart;

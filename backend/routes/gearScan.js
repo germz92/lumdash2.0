@@ -348,6 +348,7 @@ module.exports = function createGearScanRouter({
       }
 
       const progress = updated.quantity > 1 ? ` (${scanned} of ${updated.quantity})` : '';
+      const kitSuffix = updated.kitName ? ` - ${updated.kitName}` : '';
       return finish(res, {
         ...logBase,
         reservedItemId: updated._id,
@@ -356,9 +357,11 @@ module.exports = function createGearScanRouter({
       }, {
         result: 'ok',
         effect,
-        title: `${title}${progress}`,
+        title: `${title}${progress}${kitSuffix}`,
         detail: detail || unitText(unit),
         unit: unitSummary(unit),
+        kitName: updated.kitName || null,
+        kitInstanceId: updated.kitInstanceId || null,
         warnings: allWarnings,
         lines: await loadLinesForResponse([updated._id], kind),
         ...extra

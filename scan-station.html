@@ -264,6 +264,49 @@
         color: var(--text-tertiary);
       }
 
+      .scan-station .side-dates {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 10px 12px;
+        margin: 0 0 14px 0;
+        padding: 12px;
+        border: 1px solid var(--border-subtle);
+        border-radius: var(--radius-md);
+        background: var(--bg-tertiary, rgba(255,255,255,0.03));
+      }
+
+      .scan-station .side-dates label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+      }
+
+      .scan-station .side-dates input[type="date"] {
+        padding: 8px 10px;
+        border: 1px solid var(--border-default);
+        border-radius: var(--radius-md);
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        font-size: 14px;
+        font-family: inherit;
+      }
+
+      .scan-station .side-dates .side-btn {
+        margin-left: auto;
+      }
+
+      .scan-station .side-dates-error {
+        flex: 1 1 100%;
+        font-size: 13px;
+        color: var(--accent-red, #ef4444);
+      }
+
       /* Side panel: the list being packed, what is still out, or the item looked up */
       .scan-station .station-side {
         background: var(--bg-secondary);
@@ -779,6 +822,17 @@
             return data;
         }
 
+        async function apiPut(path, body) {
+            const response = await fetch(`${API_BASE}${path}`, {
+                method: 'PUT',
+                headers: authHeaders({ 'Content-Type': 'application/json' }),
+                body: JSON.stringify(body)
+            });
+            const data = await response.json().catch(() => null);
+            if (!response.ok) throw new Error((data && data.error) || `Request failed (${response.status})`);
+            return data;
+        }
+
         // Scan requests answer 200 with an outcome; anything else becomes an error outcome
         async function scanRequest(path, body) {
             const response = await fetch(`${API_BASE}/api/gear-scan${path}`, {
@@ -1201,11 +1255,57 @@
             if (count('returned') + count('returning') > 0) extras.push(`${count('returned') + count('returning')} checked in`);
             const allDone = lines.length > 0 && done === lines.length;
 
-            // What is left to scan stays at the top
+            // What is left to scan stays at the top; kit lines stay together under kit headings
             const order = { open: 0, partial: 0, returning: 1, checked: 2, scanned: 2, returned: 3 };
             const rows = lines
                 .map((line, index) => ({ line, s: states[index], index }))
                 .sort((a, b) => (order[a.s.key] - order[b.s.key]) || (a.index - b.index));
+
+            function renderLineRow({ line, s }) {
+                return `
+                    <li class="line-row state-${s.key}" data-line-id="${escapeHtml(line._id)}">
+                        <span class="material-symbols-outlined line-icon">${LINE_ICONS[s.key]}</span>
+                        <div class="line-text">
+                            <div class="line-name">${escapeHtml(line.inventoryId.label || `${line.brand} ${line.model}`)}${s.quantity > 1 ? ` × ${s.quantity}` : ''}</div>
+                            <div class="line-sub">${escapeHtml(unitIdText(line.inventoryId) || line.inventoryId.category || '')}</div>
+                        </div>
+                        ${line.isOverdue ? '<span class="badge badge-overdue">Overdue</span>' : ''}
+                        <span class="line-state">${escapeHtml(lineStateText(s))}</span>
+                    </li>`;
+            }
+
+            function renderGroupedLineList(sortedRows) {
+                const kitOrder = [];
+                const byKit = new Map();
+                const loose = [];
+                for (const row of sortedRows) {
+                    if (row.line.kitInstanceId) {
+                        if (!byKit.has(row.line.kitInstanceId)) {
+                            byKit.set(row.line.kitInstanceId, []);
+                            kitOrder.push(row.line.kitInstanceId);
+                        }
+                        byKit.get(row.line.kitInstanceId).push(row);
+                    } else {
+                        loose.push(row);
+                    }
+                }
+                let html = '<ul class="line-list">';
+                for (const instanceId of kitOrder) {
+                    const kitRows = byKit.get(instanceId) || [];
+                    const kitName = kitRows[0]?.line?.kitName || 'Kit';
+                    html += `<li class="line-kit-heading" style="list-style:none;padding:10px 4px 4px;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;">
+                        <span class="material-symbols-outlined" style="font-size:14px;vertical-align:middle;">package_2</span>
+                        ${escapeHtml(kitName)}
+                    </li>`;
+                    html += kitRows.map(renderLineRow).join('');
+                }
+                if (loose.length && kitOrder.length) {
+                    html += `<li class="line-kit-heading" style="list-style:none;padding:10px 4px 4px;font-size:12px;font-weight:600;color:var(--text-secondary);text-transform:uppercase;letter-spacing:0.04em;">Other gear</li>`;
+                }
+                html += loose.map(renderLineRow).join('');
+                html += '</ul>';
+                return html;
+            }
 
             return `
                 <div class="side-head">
@@ -1231,7 +1331,23 @@
                 ${manual ? `
                     <div class="side-note">
                         <span>Manual check-out · ${escapeHtml(formatDay(manual.startDate))} - due back ${escapeHtml(formatDay(manual.endDate))}</span>
-                    </div>` : ''}
+                    </div>` : (canReserve ? `
+                    <div class="side-dates" id="sideDatesEditor">
+                        <label>Check out
+                            <input type="date" id="sideCheckOut" value="${escapeHtml(dayOf(event && event.gear && event.gear.checkOutDate))}">
+                        </label>
+                        <label>Due back
+                            <input type="date" id="sideCheckIn" value="${escapeHtml(dayOf(event && event.gear && event.gear.checkInDate))}">
+                        </label>
+                        <button type="button" class="side-btn" id="saveSideDatesBtn" title="Update these dates on the event and every item on its gear lists">
+                            <span class="material-symbols-outlined">save</span>
+                            Save dates
+                        </button>
+                        <div class="side-dates-error" id="sideDatesError" hidden></div>
+                    </div>` : (event && event.gear && event.gear.checkOutDate ? `
+                    <div class="side-note">
+                        <span>${escapeHtml(formatDay(event.gear.checkOutDate))} - due back ${escapeHtml(formatDay(event.gear.checkInDate))}</span>
+                    </div>` : ''))}
                 <div class="side-summary">
                     <strong>${count('scanned')} of ${lines.length}</strong> scanned${extras.length ? ' · ' + escapeHtml(extras.join(' · ')) : ''}
                     ${allDone ? ' · <span class="all-done">Everything is packed</span>' : ''}
@@ -1239,18 +1355,7 @@
                 <div class="progress-track"><div class="progress-fill" style="width: ${lines.length ? Math.round(done / lines.length * 100) : 0}%"></div></div>
                 ${lines.length === 0
                     ? emptyHtml('inventory_2', emptyText)
-                    : `<ul class="line-list">
-                        ${rows.map(({ line, s }) => `
-                            <li class="line-row state-${s.key}" data-line-id="${escapeHtml(line._id)}">
-                                <span class="material-symbols-outlined line-icon">${LINE_ICONS[s.key]}</span>
-                                <div class="line-text">
-                                    <div class="line-name">${escapeHtml(line.inventoryId.label || `${line.brand} ${line.model}`)}${s.quantity > 1 ? ` × ${s.quantity}` : ''}</div>
-                                    <div class="line-sub">${escapeHtml(unitIdText(line.inventoryId) || line.inventoryId.category || '')}</div>
-                                </div>
-                                ${line.isOverdue ? '<span class="badge badge-overdue">Overdue</span>' : ''}
-                                <span class="line-state">${escapeHtml(lineStateText(s))}</span>
-                            </li>`).join('')}
-                    </ul>`}`;
+                    : renderGroupedLineList(rows)}`;
         }
 
         function renderCheckinSide() {
@@ -1827,8 +1932,66 @@
                     if (state.mode === 'in') loadOutstanding();
                     else if (state.mode === 'out') loadLines();
                     scanner.focus();
+                    return;
+                }
+                if (event.target.closest('#saveSideDatesBtn')) {
+                    saveSideDates();
                 }
             });
+
+            async function saveSideDates() {
+                if (!state.eventId || !canReserve) return;
+                const outEl = $('sideCheckOut');
+                const inEl = $('sideCheckIn');
+                const errEl = $('sideDatesError');
+                const out = outEl && outEl.value;
+                const inn = inEl && inEl.value;
+                if (errEl) { errEl.hidden = true; errEl.textContent = ''; }
+                if (!out || !inn) {
+                    if (errEl) { errEl.hidden = false; errEl.textContent = 'Choose both dates.'; }
+                    return;
+                }
+                if (inn < out) {
+                    if (errEl) { errEl.hidden = false; errEl.textContent = 'Due back must be on or after check-out.'; }
+                    return;
+                }
+                const btn = $('saveSideDatesBtn');
+                if (btn) btn.disabled = true;
+                try {
+                    const result = await apiPut(`/api/tables/${state.eventId}/gear-dates`, {
+                        checkOutDate: out,
+                        checkInDate: inn
+                    });
+                    const event = events.find(e => e._id === state.eventId);
+                    if (event) {
+                        if (!event.gear) event.gear = {};
+                        event.gear.checkOutDate = result.checkOutDate || out;
+                        event.gear.checkInDate = result.checkInDate || inn;
+                    }
+                    renderEventOptions();
+                    await loadLines();
+                    if (scanner && scanner.showResult) {
+                        scanner.showResult({
+                            result: 'ok',
+                            level: 'ok',
+                            title: 'Dates saved',
+                            detail: `${formatDay(out)} - ${formatDay(inn)}${result.updatedLines ? ` · ${result.updatedLines} item${result.updatedLines === 1 ? '' : 's'} updated` : ''}`
+                        }, { sound: false });
+                    }
+                } catch (error) {
+                    if (errEl) { errEl.hidden = false; errEl.textContent = error.message; }
+                    else if (scanner && scanner.showResult) {
+                        scanner.showResult({
+                            result: 'error',
+                            level: 'error',
+                            title: 'Could not save dates',
+                            detail: error.message
+                        }, { sound: false });
+                    }
+                } finally {
+                    if (btn) btn.disabled = false;
+                }
+            }
 
             // Another computer may have changed things while this tab was in the background
             document.addEventListener('visibilitychange', () => {

@@ -58,6 +58,19 @@ packageTemplateItemSchema.pre('validate', function(next) {
   next();
 });
 
+const packageTemplateKitSchema = new mongoose.Schema({
+  kitId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Kit',
+    required: true
+  },
+  quantity: {
+    type: Number,
+    default: 1,
+    min: 1
+  }
+}, { _id: false });
+
 const packageTemplateSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -70,6 +83,11 @@ const packageTemplateSchema = new mongoose.Schema({
     default: ''
   },
   items: [packageTemplateItemSchema],
+  // Kits referenced by id so editing a kit updates every template that uses it
+  kits: {
+    type: [packageTemplateKitSchema],
+    default: []
+  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

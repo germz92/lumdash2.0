@@ -67,7 +67,8 @@ function holdOverlaps(line, reqStart, reqEnd) {
 
 /**
  * How much of this line to subtract from availability for a date range.
- * Inside the listed reservation window: the full reserved quantity.
+ * Inside the listed reservation window: quantity still reserved (quantity - returned).
+ * Returned early units are free again; untouched lines still block the full quantity.
  * Only in the early-pack window (before check-out): the units already in hand.
  */
 function reservedQtyForRequest(line, reqStart, reqEnd) {
@@ -76,8 +77,24 @@ function reservedQtyForRequest(line, reqStart, reqEnd) {
   const checkOut = checkOutOf(line);
   const checkIn = checkInOf(line);
   const normalOverlap = checkOut && checkIn && checkOut <= reqEnd && checkIn >= reqStart;
-  if (normalOverlap) return line.quantity || 1;
+  if (normalOverlap) {
+    const qty = line.quantity || 1;
+    const returned = line.returnedQty || 0;
+    return Math.max(0, qty - returned);
+  }
   return heldQty(line);
+}
+
+/** Mongo fragment: line still physically holding something (for early-pack queries). */
+function stillHoldingMongo() {
+  return {
+    $or: [
+      // Scanned out more than has been returned
+      { $expr: { $gt: ['$scannedOutQty', { $ifNull: ['$returnedQty', 0] }] } },
+      // Hand-packed with nothing returned yet
+      { isPacked: true, $or: [{ returnedQty: { $exists: false } }, { returnedQty: { $lte: 0 } }] }
+    ]
+  };
 }
 
 module.exports = {
@@ -89,5 +106,6 @@ module.exports = {
   heldQty,
   holdStart,
   holdOverlaps,
-  reservedQtyForRequest
+  reservedQtyForRequest,
+  stillHoldingMongo
 };

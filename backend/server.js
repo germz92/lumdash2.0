@@ -1621,6 +1621,8 @@ const GearInventory = require('./models/GearInventory');
 const GearPackage = require('./models/GearPackage');
 const ReservedGearItem = require('./models/ReservedGearItem');
 const PackageTemplate = require('./models/PackageTemplate');
+const Kit = require('./models/Kit');
+const EventKit = require('./models/EventKit');
 const { lensClassForCategory } = require('./constants/lensClasses');
 const Cart = require('./models/Cart');
 const FolderLog = require('./models/FolderLog');
@@ -4946,6 +4948,97 @@ app.put('/api/tables/:id/gear', authenticate, async (req, res) => {
   }
 });
 
+// Update event gear dates and keep every reserved line (Scan Station / keep-list path).
+// Refuses the change with 409 if the new window would overbook any unit on the list.
+app.put('/api/tables/:eventId/gear-dates', authenticate, async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { checkOutDate, checkInDate } = req.body || {};
+
+    if (!checkOutDate || !checkInDate) {
+      return res.status(400).json({ error: 'Check-out and check-in dates are required' });
+    }
+
+    const { utcDay } = require('./services/reservationHold');
+    const out = utcDay(checkOutDate);
+    const inn = utcDay(checkInDate);
+    if (!out || !inn) {
+      return res.status(400).json({ error: 'Dates are not valid' });
+    }
+    if (inn < out) {
+      return res.status(400).json({ error: 'Check-in date must be on or after check-out date' });
+    }
+
+    const outStr = out.toISOString().slice(0, 10);
+    const innStr = inn.toISOString().slice(0, 10);
+
+    const table = await Table.findById(eventId);
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+    if (!canManageEventGearLists(table, req.user)) {
+      return res.status(403).json({ error: 'Not authorized to edit gear for this event' });
+    }
+
+    const lines = await ReservedGearItem.find({ eventId }).select('inventoryId quantity brand model');
+    // How many of each unit this event still needs under the new dates
+    const neededByInventory = new Map();
+    for (const line of lines) {
+      if (!line.inventoryId) continue;
+      const id = line.inventoryId.toString();
+      const entry = neededByInventory.get(id) || { quantity: 0, label: `${line.brand || ''} ${line.model || ''}`.trim() };
+      entry.quantity += line.quantity || 1;
+      neededByInventory.set(id, entry);
+    }
+
+    const conflicts = [];
+    for (const [inventoryId, entry] of neededByInventory) {
+      const available = await AtomicReservationService.getAvailableQuantity(
+        inventoryId, out, inn, eventId
+      );
+      if (available < entry.quantity) {
+        conflicts.push({
+          inventoryId,
+          item: entry.label || inventoryId,
+          needed: entry.quantity,
+          available
+        });
+      }
+    }
+
+    if (conflicts.length > 0) {
+      const names = conflicts.map((c) => c.item).filter(Boolean).slice(0, 5).join(', ');
+      return res.status(409).json({
+        error: `Those dates clash with other reservations${names ? `: ${names}` : ''}.`,
+        conflicts
+      });
+    }
+
+    table.gear = table.gear || {};
+    table.gear.checkOutDate = outStr;
+    table.gear.checkInDate = innStr;
+    await table.save();
+
+    await ReservedGearItem.updateMany(
+      { eventId },
+      { $set: { checkOutDate: out, checkInDate: inn } }
+    );
+
+    await Cart.updateMany(
+      { eventId },
+      { $set: { checkOutDate: out, checkInDate: inn } }
+    );
+
+    res.json({
+      success: true,
+      checkOutDate: outStr,
+      checkInDate: innStr,
+      updatedLines: lines.length
+    });
+  } catch (err) {
+    console.error('Error updating gear dates:', err);
+    res.status(500).json({ error: 'Failed to update gear dates' });
+  }
+});
+
 // TRAVEL / ACCOMMODATION
 app.get('/api/tables/:id/travel', authenticate, async (req, res) => {
   if (!req.params.id || req.params.id === "null") {
@@ -7906,6 +7999,10 @@ app.use('/api/gear-scan', authenticate, createGearScanRouter({
   canManageGearInventory
 }));
 
+// Gear kits (model-based recipes used on gear lists and in package templates)
+const createKitsRouter = require('./routes/kits');
+app.use('/api/kits', authenticate, createKitsRouter());
+
 // Fallback route in case the module doesn't load properly
 app.get('/api/gear-packages-fallback', authenticate, async (req, res) => {
   try {
@@ -8252,13 +8349,21 @@ app.get('/api/gear-packages/event/:eventId', authenticate, async (req, res) => {
       });
     }
 
-    // If no valid reserved items found, still return manual items
+    // Get manual items for the current list
+    const resolvedListName = listName || 'Main List';
+    const currentGearList = table.gear?.gearLists?.find(list => list.name === resolvedListName);
+    const manualItems = currentGearList?.manualItems || [];
+
+    // Kit snapshots for this list (includes incomplete kits with missing items)
+    const eventKits = await EventKit.find({ eventId, listName: resolvedListName }).sort({ createdAt: 1 }).lean();
+    const kitsPayload = buildKitsPayload(eventKits, validItems || []);
+
+    // If no valid reserved items found, still return manual items + kits
     if (!validItems || validItems.length === 0) {
       console.log(`[GEAR LOAD] No valid reserved items found, checking for manual items`);
-      const currentGearList = table.gear?.gearLists?.find(list => list.name === (listName || 'Main List'));
-      const manualItems = currentGearList?.manualItems || [];
       return res.json({ 
         reservedItems: [],
+        kits: kitsPayload,
         manualItems: manualItems,
         userPermissions: {
           canReserve: canManageEventGearLists(table, req.user),
@@ -8279,10 +8384,6 @@ app.get('/api/gear-packages/event/:eventId', authenticate, async (req, res) => {
         model: validItems[0].model
       });
     }
-    
-    // Get manual items for the current list
-    const currentGearList = table.gear?.gearLists?.find(list => list.name === (listName || 'Main List'));
-    const manualItems = currentGearList?.manualItems || [];
 
     // Units on this list that are overdue from ANOTHER event (scanned out there and not
     // scanned back in). Shown as a warning on the line; it does not block anything.
@@ -8300,6 +8401,7 @@ app.get('/api/gear-packages/event/:eventId', authenticate, async (req, res) => {
 
     res.json({ 
       reservedItems: validItems,
+      kits: kitsPayload,
       unitWarnings,
       manualItems: manualItems,
       userPermissions: {
@@ -8311,6 +8413,117 @@ app.get('/api/gear-packages/event/:eventId', authenticate, async (req, res) => {
   } catch (error) {
     console.error('Error getting reserved items for event:', error);
     res.status(500).json({ error: 'Failed to get reserved items' });
+  }
+});
+
+// Build the kits[] payload for a gear list: packed counts, display numbers, missing items
+function buildKitsPayload(eventKits, reservedItems) {
+  if (!eventKits || eventKits.length === 0) return [];
+
+  const norm = (s) => (s ?? '').toString().trim().replace(/\s+/g, ' ').toLowerCase();
+  const linesByInstance = new Map();
+  for (const line of reservedItems || []) {
+    if (!line.kitInstanceId) continue;
+    if (!linesByInstance.has(line.kitInstanceId)) linesByInstance.set(line.kitInstanceId, []);
+    linesByInstance.get(line.kitInstanceId).push(line);
+  }
+
+  // Number copies of the same kit name (Headshot Booth Kit, Headshot Booth Kit 2, ...)
+  const nameCounts = new Map();
+  for (const kit of eventKits) {
+    const key = norm(kit.name);
+    nameCounts.set(key, (nameCounts.get(key) || 0) + 1);
+  }
+  const nameSeen = new Map();
+
+  return eventKits.map((kit) => {
+    const lines = linesByInstance.get(kit.instanceId) || [];
+    const packed = lines.filter((line) => line.isPacked).length;
+    const totalLines = lines.length;
+
+    // Present qty by brand|model|category
+    const present = new Map();
+    for (const line of lines) {
+      const key = `${norm(line.brand)}|${norm(line.model)}|${norm(line.category)}`;
+      present.set(key, (present.get(key) || 0) + (line.quantity || 1));
+    }
+
+    const missing = [];
+    for (const item of kit.items || []) {
+      const key = `${norm(item.brand)}|${norm(item.model)}|${norm(item.category)}`;
+      const have = present.get(key) || 0;
+      const need = item.quantity || 1;
+      if (have < need) {
+        missing.push({
+          brand: item.brand,
+          model: item.model,
+          category: item.category,
+          quantity: need - have
+        });
+      }
+    }
+
+    const nameKey = norm(kit.name);
+    const seen = (nameSeen.get(nameKey) || 0) + 1;
+    nameSeen.set(nameKey, seen);
+    const displayNumber = nameCounts.get(nameKey) > 1 ? seen : null;
+
+    return {
+      instanceId: kit.instanceId,
+      kitId: kit.kitId,
+      name: kit.name,
+      displayNumber,
+      items: kit.items || [],
+      lines: lines.map((l) => l._id),
+      packed,
+      total: totalLines + missing.reduce((sum, m) => sum + m.quantity, 0),
+      lineCount: totalLines,
+      missing,
+      incomplete: missing.length > 0
+    };
+  });
+}
+
+// Remove an entire kit (all lines + snapshot) from a gear list
+app.delete('/api/gear-packages/event/:eventId/kits/:instanceId', authenticate, async (req, res) => {
+  try {
+    const { eventId, instanceId } = req.params;
+    const userId = req.user.id;
+
+    const table = await Table.findById(eventId);
+    if (!table) return res.status(404).json({ error: 'Event not found' });
+    if (!canManageEventGearLists(table, req.user)) {
+      return res.status(403).json({ error: 'Not authorized to edit gear for this event' });
+    }
+
+    const eventKit = await EventKit.findOne({ eventId, instanceId });
+    if (!eventKit) return res.status(404).json({ error: 'Kit not found on this list' });
+
+    const lines = await ReservedGearItem.find({ eventId, kitInstanceId: instanceId });
+    let removed = 0;
+    for (const line of lines) {
+      // Same release path as single-line delete
+      if (line.inventoryId) {
+        const inventoryItem = await GearInventory.findById(line.inventoryId);
+        if (inventoryItem) {
+          inventoryItem.releaseQuantity(line.eventId.toString(), userId, line.quantity);
+          await inventoryItem.save();
+        }
+      }
+      await ReservedGearItem.findByIdAndDelete(line._id);
+      removed += 1;
+    }
+
+    await EventKit.deleteOne({ _id: eventKit._id });
+
+    res.json({
+      success: true,
+      message: `Removed kit "${eventKit.name}" (${removed} item${removed === 1 ? '' : 's'})`,
+      removed
+    });
+  } catch (error) {
+    console.error('Error removing kit from gear list:', error);
+    res.status(500).json({ error: 'Failed to remove kit' });
   }
 });
 
@@ -8455,12 +8668,21 @@ app.get('/api/test-delete/:itemId', (req, res) => {
 
 // Note: DELETE /api/gear-packages/:itemId is handled by routes/gearPackages.js
 
+function cleanTemplateKits(kits) {
+  if (!Array.isArray(kits)) return [];
+  return kits.map((entry) => ({
+    kitId: entry.kitId,
+    quantity: Math.max(1, parseInt(entry.quantity, 10) || 1)
+  })).filter((entry) => entry.kitId);
+}
+
 // PACKAGE TEMPLATES API ENDPOINTS
 // Get all package templates (global)
 app.get('/api/package-templates', authenticate, async (req, res) => {
   try {
     const templates = await PackageTemplate.find()
       .populate('createdBy', 'fullName')
+      .populate('kits.kitId', 'name description items')
       .sort({ name: 1 });
     
     res.json(templates);
@@ -8473,21 +8695,33 @@ app.get('/api/package-templates', authenticate, async (req, res) => {
 // Create new package template
 app.post('/api/package-templates', authenticate, async (req, res) => {
   try {
-    const { name, description, items } = req.body;
+    const { name, description, items, kits } = req.body;
+    const cleanItems = Array.isArray(items) ? items : [];
+    const cleanKits = cleanTemplateKits(kits);
     
-    if (!name || !items || !Array.isArray(items)) {
-      return res.status(400).json({ error: 'Name and items array are required' });
+    if (!name || (cleanItems.length === 0 && cleanKits.length === 0)) {
+      return res.status(400).json({ error: 'Name and at least one item or kit are required' });
+    }
+
+    if (cleanKits.length > 0) {
+      const kitIds = cleanKits.map((k) => k.kitId);
+      const found = await Kit.find({ _id: { $in: kitIds } }).select('_id');
+      if (found.length !== new Set(kitIds.map(String)).size) {
+        return res.status(400).json({ error: 'One or more kits were not found' });
+      }
     }
     
     const template = new PackageTemplate({
       name,
       description: description || '',
-      items,
+      items: cleanItems,
+      kits: cleanKits,
       createdBy: req.user.id
     });
     
     await template.save();
     await template.populate('createdBy', 'fullName');
+    await template.populate('kits.kitId', 'name description items');
     
     res.status(201).json(template);
   } catch (error) {
@@ -8502,7 +8736,7 @@ app.post('/api/package-templates', authenticate, async (req, res) => {
 // Update package template
 app.put('/api/package-templates/:id', authenticate, async (req, res) => {
   try {
-    const { name, description, items } = req.body;
+    const { name, description, items, kits } = req.body;
     
     const template = await PackageTemplate.findById(req.params.id);
     if (!template) {
@@ -8516,10 +8750,22 @@ app.put('/api/package-templates/:id', authenticate, async (req, res) => {
     
     template.name = name || template.name;
     template.description = description !== undefined ? description : template.description;
-    template.items = items || template.items;
+    if (items !== undefined) template.items = items;
+    if (kits !== undefined) {
+      const cleanKits = cleanTemplateKits(kits);
+      if (cleanKits.length > 0) {
+        const kitIds = cleanKits.map((k) => k.kitId);
+        const found = await Kit.find({ _id: { $in: kitIds } }).select('_id');
+        if (found.length !== new Set(kitIds.map(String)).size) {
+          return res.status(400).json({ error: 'One or more kits were not found' });
+        }
+      }
+      template.kits = cleanKits;
+    }
     
     await template.save();
     await template.populate('createdBy', 'fullName');
+    await template.populate('kits.kitId', 'name description items');
     
     res.json(template);
   } catch (error) {
@@ -8729,6 +8975,10 @@ app.put('/api/tables/:eventId/gear-lists/:listName', authenticate, async (req, r
     
     // Update all reserved items with this list name
     await ReservedGearItem.updateMany(
+      { eventId: req.params.eventId, listName: oldName },
+      { listName: newName.trim() }
+    );
+    await EventKit.updateMany(
       { eventId: req.params.eventId, listName: oldName },
       { listName: newName.trim() }
     );
@@ -9701,7 +9951,8 @@ app.post('/api/carts/:eventId/items/batch', authenticate, async (req, res) => {
   try {
     const { eventId } = req.params;
     const userId = req.user.id;
-    const { items } = req.body; // Array of { inventoryId, quantity, specificSerial }
+    // items: Array of { inventoryId, quantity, specificSerial, kitInstanceId?, kitId? }
+    const { items } = req.body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({ error: 'Items array is required' });
@@ -9713,6 +9964,19 @@ app.post('/api/carts/:eventId/items/batch', authenticate, async (req, res) => {
     }
     if (!canManageEventGearLists(eventForAccess, req.user)) {
       return res.status(403).json({ error: 'Not authorized to edit gear for this event' });
+    }
+
+    // Resolve kit tags once (kit name is stamped server-side)
+    const kitIdsNeeded = [...new Set(items.map(i => i.kitId).filter(Boolean).map(String))];
+    const kitMap = new Map();
+    if (kitIdsNeeded.length > 0) {
+      const kitsFound = await Kit.find({ _id: { $in: kitIdsNeeded } }).select('name items');
+      for (const kit of kitsFound) kitMap.set(kit._id.toString(), kit);
+      for (const kitId of kitIdsNeeded) {
+        if (!kitMap.has(kitId)) {
+          return res.status(400).json({ error: `Kit not found: ${kitId}` });
+        }
+      }
     }
 
     // 1. Get or create cart (ONE query)
@@ -9829,7 +10093,7 @@ app.post('/api/carts/:eventId/items/batch', authenticate, async (req, res) => {
     const batchAddedBySerial = new Map();
 
     for (const reqItem of items) {
-      const { inventoryId, quantity = 1, specificSerial = null } = reqItem;
+      const { inventoryId, quantity = 1, specificSerial = null, kitInstanceId = null, kitId = null } = reqItem;
       const inventoryItem = inventoryMap.get(inventoryId);
 
       if (!inventoryItem) {
@@ -9839,6 +10103,9 @@ app.post('/api/carts/:eventId/items/batch', authenticate, async (req, res) => {
 
       const parts = inventoryItem.label.split(' ');
       const bmKey = `${parts[0] || ''}|||${parts.slice(1).join(' ') || ''}`;
+      const kitTag = (kitInstanceId && kitId && kitMap.has(String(kitId)))
+        ? { kitInstanceId: String(kitInstanceId), kitId: String(kitId), kitName: kitMap.get(String(kitId)).name }
+        : null;
 
       if (specificSerial) {
         // For specific serial: check individual item availability.
@@ -9852,7 +10119,8 @@ app.post('/api/carts/:eventId/items/batch', authenticate, async (req, res) => {
         // Use the ACTUAL cart item fields (serial + specificSerialRequested)
         const existingSerialInCart = cart.items
           .filter(ci => ci.inventoryId.toString() === inventoryId &&
-                        ci.specificSerialRequested && ci.serial === specificSerial)
+                        ci.specificSerialRequested && ci.serial === specificSerial &&
+                        (ci.kitInstanceId || null) === (kitTag?.kitInstanceId || null))
           .reduce((sum, ci) => sum + ci.quantity, 0);
 
         const serialKey = `${inventoryId}|||${specificSerial}`;
@@ -9895,8 +10163,8 @@ app.post('/api/carts/:eventId/items/batch', authenticate, async (req, res) => {
         }
       }
 
-      // Add to cart
-      cart.addItem(inventoryItem, quantity, specificSerial);
+      // Add to cart (kit tag keeps separate kit copies from merging)
+      cart.addItem(inventoryItem, quantity, specificSerial, kitTag);
       if (!specificSerial) {
         const batchAdded = batchAddedByBrandModel.get(bmKey) || 0;
         batchAddedByBrandModel.set(bmKey, batchAdded + quantity);
@@ -9904,7 +10172,7 @@ app.post('/api/carts/:eventId/items/batch', authenticate, async (req, res) => {
         const serialKey = `${inventoryId}|||${specificSerial}`;
         batchAddedBySerial.set(serialKey, (batchAddedBySerial.get(serialKey) || 0) + quantity);
       }
-      results.push({ inventoryId, success: true, quantity });
+      results.push({ inventoryId, success: true, quantity, kitInstanceId: kitTag?.kitInstanceId || null });
     }
 
     // 9. Save cart ONCE
@@ -10095,7 +10363,26 @@ app.post('/api/carts/:eventId/reserve', authenticate, async (req, res) => {
     // Prepare all reservations for atomic bulk processing
     const reservationRequests = [];
     
+    // Collect kit snapshots to write after a successful reserve
+    const kitSnapshots = new Map(); // instanceId -> { kitId, kitName, items[] }
+
     for (const cartItem of cart.items) {
+      const kitFields = cartItem.kitInstanceId
+        ? {
+            kitInstanceId: cartItem.kitInstanceId,
+            kitId: cartItem.kitId || null,
+            kitName: cartItem.kitName || null
+          }
+        : {};
+
+      if (cartItem.kitInstanceId && !kitSnapshots.has(cartItem.kitInstanceId)) {
+        kitSnapshots.set(cartItem.kitInstanceId, {
+          kitId: cartItem.kitId || null,
+          kitName: cartItem.kitName || 'Kit',
+          items: []
+        });
+      }
+
       if (cartItem.specificSerialRequested && cartItem.serial) {
         // Handle specific serial request
         reservationRequests.push({
@@ -10107,7 +10394,8 @@ app.post('/api/carts/:eventId/reserve', authenticate, async (req, res) => {
           checkInDate: cart.checkInDate,
           listName: currentListName,
           serial: cartItem.serial,
-          specificSerialRequested: true
+          specificSerialRequested: true,
+          ...kitFields
         });
       } else {
         // Handle grouped items (same brand/model) - need to split into individual units
@@ -10151,7 +10439,8 @@ app.post('/api/carts/:eventId/reserve', authenticate, async (req, res) => {
               checkInDate: cart.checkInDate,
               listName: currentListName,
               serial: item.serial,
-              specificSerialRequested: false
+              specificSerialRequested: false,
+              ...kitFields
             });
             
             remainingToReserve -= quantityToReserve;
@@ -10169,6 +10458,44 @@ app.post('/api/carts/:eventId/reserve', authenticate, async (req, res) => {
         }
       }
     }
+
+    // Prefer full kit definition for the EventKit snapshot when available
+    if (kitSnapshots.size > 0) {
+      const kitIds = [...new Set([...kitSnapshots.values()].map(k => k.kitId).filter(Boolean).map(String))];
+      const kitsById = new Map();
+      if (kitIds.length > 0) {
+        const kits = await Kit.find({ _id: { $in: kitIds } }).select('name items');
+        for (const kit of kits) kitsById.set(kit._id.toString(), kit);
+      }
+      for (const [instanceId, snap] of kitSnapshots) {
+        const kit = snap.kitId ? kitsById.get(String(snap.kitId)) : null;
+        if (kit) {
+          snap.kitName = kit.name;
+          snap.items = (kit.items || []).map((item) => ({
+            brand: item.brand,
+            model: item.model,
+            category: item.category,
+            quantity: item.quantity || 1
+          }));
+        } else {
+          // Fall back to aggregating what was actually in the cart for this instance
+          const byModel = new Map();
+          for (const cartItem of cart.items) {
+            if (cartItem.kitInstanceId !== instanceId) continue;
+            const key = `${cartItem.brand}|${cartItem.model}|${cartItem.inventoryId?.category || ''}`;
+            const existing = byModel.get(key) || {
+              brand: cartItem.brand,
+              model: cartItem.model,
+              category: cartItem.inventoryId?.category || 'Uncategorized',
+              quantity: 0
+            };
+            existing.quantity += cartItem.quantity || 1;
+            byModel.set(key, existing);
+          }
+          snap.items = [...byModel.values()];
+        }
+      }
+    }
     
     // Execute ALL reservations atomically (all succeed or all fail)
     try {
@@ -10182,8 +10509,27 @@ app.post('/api/carts/:eventId/reserve', authenticate, async (req, res) => {
           item: `${reservation.brand} ${reservation.model}`,
           quantity: reservation.quantity,
           serial: reservation.serial,
-          status: 'reserved'
+          status: 'reserved',
+          kitInstanceId: reservation.kitInstanceId || null,
+          kitName: reservation.kitName || null
         });
+      }
+
+      // Write EventKit snapshots for any kit instances that were reserved
+      for (const [instanceId, snap] of kitSnapshots) {
+        await EventKit.findOneAndUpdate(
+          { eventId, instanceId },
+          {
+            eventId,
+            listName: currentListName,
+            instanceId,
+            kitId: snap.kitId || null,
+            name: snap.kitName || 'Kit',
+            items: snap.items,
+            createdBy: userId
+          },
+          { upsert: true, new: true, setDefaultsOnInsert: true }
+        );
       }
       
       console.log(`[CART RESERVE] ✅ Successfully reserved ${createdReservations.length} items atomically`);
